@@ -31,6 +31,7 @@
 - `master` 允许 merge commit 和 rebase merge，禁用 squash merge，并要求变化回流 `dev`。
 - `Candidate Quality` 作为稳定聚合质量门；当前只包含仓库卫生和检查器测试。
 - GitHub 远端默认分支为 `master`，`master` Ruleset 已启用并要求 PR、严格状态检查和已解决对话。
+- GitHub Private vulnerability reporting 已启用；未修复漏洞优先通过仓库 Security Advisory 私下报告，入口和备用联系方式以 [SECURITY.md](../../SECURITY.md) 为准。
 
 ## 当前文档基线
 
