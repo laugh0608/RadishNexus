@@ -6,11 +6,11 @@ RadishNexus 当前处于产品定义、仓库治理和 Golden Path 预研阶段�
 
 请不要为未修复漏洞创建公开 Issue、Pull Request 或讨论，也不要提交真实密钥、访问令牌、个人数据、生产凭据、私密消息或未经授权取得的第三方内容。
 
-GitHub 远端启用 Private vulnerability reporting 后，请优先使用以下入口：
+GitHub 远端已经启用 Private vulnerability reporting。请优先通过以下入口私下提交漏洞报告：
 
 https://github.com/laugh0608/RadishNexus/security/advisories/new
 
-若该入口不可用，可发送邮件至 `laugh0608@foxmail.com`，主题包含 `[RadishNexus Security]`。
+若 GitHub 私密报告入口暂时不可用，可发送邮件至 `laugh0608@foxmail.com`，主题包含 `[RadishNexus Security]`。不要因为入口不可用而改用公开 Issue、Pull Request 或讨论披露漏洞细节。
 
 报告应尽量包含：
 
