@@ -1,0 +1,79 @@
+# Operating systems
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors and local agent state
+.idea/
+.vscode/
+.vs/
+.fleet/
+.agents/
+.claude/
+.codex/
+.playwright-cli/
+*.swp
+*.swo
+*.orig
+*.rej
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.local
+*.local.*
+secrets/
+
+# Logs, caches and temporary artifacts
+*.log
+*.tmp
+*.temp
+.cache/
+.tmp/
+tmp/
+var/
+artifacts/
+coverage/
+
+# Go
+bin/
+*.test
+*.out
+*.prof
+
+# Node.js and React
+node_modules/
+dist/
+.vite/
+.turbo/
+.eslintcache
+*.tsbuildinfo
+
+# Rust
+target/
+
+# Flutter and Dart
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+**/flutter/ephemeral/
+
+# Python repository checker
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+
+# Local databases and self-hosted volumes
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+docker-compose.override.yml
+deploy/local-data/

@@ -1,0 +1,93 @@
+name: 变更提案
+description: 提议产品、领域模型、架构、协议、安全、插件或仓库治理变化
+title: "[Proposal] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提案用于澄清真实问题、用户价值、兼容性和停止线，不表示方案已经接受。安全漏洞请使用 SECURITY.md 中的私密报告入口。
+  - type: dropdown
+    id: area
+    attributes:
+      label: 主要领域
+      options:
+        - 产品定位与 Golden Path
+        - 领域模型与 Decision
+        - 身份、权限与数据边界
+        - Chat、Ticket 或 Document
+        - Component、Environment 与 CI/CD
+        - Plugin SDK 与外部集成
+        - API、事件、EntityLink 与 Activity
+        - 自部署、迁移、备份与恢复
+        - Web、Flutter 与设计系统
+        - 许可、贡献与仓库治理
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题与用户价值
+      description: 说明当前真实阻塞、目标用户和期望价值，不要先从技术偏好出发。
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: 当前基线与证据
+      description: 指向当前状态、产品定义、领域模型、ADR、代码或可复验记录，并区分事实、假设和未验证结论。
+    validations:
+      required: true
+  - type: textarea
+    id: goals
+    attributes:
+      label: 目标与非目标
+      description: 分别说明本提案必须解决和明确不解决的内容。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提议方案
+      description: 描述 owner、交互、数据模型、权限、API、事件、失败语义和运行时影响。
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: 权限、安全与隐私
+      description: 说明 Workspace scope、私密对象、Secrets、插件、外部写操作、审计、备份和导出影响。
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: 兼容性、迁移与回滚
+      description: 说明 schema、API、事件、存储、插件、历史数据、自部署升级和失败恢复影响。
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 验证与证据计划
+      description: 给出正例、负例、边界条件、通过标准和需要人工复核的场景。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 替代方案与权衡
+      description: 列出考虑过的方案、取舍和暂不采用的原因。
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: 边界确认
+      options:
+        - label: 我没有把方案、文档或原型写成已经实现或生产就绪。
+          required: true
+        - label: 若涉及权限、用户数据、插件、CI/CD 写操作或公共协议，我已显式说明风险和停止线。
+          required: true
+        - label: 本提案不包含真实凭据、个人数据、私密工作区内容或无权提供的第三方材料。
+          required: true

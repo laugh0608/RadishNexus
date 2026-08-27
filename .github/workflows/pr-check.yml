@@ -1,0 +1,90 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repo-hygiene:
+    name: Repo Hygiene
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Check repository baseline
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [[ -n "${BASE_SHA}" ]]; then
+            ./scripts/check-repo.sh --base-ref "${BASE_SHA}"
+          else
+            ./scripts/check-repo.sh
+          fi
+
+  checker-tests:
+    name: Repository Checker Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Test repository checker
+        run: python3 -m unittest discover -s scripts/tests -p "test_*.py"
+
+  candidate-quality:
+    name: Candidate Quality
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - repo-hygiene
+      - checker-tests
+
+    steps:
+      - name: Summarize candidate quality
+        shell: bash
+        env:
+          REPO_HYGIENE_RESULT: ${{ needs.repo-hygiene.result }}
+          CHECKER_TESTS_RESULT: ${{ needs.checker-tests.result }}
+        run: |
+          {
+            echo "## Candidate Quality"
+            echo
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            echo "| Repo Hygiene | ${REPO_HYGIENE_RESULT} |"
+            echo "| Repository Checker Tests | ${CHECKER_TESTS_RESULT} |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ "${REPO_HYGIENE_RESULT}" != "success" || "${CHECKER_TESTS_RESULT}" != "success" ]]; then
+            echo "Candidate quality checks did not all succeed." >&2
+            exit 1
+          fi
+
+          echo "All candidate quality components succeeded."

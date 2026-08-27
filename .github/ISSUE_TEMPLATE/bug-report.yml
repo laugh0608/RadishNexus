@@ -1,0 +1,80 @@
+name: 缺陷报告
+description: 报告可复现的产品、协议、文档、自部署或工具链问题
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        安全漏洞、真实凭据、个人数据或私密工作区内容不要写入公开 Issue。请阅读 SECURITY.md 并使用私密报告入口。
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已确认这不是需要私下报告的安全漏洞。
+          required: true
+        - label: 我已搜索现有 Issue，并阅读当前状态和相关专题。
+          required: true
+        - label: 本报告不包含真实凭据、个人数据、未脱敏日志、私密消息或无权提供的第三方材料。
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 主要领域
+      options:
+        - 身份、Workspace 与权限
+        - 私聊、频道与消息
+        - Decision 与 Attention Item
+        - Ticket 与 Initiative
+        - Document 与协同
+        - Component、Repository 与 CI/CD
+        - Plugin、Webhook 与外部集成
+        - 自部署、升级、备份与恢复
+        - Web UI 与可访问性
+        - 文档、脚本、CI 与仓库治理
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题摘要
+      description: 简明说明实际问题、影响和受影响的用户路径。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 最小复现
+      description: 提供最小、可重复且不泄露秘密的步骤、输入、命令或文档路径。
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 说明依据的产品定义、领域模型、协议、页面状态或测试预期。
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为与证据
+      description: 附上已脱敏的错误、日志、响应、运行记录或截图，并说明证据覆盖范围。
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境与版本
+      description: 提供 commit、操作系统、部署方式、数据库、浏览器和相关依赖版本；不要粘贴秘密。
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: 权限、数据与外部动作影响
+      description: 是否涉及跨 Workspace、私密对象、EntityLink、插件权限、Secrets、Webhook、CI/CD 写操作、备份或导出？
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: 临时缓解与补充信息
