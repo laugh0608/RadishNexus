@@ -6,7 +6,7 @@
 
 产品定义、架构基线与仓库治理基线。
 
-当前已经初始化本地 Git 仓库的 `master` 初始分支，并建立协作规则、GitHub 模板、Ruleset 模板和无第三方依赖的仓库检查器；尚未创建首个提交和 `dev` 分支，尚未实现 Web App、服务端、插件或客户端，也尚未把本地 Ruleset 模板应用到 GitHub 远端。
+当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、无第三方依赖的仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。尚未实现 Web App、服务端、插件或客户端。
 
 ## 当前结论
 
@@ -30,6 +30,7 @@
 - 仓库采用 `master` 稳定分支、`dev` 集成分支和主题分支；普通 PR 默认进入 `dev`。
 - `master` 允许 merge commit 和 rebase merge，禁用 squash merge，并要求变化回流 `dev`。
 - `Candidate Quality` 作为稳定聚合质量门；当前只包含仓库卫生和检查器测试。
+- GitHub 远端默认分支为 `master`，`master` Ruleset 已启用并要求 PR、严格状态检查和已解决对话。
 
 ## 当前文档基线
 
@@ -49,15 +50,14 @@
 
 下一次继续推进时，优先完成 M0 和 M0.5，而不是直接生成完整工程：
 
-1. 在获得远端写授权后创建/核对 `dev`、合并选项和 `master` Ruleset，并用测试 PR 验证门禁；
-2. 根据领域模型冻结 Project、Initiative、Component、Decision、Environment 和 EntityLink 的最小字段；
-3. 设计稳定实体引用、权限检查、事件 envelope 和 Activity 投影；
-4. 选择 Go Web 基础栈并建立 Golden Path 所需的最小服务；
-5. 用 React 原型实现 Nexus View，而不是先铺完整聊天界面；
-6. 实现“Thread → Decision → Ticket → Jenkins CI Run → staging Deployment”纵向实验；
-7. 验证重复 Webhook、私密引用、外部故障和备份恢复；
-8. 对候选文档编辑器和协同方案做独立原型，不让 CRDT 阻塞 Golden Path；
-9. 起草低摩擦、可离线验证的免费评估与使用授权模板，并安排法律复核。
+1. 根据领域模型冻结 Project、Initiative、Component、Decision、Environment 和 EntityLink 的最小字段；
+2. 设计稳定实体引用、权限检查、事件 envelope 和 Activity 投影；
+3. 选择 Go Web 基础栈并建立 Golden Path 所需的最小服务；
+4. 用 React 原型实现 Nexus View，而不是先铺完整聊天界面；
+5. 实现“Thread → Decision → Ticket → Jenkins CI Run → staging Deployment”纵向实验；
+6. 验证重复 Webhook、私密引用、外部故障和备份恢复；
+7. 对候选文档编辑器和协同方案做独立原型，不让 CRDT 阻塞 Golden Path；
+8. 起草低摩擦、可离线验证的免费评估与使用授权模板，并安排法律复核。
 
 ## 开放问题
 
@@ -72,7 +72,6 @@
 - 消息和文档搜索边界；
 - 免费书面授权的签发与撤销规则；
 - 免费评估是否公开授予，或使用离线自助签发；
-- GitHub 远端治理基线的首次启用时间和管理员执行人；
 
 ## 停止线
 
