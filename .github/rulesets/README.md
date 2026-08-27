@@ -8,6 +8,8 @@
 
 仓库合并策略为允许 merge commit 与 rebase merge、禁用 squash merge。当前为单维护者阶段，最少批准数为 0，不要求 CODEOWNERS；管理员绕过限制为“仍须通过 PR”。完整理由见 [ADR-0001](../../docs/adr/0001-branch-and-pr-governance.md)。
 
+模板显式保留 GitHub 默认启用的 `require_extra_approval_for_unattributed_changes`。该公开预览选项只为未归属到具体人的 Copilot PR 增加一次审批；当前最少批准数为 0，因此不会形成额外门禁。未来提高批准数时必须重新评估这一行为。
+
 ## 启用前置条件
 
 1. `master`、`dev` 和默认 PR 目标已按治理文档建立；

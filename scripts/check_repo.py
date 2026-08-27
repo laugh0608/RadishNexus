@@ -318,6 +318,8 @@ def check_ruleset(errors: list[str]) -> None:
             errors.append("单维护者阶段 master 最少批准数必须为 0")
         if pull_request.get("require_code_owner_review") is not False:
             errors.append("当前 master Ruleset 不应要求 CODEOWNERS 审查")
+        if pull_request.get("require_extra_approval_for_unattributed_changes") is not True:
+            errors.append("master Ruleset 必须显式保留未归属 Copilot PR 的默认审批语义")
         if pull_request.get("required_review_thread_resolution") is not True:
             errors.append("master Ruleset 必须要求解决所有审阅对话")
 
