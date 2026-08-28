@@ -1,6 +1,6 @@
 # 参与 RadishNexus
 
-感谢你参与 RadishNexus。项目当前处于产品定义、仓库治理和 Golden Path 预研阶段，贡献的首要目标是验证“讨论、决策、执行、构建和部署上下文不断链”，而不是快速堆叠聊天、工单或插件数量。
+感谢你参与 RadishNexus。项目当前处于 M0 正式服务与 Golden Path 纵向切片阶段，贡献的首要目标是验证“讨论、决策、执行、构建和部署上下文不断链”，而不是快速堆叠聊天、工单或插件数量。
 
 ## 开始之前
 
@@ -85,7 +85,19 @@ M0 核心契约 Go 检查：
 ./scripts/check-m0-core-contracts-postgres.sh
 ```
 
-PostgreSQL 脚本使用固定镜像、随机本机端口和任务专属临时容器，结束后自动删除且不保留数据卷；镜像不存在时不会隐式下载。详细边界见 [M0 核心契约实验](experiments/m0-core-contracts/README.md)。
+修改正式 Go 服务时运行：
+
+```bash
+./scripts/check-server.sh
+```
+
+涉及 migration、权限、业务事务、EntityLink、领域事件或 Outbox 时，还需运行：
+
+```bash
+./scripts/check-server-postgres.sh
+```
+
+PostgreSQL 脚本使用固定镜像、随机本机端口和任务专属临时容器，结束后自动删除且不保留数据卷；镜像不存在时不会隐式下载。详细边界分别见 [M0 核心契约实验](experiments/m0-core-contracts/README.md)和[正式 Go 服务](server/README.md)。
 
 实现代码进入仓库后，还必须执行与改动范围匹配的 Go、React / TypeScript、Rust 或 Flutter 格式化、静态分析、测试和构建。PR 只记录真实执行过的命令，并明确列出未执行、受环境阻塞或需要人工完成的验证。
 

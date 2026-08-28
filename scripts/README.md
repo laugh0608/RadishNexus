@@ -55,3 +55,19 @@ python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 ```
 
 后者只操作任务专属容器和其中的 `m0_core` schema，结束后自动删除容器；默认不会隐式拉取缺失镜像。实验范围和手工数据库入口见 [M0 核心契约实验](../experiments/m0-core-contracts/README.md)。
+
+## 正式 Go 服务
+
+不需要数据库的单元测试、`go vet`、`go mod tidy -diff` 与 module checksum 验证：
+
+```bash
+./scripts/check-server.sh
+```
+
+使用同一固定 PostgreSQL digest 的临时容器，验证正式 migration、权限、业务事务、EntityLink 和 Outbox：
+
+```bash
+./scripts/check-server-postgres.sh
+```
+
+两个 PostgreSQL 入口复用 `run-postgres-go-integration.sh`，只操作各自任务专属容器并在退出时自动清理；默认不会隐式拉取缺失镜像。

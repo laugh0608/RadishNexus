@@ -35,9 +35,10 @@
 
 ## 当前边界
 
-当前已经建立仓库治理、贡献模板和静态检查基线，但不代表以下产品能力已经实现：
+当前已经建立仓库治理、正式 Go 服务基础、Thread → Decision → Ticket application service 和 PostgreSQL 权限/事务验证，但不代表以下产品能力已经实现：
 
 - 可运行的 Web App；
+- 对外业务 HTTP API、完整认证或 Activity / Nexus View 读取面；
 - 可安装插件或 Plugin SDK；
 - Flutter 移动端或 PC 客户端；
 - Jenkins、GitLab 或其他外部系统集成；

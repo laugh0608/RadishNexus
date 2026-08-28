@@ -4,9 +4,9 @@
 
 ## 当前阶段
 
-产品定义、架构基线、仓库治理基线与 M0 核心契约实验。
+产品定义、架构基线、仓库治理基线与 M0 正式服务纵向切片。
 
-当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过，Go 服务端基础栈已形成 ADR-0003 提议。尚未建立正式 Web App、服务端、插件或客户端。
+当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner 与 Thread → Decision → Ticket 权限纵向切片已经建立；尚未建立正式 Web App、插件或客户端，也尚未开放业务 HTTP API。
 
 ## 当前结论
 
@@ -33,11 +33,16 @@
 - M0 核心契约实验已经验证 Decision evidence、领域事件和 Outbox 的单事务写入。
 - 跨 Workspace EntityLink、缺少 evidence 的 Decision 和重复 Jenkins delivery 已有真实 PostgreSQL 失败路径或幂等测试。
 - Activity 可以按 projection version 幂等重建，已投递 Outbox 状态清理不影响事件事实和重建结果。
-- ADR-0003 提议使用 Go 标准库 HTTP 路由、原生 `pgx/v5` 和手写版本化 SQL，不引入 Web 框架或 ORM。
+- ADR-0003 已接受 Go 标准库 HTTP 路由、原生 `pgx/v5` 和手写版本化 SQL，不引入 Web 框架或 ORM。
+- ADR-0004 已冻结 Thread、Decision、Ticket 的 governing Project、首批角色与 restricted Thread 投影边界。
+- ADR-0005 已冻结连续编号、checksum、advisory lock、单 migration 事务和显式 forward-only 执行。
+- 正式 application service 已完成 Thread → Proposed Decision → Accepted Decision → Ticket，并把 EntityLink、领域事件和 Outbox 与业务状态放在同一事务。
+- contributor 不能确认 Decision；decider 必须能读取全部 evidence 后才能人工确认；Project admin 也不会自动穿透 restricted Thread。
+- 关系投影对不可读目标只返回不含 EntityRef、类型、关系类型和标题的通用占位。
 - 在横向补全各模块前，先完成 Golden Path 纵向原型。
 - 仓库采用 `master` 稳定分支、`dev` 集成分支和主题分支；普通 PR 默认进入 `dev`。
 - `master` 允许 merge commit 和 rebase merge，禁用 squash merge，并要求变化回流 `dev`。
-- `Candidate Quality` 作为稳定聚合质量门；仓库定义已加入 M0 Go 单元测试、`go vet` 和真实 PostgreSQL 集成测试，远端运行结果仍需在本批次 PR 中确认。
+- `Candidate Quality` 作为稳定聚合质量门；仓库定义已加入 M0 实验与正式 Go 服务的单元测试、`go vet` 和真实 PostgreSQL 集成测试，远端运行结果仍需在本批次 PR 中确认。
 - GitHub 远端默认分支为 `master`，`master` Ruleset 已启用并要求 PR、严格状态检查和已解决对话。
 - GitHub Private vulnerability reporting 已启用；未修复漏洞优先通过仓库 Security Advisory 私下报告，入口和备用联系方式以 [SECURITY.md](../../SECURITY.md) 为准。
 
@@ -56,30 +61,36 @@
 - [ADR-0001：分支与 PR 治理](../adr/0001-branch-and-pr-governance.md)
 - [ADR-0002：稳定实体引用与事件投影边界](../adr/0002-stable-entity-reference-and-event-projection.md)
 - [ADR-0003：Go 服务端基础栈与数据访问](../adr/0003-go-service-foundation.md)
+- [ADR-0004：Project 作用域下的协作对象与权限](../adr/0004-project-scoped-collaboration-permissions.md)
+- [ADR-0005：Forward-only PostgreSQL migration runner](../adr/0005-forward-only-postgresql-migrations.md)
 - [开发指南](../development/README.md)
 - [M0 核心契约实验](../../experiments/m0-core-contracts/README.md)
+- [正式 Go 服务](../../server/README.md)
 
-## 下一步建议
+## 明日事项（2026-08-29）
 
-下一次继续推进时，优先完成 M0 和 M0.5，而不是直接生成完整工程：
+明日只推进一个小而完整的读取切片，不横向铺开聊天、Jenkins 或 Web Shell：
 
-1. 评审并接受或修订 ADR-0003，冻结 Go HTTP 与 PostgreSQL 数据访问基线；
-2. 决定正式 migration runner 和首个 `server/` module 最小布局，不复制实验 runner；
-3. 建立 Golden Path 所需的最小服务，并先实现 Thread → Decision → Ticket 的领域与权限切片；
-4. 用 React 原型实现 Nexus View，而不是先铺完整聊天界面；
-5. 接入 Jenkins CI Run 与显式 staging Deployment，验证重复 Webhook、私密引用、外部故障和备份恢复；
-6. 对候选文档编辑器和协同方案做独立原型，不让 CRDT 阻塞 Golden Path；
-7. 起草低摩擦、可离线验证的免费评估与使用授权模板，并安排法律复核。
+1. 在正式服务中实现由不可变领域事件重建的最小 Activity projection，先覆盖现有 Decision 与 Ticket 事件；
+2. 建立 Nexus View 的只读 application query，复用 ADR-0002 / ADR-0004 的 `visible / restricted / hidden` 权限语义；
+3. 用真实 PostgreSQL 验证 projection 幂等重建、Outbox 投递状态清理不破坏事件事实，以及 restricted Thread 不通过 Timeline 或 Relations 泄漏；
+4. 根据读取切片暴露的真实需要，起草最小认证 adapter 与内部 HTTP 错误边界；没有必要时不开放业务 HTTP API；
+5. 只有读取模型和权限测试稳定后，才准备 React Nexus View 原型，不先铺完整聊天界面。
+
+明日完成线：同一 Decision 或 Ticket 能返回权限过滤后的 Current、Relations 和 Timeline；清空 projection 后可从事件事实幂等重建，结果和权限边界不变。
+
+明日停止线：不接入 Jenkins，不启动 Flutter，不选择 CRDT，不建立通用 RBAC framework，不把健康检查以外的临时 HTTP 路由当成公共 API。
+
+后续顺位保持为 Jenkins CI Run → 显式 staging Deployment → 备份恢复，再独立评估文档协同方案和授权模板。
 
 ## 开放问题
 
-- ADR-0003 的标准库 HTTP、原生 `pgx/v5` 和手写 SQL 基线是否接受；
-- 正式 migration runner 与 PostgreSQL 支持版本矩阵；
-- EntityID 生成算法、其余 Golden Path 类型前缀和 PostgreSQL 物理 schema；
+- PostgreSQL 正式支持版本矩阵，以及生产升级的 forward repair 与恢复流程；
+- EntityID 生成算法、其余 Golden Path 类型前缀和后续 PostgreSQL schema；
 - 文档编辑器和 CRDT；
 - 首版插件运行方式；
 - Initiative、Component 与 Project 的首版导航表现；
-- Decision 的确认权限、复核周期和替代交互；
+- Decision 的复核周期和替代交互；
 - `.nexus` 上下文包的开放格式与脱敏规则；
 - SDK 和插件的具体开放源码许可证；
 - 认证第一阶段只做本地账号，还是同时加入 OIDC；

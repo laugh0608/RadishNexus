@@ -20,7 +20,7 @@
 - canonical `entity://<type>/<id>` parser 不做隐式归一化。
 - Go 标准库 `net/http.ServeMux` 可以表达首期所需的方法和路径参数路由。
 
-Thread 和 CI Run 表只提供验证所需的骨架，不代表其完整领域字段或 ID 前缀已经冻结。实验也不包含正式认证、RBAC、HTTP API、迁移工具、备份工具或生产部署。
+本目录中的 Thread 和 CI Run 表只提供实验所需的骨架；后续 ADR-0004 已在正式服务中冻结 Thread 的首批字段和 `thr_` 前缀，但这不把实验 schema 追认成生产设计。实验也不包含正式认证、RBAC、HTTP API、迁移工具、备份工具或生产部署。
 
 ## 技术选择
 
@@ -59,11 +59,13 @@ DATABASE_URL='postgres://...' go test -tags=integration ./...
 
 ## 结果用途
 
-实验通过后再决定：
+实验结果已经用于：
 
-- 是否接受 Go 标准库 HTTP 路由与原生 `pgx/v5` 作为首期服务基线；
-- 事件事实和 Outbox 投递状态采用一表还是分表；
-- 哪些数据库约束保留，哪些不变量放入 Go 领域层并由集成测试覆盖；
-- 实验代码应迁入正式 `server/` 还是丢弃重写。
+- 接受 ADR-0003 的 Go 标准库 HTTP 与原生 `pgx/v5` 服务基线；
+- 在正式 schema 中分离不可变事件事实与可变 Outbox 投递状态；
+- 迁移 canonical EntityRef、Decision evidence、跨 Workspace 拒绝和事务失败用例；
+- 建立单一正式 `server/` module，而不把实验升级为第二套服务。
+
+实验暂时保留，用于回归正式服务尚未覆盖的 Activity 重建、Outbox 清理和重复 Jenkins delivery。正式切片覆盖这些失败场景后，再删除或归档本目录；不再向实验追加新的产品能力。
 
 实验目录不能成为绕过 ADR、迁移和模块边界的第二套生产入口。

@@ -12,7 +12,7 @@
 
 ## 适用范围
 
-本轮冻结 Project、Initiative、Component、Decision、Environment 和 EntityLink 的引用能力，并用 Thread、Ticket、CI Run 和 Deployment 验证接口是否足以承载 [Golden Path](../golden-path.md)。这不表示后四类对象的完整字段已经冻结。
+初始 M0 冻结 Project、Initiative、Component、Decision、Environment 和 EntityLink 的引用能力，并用 Thread、Ticket、CI Run 和 Deployment 验证接口是否足以承载 [Golden Path](../golden-path.md)。ADR-0004 随首个正式纵向切片继续冻结了 Thread 与 Ticket 的类型前缀、最小字段和授权上下文；CI Run 与 Deployment 的完整字段仍未冻结。
 
 M0 不支持：
 
@@ -43,8 +43,10 @@ M0 首批冻结以下类型名与 ID 前缀：
 | `decision` | `dec_` | 可确认、拒绝和替代的决策 |
 | `environment` | `env_` | 稳定部署目标 |
 | `entity-link` | `lnk_` | 带来源的跨对象关系 |
+| `thread` | `thr_` | 作为讨论证据的 Thread |
+| `ticket` | `tkt_` | 可执行工作对象 |
 
-Thread、Ticket、Document、Repository、CI Run 和 Deployment 等 Golden Path 类型进入同一注册表，但其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。
+Document、Repository、CI Run 和 Deployment 等其余 Golden Path 类型进入同一注册表，但其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结。
 
 ### 结构化表示
 
@@ -253,7 +255,7 @@ safe_facts
 
 1. 用户从私密 Thread 创建 Proposed Decision。Decision 与 `derived-from` EntityLink 在同一事务写入；该关系是 `asserted + user`，因为 `derived-from` 是业务语义，不代表自动推导。
 2. `decision.proposed` 和 `entity-link.created` 共享 correlation，分别投影到 Decision 和 Thread；Decision 草案必须保留 evidence 引用。
-3. 有确认权限的人接受 Decision，产生 `decision.accepted`。系统生成内容只能保留为草案，不能作为 actor 完成接受。
+3. 有确认权限且能读取全部 evidence 的人接受 Decision，产生 `decision.accepted`。Project 管理角色不自动穿透 restricted Thread；系统生成内容只能保留为草案，不能作为 actor 完成接受。
 4. 从 Decision 创建 Ticket，Ticket 与 `implements` 关系保留来源，不复制 Thread 正文。读取 Ticket 但不能读取 Thread 的用户只在对象页看到不可识别目标的通用受限占位。
 5. Jenkins 重复发送同一 delivery 时只产生一个 CI Run。插件推导的关系标记为 `derived + plugin`，失败投递进入有界重试或人工恢复，不阻塞聊天和 Decision 写入。
 6. 构建成功只更新 CI Run。只有独立、获授权的受控操作才能创建 staging Deployment 及其关系和审计。
@@ -261,7 +263,7 @@ safe_facts
 
 ## M0 验证清单
 
-实现该契约的首个技术实验必须证明：
+M0 实验与正式纵向切片累计必须证明：
 
 - 重命名 Project 或 Component 后旧 EntityRef 仍可解析；
 - 不同 Workspace 的两端不能创建 EntityLink；
@@ -274,11 +276,11 @@ safe_facts
 
 ## 后续仍需决定
 
-- EntityID 的具体生成算法和所有 Golden Path 类型前缀；
-- PostgreSQL 表、约束、索引以及事件事实和投递状态采用一表还是分表；
+- EntityID 的具体生成算法和 Thread、Ticket 之外的 Golden Path 类型前缀；
+- 后续对象的 PostgreSQL 表、约束、索引，以及事件事实和投递状态的保留与演进策略；
 - 关系类型注册表的完整方向、基数和 metadata schema；
-- Project、Team 和对象级授权的具体策略模型；
+- Team 角色继承、对象分享、跨 Project 转换和管理员 break-glass 策略；
 - 领域事件保留、压缩和 projection version 迁移策略；
 - HTTP/OpenAPI 的错误对象、游标和并发控制字段。
 
-这些事项必须通过下一轮 schema / Outbox 原型验证，不能由 Web 框架或 ORM 默认行为替项目作出决定。
+这些事项必须通过后续纵向切片验证，不能由 Web 框架或 ORM 默认行为替项目作出决定。

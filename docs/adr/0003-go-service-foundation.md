@@ -1,6 +1,6 @@
 # ADR-0003：Go 服务端基础栈与数据访问
 
-状态：提议
+状态：已接受
 
 日期：2026-08-28
 
@@ -19,7 +19,7 @@ ADR-0002 已冻结稳定实体引用、授权结果、领域事件、Outbox 和 
 
 ## 决定
 
-本 ADR 接受后，首期 Go 服务采用以下基线。
+首期 Go 服务采用以下基线。
 
 ### Go 与 HTTP
 
@@ -44,7 +44,6 @@ Go 官方从 1.22 起在 `ServeMux` 中提供 method 和 wildcard 路由，足�
 
 ### 暂不冻结
 
-- 正式 migration runner；实验中的 embedded migration 只证明事务和 schema，不直接作为生产升级机制；
 - SQL 代码生成；出现第二批稳定查询和真实重复后，再评估 `sqlc` 等方案；
 - EntityID 生成算法；
 - HTTP/OpenAPI 错误对象、分页、并发控制和版本发布策略；
@@ -69,7 +68,7 @@ ORM 能减少简单 CRUD，但多态 EntityRef、deferred 领域约束、Outbox�
 
 ### 现在引入 `sqlc`
 
-生成类型安全查询具有潜在价值，但当前只有一个可丢弃实验，查询边界仍会变化。等正式模块出现第二批稳定 SQL 后再评估，避免为尚未稳定的 schema 固化生成合同。
+生成类型安全查询具有潜在价值，但正式模块当前只有首个协作纵向切片，查询边界仍会变化。等第二批领域查询出现真实重复后再评估，避免为尚未稳定的 schema 固化生成合同。
 
 ### `psql` 子进程作为 Go 数据访问层
 
@@ -91,11 +90,11 @@ ORM 能减少简单 CRUD，但多态 EntityRef、deferred 领域约束、Outbox�
 - 手写 SQL 需要严格集成测试、迁移检查和 review；
 - `pgx` 成为供应链与安全升级责任，必须跟踪其稳定版本和安全修复；
 - PostgreSQL 特性会提高迁移到其它数据库的成本，但这不是当前产品目标；
-- migration runner、授权策略和正式服务布局仍需后续窄决策，不能由实验代码默认决定。
+- 授权策略和正式服务布局仍需后续窄决策，不能由实验代码默认决定；migration runner 已由 ADR-0005 另行冻结。
 
 ## 迁移与验证
 
-当前没有生产服务或数据库，因此不存在数据迁移。若本 ADR 接受：
+当前没有已部署的生产实例或存量数据库，因此不存在数据迁移。实施顺序如下：
 
 1. 建立单一 `server/` Go module 和最小启动命令；
 2. 迁移 EntityRef parser、领域不变量测试和必要 SQL，不复制实验 runner；
@@ -109,7 +108,11 @@ ORM 能减少简单 CRUD，但多态 EntityRef、deferred 领域约束、Outbox�
 ```text
 ./scripts/check-m0-core-contracts.sh             PASS
 ./scripts/check-m0-core-contracts-postgres.sh    PASS
+./scripts/check-server.sh                        PASS
+./scripts/check-server-postgres.sh               PASS
 go mod verify                                    PASS
 ```
 
-接受本 ADR 时应同步工程标准、当前状态和 ADR 索引。若需要改用第三方 Web 框架、ORM 或 `database/sql`，应以新 ADR 替代本记录。
+实施状态：2026-08-28，单一 `server/` module、EntityRef、首个事务与权限切片以及 `Candidate Quality` 服务检查已经落地。备份恢复和正式升级失败演练仍未完成；M0 实验继续保留，直到正式服务覆盖 Activity 重建和外部 delivery 幂等场景。
+
+本 ADR 已同步工程标准、当前状态和 ADR 索引。若需要改用第三方 Web 框架、ORM 或 `database/sql`，应以新 ADR 替代本记录。

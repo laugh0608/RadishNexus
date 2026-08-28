@@ -1,6 +1,6 @@
 # RadishNexus 总体架构
 
-状态：方向基线，具体库尚未冻结
+状态：方向基线，Go 服务基础已冻结
 
 日期：2026-08-28
 
@@ -135,19 +135,16 @@ Flutter 与 React 不强求共享 UI 代码。
 跨模块关联不直接泄漏数据库表结构。每个对象拥有稳定引用，例如：
 
 ```text
-entity://message/msg_123
+entity://thread/thr_123
 entity://decision/dec_234
-entity://ticket/ticket_456
-entity://document/doc_789
-entity://component/comp_321
-entity://ci-run/run_001
+entity://ticket/tkt_456
+entity://component/cmp_321
 entity://environment/env_002
-entity://deployment/dep_003
 ```
 
 引用必须经过原对象权限检查。能够看到工单不表示自动获得关联私密频道或文档的读取权。
 
-类型注册、结构化表示、Workspace 解析和受限占位的 M0 基线见[核心实体、授权与事件契约](core-contracts.md)。具体 ID 算法和物理 schema 仍未冻结。
+类型注册、结构化表示、Workspace 解析和受限占位的 M0 基线见[核心实体、授权与事件契约](core-contracts.md)。Thread、Decision、Ticket 的首段 Project 作用域与物理 schema 已由 ADR-0004、ADR-0005 和正式 migration 落地；具体 ID 生成算法及其余对象 schema 仍未冻结。
 
 ## EntityLink 与 Nexus View
 
@@ -247,7 +244,7 @@ M0 契约把不可变领域事件事实与可变投递状态作逻辑分离，�
 
 ## 预期仓库布局
 
-真正进入实现时可从以下布局起步，但目录名仍需通过实现 ADR 确认：
+当前已经从单一 `server/` Go module 起步；其余目录只在对应应用、SDK、插件或部署产物真正进入实现时创建：
 
 ```text
 RadishNexus/

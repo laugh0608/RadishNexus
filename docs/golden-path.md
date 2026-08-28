@@ -61,7 +61,7 @@ Golden Path 用最薄的可运行产品验证 RadishNexus 的核心价值，而�
 
 ### 人工确认决策
 
-系统可以生成 Decision 草案，但只有有权限的人能够 Accepted。自动摘要不能被展示成已经确认的团队结论。
+系统可以生成 Decision 草案，但只有具备确认权限且能够读取全部 evidence 的人才能 Accepted。Project 管理角色不会自动穿透 restricted Thread；自动摘要不能被展示成已经确认的团队结论。
 
 ### 构建不等于部署
 

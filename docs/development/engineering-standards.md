@@ -21,8 +21,13 @@
 - 错误保留上下文和可判定类型，不依赖字符串匹配实现业务分支。
 - 数据库事务只包围需要原子性的最小范围；外部网络调用不放入长事务。
 - 包级可变状态和隐式单例应避免；依赖通过清晰构造边界传入。
+- 首期 HTTP server、路由和测试使用标准库 `net/http`、`http.ServeMux` 和 `httptest`，不引入 Web 框架。
+- PostgreSQL 使用原生 `pgx/v5` 与 `pgxpool`，不通过 `database/sql` adapter；首个固定版本为 `v5.10.0`。
+- SQL 手写、版本化并接受真实 PostgreSQL 集成测试；首期不引入 ORM 或 query builder。
+- PostgreSQL migration 使用连续 `NNN_name.sql`、完整 artifact SHA-256、session advisory lock 和单 migration 事务；只允许显式 forward 执行，不随服务启动隐式迁移。
+- SQL 代码生成和完整服务目录层级仍需按真实实现收窄决定。
 
-具体 Web 框架和数据访问库尚未冻结，选型必须通过原型和 ADR，不写入通用规则假装已经决定。
+精确边界与替代条件见 [ADR-0003](../adr/0003-go-service-foundation.md)和 [ADR-0005](../adr/0005-forward-only-postgresql-migrations.md)。
 
 ## React 与 TypeScript
 

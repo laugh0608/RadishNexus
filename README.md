@@ -4,7 +4,7 @@
 
 RadishNexus 是 Radish 家族中的团队协作项目。它把私聊、团队频道、决策、工单、协作文档和 CI/CD 上下文放进同一个工作空间，让一次讨论能够持续关联到结论、任务、软件组件、构建、发布和复盘，而不是把多个独立产品简单拼接在一起。
 
-项目当前处于 M0 核心契约实验阶段，尚未进入正式产品实现。稳定引用、事件 Outbox 和 Activity 重建已经有可丢弃的 Go + PostgreSQL 技术实验；第一产品形态仍是 React + TypeScript Web App，Flutter 客户端在 Web 产品达到阶段门槛后再启动，并统一覆盖移动端与 PC 端。
+项目当前处于 M0 正式服务纵向切片阶段。稳定引用、事件 Outbox 和 Activity 重建已有可丢弃的 Go + PostgreSQL 技术实验；正式 `server/` Go module 已实现 Thread → Decision → Ticket 的首段领域、权限和事务闭环，但业务 HTTP API、Activity 读取面和 Web App 尚未建立。第一产品形态仍是 React + TypeScript Web App，Flutter 客户端在 Web 产品达到阶段门槛后再启动，并统一覆盖移动端与 PC 端。
 
 ## 已确认基线
 
@@ -42,13 +42,15 @@ RadishNexus 是 Radish 家族中的团队协作项目。它把私聊、团队频
 
 - `master` 是稳定分支，`dev` 是日常集成分支；普通变更默认通过主题分支向 `dev` 提交 PR。
 - `master` 只接受 PR，允许 merge commit 与 rebase merge，禁用 squash merge；合入后必须回流 `dev`。
-- `Candidate Quality` 是稳定聚合质量门，当前验证仓库卫生、检查器以及 M0 Go + PostgreSQL 核心契约实验，后续随真实应用接入各技术栈检查。
+- `Candidate Quality` 是稳定聚合质量门，当前验证仓库卫生、检查器、M0 核心契约实验以及正式 Go 服务的单元、静态和真实 PostgreSQL 边界。
 - 仓库中的 Ruleset JSON 是版本化模板，不表示 GitHub 远端设置已经生效。
 
 开始贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [协作约定](AGENTS.md)。安全问题按 [SECURITY.md](SECURITY.md) 私下报告。当前本地基线可运行：
 
 ```bash
 ./scripts/check-repo.sh
+./scripts/check-server.sh
+./scripts/check-server-postgres.sh
 ```
 
 ## 名称

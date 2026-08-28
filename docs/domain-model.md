@@ -155,6 +155,10 @@ Environment 独立存在并通过 EntityLink 关联 Component，不能假设一�
 - Message 与 Thread 保存原始讨论；
 - 讨论可以产生 Ticket、Document 或 Decision，但转换后仍保留双向引用。
 
+### M0 协作作用域
+
+M0 纵向切片继续冻结 `thread` / `thr_` 与 `ticket` / `tkt_` 的稳定引用。Thread、Decision 和 Ticket 各自保存不可变的 `governing_project_id` 作为协作与授权上下文；来源、实现和其它业务关系仍由 EntityLink 表达。Thread 首批冻结 `title` 与 `project / restricted` 可见性；Ticket 首批冻结 `title` 与 `open / in-progress / done / canceled` 状态。完整聊天和工单工作流字段等待 Golden Path 交互验证。精确权限边界见 [ADR-0004](adr/0004-project-scoped-collaboration-permissions.md)。
+
 ### Ticket
 
 可执行工作的统一对象。需求、任务、缺陷、事故和改进项通过 type、workflow 和字段配置表达，不在首期拆成彼此无关的模型。

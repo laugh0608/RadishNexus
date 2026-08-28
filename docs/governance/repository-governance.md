@@ -97,8 +97,9 @@ Ruleset 只依赖一个稳定聚合状态 `Candidate Quality`。当前聚合以�
 - `Repo Hygiene`：运行仓库检查器，验证文本、链接、模板和治理契约；
 - `Repository Checker Tests`：验证检查器本身的关键行为；
 - `M0 Core Contracts`：运行 Go 单元测试、`go vet` 和真实 PostgreSQL 事务/约束集成测试。
+- `Go Server`：运行正式服务单元测试、`go vet`、module 校验和真实 PostgreSQL migration / 权限 / 事务集成测试。
 
-当前只对已经进入仓库的 M0 Go + PostgreSQL 实验设置检查，不把它描述为正式服务。React Web、插件或 SDK 真正进入仓库后，再把对应格式化、单元测试、构建、安全和许可证检查接入工作流，并保持 `Candidate Quality` 名称稳定。不得为尚不存在的目录或工具创建必需状态检查。
+当前只对已经进入仓库的 M0 实验和正式 Go 服务设置检查。React Web、插件或 SDK 真正进入仓库后，再把对应格式化、单元测试、构建、安全和许可证检查接入工作流，并保持 `Candidate Quality` 名称稳定。不得为尚不存在的目录或工具创建必需状态检查。
 
 ## 变更同步矩阵
 

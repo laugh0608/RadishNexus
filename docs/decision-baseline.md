@@ -105,11 +105,34 @@
 - EntityLink 分开记录 asserted / derived 事实强度与 user / system / plugin / import 来源，移除关系不能删除旧来源证据。
 - 首批 ID 前缀、引用序列化、授权结果和事件持久化边界已由 ADR-0002 接受；其余类型前缀和物理 schema 仍需原型验证。
 
+### D-014 Go 服务端基础栈
+
+- 首期正式服务使用单一 `server/` Go module，并保持模块化单体。
+- HTTP server、路由和测试使用 Go 标准库；当前不引入 Web 框架。
+- PostgreSQL 使用原生 `pgx/v5` 与 `pgxpool`，SQL 手写并版本化；当前不引入 ORM 或 query builder。
+- 事务由 application service 显式控制，领域层不暴露驱动类型或 SQL 错误字符串。
+- SQL 代码生成和完整服务目录层级仍需在真实纵向切片中收窄决定。
+
+### D-015 首个协作权限切片
+
+- Thread、Decision 和 Ticket 各自保存不可变的 governing Project 授权上下文；业务关系仍由 EntityLink 表达。
+- Thread 与 Ticket 的首批类型前缀分别为 `thr_` 和 `tkt_`，具体 ID 生成算法仍未冻结。
+- Project 首批角色为 `viewer / contributor / decider / admin`；只有 `decider` 和 `admin` 可以 Accepted Decision。
+- restricted Thread 需要显式 Thread 成员权限，Project 角色不会自动穿透；无权限关系目标只显示不含标识和展示字段的通用占位。
+- 认证协议仍未冻结，application service 只接收认证 adapter 提供的显式 Principal。
+
+### D-016 PostgreSQL migration 基线
+
+- migration 使用连续编号、SHA-256 artifact 校验、session advisory lock 和单 migration 事务。
+- schema 变更通过独立命令显式执行，不成为服务副本启动的隐藏副作用。
+- 正式 runner 只向前推进；自动 down SQL 不作为生产回滚承诺，已提交升级依赖备份恢复或经过验证的 forward repair。
+- 当前不为未出现的模板、在线 DDL 或多数据库需求引入额外 migration 依赖。
+
 ## 尚未冻结
 
 以下事项仍需在实现前通过原型或 ADR 决定：
 
-- Go Web 框架和数据库访问库；
+- SQL 代码生成；
 - 文档编辑器与 CRDT 具体技术；
 - 插件后端首版采用 WASM、独立进程还是只提供声明式自动化；
 - SDK 和官方插件统一采用 Apache-2.0、MIT 或按组件选择；
@@ -125,3 +148,6 @@
 - 2026-08-27：建立初始决策基线。
 - 2026-08-27：确认 Decision、研发资产分层、Golden Path 以及 EntityLink/Activity 基线。
 - 2026-08-28：冻结首批 M0 核心对象字段与不变量，并接受 ADR-0002 的稳定引用、授权与事件投影边界。
+- 2026-08-28：接受 ADR-0003，冻结标准库 HTTP、原生 `pgx/v5` 与手写版本化 SQL 的首期服务端基线。
+- 2026-08-28：接受 ADR-0004，冻结 Thread → Decision → Ticket 的 Project 作用域、最小角色和私密关系投影边界。
+- 2026-08-28：接受 ADR-0005，冻结显式、可校验、事务化的 forward-only PostgreSQL migration 基线。
