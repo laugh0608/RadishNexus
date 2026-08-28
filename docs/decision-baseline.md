@@ -2,7 +2,7 @@
 
 状态：已确认的初始产品决策
 
-日期：2026-08-27
+日期：2026-08-28
 
 本文件用于防止后续讨论静默改变当前方向。修改“已确认”事项时，必须同时记录修改日期、原因、影响和迁移方式。
 
@@ -96,6 +96,15 @@
 - 引用、反向链接、时间线、通知、搜索和 AI 扩展不得绕过目标对象权限。
 - 首期使用 PostgreSQL 实现关系和查询，不引入图数据库。
 
+### D-013 首批 M0 核心字段边界
+
+- Project、Initiative、Component、Decision、Environment 和 EntityLink 已冻结首批最小业务字段与状态不变量，精确含义以[领域模型](domain-model.md)为准。
+- 六类对象都显式归属 Workspace，并使用创建后不可变、不复用的稳定 ID；名称、key、URL 和数据库行号不构成身份。
+- Project 的默认可见性不能放宽其内部私密对象；Environment 独立于 Component，production 分类不能因 UI 简化而失去保护语义。
+- Decision 的 Accepted、Rejected 和 Superseded 状态都必须保留相应主体、理由、时间与证据，自动提炼不能直接确认 Decision。
+- EntityLink 分开记录 asserted / derived 事实强度与 user / system / plugin / import 来源，移除关系不能删除旧来源证据。
+- 首批 ID 前缀、引用序列化、授权结果和事件持久化边界已由 ADR-0002 接受；其余类型前缀和物理 schema 仍需原型验证。
+
 ## 尚未冻结
 
 以下事项仍需在实现前通过原型或 ADR 决定：
@@ -115,3 +124,4 @@
 
 - 2026-08-27：建立初始决策基线。
 - 2026-08-27：确认 Decision、研发资产分层、Golden Path 以及 EntityLink/Activity 基线。
+- 2026-08-28：冻结首批 M0 核心对象字段与不变量，并接受 ADR-0002 的稳定引用、授权与事件投影边界。

@@ -2,7 +2,7 @@
 
 状态：方向基线，具体库尚未冻结
 
-日期：2026-08-27
+日期：2026-08-28
 
 ## 架构目标
 
@@ -147,16 +147,18 @@ entity://deployment/dep_003
 
 引用必须经过原对象权限检查。能够看到工单不表示自动获得关联私密频道或文档的读取权。
 
+类型注册、结构化表示、Workspace 解析和受限占位的 M0 基线见[核心实体、授权与事件契约](core-contracts.md)。具体 ID 算法和物理 schema 仍未冻结。
+
 ## EntityLink 与 Nexus View
 
 跨模块关系使用一等 `EntityLink` 记录，而不是让每个模块分别维护不可追溯的关联字段。EntityLink 至少保存关系类型、两端实体、来源、创建者、建立时间和状态。
 
-关系有两种来源：
+关系的事实强度分为：
 
 - asserted：用户或受权系统明确确认的事实；
 - derived：插件、导入器或规则推导的关系。
 
-两者必须在 API 和 UI 中可区分。自动推导的关系不能冒充人工确认的 Decision 或 Deployment 事实。
+关系来源另行记录为 user、system、plugin 或 import，并指向具体来源主体。事实强度与来源是两个维度：用户可以明确确认 `derived-from` 关系，插件也只能在获权范围内写入推导关系。两者必须在 API 和 UI 中可区分，自动推导的关系不能冒充人工确认的 Decision 或 Deployment 事实。
 
 每个主要对象通过 Nexus View 统一提供：
 
@@ -172,8 +174,8 @@ entity://deployment/dep_003
 首期使用 PostgreSQL Transactional Outbox 保证业务写入和事件记录的一致性。事件至少包含：
 
 - event ID 和 type；
-- workspace/project；
-- actor；
+- workspace 和可选 project context；
+- actor 和 source；
 - primary entity；
 - correlation ID 和 causation ID；
 - occurred time；
@@ -181,6 +183,8 @@ entity://deployment/dep_003
 - 最小且经过权限评估的 payload。
 
 Activity 不是 Outbox 的副本。Outbox 用于可靠投递，Activity 是可重建、可权限过滤的产品时间线投影；审计日志则保存安全与合规所需的操作证据。三者可以来自同一领域事件，但保留不同职责和生命周期。
+
+M0 契约把不可变领域事件事实与可变投递状态作逻辑分离，避免已投递 Outbox 清理后无法重建 Activity 或验证备份；具体一表或分表由 PostgreSQL 原型决定。详见[核心实体、授权与事件契约](core-contracts.md)和 [ADR-0002](../adr/0002-stable-entity-reference-and-event-projection.md)。
 
 早期不强制引入独立消息中间件。只有插件吞吐、跨进程可靠消费或服务拆分形成真实需求后，再评估 NATS JetStream 等方案。
 
