@@ -8,6 +8,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | --- | --- | --- |
 | [ADR-0001](0001-branch-and-pr-governance.md) | 已接受 | 分支与 PR 治理 |
 | [ADR-0002](0002-stable-entity-reference-and-event-projection.md) | 已接受 | 稳定实体引用与事件投影边界 |
+| [ADR-0003](0003-go-service-foundation.md) | 提议 | Go 服务端基础栈与数据访问 |
 
 ## 新建规则
 

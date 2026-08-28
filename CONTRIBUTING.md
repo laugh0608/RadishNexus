@@ -73,6 +73,20 @@ pwsh ./scripts/check-repo.ps1
 python3 -m unittest discover -s scripts/tests -p "test_*.py"
 ```
 
+M0 核心契约 Go 检查：
+
+```bash
+./scripts/check-m0-core-contracts.sh
+```
+
+修改 M0 schema、事务、事件、Outbox 或 Activity 时，还需运行真实 PostgreSQL 边界测试：
+
+```bash
+./scripts/check-m0-core-contracts-postgres.sh
+```
+
+PostgreSQL 脚本使用固定镜像、随机本机端口和任务专属临时容器，结束后自动删除且不保留数据卷；镜像不存在时不会隐式下载。详细边界见 [M0 核心契约实验](experiments/m0-core-contracts/README.md)。
+
 实现代码进入仓库后，还必须执行与改动范围匹配的 Go、React / TypeScript、Rust 或 Flutter 格式化、静态分析、测试和构建。PR 只记录真实执行过的命令，并明确列出未执行、受环境阻塞或需要人工完成的验证。
 
 ## Pull Request 说明

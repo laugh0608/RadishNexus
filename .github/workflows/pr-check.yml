@@ -58,6 +58,44 @@ jobs:
       - name: Test repository checker
         run: python3 -m unittest discover -s scripts/tests -p "test_*.py"
 
+  m0-core-contracts:
+    name: M0 Core Contracts
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_DB: radishnexus_m0_test
+          POSTGRES_USER: radishnexus_test
+          POSTGRES_PASSWORD: radishnexus-test-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U radishnexus_test -d radishnexus_m0_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: experiments/m0-core-contracts/go.mod
+          cache-dependency-path: experiments/m0-core-contracts/go.sum
+
+      - name: Check Go contract experiment
+        run: ./scripts/check-m0-core-contracts.sh
+
+      - name: Test PostgreSQL contract experiment
+        working-directory: experiments/m0-core-contracts
+        env:
+          DATABASE_URL: postgres://radishnexus_test:radishnexus-test-only@127.0.0.1:5432/radishnexus_m0_test?sslmode=disable
+        run: go test -tags=integration ./...
+
   candidate-quality:
     name: Candidate Quality
     runs-on: ubuntu-latest
@@ -65,6 +103,7 @@ jobs:
     needs:
       - repo-hygiene
       - checker-tests
+      - m0-core-contracts
 
     steps:
       - name: Summarize candidate quality
@@ -72,6 +111,7 @@ jobs:
         env:
           REPO_HYGIENE_RESULT: ${{ needs.repo-hygiene.result }}
           CHECKER_TESTS_RESULT: ${{ needs.checker-tests.result }}
+          M0_CORE_CONTRACTS_RESULT: ${{ needs.m0-core-contracts.result }}
         run: |
           {
             echo "## Candidate Quality"
@@ -80,9 +120,10 @@ jobs:
             echo "| --- | --- |"
             echo "| Repo Hygiene | ${REPO_HYGIENE_RESULT} |"
             echo "| Repository Checker Tests | ${CHECKER_TESTS_RESULT} |"
+            echo "| M0 Core Contracts | ${M0_CORE_CONTRACTS_RESULT} |"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-          if [[ "${REPO_HYGIENE_RESULT}" != "success" || "${CHECKER_TESTS_RESULT}" != "success" ]]; then
+          if [[ "${REPO_HYGIENE_RESULT}" != "success" || "${CHECKER_TESTS_RESULT}" != "success" || "${M0_CORE_CONTRACTS_RESULT}" != "success" ]]; then
             echo "Candidate quality checks did not all succeed." >&2
             exit 1
           fi

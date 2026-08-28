@@ -27,3 +27,12 @@ PowerShell 环境可以运行：
 ```
 
 随着实现进入仓库，各语言的真实构建和测试会加入统一质量门；在此之前不维护虚假的占位命令。
+
+当前 M0 核心契约实验已经提供独立的 Go 与 PostgreSQL 定向入口：
+
+```bash
+./scripts/check-m0-core-contracts.sh
+./scripts/check-m0-core-contracts-postgres.sh
+```
+
+该目录是可丢弃技术实验，不代表正式服务工程已经建立；范围、依赖和清理方式见 [M0 核心契约实验](../../experiments/m0-core-contracts/README.md)。

@@ -43,7 +43,13 @@ REQUIRED_FILES = (
     "docs/governance/agent-collaboration.md",
     "docs/governance/documentation-governance.md",
     "docs/governance/repository-governance.md",
+    "experiments/m0-core-contracts/README.md",
+    "experiments/m0-core-contracts/go.mod",
+    "experiments/m0-core-contracts/go.sum",
+    "experiments/m0-core-contracts/migrations/001_core_contracts.sql",
     "scripts/README.md",
+    "scripts/check-m0-core-contracts-postgres.sh",
+    "scripts/check-m0-core-contracts.sh",
     "scripts/check-repo.ps1",
     "scripts/check-repo.sh",
     "scripts/check_repo.py",
@@ -352,10 +358,13 @@ def check_workflow_contract(errors: list[str]) -> None:
         "- master",
         "name: Repo Hygiene",
         "name: Repository Checker Tests",
+        "name: M0 Core Contracts",
         "name: Candidate Quality",
         "./scripts/check-repo.sh",
+        "./scripts/check-m0-core-contracts.sh",
         "python3 -m unittest discover -s scripts/tests",
-        "needs:\n      - repo-hygiene\n      - checker-tests",
+        "go test -tags=integration ./...",
+        "needs:\n      - repo-hygiene\n      - checker-tests\n      - m0-core-contracts",
     )
     for fragment in required_fragments:
         if fragment not in text:

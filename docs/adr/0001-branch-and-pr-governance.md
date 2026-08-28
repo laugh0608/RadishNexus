@@ -57,6 +57,8 @@ Ruleset 只绑定稳定上下文 `Candidate Quality`。工作流内部可以随�
 
 当前只运行已经真实存在的仓库卫生检查和检查器单元测试。不存在的构建不设为必需状态。
 
+实施记录：2026-08-28，M0 Go + PostgreSQL 核心契约实验进入仓库后，其单元测试、`go vet` 和真实 PostgreSQL 集成测试已加入聚合门；`Candidate Quality` 名称与 Ruleset 绑定保持不变。这是本 ADR 预留的内部检查演进，不改变分支或保护策略。
+
 ## 未采用的方案
 
 ### 只有 `master`

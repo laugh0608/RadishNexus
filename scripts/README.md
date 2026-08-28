@@ -39,3 +39,19 @@ python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 ```
 
 检查器只验证能被仓库静态判定的基线，不声称远端 Ruleset 已启用，也不替代未来 Go、React、Rust、Flutter、数据库、浏览器或部署测试。
+
+## M0 核心契约实验
+
+不需要数据库的 Go 测试与静态检查：
+
+```bash
+./scripts/check-m0-core-contracts.sh
+```
+
+使用固定 digest 的临时 PostgreSQL 17.10 容器运行真实事务、约束、Outbox 和 Activity 重建测试：
+
+```bash
+./scripts/check-m0-core-contracts-postgres.sh
+```
+
+后者只操作任务专属容器和其中的 `m0_core` schema，结束后自动删除容器；默认不会隐式拉取缺失镜像。实验范围和手工数据库入口见 [M0 核心契约实验](../experiments/m0-core-contracts/README.md)。
