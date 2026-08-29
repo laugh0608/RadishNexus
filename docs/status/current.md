@@ -47,11 +47,11 @@
 - Decision Nexus View 代表原型已经表达 Current、Relations 和 Timeline，并覆盖 loading、empty、error、restricted placeholder 与窄屏布局。
 - Web 原型只消费权限过滤后的 discriminated union；`restricted` 形状不携带 EntityRef、对象类型、关系类型、标题、来源或时间，`hidden` 目标不进入客户端数据。
 - 原型使用明确标注的静态 fixture；本轮浏览器复核没有暴露必须新增内部 handler 的需求，因此没有为了联调制造临时业务 API。
-- `web/` 已建立 Prettier、Oxlint、Vitest + jsdom、严格 TypeScript、Vite production build 与 lockfile 供应链检查；`Candidate Quality` 已加入独立 `Web App` job，远端结果仍需在本批次 PR 中确认。
+- `web/` 已建立 Prettier、Oxlint、Vitest + jsdom、严格 TypeScript、Vite production build 与 lockfile 供应链检查；`Candidate Quality` 已加入独立 `Web App` job，并已在本批次 PR 中实际通过。
 - 在横向补全各模块前，先完成 Golden Path 纵向原型。
 - 仓库采用 `master` 稳定分支、`dev` 集成分支和主题分支；普通 PR 默认进入 `dev`。
 - `master` 允许 merge commit 和 rebase merge，禁用 squash merge，并要求变化回流 `dev`。
-- `Candidate Quality` 作为稳定聚合质量门；仓库定义已加入 M0 实验、正式 Go 服务和 Web App 的单元/状态测试、静态检查、构建与真实 PostgreSQL 集成测试；新增 Web job 的远端结果仍需在本批次 PR 中确认。
+- `Candidate Quality` 作为稳定聚合质量门；仓库定义已加入 M0 实验、正式 Go 服务和 Web App 的单元/状态测试、静态检查、构建与真实 PostgreSQL 集成测试，新增 Web job 与聚合门已在 GitHub 实际通过。
 - GitHub 远端默认分支为 `master`，`master` Ruleset 已启用并要求 PR、严格状态检查和已解决对话。
 - GitHub Private vulnerability reporting 已启用；未修复漏洞优先通过仓库 Security Advisory 私下报告，入口和备用联系方式以 [SECURITY.md](../../SECURITY.md) 为准。
 
@@ -80,13 +80,13 @@
 
 Decision Nexus View 代表原型已经达到本地完成线。当前批次先收口 Web 工程并确认远端门禁，再进入下一个独立后端纵向切片：
 
-1. 提交代表原型、Web 工程基线与治理同步，创建面向 `dev` 的 PR，确认新增 `Web App` 与聚合 `Candidate Quality` 在 GitHub 实际通过；
+1. 把远端门禁全绿的代表原型、Web 工程基线与治理同步 PR 合入 `dev`，再从最新 `dev` 开始下一独立切片；
 2. 原型没有暴露必须新增内部 handler 的需求，本批次不为了“接上后端”制造临时业务 API；公开错误对象、分页、游标和通用资源模型继续保持未冻结；
 3. Web PR 合并后，从最新 `dev` 独立准备 Jenkins CI Run 切片，先沿 Golden Path、插件隔离、Webhook 来源校验与 delivery 幂等边界冻结最小输入；
 4. Jenkins 切片只把成功验证和幂等接收的交付事实映射为独立 CI Run，不把构建成功解释为已经部署，也不提前实现通用插件市场；
 5. CI Run 读取体验稳定后，后端纵向顺位保持为显式 staging Deployment → 备份恢复。
 
-下一步完成线：本批次 Web PR 的新增检查在远端全绿；随后 Jenkins 重复 delivery 不重复创建 CI Run，来源、失败和审计边界可复验，CI Run 仍与 Deployment 保持不同实体和生命周期。
+下一步完成线：Web PR 合入 `dev` 后，Jenkins 重复 delivery 不重复创建 CI Run，来源、失败和审计边界可复验，CI Run 仍与 Deployment 保持不同实体和生命周期。
 
 下一步停止线：不为代表原型补临时公共 API，不启动 Flutter，不选择 CRDT，不建立通用 RBAC framework，不扩建完整 Web Shell、聊天界面或插件市场，不把 CI 成功冒充 Deployment。
 
