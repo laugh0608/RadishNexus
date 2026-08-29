@@ -2,7 +2,7 @@
 
 状态：已确认的初始产品决策
 
-日期：2026-08-28
+日期：2026-08-29
 
 本文件用于防止后续讨论静默改变当前方向。修改“已确认”事项时，必须同时记录修改日期、原因、影响和迁移方式。
 
@@ -128,6 +128,15 @@
 - 正式 runner 只向前推进；自动 down SQL 不作为生产回滚承诺，已提交升级依赖备份恢复或经过验证的 forward repair。
 - 当前不为未出现的模板、在线 DDL 或多数据库需求引入额外 migration 依赖。
 
+### D-017 CI Run 与 staging Deployment 边界
+
+- `ci-run` / `cir_` 与 `deployment` / `dpl_` 是不同的稳定业务身份；构建成功不自动创建 Deployment，也不证明外部部署已经发生。
+- Jenkins 核心只接收已完成来源认证、重放校验和字段映射的 verified delivery，并原子记录完成态 CI Run、幂等 receipt、领域事件和 Outbox；不保存 Secret 或原始 webhook body。
+- CI Run 的 M0 用户读取沿 active Workspace 成员 → Component → CI Run 解析；owner Team、Project、EntityLink 和 Jenkins source 都不授予读取权，不可读对象返回 not-found。
+- M0 staging Deployment 只由明确用户通过受控 `web / api` 调用记录；调用者必须是 active Workspace 成员，并持有目标 active staging Environment 的 active 显式授权。
+- Project 角色、owner Team、CI source 和成功构建都不隐式授予部署能力。记录必须保留实际操作者、所用授权、来源 CI Run 与 Environment，并与 `deploys` 关系、领域事件和 Outbox 原子提交。
+- 当前 Deployment command 只记录调用方已经确认的外部终态事实，不执行部署、不读取 Secret，也不支持 production、审批、回滚或运行中状态。精确技术契约以 [ADR-0006](adr/0006-verified-jenkins-delivery-and-ci-run.md)、[ADR-0007](adr/0007-component-scoped-ci-run-read.md) 与 [ADR-0009](adr/0009-explicit-staging-deployment.md) 为准。
+
 ## 尚未冻结
 
 以下事项仍需在实现前通过原型或 ADR 决定：
@@ -151,3 +160,4 @@
 - 2026-08-28：接受 ADR-0003，冻结标准库 HTTP、原生 `pgx/v5` 与手写版本化 SQL 的首期服务端基线。
 - 2026-08-28：接受 ADR-0004，冻结 Thread → Decision → Ticket 的 Project 作用域、最小角色和私密关系投影边界。
 - 2026-08-28：接受 ADR-0005，冻结显式、可校验、事务化的 forward-only PostgreSQL migration 基线。
+- 2026-08-29：冻结完成态 CI Run 的 verified delivery、Component 作用域读取，以及显式 staging Deployment 与环境级授权边界。

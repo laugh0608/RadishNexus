@@ -94,9 +94,9 @@
 - [M0 核心契约实验](../../experiments/m0-core-contracts/README.md)
 - [正式 Go 服务](../../server/README.md)
 
-## 下一步事项
+## 明日事项（2026-08-30）
 
-显式 staging Deployment 的最小领域、Environment 归属、环境级授权、终态状态、CI Run 关系、领域事件与事务边界已经由 ADR-0009、migration 004、application service 和真实 PostgreSQL 测试完成。仓库采用 ADR-0008 的 `dev` 优先开发拓扑，不为该独立切片补建临时分支；当前直接进入最小备份恢复：
+明日主目标是完成最小备份恢复纵向切片的契约冻结、实现和全新 PostgreSQL 实例恢复演练。显式 staging Deployment 的最小领域、Environment 归属、环境级授权、终态状态、CI Run 关系、领域事件与事务边界已经由 ADR-0009、migration 004、application service 和真实 PostgreSQL 测试完成；仓库采用 ADR-0008 的 `dev` 优先开发拓扑，继续直接在 `dev` 推进：
 
 1. 先冻结备份范围、恢复前提、manifest、schema migration history 与 Secret 排除边界；备份必须包含稳定 ID、业务权威表、授权 provenance、EntityLink、不可变领域事件、receipt 和必要 Outbox 状态，但默认不包含 Secret、Token、外部实例凭据或本机授权材料；
 2. 以一个全新 PostgreSQL 实例做真实恢复演练，不在原库上用复制 schema 或测试事务冒充恢复；恢复后显式运行 forward-only migration，并拒绝 migration checksum 漂移或目标库已有冲突状态；

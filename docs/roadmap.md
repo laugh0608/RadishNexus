@@ -49,7 +49,7 @@
 - Thread 创建 Decision，Decision 创建基础 Ticket；
 - 简单 Markdown Document；
 - Jenkins Webhook 映射 CI Run；
-- CI Run 关联一条 staging Deployment；
+- 由获环境授权的成员显式记录并关联一条 staging Deployment；
 - EntityLink、Activity 和最小 Nexus View；
 - 权限过滤、审计、Docker Compose 与最小备份恢复。
 
