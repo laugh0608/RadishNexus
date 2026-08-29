@@ -6,7 +6,7 @@
 
 产品定义、架构基线、仓库治理基线与 M0 正式服务纵向切片。
 
-当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建和 Decision / Ticket Nexus View 读取查询已经建立；尚未建立正式 Web App、插件或客户端，也尚未开放业务 HTTP API。
+当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；尚未建立正式 Web App、插件或客户端，也尚未开放业务 HTTP API。
 
 ## 当前结论
 
@@ -41,6 +41,8 @@
 - contributor 不能确认 Decision；decider 必须能读取全部 evidence 后才能人工确认；Project admin 也不会自动穿透 restricted Thread。
 - Nexus View application query 已能为 Decision 和 Ticket 返回 Current、Relations 和 Timeline，并在同一 repeatable-read 事务中按当前权限解析。
 - Relations 和 Timeline 对不可读目标只返回不含 EntityRef、类型、关系类型和标题的通用占位；hidden 目标不进入结果。
+- 最小认证 adapter 只把上游已验证的 UserID 与 WorkspaceID 转换为 application `Principal`，不读取或验证 Header、Cookie、Token 和 OIDC claims。
+- 内部 HTTP error mapping 已覆盖 `unauthenticated / forbidden / not found / conflict / invalid` 与未知失败；它不暴露原始错误，也尚未形成公共响应对象。
 - 在横向补全各模块前，先完成 Golden Path 纵向原型。
 - 仓库采用 `master` 稳定分支、`dev` 集成分支和主题分支；普通 PR 默认进入 `dev`。
 - `master` 允许 merge commit 和 rebase merge，禁用 squash merge，并要求变化回流 `dev`。
@@ -71,14 +73,15 @@
 
 ## 下一步事项
 
-读取模型已经达到本批次完成线。下一步先收口最小交付边界，不横向铺开聊天或通用 API：
+读取模型和最小 transport adapter 已经达到本批次完成线。下一步只准备 Current、Relations 和 Timeline 的 React Nexus View 代表原型，不横向铺开聊天或通用 API：
 
-1. 根据 Nexus View 查询实际需要的 principal 输入和现有 application service 的 `unauthenticated / forbidden / not found / conflict / invalid` 错误，起草最小认证 adapter 与内部 HTTP 错误映射；
-2. 没有必要时不开放业务 HTTP API，也不提前冻结公共分页、游标或通用资源模型；
-3. transport 边界明确后，只准备 Current、Relations 和 Timeline 的 React Nexus View 代表原型，用它验证 restricted 占位与上下文不断链，不先铺完整聊天或 Web Shell；
-4. 读取体验稳定后，后端纵向顺位保持为 Jenkins CI Run → 显式 staging Deployment → 备份恢复。
+1. 在新增依赖前先冻结最小 Web 工程基线、检查入口、许可证和供应链边界，并同步工程规范与 CI；
+2. 代表原型只消费权限过滤后的 Nexus View 形状，不在前端复制授权判断，也不为了页面方便扩充 Activity 安全事实；
+3. 覆盖 loading、empty、error、restricted placeholder 和窄屏状态，但不先建设完整 Web Shell、导航或聊天页面；
+4. 只有代表原型暴露真实需要时，才增加单个内部只读 handler；不提前冻结公共分页、游标或通用资源模型；
+5. 读取体验稳定后，后端纵向顺位保持为 Jenkins CI Run → 显式 staging Deployment → 备份恢复。
 
-下一步完成线：认证与错误边界只表达现有 application contract，React 代表原型不复制权限逻辑，也不要求为了页面方便把标题或敏感摘要写入 Activity。
+下一步完成线：一个 Decision 或 Ticket 的 Current、Relations 和 Timeline 可以在代表原型中清楚表达上下文来源；restricted placeholder 不泄漏目标身份，前端不复制权限逻辑，新增 Web 工程入口有对应本地与 CI 检查。
 
 下一步停止线：不启动 Flutter，不选择 CRDT，不建立通用 RBAC framework，不把临时 HTTP 路由当成已承诺的公共 API，不在 Nexus View 代表原型外扩建完整聊天界面。
 

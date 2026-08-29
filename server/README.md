@@ -8,11 +8,15 @@
 - Project 角色、restricted Thread 和关系投影权限；
 - 与业务状态同事务写入的不可变领域事件与 Outbox 投递状态；
 - 从领域事件原子、幂等重建的 Activity projection version 1；
-- 为 Decision 和 Ticket 返回 Current、Relations 和 Timeline 的权限过滤 Nexus View query。
+- 为 Decision 和 Ticket 返回 Current、Relations 和 Timeline 的权限过滤 Nexus View query；
+- 把已验证用户身份转换为 application `Principal` 的最小认证 adapter；
+- 把 application sentinel error 转换为内部 HTTP 状态与安全机器码的显式映射。
 
 业务写入尚未暴露为 HTTP API。认证 adapter、公共错误对象和 API 版本策略冻结前，调用方应直接通过 application service 测试领域与权限边界。
 
 当前 Activity 白名单只包含 `decision.proposed`、`decision.accepted` 和 `ticket.created`。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，不依赖 Outbox 投递状态，也尚未建立常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
+
+当前认证 adapter 不读取 Header、Cookie、Token 或 OIDC claims，也不负责验证凭据；未来的本地 session 或 OIDC verifier 只有在成功认证后才能向它提供 `VerifiedUser`。HTTP error mapping 不是公共响应 schema，也不写 response body；未来 handler 仍需单独确定 request ID、日志、内容类型和公共错误对象。不可读资源由 application service 返回 `not found`，transport 不把它改写成 `forbidden`。
 
 ## 本地检查
 
