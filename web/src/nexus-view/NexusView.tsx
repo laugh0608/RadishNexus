@@ -1,4 +1,6 @@
 import type {
+  CIRunNexusCurrent,
+  DecisionNexusCurrent,
   NexusRelation,
   NexusTimelineItem,
   NexusViewData,
@@ -81,51 +83,138 @@ function ErrorNexusView({ message, onRetry }: ErrorNexusViewProps) {
 }
 
 function ReadyNexusView({ data }: { data: NexusViewData }) {
-  const { current } = data;
-
   return (
     <main className="nexus-layout">
-      <article className="current-card" aria-labelledby="nexus-current-title">
-        <div className="current-card__topline">
-          <p className="section-kicker">{current.eyebrow}</p>
-          <span className={`status-badge status-badge--${current.status}`}>
-            <span aria-hidden="true" />
-            {current.statusLabel}
-          </span>
-        </div>
-
-        <div className="current-card__body">
-          <div>
-            <h1 id="nexus-current-title">{current.title}</h1>
-            <p className="current-card__summary">{current.summary}</p>
-          </div>
-          <div className="entity-stamp" aria-label="稳定实体引用">
-            <span>EntityRef</span>
-            <code>{current.entityRef}</code>
-          </div>
-        </div>
-
-        <dl className="current-meta">
-          <MetaItem label="Governing Project" value={current.projectLabel} />
-          <MetaItem label="Decision Owner" value={current.decisionOwnerLabel} />
-          <MetaItem
-            label="Evidence"
-            value={`${current.evidenceCount} 条可读依据`}
-          />
-          <div>
-            <dt>Last activity</dt>
-            <dd>
-              <time dateTime={current.updatedAt}>{current.updatedAtLabel}</time>
-            </dd>
-          </div>
-        </dl>
-      </article>
+      {data.current.entityType === "ci-run" ? (
+        <CIRunCurrentCard current={data.current} />
+      ) : (
+        <DecisionCurrentCard current={data.current} />
+      )}
 
       <div className="nexus-columns">
-        <RelationsPanel relations={data.relations} />
+        <RelationsPanel
+          relations={data.relations}
+          currentEntityType={data.current.entityType}
+        />
         <TimelinePanel timeline={data.timeline} />
       </div>
     </main>
+  );
+}
+
+function DecisionCurrentCard({ current }: { current: DecisionNexusCurrent }) {
+  return (
+    <article className="current-card" aria-labelledby="nexus-current-title">
+      <CurrentTopline
+        eyebrow={current.eyebrow}
+        status={current.status}
+        statusLabel={current.statusLabel}
+      />
+
+      <div className="current-card__body">
+        <div>
+          <h1 id="nexus-current-title">{current.title}</h1>
+          <p className="current-card__summary">{current.summary}</p>
+        </div>
+        <EntityStamp entityRef={current.entityRef} />
+      </div>
+
+      <dl className="current-meta">
+        <MetaItem label="Governing Project" value={current.projectLabel} />
+        <MetaItem label="Decision Owner" value={current.decisionOwnerLabel} />
+        <MetaItem
+          label="Evidence"
+          value={`${current.evidenceCount} 条可读依据`}
+        />
+        <TimeMetaItem
+          label="Last activity"
+          dateTime={current.updatedAt}
+          value={current.updatedAtLabel}
+        />
+      </dl>
+    </article>
+  );
+}
+
+function CIRunCurrentCard({ current }: { current: CIRunNexusCurrent }) {
+  return (
+    <article
+      className="current-card current-card--ci-run"
+      aria-labelledby="nexus-current-title"
+    >
+      <CurrentTopline
+        eyebrow={current.eyebrow}
+        status={current.status}
+        statusLabel={current.statusLabel}
+      />
+
+      <div className="current-card__body current-card__body--ci-run">
+        <div>
+          <h1 id="nexus-current-title">CI Run</h1>
+          <p className="current-card__summary">{current.summary}</p>
+        </div>
+        <div className="ci-run-context">
+          <div className="component-stamp" aria-label="所属 Component">
+            <span>Component</span>
+            <strong>{current.component.name}</strong>
+            <code>{current.component.entityRef}</code>
+          </div>
+          <EntityStamp entityRef={current.entityRef} />
+        </div>
+      </div>
+
+      <dl className="current-meta current-meta--ci-run">
+        <TimeMetaItem
+          label="Started"
+          dateTime={current.startedAt}
+          value={current.startedAtLabel}
+        />
+        <TimeMetaItem
+          label="Completed"
+          dateTime={current.completedAt}
+          value={current.completedAtLabel}
+        />
+        <TimeMetaItem
+          label="Recorded"
+          dateTime={current.recordedAt}
+          value={current.recordedAtLabel}
+        />
+        <TimeMetaItem
+          label="Last updated"
+          dateTime={current.updatedAt}
+          value={current.updatedAtLabel}
+        />
+      </dl>
+    </article>
+  );
+}
+
+function CurrentTopline({
+  eyebrow,
+  status,
+  statusLabel,
+}: {
+  eyebrow: string;
+  status: string;
+  statusLabel: string;
+}) {
+  return (
+    <div className="current-card__topline">
+      <p className="section-kicker">{eyebrow}</p>
+      <span className={`status-badge status-badge--${status}`}>
+        <span aria-hidden="true" />
+        {statusLabel}
+      </span>
+    </div>
+  );
+}
+
+function EntityStamp({ entityRef }: { entityRef: string }) {
+  return (
+    <div className="entity-stamp" aria-label="稳定实体引用">
+      <span>EntityRef</span>
+      <code>{entityRef}</code>
+    </div>
   );
 }
 
@@ -138,10 +227,31 @@ function MetaItem({ label, value }: { label: string; value: string }) {
   );
 }
 
+function TimeMetaItem({
+  label,
+  dateTime,
+  value,
+}: {
+  label: string;
+  dateTime: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>
+        <time dateTime={dateTime}>{value}</time>
+      </dd>
+    </div>
+  );
+}
+
 function RelationsPanel({
   relations,
+  currentEntityType,
 }: {
   relations: readonly NexusRelation[];
+  currentEntityType: NexusViewData["current"]["entityType"];
 }) {
   return (
     <section className="panel" aria-labelledby="relations-title">
@@ -155,7 +265,11 @@ function RelationsPanel({
       {relations.length === 0 ? (
         <EmptyState
           title="暂无关联上下文"
-          description="当前 Decision 还没有你可以看到的关联对象。"
+          description={
+            currentEntityType === "ci-run"
+              ? "当前安全合同没有投影 Repository、commit 或 Deployment 关系。"
+              : "当前 Decision 还没有你可以看到的关联对象。"
+          }
         />
       ) : (
         <ul className="relation-list">

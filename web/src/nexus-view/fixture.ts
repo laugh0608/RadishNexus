@@ -86,3 +86,69 @@ export const emptyDecisionNexusViewFixture: NexusViewData = {
   relations: [],
   timeline: [],
 };
+
+export const succeededCIRunNexusViewFixture = {
+  current: {
+    entityRef: "ci-run:cir_01K3RADISHNEXUS",
+    entityType: "ci-run",
+    eyebrow: "CI Run · Completed build fact",
+    status: "succeeded",
+    statusLabel: "构建成功",
+    summary:
+      "一次构建流水线已经完成，并被记录为成功。此事实只说明构建结果，不表示任何 Environment 已经部署。",
+    component: {
+      entityRef: "component:cmp_identity",
+      name: "Identity Service",
+    },
+    startedAt: "2026-08-29T09:12:18+08:00",
+    startedAtLabel: "2026-08-29 09:12:18",
+    completedAt: "2026-08-29T09:18:42+08:00",
+    completedAtLabel: "2026-08-29 09:18:42",
+    recordedAt: "2026-08-29T09:18:44+08:00",
+    recordedAtLabel: "2026-08-29 09:18:44",
+    updatedAt: "2026-08-29T09:18:44+08:00",
+    updatedAtLabel: "2026-08-29 09:18:44",
+  },
+  relations: [],
+  timeline: [
+    {
+      visibility: "readable",
+      id: "activity:act_01K3CIRUNRECORDED",
+      action: "CI Run 已记录为成功",
+      detail: "Identity Service 的完成态构建事实已经进入统一时间线。",
+      actorLabel: "受控自动化",
+      sourceLabel: "ci-run.recorded",
+      occurredAt: "2026-08-29T09:18:44+08:00",
+      occurredAtLabel: "08-29 · 09:18",
+    },
+  ],
+} satisfies NexusViewData;
+
+export const failedCIRunNexusViewFixture = {
+  ...succeededCIRunNexusViewFixture,
+  current: {
+    ...succeededCIRunNexusViewFixture.current,
+    status: "failed",
+    statusLabel: "构建失败",
+    summary:
+      "一次构建流水线已经完成，并被记录为失败。失败事实可被追踪，但不会自动创建 Deployment 或改变 Environment。",
+    completedAt: "2026-08-29T10:07:31+08:00",
+    completedAtLabel: "2026-08-29 10:07:31",
+    recordedAt: "2026-08-29T10:07:33+08:00",
+    recordedAtLabel: "2026-08-29 10:07:33",
+    updatedAt: "2026-08-29T10:07:33+08:00",
+    updatedAtLabel: "2026-08-29 10:07:33",
+  },
+  timeline: [
+    {
+      visibility: "readable",
+      id: "activity:act_01K3CIRUNFAILED",
+      action: "CI Run 已记录为失败",
+      detail: "Identity Service 的失败构建事实已经进入统一时间线。",
+      actorLabel: "受控自动化",
+      sourceLabel: "ci-run.recorded",
+      occurredAt: "2026-08-29T10:07:33+08:00",
+      occurredAtLabel: "08-29 · 10:07",
+    },
+  ],
+} satisfies NexusViewData;

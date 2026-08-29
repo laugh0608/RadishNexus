@@ -6,7 +6,7 @@
 
 产品定义、架构基线、仓库治理基线与 M0 正式服务纵向切片。
 
-当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和 `ci-run.recorded` 投影已通过 PR #7 合入 `dev`，CI Run 的 Component 作用域授权与安全 Nexus View 读取也已达到本地完成线。正式 `web/` React + TypeScript 基线与 Decision Nexus View 代表原型已经通过本地检查和浏览器复核；尚未建立插件 runtime 或客户端，也尚未开放业务 HTTP API。
+当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和 `ci-run.recorded` 投影已通过 PR #7 合入 `dev`，CI Run 的 Component 作用域授权与安全 Nexus View 读取已通过 PR #8 合入 `dev`。正式 `web/` React + TypeScript 基线、Decision Nexus View 代表原型与 CI Run Nexus View 代表交互已经通过本地检查和浏览器复核；尚未建立插件 runtime 或客户端，也尚未开放业务 HTTP API。
 
 ## 当前结论
 
@@ -52,6 +52,8 @@
 - 最小认证 adapter 只把上游已验证的 UserID 与 WorkspaceID 转换为 application `Principal`，不读取或验证 Header、Cookie、Token 和 OIDC claims。
 - 内部 HTTP error mapping 已覆盖 `unauthenticated / forbidden / not found / conflict / invalid` 与未知失败；它不暴露原始错误，也尚未形成公共响应对象。
 - Decision Nexus View 代表原型已经表达 Current、Relations 和 Timeline，并覆盖 loading、empty、error、restricted placeholder 与窄屏布局。
+- CI Run Nexus View 代表交互已经表达 succeeded / failed、四个受控时间、当前 Component、唯一 `ci-run.recorded` Timeline、loading、error 与窄屏布局；构建结果没有被表现为 Deployment。
+- CI Run Web fixture 与后端安全投影同形，不携带 source ID、external run key、delivery receipt、digest、Secret、原始 payload 或未经治理的外部 URL；浏览器验证未发现必须新增 transport 的需求。
 - Web 原型只消费权限过滤后的 discriminated union；`restricted` 形状不携带 EntityRef、对象类型、关系类型、标题、来源或时间，`hidden` 目标不进入客户端数据。
 - 原型使用明确标注的静态 fixture；本轮浏览器复核没有暴露必须新增内部 handler 的需求，因此没有为了联调制造临时业务 API。
 - `web/` 已建立 Prettier、Oxlint、Vitest + jsdom、严格 TypeScript、Vite production build 与 lockfile 供应链检查；`Candidate Quality` 已加入独立 `Web App` job，并已在本批次 PR 中实际通过。
@@ -87,19 +89,19 @@
 
 ## 下一步事项
 
-CI Run 读取切片已经达到本地完成线。当前批次先收口后端读取合同并确认远端门禁，再验证代表交互：
+CI Run 读取已经通过 PR #8 合入 `dev`，Web 代表交互也已达到本地完成线。当前批次先收口 Web 切片并确认远端门禁，再进入显式 staging Deployment：
 
-1. 复核本分支授权矩阵、安全投影、真实 PostgreSQL 测试与 ADR-0007 一致性，提交后通过 PR 确认 Go Server 与 Candidate Quality 远端门禁；
-2. 从最新 `dev` 单独设计 CI Run Nexus View 的 Web 代表交互，覆盖 succeeded / failed、loading、error、唯一 Timeline 和窄屏，不显示来源标识、receipt 或未经治理的外部跳转；
-3. Web 原型继续使用明确标注且与后端安全合同同形的 fixture，直到浏览器验证证明需要真实 transport；不把 fixture 表述为联调或生产能力；
-4. 若代表交互证明需要后端接线，再独立冻结版本化 HTTP 路由、公共错误对象和响应 discriminated union，不制造临时 API；
-5. CI Run 读取体验稳定后，后端纵向顺位保持为显式 staging Deployment → 备份恢复。
+1. 复核 CI Run Web 类型、fixture、安全字段、状态测试与浏览器证据一致性，提交后通过 PR 确认 Web App 与 Candidate Quality 远端门禁；
+2. 代表交互没有证明需要真实 transport，因此本批次不新增 HTTP route、公共错误对象或响应 schema；fixture 继续明确标注为静态代表数据；
+3. 从最新 `dev` 独立冻结 staging Deployment 的最小对象、Environment 归属、授权、状态、事件与 CI Run 关联边界，再实现正式服务纵向切片；
+4. staging Deployment 必须是显式、可审计且独立授权的事实，不从 `succeeded` CI Run 自动推导，不提前扩张 production 操作、审批框架或多 provider 抽象；
+5. staging Deployment 稳定后进入备份恢复，再独立评估公共 transport、文档协同方案和授权模板。
 
-下一步完成线：CI Run 读取 PR 合入 `dev` 且远端门禁全绿；随后 Web 代表交互能清楚表达真实安全合同中的状态、时间、Component 和唯一 Timeline，并通过浏览器与窄屏复核。
+下一步完成线：CI Run Web 代表交互 PR 合入 `dev` 且远端门禁全绿；页面清楚表达真实安全合同中的状态、时间、Component 和唯一 Timeline，桌面与窄屏复核无溢出、无控制台错误或警告。随后 staging Deployment 的最小领域与权限边界形成可实施、可复验的正式契约。
 
-下一步停止线：不在读取切片补 Jenkins HTTP route 或签名协议，不暴露 source ID、external run key、receipt/digest，不启动 Flutter，不选择 CRDT，不建立 restricted Component、通用 RBAC framework、Repository 占位、插件市场或多 CI provider 抽象，不把 CI 成功冒充 Deployment。
+下一步停止线：不补 Jenkins HTTP route 或签名协议，不暴露 source ID、external run key、receipt/digest，不启动 Flutter，不选择 CRDT，不建立 restricted Component、通用 RBAC framework、Repository 占位、插件市场或多 CI provider 抽象，不把 CI 成功冒充 Deployment，也不把 staging 自动扩张为 production 发布能力。
 
-后续顺位保持为 CI Run Web 代表交互 → 显式 staging Deployment → 备份恢复，再独立评估公共 transport、文档协同方案和授权模板。
+后续顺位保持为 CI Run Web 代表交互收口 → 显式 staging Deployment → 备份恢复，再独立评估公共 transport、文档协同方案和授权模板。
 
 ## 开放问题
 

@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { NexusView } from "./nexus-view/NexusView";
 import {
-  decisionNexusViewFixture,
-  emptyDecisionNexusViewFixture,
+  failedCIRunNexusViewFixture,
+  succeededCIRunNexusViewFixture,
 } from "./nexus-view/fixture";
 import type { NexusViewState } from "./nexus-view/model";
 
-type PrototypeMode = "data" | "loading" | "empty" | "error";
+type PrototypeMode = "succeeded" | "failed" | "loading" | "error";
 
 const prototypeStates: Record<PrototypeMode, NexusViewState> = {
-  data: { status: "ready", data: decisionNexusViewFixture },
+  succeeded: { status: "ready", data: succeededCIRunNexusViewFixture },
+  failed: { status: "ready", data: failedCIRunNexusViewFixture },
   loading: { status: "loading" },
-  empty: { status: "ready", data: emptyDecisionNexusViewFixture },
   error: {
     status: "error",
     message:
@@ -20,14 +20,14 @@ const prototypeStates: Record<PrototypeMode, NexusViewState> = {
 };
 
 const prototypeModes: readonly { id: PrototypeMode; label: string }[] = [
-  { id: "data", label: "数据" },
+  { id: "succeeded", label: "成功" },
+  { id: "failed", label: "失败" },
   { id: "loading", label: "加载" },
-  { id: "empty", label: "空态" },
   { id: "error", label: "错误" },
 ];
 
 export function App() {
-  const [mode, setMode] = useState<PrototypeMode>("data");
+  const [mode, setMode] = useState<PrototypeMode>("succeeded");
 
   return (
     <div className="app-shell">
@@ -70,12 +70,12 @@ export function App() {
 
       <NexusView
         state={prototypeStates[mode]}
-        onRetry={() => setMode("data")}
+        onRetry={() => setMode("succeeded")}
       />
 
       <footer className="prototype-footer">
         <span>Representative slice / M0</span>
-        <span>Current · Relations · Timeline</span>
+        <span>CI Run · Component · Timeline</span>
       </footer>
     </div>
   );

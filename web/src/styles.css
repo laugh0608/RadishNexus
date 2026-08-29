@@ -288,6 +288,18 @@ code {
   background: #a49346;
 }
 
+.status-badge--failed,
+.status-badge--canceled {
+  border-color: #d7a59c;
+  background: var(--error-soft);
+  color: var(--error);
+}
+
+.status-badge--failed > span,
+.status-badge--canceled > span {
+  background: var(--error);
+}
+
 .current-card__body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 0.3fr);
@@ -324,6 +336,42 @@ code {
   background: rgba(255, 255, 255, 0.48);
 }
 
+.ci-run-context {
+  display: grid;
+  align-self: end;
+  gap: 10px;
+}
+
+.component-stamp {
+  display: grid;
+  gap: 6px;
+  padding: 17px 18px;
+  border: 1px solid #b8d58a;
+  border-radius: 12px;
+  background: #f2fadf;
+}
+
+.component-stamp span {
+  color: var(--accent-dark);
+  font-size: 10px;
+  font-weight: 740;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.component-stamp strong {
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.component-stamp code {
+  overflow: hidden;
+  color: #5c6b54;
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
+
 .entity-stamp span,
 .current-meta dt {
   color: var(--faint);
@@ -345,6 +393,11 @@ code {
   grid-template-columns: 1.4fr 1fr 0.8fr 0.8fr;
   margin: 0 -48px;
   border-top: 1px solid var(--line);
+}
+
+.current-meta--ci-run dd {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
 }
 
 .current-meta > div {
@@ -772,6 +825,10 @@ code {
   }
 
   .entity-stamp {
+    width: min(100%, 360px);
+  }
+
+  .ci-run-context {
     width: min(100%, 360px);
   }
 

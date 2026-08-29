@@ -4,6 +4,8 @@ import { NexusView } from "./NexusView";
 import {
   decisionNexusViewFixture,
   emptyDecisionNexusViewFixture,
+  failedCIRunNexusViewFixture,
+  succeededCIRunNexusViewFixture,
 } from "./fixture";
 
 describe("NexusView", () => {
@@ -60,5 +62,50 @@ describe("NexusView", () => {
     expect(screen.getAllByText("受限对象")).toHaveLength(1);
     expect(screen.getAllByText("受限动态")).toHaveLength(1);
     expect(screen.queryByText(/restricted:|secret:/iu)).toBeNull();
+  });
+
+  it("renders the succeeded CI Run safe projection with exactly one Timeline item", () => {
+    const { container } = render(
+      <NexusView
+        state={{ status: "ready", data: succeededCIRunNexusViewFixture }}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "CI Run" })).toBeDefined();
+    expect(screen.getByText("构建成功")).toBeDefined();
+    expect(screen.getByText("Identity Service")).toBeDefined();
+    expect(screen.getByText("component:cmp_identity")).toBeDefined();
+    expect(screen.getByText("ci-run:cir_01K3RADISHNEXUS")).toBeDefined();
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText("受控自动化 · ci-run.recorded")).toBeDefined();
+
+    const renderedText = container.textContent ?? "";
+    expect(renderedText).not.toMatch(
+      /jenkins|source[_ -]?id|external|receipt|digest|https?:\/\//iu,
+    );
+  });
+
+  it("renders a failed CI Run without implying a Deployment", () => {
+    const { container } = render(
+      <NexusView
+        state={{ status: "ready", data: failedCIRunNexusViewFixture }}
+      />,
+    );
+
+    expect(screen.getByText("构建失败")).toBeDefined();
+    expect(screen.getByText("CI Run 已记录为失败")).toBeDefined();
+    expect(container.textContent).toContain("不会自动创建 Deployment");
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+  });
+
+  it("keeps prohibited CI source fields out of the representative fixtures", () => {
+    const fixtures = JSON.stringify([
+      succeededCIRunNexusViewFixture,
+      failedCIRunNexusViewFixture,
+    ]);
+
+    expect(fixtures).not.toMatch(
+      /jenkins|sourceId|externalRunKey|deliveryId|receipt|digest|secret|url/iu,
+    );
   });
 });

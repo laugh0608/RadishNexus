@@ -1,6 +1,6 @@
 export type NexusEntityType = "decision" | "thread" | "ticket";
 
-export interface NexusCurrent {
+export interface DecisionNexusCurrent {
   entityRef: string;
   entityType: "decision";
   eyebrow: string;
@@ -14,6 +14,33 @@ export interface NexusCurrent {
   updatedAt: string;
   updatedAtLabel: string;
 }
+
+export type CIRunStatus = "succeeded" | "failed" | "canceled";
+
+export interface CIRunComponent {
+  entityRef: string;
+  name: string;
+}
+
+export interface CIRunNexusCurrent {
+  entityRef: string;
+  entityType: "ci-run";
+  eyebrow: string;
+  status: CIRunStatus;
+  statusLabel: string;
+  summary: string;
+  component: CIRunComponent;
+  startedAt: string;
+  startedAtLabel: string;
+  completedAt: string;
+  completedAtLabel: string;
+  recordedAt: string;
+  recordedAtLabel: string;
+  updatedAt: string;
+  updatedAtLabel: string;
+}
+
+export type NexusCurrent = DecisionNexusCurrent | CIRunNexusCurrent;
 
 export interface ReadableNexusRelation {
   visibility: "readable";
