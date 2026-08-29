@@ -134,6 +134,32 @@ jobs:
           DATABASE_URL: postgres://radishnexus_test:radishnexus-test-only@127.0.0.1:5432/radishnexus_server_test?sslmode=disable
         run: go test -tags=integration ./...
 
+  web-app:
+    name: Web App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install locked Web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Check Web app
+        run: ./scripts/check-web.sh
+
+      - name: Audit Web dependencies
+        working-directory: web
+        run: npm audit --audit-level=high
+
   candidate-quality:
     name: Candidate Quality
     runs-on: ubuntu-latest
@@ -143,6 +169,7 @@ jobs:
       - checker-tests
       - m0-core-contracts
       - go-server
+      - web-app
 
     steps:
       - name: Summarize candidate quality
@@ -152,6 +179,7 @@ jobs:
           CHECKER_TESTS_RESULT: ${{ needs.checker-tests.result }}
           M0_CORE_CONTRACTS_RESULT: ${{ needs.m0-core-contracts.result }}
           GO_SERVER_RESULT: ${{ needs.go-server.result }}
+          WEB_APP_RESULT: ${{ needs.web-app.result }}
         run: |
           {
             echo "## Candidate Quality"
@@ -162,9 +190,10 @@ jobs:
             echo "| Repository Checker Tests | ${CHECKER_TESTS_RESULT} |"
             echo "| M0 Core Contracts | ${M0_CORE_CONTRACTS_RESULT} |"
             echo "| Go Server | ${GO_SERVER_RESULT} |"
+            echo "| Web App | ${WEB_APP_RESULT} |"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-          if [[ "${REPO_HYGIENE_RESULT}" != "success" || "${CHECKER_TESTS_RESULT}" != "success" || "${M0_CORE_CONTRACTS_RESULT}" != "success" || "${GO_SERVER_RESULT}" != "success" ]]; then
+          if [[ "${REPO_HYGIENE_RESULT}" != "success" || "${CHECKER_TESTS_RESULT}" != "success" || "${M0_CORE_CONTRACTS_RESULT}" != "success" || "${GO_SERVER_RESULT}" != "success" || "${WEB_APP_RESULT}" != "success" ]]; then
             echo "Candidate quality checks did not all succeed." >&2
             exit 1
           fi

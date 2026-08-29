@@ -6,7 +6,7 @@
 
 产品定义、架构基线、仓库治理基线与 M0 正式服务纵向切片。
 
-当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；尚未建立正式 Web App、插件或客户端，也尚未开放业务 HTTP API。
+当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立。正式 `web/` React + TypeScript 基线与 Decision Nexus View 代表原型已经通过本地检查和浏览器复核；尚未建立插件或客户端，也尚未开放业务 HTTP API。
 
 ## 当前结论
 
@@ -16,6 +16,7 @@
 - 核心采用 source-available 和单独书面授权模式；书面授权可以免费。
 - SDK、公共协议和插件开放源码，并使用各自独立许可证。
 - Web App 是第一产品形态，采用 React + TypeScript。
+- 首个正式 Web 基线使用 Node 24 LTS、npm 11、React 19、Vite 8 与 TypeScript 6；router、状态库、编辑器和组件库尚未冻结。
 - 前期不开发移动端和 PC 客户端。
 - 后续客户端统一采用 Flutter，不采用 Tauri。
 - 服务端以 Go 为主，Rust 只进入有明确收益的边界。
@@ -43,10 +44,14 @@
 - Relations 和 Timeline 对不可读目标只返回不含 EntityRef、类型、关系类型和标题的通用占位；hidden 目标不进入结果。
 - 最小认证 adapter 只把上游已验证的 UserID 与 WorkspaceID 转换为 application `Principal`，不读取或验证 Header、Cookie、Token 和 OIDC claims。
 - 内部 HTTP error mapping 已覆盖 `unauthenticated / forbidden / not found / conflict / invalid` 与未知失败；它不暴露原始错误，也尚未形成公共响应对象。
+- Decision Nexus View 代表原型已经表达 Current、Relations 和 Timeline，并覆盖 loading、empty、error、restricted placeholder 与窄屏布局。
+- Web 原型只消费权限过滤后的 discriminated union；`restricted` 形状不携带 EntityRef、对象类型、关系类型、标题、来源或时间，`hidden` 目标不进入客户端数据。
+- 原型使用明确标注的静态 fixture；本轮浏览器复核没有暴露必须新增内部 handler 的需求，因此没有为了联调制造临时业务 API。
+- `web/` 已建立 Prettier、Oxlint、Vitest + jsdom、严格 TypeScript、Vite production build 与 lockfile 供应链检查；`Candidate Quality` 已加入独立 `Web App` job，远端结果仍需在本批次 PR 中确认。
 - 在横向补全各模块前，先完成 Golden Path 纵向原型。
 - 仓库采用 `master` 稳定分支、`dev` 集成分支和主题分支；普通 PR 默认进入 `dev`。
 - `master` 允许 merge commit 和 rebase merge，禁用 squash merge，并要求变化回流 `dev`。
-- `Candidate Quality` 作为稳定聚合质量门；仓库定义已加入 M0 实验与正式 Go 服务的单元测试、`go vet` 和真实 PostgreSQL 集成测试，远端运行结果仍需在本批次 PR 中确认。
+- `Candidate Quality` 作为稳定聚合质量门；仓库定义已加入 M0 实验、正式 Go 服务和 Web App 的单元/状态测试、静态检查、构建与真实 PostgreSQL 集成测试；新增 Web job 的远端结果仍需在本批次 PR 中确认。
 - GitHub 远端默认分支为 `master`，`master` Ruleset 已启用并要求 PR、严格状态检查和已解决对话。
 - GitHub Private vulnerability reporting 已启用；未修复漏洞优先通过仓库 Security Advisory 私下报告，入口和备用联系方式以 [SECURITY.md](../../SECURITY.md) 为准。
 
@@ -73,17 +78,17 @@
 
 ## 下一步事项
 
-读取模型和最小 transport adapter 已经达到本批次完成线。下一步只准备 Current、Relations 和 Timeline 的 React Nexus View 代表原型，不横向铺开聊天或通用 API：
+Decision Nexus View 代表原型已经达到本地完成线。当前批次先收口 Web 工程并确认远端门禁，再进入下一个独立后端纵向切片：
 
-1. 在新增依赖前先冻结最小 Web 工程基线、检查入口、许可证和供应链边界，并同步工程规范与 CI；
-2. 代表原型只消费权限过滤后的 Nexus View 形状，不在前端复制授权判断，也不为了页面方便扩充 Activity 安全事实；
-3. 覆盖 loading、empty、error、restricted placeholder 和窄屏状态，但不先建设完整 Web Shell、导航或聊天页面；
-4. 只有代表原型暴露真实需要时，才增加单个内部只读 handler；不提前冻结公共分页、游标或通用资源模型；
-5. 读取体验稳定后，后端纵向顺位保持为 Jenkins CI Run → 显式 staging Deployment → 备份恢复。
+1. 提交代表原型、Web 工程基线与治理同步，创建面向 `dev` 的 PR，确认新增 `Web App` 与聚合 `Candidate Quality` 在 GitHub 实际通过；
+2. 原型没有暴露必须新增内部 handler 的需求，本批次不为了“接上后端”制造临时业务 API；公开错误对象、分页、游标和通用资源模型继续保持未冻结；
+3. Web PR 合并后，从最新 `dev` 独立准备 Jenkins CI Run 切片，先沿 Golden Path、插件隔离、Webhook 来源校验与 delivery 幂等边界冻结最小输入；
+4. Jenkins 切片只把成功验证和幂等接收的交付事实映射为独立 CI Run，不把构建成功解释为已经部署，也不提前实现通用插件市场；
+5. CI Run 读取体验稳定后，后端纵向顺位保持为显式 staging Deployment → 备份恢复。
 
-下一步完成线：一个 Decision 或 Ticket 的 Current、Relations 和 Timeline 可以在代表原型中清楚表达上下文来源；restricted placeholder 不泄漏目标身份，前端不复制权限逻辑，新增 Web 工程入口有对应本地与 CI 检查。
+下一步完成线：本批次 Web PR 的新增检查在远端全绿；随后 Jenkins 重复 delivery 不重复创建 CI Run，来源、失败和审计边界可复验，CI Run 仍与 Deployment 保持不同实体和生命周期。
 
-下一步停止线：不启动 Flutter，不选择 CRDT，不建立通用 RBAC framework，不把临时 HTTP 路由当成已承诺的公共 API，不在 Nexus View 代表原型外扩建完整聊天界面。
+下一步停止线：不为代表原型补临时公共 API，不启动 Flutter，不选择 CRDT，不建立通用 RBAC framework，不扩建完整 Web Shell、聊天界面或插件市场，不把 CI 成功冒充 Deployment。
 
 后续顺位保持为 Jenkins CI Run → 显式 staging Deployment → 备份恢复，再独立评估文档协同方案和授权模板。
 

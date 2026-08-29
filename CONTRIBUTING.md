@@ -99,6 +99,14 @@ M0 核心契约 Go 检查：
 
 PostgreSQL 脚本使用固定镜像、随机本机端口和任务专属临时容器，结束后自动删除且不保留数据卷；镜像不存在时不会隐式下载。详细边界分别见 [M0 核心契约实验](experiments/m0-core-contracts/README.md)和[正式 Go 服务](server/README.md)。
 
+修改正式 React Web App 时，先在 `web/` 运行 `npm ci`，再从仓库根运行：
+
+```bash
+./scripts/check-web.sh
+```
+
+该入口覆盖格式、Lint、组件状态测试、严格 TypeScript、production build 与锁依赖基线。依赖漏洞数据需要联网刷新；CI 额外执行 `npm audit --audit-level=high`。
+
 实现代码进入仓库后，还必须执行与改动范围匹配的 Go、React / TypeScript、Rust 或 Flutter 格式化、静态分析、测试和构建。PR 只记录真实执行过的命令，并明确列出未执行、受环境阻塞或需要人工完成的验证。
 
 ## Pull Request 说明

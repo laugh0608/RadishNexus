@@ -12,6 +12,7 @@ Desktop.ini
 .claude/
 .codex/
 .playwright-cli/
+output/playwright/
 *.swp
 *.swo
 *.orig

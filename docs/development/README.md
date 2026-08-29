@@ -42,4 +42,12 @@ pwsh ./scripts/check-repo.ps1
 ./scripts/check-server-postgres.sh
 ```
 
-正式服务当前只开放存活与就绪检查；业务写入仍通过 application service 验证，认证和公共 HTTP 契约冻结前不建立临时业务 API。范围和 migration 入口见[正式 Go 服务](../../server/README.md)。后续 React、Rust、Flutter 或插件真正进入仓库时，再加入对应的真实构建和测试，不维护占位命令。
+正式服务当前只开放存活与就绪检查；业务写入仍通过 application service 验证，认证和公共 HTTP 契约冻结前不建立临时业务 API。范围和 migration 入口见[正式 Go 服务](../../server/README.md)。
+
+正式 React Web App 的格式、Lint、组件状态测试、严格 TypeScript、production build 与锁依赖入口为：
+
+```bash
+./scripts/check-web.sh
+```
+
+首次运行前需要在 `web/` 使用 Node 24 LTS 与 npm 11 执行 `npm ci`。当前 Web 范围和安全边界见 [Web App](../../web/README.md)。后续 Rust、Flutter 或插件真正进入仓库时，再加入对应真实检查，不维护占位命令。
