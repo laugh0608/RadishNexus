@@ -16,6 +16,7 @@ func TestParseFrozenCollaborationReferences(t *testing.T) {
 		{raw: "entity://thread/thr_01K4THREAD", wantType: "thread", wantID: "thr_01K4THREAD"},
 		{raw: "entity://decision/dec_01K4DECISION", wantType: "decision", wantID: "dec_01K4DECISION"},
 		{raw: "entity://ticket/tkt_01K4TICKET", wantType: "ticket", wantID: "tkt_01K4TICKET"},
+		{raw: "entity://ci-run/cir_01K4CIRUN", wantType: "ci-run", wantID: "cir_01K4CIRUN"},
 	}
 
 	for _, test := range tests {

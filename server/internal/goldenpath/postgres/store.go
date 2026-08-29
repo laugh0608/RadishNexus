@@ -68,6 +68,7 @@ func (store *Store) CreateDecisionFromThread(
 		ID:            command.EventID,
 		Type:          "decision.proposed",
 		WorkspaceID:   command.Principal.WorkspaceID,
+		ActorKind:     "user",
 		ActorID:       command.Principal.ID,
 		SourceKind:    command.SourceKind,
 		SourceID:      command.SourceID,
@@ -198,6 +199,7 @@ func (store *Store) AcceptDecision(
 		ID:            command.EventID,
 		Type:          "decision.accepted",
 		WorkspaceID:   command.Principal.WorkspaceID,
+		ActorKind:     "user",
 		ActorID:       command.Principal.ID,
 		SourceKind:    command.SourceKind,
 		SourceID:      command.SourceID,
@@ -281,6 +283,7 @@ func (store *Store) CreateTicketFromDecision(
 		ID:            command.EventID,
 		Type:          "ticket.created",
 		WorkspaceID:   command.Principal.WorkspaceID,
+		ActorKind:     "user",
 		ActorID:       command.Principal.ID,
 		SourceKind:    command.SourceKind,
 		SourceID:      command.SourceID,
@@ -339,6 +342,7 @@ type eventRecord struct {
 	ID            string
 	Type          string
 	WorkspaceID   string
+	ActorKind     string
 	ActorID       string
 	SourceKind    string
 	SourceID      string
@@ -362,11 +366,11 @@ func insertEvent(ctx context.Context, tx pgx.Tx, event eventRecord) error {
 			actor_kind, actor_id, source_kind, source_id,
 			primary_entity_type, primary_entity_id, project_id,
 			correlation_id, causation_id, occurred_at, payload
-		) VALUES ($1, $2, 1, $3, 'user', $4, $5, $6,
-			$7, $8, $9, $10, $11, $12, $13)
-	`, event.ID, event.Type, event.WorkspaceID, event.ActorID,
+		) VALUES ($1, $2, 1, $3, $4, $5, $6, $7,
+			$8, $9, $10, $11, $12, $13, $14)
+	`, event.ID, event.Type, event.WorkspaceID, event.ActorKind, nullable(event.ActorID),
 		event.SourceKind, nullable(event.SourceID), event.PrimaryType, event.PrimaryID,
-		event.ProjectID, event.CorrelationID, nullable(event.CausationID), event.OccurredAt, payload)
+		nullable(event.ProjectID), event.CorrelationID, nullable(event.CausationID), event.OccurredAt, payload)
 	if err != nil {
 		return mapDatabaseError("insert "+event.Type+" domain event", err)
 	}

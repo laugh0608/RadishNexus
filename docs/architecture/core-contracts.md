@@ -12,7 +12,7 @@
 
 ## 适用范围
 
-初始 M0 冻结 Project、Initiative、Component、Decision、Environment 和 EntityLink 的引用能力，并用 Thread、Ticket、CI Run 和 Deployment 验证接口是否足以承载 [Golden Path](../golden-path.md)。ADR-0004 随首个正式纵向切片继续冻结了 Thread 与 Ticket 的类型前缀、最小字段和授权上下文；CI Run 与 Deployment 的完整字段仍未冻结。
+初始 M0 冻结 Project、Initiative、Component、Decision、Environment 和 EntityLink 的引用能力，并用 Thread、Ticket、CI Run 和 Deployment 验证接口是否足以承载 [Golden Path](../golden-path.md)。ADR-0004 随首个正式纵向切片继续冻结了 Thread 与 Ticket 的类型前缀、最小字段和授权上下文；ADR-0006 继续冻结 CI Run 的类型前缀、最小来源字段和完成事实，Deployment 字段仍未冻结。
 
 M0 不支持：
 
@@ -45,8 +45,9 @@ M0 首批冻结以下类型名与 ID 前缀：
 | `entity-link` | `lnk_` | 带来源的跨对象关系 |
 | `thread` | `thr_` | 作为讨论证据的 Thread |
 | `ticket` | `tkt_` | 可执行工作对象 |
+| `ci-run` | `cir_` | 一次构建或流水线运行 |
 
-Document、Repository、CI Run 和 Deployment 等其余 Golden Path 类型进入同一注册表，但其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结。
+Document、Repository 和 Deployment 等其余 Golden Path 类型进入同一注册表时，其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结；CI Run 的来源和幂等边界由 [ADR-0006](../adr/0006-verified-jenkins-delivery-and-ci-run.md) 冻结。
 
 ### 结构化表示
 
@@ -203,7 +204,7 @@ request_context
 
 外部网络调用不得发生在业务数据库事务中。消费者按 `event_id` 幂等处理；重复、乱序和进程崩溃后的再次投递都属于正常输入。M0 仍以业务表保存当前状态，不采用 Event Sourcing。
 
-外部 Webhook 的 delivery ID 是接收命令的幂等身份；只有首次有效处理才创建 CI Run 和领域事件。它不能替代平台 `event_id`，也不能直接成为 EntityID。
+外部 Webhook 的 delivery ID 是来源作用域内接收命令的幂等身份；只有首次有效处理才创建 CI Run 和领域事件。它不能替代平台 `event_id`，也不能直接成为 EntityID。同一 Workspace、source 与 delivery ID 的 payload digest 必须一致；不一致时 fail closed，不能覆盖 receipt 或把冲突伪装成成功重复。已验证 Jenkins delivery 的精确事务与停止线见 ADR-0006。
 
 ## Activity 投影
 
@@ -257,7 +258,7 @@ safe_facts
 2. `decision.proposed` 和 `entity-link.created` 共享 correlation，分别投影到 Decision 和 Thread；Decision 草案必须保留 evidence 引用。
 3. 有确认权限且能读取全部 evidence 的人接受 Decision，产生 `decision.accepted`。Project 管理角色不自动穿透 restricted Thread；系统生成内容只能保留为草案，不能作为 actor 完成接受。
 4. 从 Decision 创建 Ticket，Ticket 与 `implements` 关系保留来源，不复制 Thread 正文。读取 Ticket 但不能读取 Thread 的用户只在对象页看到不可识别目标的通用受限占位。
-5. Jenkins 重复发送同一 delivery 时只产生一个 CI Run。插件推导的关系标记为 `derived + plugin`，失败投递进入有界重试或人工恢复，不阻塞聊天和 Decision 写入。
+5. Jenkins 重复发送同一 delivery 时只产生一个 CI Run；相同幂等键的 digest 变化直接冲突。正式核心只接收已经完成来源验证与字段映射的 delivery，并把 receipt、CI Run、`ci-run.recorded` 和 Outbox 原子提交；外部失败重试和安全审计由后续 adapter 定义，不阻塞聊天和 Decision 写入。
 6. 构建成功只更新 CI Run。只有独立、获授权的受控操作才能创建 staging Deployment 及其关系和审计。
 7. 备份恢复保留所有稳定 ID、关系来源、事件 correlation 和审计；Activity 可以重新投影且不产生重复项。
 
@@ -276,7 +277,7 @@ M0 实验与正式纵向切片累计必须证明：
 
 ## 后续仍需决定
 
-- EntityID 的具体生成算法和 Thread、Ticket 之外的 Golden Path 类型前缀；
+- EntityID 的具体生成算法，以及 Document、Repository、Deployment 等尚未进入正式纵向切片的类型前缀；
 - 后续对象的 PostgreSQL 表、约束、索引，以及事件事实和投递状态的保留与演进策略；
 - 关系类型注册表的完整方向、基数和 metadata schema；
 - Team 角色继承、对象分享、跨 Project 转换和管理员 break-glass 策略；

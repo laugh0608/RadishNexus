@@ -115,6 +115,7 @@ type Store interface {
 	CreateDecisionFromThread(context.Context, CreateDecisionCommand) (Decision, error)
 	AcceptDecision(context.Context, AcceptDecisionCommand) (Decision, error)
 	CreateTicketFromDecision(context.Context, CreateTicketCommand) (Ticket, error)
+	RecordCompletedCIRun(context.Context, RecordCompletedCIRunCommand) (CIRunReceipt, error)
 	ListRelations(context.Context, authz.Principal, entityref.Ref) ([]RelationProjection, error)
 	GetNexusView(context.Context, authz.Principal, entityref.Ref) (NexusView, error)
 }
