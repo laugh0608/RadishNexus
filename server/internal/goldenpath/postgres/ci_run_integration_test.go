@@ -127,6 +127,7 @@ func assertJenkinsCIRunSlice(
 	assertCIRunNexusView(t, ctx, pool, service, first.CIRun, delivery, input)
 	assertNoDeploymentEvent(t, ctx, pool)
 	assertInboundReceiptImmutable(t, ctx, pool, delivery.DeliveryID)
+	assertStagingDeploymentSlice(t, ctx, pool, store, service, first.CIRun)
 }
 
 func assertCIRunNexusView(

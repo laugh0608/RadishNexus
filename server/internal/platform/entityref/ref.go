@@ -35,6 +35,7 @@ func M0Registry() Registry {
 		"thread":      "thr_",
 		"ticket":      "tkt_",
 		"ci-run":      "cir_",
+		"deployment":  "dpl_",
 	}
 }
 

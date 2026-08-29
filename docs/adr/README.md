@@ -14,6 +14,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0006](0006-verified-jenkins-delivery-and-ci-run.md) | 已接受 | 已验证 Jenkins delivery 与 CI Run 原子记录 |
 | [ADR-0007](0007-component-scoped-ci-run-read.md) | 已接受 | Component 作用域下的 CI Run 读取 |
 | [ADR-0008](0008-dev-first-development-governance.md) | 已接受 | `dev` 优先的单维护者开发拓扑 |
+| [ADR-0009](0009-explicit-staging-deployment.md) | 已接受 | 显式 staging Deployment 与环境级授权 |
 
 ## 新建规则
 

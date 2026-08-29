@@ -97,3 +97,59 @@ func TestProjectActivityEventRejectsCIRunUserActor(t *testing.T) {
 		t.Fatal("projectActivityEvent() error = nil, want invalid CI Run actor error")
 	}
 }
+
+func TestProjectActivityEventAcceptsExplicitDeploymentFacts(t *testing.T) {
+	t.Parallel()
+	userID := "usr_1"
+
+	record, err := projectActivityEvent(activityEvent{
+		eventID:       "evt_deployment_1",
+		eventType:     "deployment.recorded",
+		schemaVersion: 1,
+		workspaceID:   "wrk_1",
+		actorKind:     "user",
+		actorID:       &userID,
+		target:        entityref.Ref{Type: "deployment", ID: "dpl_1"},
+		occurredAt:    time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC),
+		payload: []byte(`{
+			"status":"succeeded",
+			"environment":{"type":"environment","id":"env_1"},
+			"ci_run":{"type":"ci-run","id":"cir_1"}
+		}`),
+	})
+	if err != nil {
+		t.Fatalf("projectActivityEvent() error = %v", err)
+	}
+	if len(record.safeFacts) != 1 || record.safeFacts["status"] != "succeeded" {
+		t.Fatalf("safeFacts = %#v", record.safeFacts)
+	}
+	if len(record.subjects) != 2 ||
+		record.subjects[0] != (entityref.Ref{Type: "environment", ID: "env_1"}) ||
+		record.subjects[1] != (entityref.Ref{Type: "ci-run", ID: "cir_1"}) {
+		t.Fatalf("subjects = %#v", record.subjects)
+	}
+}
+
+func TestProjectActivityEventRejectsDeploymentPluginActor(t *testing.T) {
+	t.Parallel()
+	pluginID := "plugin_1"
+
+	_, err := projectActivityEvent(activityEvent{
+		eventID:       "evt_deployment_1",
+		eventType:     "deployment.recorded",
+		schemaVersion: 1,
+		workspaceID:   "wrk_1",
+		actorKind:     "plugin",
+		actorID:       &pluginID,
+		target:        entityref.Ref{Type: "deployment", ID: "dpl_1"},
+		occurredAt:    time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC),
+		payload: []byte(`{
+			"status":"succeeded",
+			"environment":{"type":"environment","id":"env_1"},
+			"ci_run":{"type":"ci-run","id":"cir_1"}
+		}`),
+	})
+	if err == nil {
+		t.Fatal("projectActivityEvent() error = nil, want invalid Deployment actor error")
+	}
+}

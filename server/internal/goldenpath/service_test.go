@@ -11,11 +11,12 @@ import (
 )
 
 type recordingStore struct {
-	createDecisionCommand CreateDecisionCommand
-	recordCIRunCommand    RecordCompletedCIRunCommand
-	nexusPrincipal        authz.Principal
-	nexusTarget           entityref.Ref
-	nexusView             NexusView
+	createDecisionCommand   CreateDecisionCommand
+	recordCIRunCommand      RecordCompletedCIRunCommand
+	recordDeploymentCommand RecordStagingDeploymentCommand
+	nexusPrincipal          authz.Principal
+	nexusTarget             entityref.Ref
+	nexusView               NexusView
 }
 
 func (store *recordingStore) CreateDecisionFromThread(_ context.Context, command CreateDecisionCommand) (Decision, error) {
@@ -37,6 +38,14 @@ func (store *recordingStore) RecordCompletedCIRun(
 ) (CIRunReceipt, error) {
 	store.recordCIRunCommand = command
 	return CIRunReceipt{CIRun: CIRun{ID: command.CIRunID}}, nil
+}
+
+func (store *recordingStore) RecordStagingDeployment(
+	_ context.Context,
+	command RecordStagingDeploymentCommand,
+) (Deployment, error) {
+	store.recordDeploymentCommand = command
+	return Deployment{ID: command.DeploymentID}, nil
 }
 
 func (*recordingStore) ListRelations(context.Context, authz.Principal, entityref.Ref) ([]RelationProjection, error) {
@@ -205,6 +214,98 @@ func TestRecordCompletedJenkinsRunRejectsUnverifiedFactsBeforeStore(t *testing.T
 			}
 			if store.recordCIRunCommand.CIRunID != "" {
 				t.Fatalf("invalid input reached Store: %#v", store.recordCIRunCommand)
+			}
+		})
+	}
+}
+
+func TestRecordStagingDeploymentBuildsExplicitAtomicCommand(t *testing.T) {
+	t.Parallel()
+
+	store := &recordingStore{}
+	startedAt := time.Date(2026, 8, 29, 11, 0, 0, 0, time.FixedZone("source", 8*60*60))
+	completedAt := startedAt.Add(3 * time.Minute)
+	recordedAt := time.Date(2026, 8, 29, 3, 4, 0, 0, time.UTC)
+	service := NewService(
+		store,
+		&sequenceIDs{values: []string{"dpl_1", "lnk_1", "evt_1"}},
+		fixedClock{value: recordedAt},
+	)
+	invocation := Invocation{
+		Principal:     authz.Principal{Kind: authz.PrincipalUser, ID: "usr_1", WorkspaceID: "wrk_1"},
+		SourceKind:    "api",
+		CorrelationID: "cor_1",
+	}
+
+	deployment, err := service.RecordStagingDeployment(
+		context.Background(),
+		invocation,
+		RecordStagingDeploymentInput{
+			EnvironmentID: "env_staging",
+			CIRunID:       "cir_1",
+			Status:        "succeeded",
+			StartedAt:     &startedAt,
+			CompletedAt:   completedAt,
+		},
+	)
+	if err != nil {
+		t.Fatalf("RecordStagingDeployment() error = %v", err)
+	}
+	command := store.recordDeploymentCommand
+	if deployment.ID != "dpl_1" || command.LinkID != "lnk_1" || command.EventID != "evt_1" {
+		t.Fatalf("generated identifiers were not kept in one command: %#v", command)
+	}
+	if command.StartedAt == nil || !command.StartedAt.Equal(startedAt.UTC()) ||
+		!command.CompletedAt.Equal(completedAt.UTC()) || !command.RecordedAt.Equal(recordedAt) {
+		t.Fatalf("command times were not normalized to UTC: %#v", command)
+	}
+}
+
+func TestRecordStagingDeploymentRejectsInvalidFactsBeforeStore(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input RecordStagingDeploymentInput
+	}{
+		{
+			name: "nonterminal status",
+			input: RecordStagingDeploymentInput{
+				EnvironmentID: "env_staging", CIRunID: "cir_1", Status: "running",
+				CompletedAt: time.Date(2026, 8, 29, 3, 4, 0, 0, time.UTC),
+			},
+		},
+		{
+			name: "completion before start",
+			input: func() RecordStagingDeploymentInput {
+				completedAt := time.Date(2026, 8, 29, 3, 4, 0, 0, time.UTC)
+				startedAt := completedAt.Add(time.Minute)
+				return RecordStagingDeploymentInput{
+					EnvironmentID: "env_staging", CIRunID: "cir_1", Status: "succeeded",
+					StartedAt: &startedAt, CompletedAt: completedAt,
+				}
+			}(),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			store := &recordingStore{}
+			service := NewService(
+				store,
+				&sequenceIDs{values: []string{"dpl_1", "lnk_1", "evt_1"}},
+				fixedClock{},
+			)
+			_, err := service.RecordStagingDeployment(context.Background(), Invocation{
+				Principal:  authz.Principal{Kind: authz.PrincipalUser, ID: "usr_1", WorkspaceID: "wrk_1"},
+				SourceKind: "api", CorrelationID: "cor_1",
+			}, test.input)
+			if !errors.Is(err, authz.ErrInvalid) {
+				t.Fatalf("RecordStagingDeployment() error = %v, want invalid", err)
+			}
+			if store.recordDeploymentCommand.DeploymentID != "" {
+				t.Fatalf("invalid input reached Store: %#v", store.recordDeploymentCommand)
 			}
 		})
 	}

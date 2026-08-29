@@ -166,7 +166,25 @@ Environment 独立存在并通过 EntityLink 关联 Component，不能假设一�
 
 ### Deployment
 
-某个版本、制品或提交进入某个 Environment 的事实记录。Deployment 与 CI Run 分开：构建成功不等于已经部署，部署完成也必须保留来源、操作者、审批和回滚关系。
+某个版本、制品或提交进入某个 Environment 的事实记录。Deployment 与 CI Run 分开：构建成功不等于已经部署；已经发生的来源、操作者、审批和回滚关系必须保留，M0 尚无审批或回滚时不能伪造这些事实。
+
+M0 正式切片先冻结 `deployment` 类型与 `dpl_` ID 前缀，并只记录显式、终态的 staging 事实：
+
+| 字段 | 约束 |
+| --- | --- |
+| `environment_id` | 同一 Workspace 内 active 且 classification 为 `staging` 的 Environment |
+| `ci_run_id` | 同一 Workspace 内已经 `succeeded` 的 CI Run |
+| `authorization_id` | 操作者针对目标 Environment 的 active 显式授权 |
+| `status` | `succeeded / failed / canceled` |
+| `started_at` | 可选外部执行开始时间 |
+| `completed_at` | 必填，且不能早于开始时间 |
+| `recorded_by` | 明确记录该事实的用户 |
+| `source_kind / source_id` | 受控 `web / api` 调用来源 |
+| `recorded_at` | RadishNexus 原子记录时间 |
+
+同一 CI Run 在同一 Environment 最多形成一条 Deployment。CI Run 成功不会调用 Deployment 写入；只有 active Workspace 用户持有目标 Environment 的显式授权后，才能通过独立命令记录。Project 角色、owner Team、EntityLink 和 CI source 都不隐式授予部署能力。
+
+M0 command 只记录调用方已经确认的外部终态，不执行部署、不读取 Secret，也不建立 production、审批、回滚或运行中状态。Deployment、`deploys` CI Run 关系、`deployment.recorded` 事件和 Outbox 原子提交；权威行保留授权、操作者和来源，但不替代未来通用 Audit 与外部执行日志。精确边界见 [ADR-0009](adr/0009-explicit-staging-deployment.md)。
 
 ## 协作对象
 

@@ -25,10 +25,12 @@ type activityEvent struct {
 }
 
 type activityEventPayload struct {
-	Status    string         `json:"status"`
-	Evidence  *entityref.Ref `json:"evidence"`
-	Decision  *entityref.Ref `json:"decision"`
-	Component *entityref.Ref `json:"component"`
+	Status      string         `json:"status"`
+	Evidence    *entityref.Ref `json:"evidence"`
+	Decision    *entityref.Ref `json:"decision"`
+	Component   *entityref.Ref `json:"component"`
+	Environment *entityref.Ref `json:"environment"`
+	CIRun       *entityref.Ref `json:"ci_run"`
 }
 
 type activityRecord struct {
@@ -53,7 +55,8 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
 			occurred_at, payload
 		FROM radishnexus.domain_events
 		WHERE event_type IN (
-			'decision.proposed', 'decision.accepted', 'ticket.created', 'ci-run.recorded'
+			'decision.proposed', 'decision.accepted', 'ticket.created',
+			'ci-run.recorded', 'deployment.recorded'
 		)
 		ORDER BY occurred_at, event_id
 	`)
@@ -175,6 +178,12 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid ci-run.recorded facts", event.eventID)
 		}
 		record.subjects = []entityref.Ref{*payload.Component}
+	case "deployment.recorded":
+		if event.target.Type != "deployment" || event.actorKind != "user" || event.actorID == nil ||
+			!isTerminalDeploymentStatus(payload.Status) || payload.Environment == nil || payload.CIRun == nil {
+			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid deployment.recorded facts", event.eventID)
+		}
+		record.subjects = []entityref.Ref{*payload.Environment, *payload.CIRun}
 	default:
 		return activityRecord{}, fmt.Errorf("project Activity event %s: event type is not allowed", event.eventID)
 	}
@@ -188,5 +197,9 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 }
 
 func isTerminalCIRunStatus(status string) bool {
+	return status == "succeeded" || status == "failed" || status == "canceled"
+}
+
+func isTerminalDeploymentStatus(status string) bool {
 	return status == "succeeded" || status == "failed" || status == "canceled"
 }

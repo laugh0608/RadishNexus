@@ -12,7 +12,7 @@
 
 ## 适用范围
 
-初始 M0 冻结 Project、Initiative、Component、Decision、Environment 和 EntityLink 的引用能力，并用 Thread、Ticket、CI Run 和 Deployment 验证接口是否足以承载 [Golden Path](../golden-path.md)。ADR-0004 随首个正式纵向切片继续冻结了 Thread 与 Ticket 的类型前缀、最小字段和授权上下文；ADR-0006 继续冻结 CI Run 的类型前缀、最小来源字段和完成事实，Deployment 字段仍未冻结。
+初始 M0 冻结 Project、Initiative、Component、Decision、Environment 和 EntityLink 的引用能力，并用 Thread、Ticket、CI Run 和 Deployment 验证接口是否足以承载 [Golden Path](../golden-path.md)。ADR-0004 随首个正式纵向切片继续冻结了 Thread 与 Ticket 的类型前缀、最小字段和授权上下文；ADR-0006 冻结 CI Run 的类型前缀、最小来源字段和完成事实；ADR-0009 冻结显式 staging Deployment、环境级授权和原子关系边界。
 
 M0 不支持：
 
@@ -46,8 +46,9 @@ M0 首批冻结以下类型名与 ID 前缀：
 | `thread` | `thr_` | 作为讨论证据的 Thread |
 | `ticket` | `tkt_` | 可执行工作对象 |
 | `ci-run` | `cir_` | 一次构建或流水线运行 |
+| `deployment` | `dpl_` | 一次显式记录的部署终态事实 |
 
-Document、Repository 和 Deployment 等其余 Golden Path 类型进入同一注册表时，其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结；CI Run 的来源和幂等边界由 [ADR-0006](../adr/0006-verified-jenkins-delivery-and-ci-run.md) 冻结。
+Document 和 Repository 等其余 Golden Path 类型进入同一注册表时，其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结；CI Run 的来源和幂等边界由 [ADR-0006](../adr/0006-verified-jenkins-delivery-and-ci-run.md) 冻结；Deployment 由 [ADR-0009](../adr/0009-explicit-staging-deployment.md) 冻结。
 
 ### 结构化表示
 
@@ -133,6 +134,14 @@ request_context
 - CI Run 的读取能力来自其稳定 `component_id` 归属；只有当前主体能读取 Component 时才可以读取 CI Run。owner Team 只表达责任，EntityLink、Project 和 Jenkins source 都不授予该读取能力。
 - CI Run Current 只投影 status、开始/完成/记录/更新时间和经当前权限解析的 Component；不返回 source ID、external run key、delivery receipt、digest、Secret、原始 payload 或未经治理的外部 URL。
 - `ci-run.recorded` Timeline 可以显示通用 `plugin` actor kind，但在来源展示协议冻结前隐藏 plugin/source ID。精确边界见 [ADR-0007](../adr/0007-component-scoped-ci-run-read.md)。
+
+### Environment 与 staging Deployment 的 M0 写入
+
+- Environment 是 Workspace 级稳定部署目标；classification 创建后不可修改。owner Team 表示责任，不授予部署能力。
+- staging Deployment 只由明确用户的独立 command 记录。调用者必须是 active Workspace 成员，并持有目标 Environment 的 active 显式授权；Project 角色、Component、EntityLink、CI source 或 plugin actor 均不授予该能力。
+- 目标必须是 active staging Environment，来源必须是 succeeded CI Run。CI Run 写入路径不调用 Deployment，production 也不能通过改名或普通参数进入该 command。
+- Deployment 是不可变终态事实，同一 Environment 与 CI Run 组合唯一；它保留 authorization、actor、source 和时间，但不冒充外部执行日志或通用 Audit。
+- 成功命令原子写入 Deployment、asserted user `deploys` 关系、`deployment.recorded` 和 Outbox。事件只保留 status、Environment 与 CI Run 引用。精确边界见 [ADR-0009](../adr/0009-explicit-staging-deployment.md)。
 
 ### EntityLink 写入
 
@@ -266,7 +275,7 @@ safe_facts
 3. 有确认权限且能读取全部 evidence 的人接受 Decision，产生 `decision.accepted`。Project 管理角色不自动穿透 restricted Thread；系统生成内容只能保留为草案，不能作为 actor 完成接受。
 4. 从 Decision 创建 Ticket，Ticket 与 `implements` 关系保留来源，不复制 Thread 正文。读取 Ticket 但不能读取 Thread 的用户只在对象页看到不可识别目标的通用受限占位。
 5. Jenkins 重复发送同一 delivery 时只产生一个 CI Run；相同幂等键的 digest 变化直接冲突。正式核心只接收已经完成来源验证与字段映射的 delivery，并把 receipt、CI Run、`ci-run.recorded` 和 Outbox 原子提交；外部失败重试和安全审计由后续 adapter 定义，不阻塞聊天和 Decision 写入。
-6. 构建成功只更新 CI Run。只有独立、获授权的受控操作才能创建 staging Deployment 及其关系和审计。
+6. 构建成功只更新 CI Run。只有 active 用户持有目标 Environment 的显式授权后，才能通过独立 command 原子记录 staging Deployment、`deploys` 关系、`deployment.recorded` 和 Outbox；该 command 不执行外部部署。
 7. 备份恢复保留所有稳定 ID、关系来源、事件 correlation 和审计；Activity 可以重新投影且不产生重复项。
 
 ## M0 验证清单
@@ -281,10 +290,11 @@ M0 实验与正式纵向切片累计必须证明：
 - Activity 清空并重建后，顺序、来源和目标关系与重建前等价；
 - 清理已完成的投递状态不会破坏事件事实、备份或 Activity 重建；
 - CI Run 成功不会自动产生 Deployment。
+- 无授权用户、非 staging Environment 和非成功 CI Run 不能产生 Deployment；事件或关系失败时整单回滚。
 
 ## 后续仍需决定
 
-- EntityID 的具体生成算法，以及 Document、Repository、Deployment 等尚未进入正式纵向切片的类型前缀；
+- EntityID 的具体生成算法，以及 Document、Repository 等尚未进入正式纵向切片的类型前缀；
 - 后续对象的 PostgreSQL 表、约束、索引，以及事件事实和投递状态的保留与演进策略；
 - 关系类型注册表的完整方向、基数和 metadata schema；
 - Team 角色继承、对象分享、跨 Project 转换和管理员 break-glass 策略；
