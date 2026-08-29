@@ -127,6 +127,13 @@ request_context
 
 搜索、通知、全局 Activity、Attention Item、导出和 AI 上下文没有一个用户正在读取的安全来源对象，因此对不可读目标使用 `hidden`，不能用受限占位符扩大可发现范围。
 
+### Component 与 CI Run 的 M0 读取
+
+- Component 当前没有 restricted 可见性或对象成员字段；同一 Workspace 的活跃成员可以读取，非成员、暂停成员和跨 Workspace 主体不可发现。
+- CI Run 的读取能力来自其稳定 `component_id` 归属；只有当前主体能读取 Component 时才可以读取 CI Run。owner Team 只表达责任，EntityLink、Project 和 Jenkins source 都不授予该读取能力。
+- CI Run Current 只投影 status、开始/完成/记录/更新时间和经当前权限解析的 Component；不返回 source ID、external run key、delivery receipt、digest、Secret、原始 payload 或未经治理的外部 URL。
+- `ci-run.recorded` Timeline 可以显示通用 `plugin` actor kind，但在来源展示协议冻结前隐藏 plugin/source ID。精确边界见 [ADR-0007](../adr/0007-component-scoped-ci-run-read.md)。
+
 ### EntityLink 写入
 
 创建 EntityLink 必须同时满足：

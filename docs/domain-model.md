@@ -146,6 +146,8 @@ M0 最小字段：
 
 CI Run 成功只表达构建事实，不能自动创建 Deployment。Repository、commit、Ticket 和其它上下文等待相应对象字段与关系方向冻结后再通过 EntityLink 表达。
 
+M0 读取以 Component 为授权边界：同一 Workspace 的活跃成员可以读取 Component 及其 CI Run；非成员、暂停成员和跨 Workspace 主体不可发现。`owner_team_id` 只表示责任，不形成私密访问组；Jenkins source 和 plugin actor 也不授予用户权限。CI Run 的 Nexus View 只投影受控状态、时间与当前 Component，不暴露来源标识和 receipt。详见 [ADR-0007](adr/0007-component-scoped-ci-run-read.md)。
+
 ### Environment
 
 一个稳定部署目标，例如 `development`、`staging` 或 `production`。Environment 承载部署保护策略、审批要求和 Secrets 引用，但不保存 Secrets 明文。

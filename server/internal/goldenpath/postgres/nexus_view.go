@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -38,7 +39,7 @@ func (store *Store) GetNexusView(
 		return view, authz.ErrNotFound
 	}
 
-	view.Current, err = loadCurrentProjection(ctx, tx, principal.WorkspaceID, target)
+	view.Current, err = loadCurrentProjection(ctx, tx, principal, target)
 	if err != nil {
 		return view, err
 	}
@@ -60,7 +61,7 @@ func (store *Store) GetNexusView(
 func loadCurrentProjection(
 	ctx context.Context,
 	tx pgx.Tx,
-	workspaceID string,
+	principal authz.Principal,
 	target entityref.Ref,
 ) (current goldenpath.CurrentProjection, err error) {
 	current.Ref = target
@@ -70,7 +71,7 @@ func loadCurrentProjection(
 			SELECT governing_project_id, question, status, updated_at
 			FROM radishnexus.decisions
 			WHERE workspace_id = $1 AND id = $2
-		`, workspaceID, target.ID).Scan(
+		`, principal.WorkspaceID, target.ID).Scan(
 			&current.GoverningProjectID,
 			&current.Title,
 			&current.Status,
@@ -81,12 +82,47 @@ func loadCurrentProjection(
 			SELECT governing_project_id, title, status, updated_at
 			FROM radishnexus.tickets
 			WHERE workspace_id = $1 AND id = $2
-		`, workspaceID, target.ID).Scan(
+		`, principal.WorkspaceID, target.ID).Scan(
 			&current.GoverningProjectID,
 			&current.Title,
 			&current.Status,
 			&current.UpdatedAt,
 		)
+	case "ci-run":
+		var componentID string
+		var recordedAt time.Time
+		err = tx.QueryRow(ctx, `
+			SELECT component_id, status, started_at, completed_at, created_at, updated_at
+			FROM radishnexus.ci_runs
+			WHERE workspace_id = $1 AND id = $2
+		`, principal.WorkspaceID, target.ID).Scan(
+			&componentID,
+			&current.Status,
+			&current.StartedAt,
+			&current.CompletedAt,
+			&recordedAt,
+			&current.UpdatedAt,
+		)
+		if err == nil {
+			componentRef := entityref.Ref{Type: "component", ID: componentID}
+			exists, canRead, accessErr := entityAccess(ctx, tx, principal, componentRef)
+			if accessErr != nil {
+				return goldenpath.CurrentProjection{}, accessErr
+			}
+			if !exists || !canRead {
+				return goldenpath.CurrentProjection{}, authz.ErrNotFound
+			}
+			componentTitle, titleErr := entityTitle(ctx, tx, principal.WorkspaceID, componentRef)
+			if titleErr != nil {
+				return goldenpath.CurrentProjection{}, titleErr
+			}
+			current.Component = &goldenpath.SubjectProjection{
+				State: goldenpath.ProjectionVisible,
+				Ref:   componentRef,
+				Title: componentTitle,
+			}
+			current.RecordedAt = &recordedAt
+		}
 	default:
 		return current, fmt.Errorf("load Current projection: unsupported target type %q", target.Type)
 	}
@@ -143,7 +179,7 @@ func listTimeline(
 			rows.Close()
 			return nil, fmt.Errorf("scan Timeline fact: %w", err)
 		}
-		if actorID != nil {
+		if actorID != nil && fact.item.ActivityType != "ci-run.recorded" {
 			fact.item.Actor.ID = *actorID
 		}
 

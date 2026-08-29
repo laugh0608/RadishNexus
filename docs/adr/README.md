@@ -12,6 +12,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0004](0004-project-scoped-collaboration-permissions.md) | 已接受 | Project 作用域下的协作对象与权限 |
 | [ADR-0005](0005-forward-only-postgresql-migrations.md) | 已接受 | Forward-only PostgreSQL migration runner |
 | [ADR-0006](0006-verified-jenkins-delivery-and-ci-run.md) | 已接受 | 已验证 Jenkins delivery 与 CI Run 原子记录 |
+| [ADR-0007](0007-component-scoped-ci-run-read.md) | 已接受 | Component 作用域下的 CI Run 读取 |
 
 ## 新建规则
 
