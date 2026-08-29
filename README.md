@@ -40,7 +40,7 @@ RadishNexus 是 Radish 家族中的团队协作项目。它把私聊、团队频
 
 ## 协作与仓库治理
 
-- `master` 是稳定分支，`dev` 是日常集成分支；普通变更默认通过主题分支向 `dev` 提交 PR。
+- `master` 是稳定分支，`dev` 是单维护者阶段的日常开发与集成分支；串行常规任务默认直接在 `dev` 推进，主题分支只在外部贡献、并行或风险隔离等有真实收益时使用。
 - `master` 只接受 PR，允许 merge commit 与 rebase merge，禁用 squash merge；合入后必须回流 `dev`。
 - `Candidate Quality` 是稳定聚合质量门，当前验证仓库卫生、检查器、M0 核心契约实验、正式 Go 服务，以及 React Web App 的格式、Lint、状态测试、构建和依赖边界。
 - 仓库中的 Ruleset JSON 是版本化模板，不表示 GitHub 远端设置已经生效。

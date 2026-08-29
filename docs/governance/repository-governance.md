@@ -2,7 +2,7 @@
 
 状态：已采用
 
-日期：2026-08-28
+日期：2026-08-29
 
 ## 目标
 
@@ -26,17 +26,17 @@
 ## 分支职责
 
 - `master`：稳定候选与正式发布历史，只接受 PR，不直接提交。
-- `dev`：日常集成分支，普通功能、修复和文档 PR 默认合入这里。
-- 主题分支：从 `dev` 创建，使用 `feat/`、`fix/`、`docs/`、`refactor/`、`test/`、`chore/` 等可读前缀。
+- `dev`：单维护者阶段的默认日常开发与集成分支，串行常规任务直接在这里推进。
+- 主题分支或 worktree：只在项目所有者明确要求、外部贡献、并行写入、高风险隔离或 hotfix 等有真实收益时使用；普通主题 PR 以 `dev` 为目标。
 - 紧急修复：可以从 `master` 创建，但合入 `master` 后必须立即回流 `dev`。
 
-固定流向为：
+默认流向为：
 
 ```text
-topic branch -> dev -> master -> dev
+日常串行开发 -> dev -> master -> dev
 ```
 
-`master` 不能成为只向前发布、从不回流的孤立历史。每次 `master` 变化后，都应通过常规 PR 或明确的祖先关系证明把变化带回 `dev`。
+需要隔离时可以使用 `topic/worktree -> dev`，但 Agent 不得只因自身默认流程为每个切片自动创建 `codex/*` 或其它临时分支。`master` 不能成为只向前发布、从不回流的孤立历史；每次 `master` 变化后，都应通过明确的祖先关系证明把变化带回 `dev`。
 
 ## 提交约束
 
@@ -48,7 +48,14 @@ topic branch -> dev -> master -> dev
 
 ## PR 规则
 
-普通 PR 目标为 `dev`。只有以下变更以 `master` 为目标：
+PR 不是普通串行开发进入 `dev` 的强制入口。以下情况以 `dev` 为 PR 目标：
+
+- 外部贡献；
+- 多人或多 Agent 并行隔离；
+- 高风险实验或大范围重构需要独立审查；
+- 项目所有者明确要求远端合并前证据。
+
+只有以下变更以 `master` 为目标：
 
 - 已在 `dev` 验证的稳定候选；
 - 明确的紧急修复；
@@ -64,12 +71,20 @@ topic branch -> dev -> master -> dev
 
 涉及 Decision、EntityLink、Activity、权限、私密数据、Webhook、插件能力或 Deployment 事实的变更，必须在 PR 中显式说明语义和越权失败路径，不能只写“已测试”。
 
+## `dev` 日常开发与检查
+
+- 当前单维护者阶段不保护 `dev`，普通提交可以直接进入 `dev`。
+- 普通 `push -> dev` 不自动触发 CI；直接开发者必须执行与改动风险匹配的本地验证。
+- 目标为 `dev` 的 PR 继续运行 `PR Checks`，为外部贡献、并行任务和明确评审提供反馈，但 `dev` 不绑定 required checks。
+- 直接开发不授权远端写入；push、PR 和仓库设置仍须按当前任务单独授权。
+- 出现稳定第二维护者、持续外部贡献、并行自动化写入或直接提交导致回归时，重新评估 `dev` Ruleset 和 push CI。
+
 ## 合并策略
 
 - 允许 merge commit 和 rebase merge。
 - 禁用 squash merge，避免把审阅后的提交结构压成无法区分的单提交。
 - `dev -> master` 默认优先 merge commit，让稳定候选的边界和回流点可见。
-- 小型、线性且不承担发布边界的主题 PR 可以 rebase merge。
+- 可选的主题 PR 可以 rebase merge；直接进入 `dev` 的提交不为制造 PR 记录而改写 SHA。
 - 删除源分支不等于完成回流；以提交祖先关系为准。
 
 选择 rebase merge 时，平台会生成新的提交 SHA。因此后续回流和审计不能只比较原主题分支 SHA，应检查实际合入后的历史。
@@ -78,7 +93,7 @@ topic branch -> dev -> master -> dev
 
 | 项目 | 当前策略 | 原因 |
 | --- | --- | --- |
-| 目标 | 仅 `refs/heads/master` | 避免误保护主题分支 |
+| 目标 | 仅 `refs/heads/master` | 保持 `dev` 日常开发与可选 PR 的低摩擦 |
 | 删除 / 强推 | 禁止 | 保留稳定历史 |
 | 进入方式 | 必须经 PR | 让检查、说明和讨论集中 |
 | 状态检查 | 严格要求 `Candidate Quality` | 使用稳定聚合上下文，内部检查可演进 |
@@ -98,8 +113,9 @@ Ruleset 只依赖一个稳定聚合状态 `Candidate Quality`。当前聚合以�
 - `Repository Checker Tests`：验证检查器本身的关键行为；
 - `M0 Core Contracts`：运行 Go 单元测试、`go vet` 和真实 PostgreSQL 事务/约束集成测试。
 - `Go Server`：运行正式服务单元测试、`go vet`、module 校验和真实 PostgreSQL migration / 权限 / 事务集成测试。
+- `Web App`：运行 React / TypeScript 格式、Lint、状态测试、production build、依赖来源与许可证检查。
 
-当前只对已经进入仓库的 M0 实验和正式 Go 服务设置检查。React Web、插件或 SDK 真正进入仓库后，再把对应格式化、单元测试、构建、安全和许可证检查接入工作流，并保持 `Candidate Quality` 名称稳定。不得为尚不存在的目录或工具创建必需状态检查。
+当前工作流只在目标为 `dev` / `master` 的 PR 和人工 `workflow_dispatch` 上运行；普通 `dev` push 不触发。插件或 SDK 真正进入仓库后，再把对应格式化、单元测试、构建、安全和许可证检查接入工作流，并保持 `Candidate Quality` 名称稳定。不得为尚不存在的目录或工具创建必需状态检查。
 
 ## 变更同步矩阵
 

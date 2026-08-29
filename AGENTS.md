@@ -99,11 +99,12 @@
 
 ## Git 约束
 
-- `master` 是受保护稳定主线，`dev` 是常态集成分支；普通主题分支默认向 `dev` 发 PR。
+- `dev` 是单维护者阶段的默认日常开发与集成分支；串行常规任务直接在 `dev` 开发、验证和提交，不为每个切片自动创建 `codex/*` 或其它主题分支。
+- 主题分支或 worktree 只在项目所有者明确要求、外部贡献、并行写入隔离、高风险实验或 hotfix 等有真实隔离收益时使用；普通主题 PR 以 `dev` 为目标。
 - `master` 只通过 PR 接收阶段性 `dev` 晋级或明确 hotfix；禁止直接 push、删除和 force push。
 - 默认分支允许 merge commit 与 rebase merge，禁用 squash merge；阶段 PR 优先 merge commit。
 - 任何进入 `master` 的变更合并后，必须先把最新 `master` 回流到 `dev`，再开始下一轮开发。
-- 共享 `dev` 不通过 rebase、reset 或 force push 伪造同步。
+- `dev` 当前不启用分支保护，普通 push 不自动触发 CI；直接开发者必须按风险完成本地验证。共享 `dev` 不通过 rebase、reset 或 force push 伪造同步。
 - 提交遵循 Conventional Commits，使用真实贡献者 Git 身份，不添加 AI 协作者署名。
 - 远程 Ruleset、仓库 Merge options 和 Secrets 的写入必须单独授权；仓库中的 JSON 模板不代表远程已经生效。
 

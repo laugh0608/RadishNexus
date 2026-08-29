@@ -6,13 +6,14 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 
 | 编号 | 状态 | 决策 |
 | --- | --- | --- |
-| [ADR-0001](0001-branch-and-pr-governance.md) | 已接受 | 分支与 PR 治理 |
+| [ADR-0001](0001-branch-and-pr-governance.md) | 已替代 | 分支与 PR 治理 |
 | [ADR-0002](0002-stable-entity-reference-and-event-projection.md) | 已接受 | 稳定实体引用与事件投影边界 |
 | [ADR-0003](0003-go-service-foundation.md) | 已接受 | Go 服务端基础栈与数据访问 |
 | [ADR-0004](0004-project-scoped-collaboration-permissions.md) | 已接受 | Project 作用域下的协作对象与权限 |
 | [ADR-0005](0005-forward-only-postgresql-migrations.md) | 已接受 | Forward-only PostgreSQL migration runner |
 | [ADR-0006](0006-verified-jenkins-delivery-and-ci-run.md) | 已接受 | 已验证 Jenkins delivery 与 CI Run 原子记录 |
 | [ADR-0007](0007-component-scoped-ci-run-read.md) | 已接受 | Component 作用域下的 CI Run 读取 |
+| [ADR-0008](0008-dev-first-development-governance.md) | 已接受 | `dev` 优先的单维护者开发拓扑 |
 
 ## 新建规则
 

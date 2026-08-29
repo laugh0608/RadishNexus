@@ -30,8 +30,10 @@
 
 ## 分支、提交与 Pull Request
 
-- `master` 是受保护稳定主线，`dev` 是日常集成分支。
-- 普通贡献从 `feature/*`、`fix/*`、`docs/*`、`proposal/*`、`experiment/*`、`refactor/*`、`test/*` 或 `chore/*` 向 `dev` 发起 PR。
+- `master` 是受保护稳定主线，`dev` 是单维护者阶段的默认日常开发与集成分支。
+- 仓库所有者的串行常规开发可以直接在 `dev` 完成；当前 `dev` 不启用分支保护，普通 push 不自动触发 CI，提交前必须执行与风险匹配的本地验证。
+- 外部贡献、并行开发、风险隔离或明确需要评审时，从最新 `dev` 创建 `feature/*`、`fix/*`、`docs/*`、`proposal/*`、`experiment/*`、`refactor/*`、`test/*` 或 `chore/*`，并向 `dev` 发起 PR。
+- Agent 不得只因自身默认工作流为普通纵向切片创建 `codex/*`、worktree 或临时 PR；需要隔离时应先说明真实原因或遵循项目所有者明确要求。
 - 只有阶段性 `dev` 晋级或明确的 `hotfix/*` 才向 `master` 发起 PR。
 - 不直接 push 到 `master`，不 force push 共享分支。
 - `master` 允许 merge commit 与 rebase merge，禁用 squash merge；阶段 PR 优先 merge commit。
@@ -39,7 +41,7 @@
 - 提交遵循 Conventional Commits，例如 `feat(decision): add superseded state`、`fix(authz): hide private relation metadata`、`docs(governance): define ruleset baseline`。
 - 提交使用贡献者自己的 Git 身份，不添加 AI 协作者署名。
 
-完整规则见 [ADR 0001](docs/adr/0001-branch-and-pr-governance.md)。
+完整规则见 [ADR 0008](docs/adr/0008-dev-first-development-governance.md)。
 
 ## 实现与数据要求
 

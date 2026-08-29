@@ -58,7 +58,7 @@
 - 原型使用明确标注的静态 fixture；本轮浏览器复核没有暴露必须新增内部 handler 的需求，因此没有为了联调制造临时业务 API。
 - `web/` 已建立 Prettier、Oxlint、Vitest + jsdom、严格 TypeScript、Vite production build 与 lockfile 供应链检查；`Candidate Quality` 已加入独立 `Web App` job，并已在本批次 PR 中实际通过。
 - 在横向补全各模块前，先完成 Golden Path 纵向原型。
-- 仓库采用 `master` 稳定分支、`dev` 集成分支和主题分支；普通 PR 默认进入 `dev`。
+- 仓库采用 `master` 稳定分支和 `dev` 日常开发/集成分支；单维护者串行任务默认直接在 `dev` 推进，主题分支只用于明确要求、外部贡献、并行写入或风险隔离。
 - `master` 允许 merge commit 和 rebase merge，禁用 squash merge，并要求变化回流 `dev`。
 - `Candidate Quality` 作为稳定聚合质量门；仓库定义已加入 M0 实验、正式 Go 服务和 Web App 的单元/状态测试、静态检查、构建与真实 PostgreSQL 集成测试，Web 基线与 Jenkins CI Run 核心 PR 均已在 GitHub 实际通过。
 - GitHub 远端默认分支为 `master`，`master` Ruleset 已启用并要求 PR、严格状态检查和已解决对话。
@@ -89,19 +89,19 @@
 
 ## 下一步事项
 
-CI Run 读取已经通过 PR #8 合入 `dev`，Web 代表交互也已达到本地完成线。当前批次先收口 Web 切片并确认远端门禁，再进入显式 staging Deployment：
+CI Run 读取已经通过 PR #8 合入 `dev`，Web 代表交互也已在本地 `dev` 提交并达到完成线。仓库采用 ADR-0008 的 `dev` 优先开发拓扑，不再为该独立切片补建临时 PR；当前直接进入显式 staging Deployment：
 
-1. 复核 CI Run Web 类型、fixture、安全字段、状态测试与浏览器证据一致性，提交后通过 PR 确认 Web App 与 Candidate Quality 远端门禁；
-2. 代表交互没有证明需要真实 transport，因此本批次不新增 HTTP route、公共错误对象或响应 schema；fixture 继续明确标注为静态代表数据；
-3. 从最新 `dev` 独立冻结 staging Deployment 的最小对象、Environment 归属、授权、状态、事件与 CI Run 关联边界，再实现正式服务纵向切片；
+1. 保持 CI Run Web 类型、fixture、安全字段、状态测试与浏览器证据一致；推送本地 `dev` 属于独立远端写操作，获得授权后执行，普通 `dev` push 不冒充已经通过远端 Candidate Quality；
+2. 代表交互没有证明需要真实 transport，因此不新增 HTTP route、公共错误对象或响应 schema；fixture 继续明确标注为静态代表数据；
+3. 直接在最新 `dev` 冻结 staging Deployment 的最小对象、Environment 归属、授权、状态、事件与 CI Run 关联边界，再实现正式服务纵向切片；
 4. staging Deployment 必须是显式、可审计且独立授权的事实，不从 `succeeded` CI Run 自动推导，不提前扩张 production 操作、审批框架或多 provider 抽象；
-5. staging Deployment 稳定后进入备份恢复，再独立评估公共 transport、文档协同方案和授权模板。
+5. staging Deployment 稳定后进入备份恢复；成组能力准备晋级时通过 `dev -> master` PR 统一确认 Candidate Quality，再独立评估公共 transport、文档协同方案和授权模板。
 
-下一步完成线：CI Run Web 代表交互 PR 合入 `dev` 且远端门禁全绿；页面清楚表达真实安全合同中的状态、时间、Component 和唯一 Timeline，桌面与窄屏复核无溢出、无控制台错误或警告。随后 staging Deployment 的最小领域与权限边界形成可实施、可复验的正式契约。
+下一步完成线：CI Run Web 页面继续清楚表达真实安全合同中的状态、时间、Component 和唯一 Timeline，桌面与窄屏复核无溢出、无控制台错误或警告；staging Deployment 的最小领域、权限、事件和事务边界形成可实施、可复验的正式契约，并由真实 PostgreSQL 测试证明构建成功不会自动产生 Deployment。
 
 下一步停止线：不补 Jenkins HTTP route 或签名协议，不暴露 source ID、external run key、receipt/digest，不启动 Flutter，不选择 CRDT，不建立 restricted Component、通用 RBAC framework、Repository 占位、插件市场或多 CI provider 抽象，不把 CI 成功冒充 Deployment，也不把 staging 自动扩张为 production 发布能力。
 
-后续顺位保持为 CI Run Web 代表交互收口 → 显式 staging Deployment → 备份恢复，再独立评估公共 transport、文档协同方案和授权模板。
+后续顺位保持为显式 staging Deployment → 备份恢复 → 阶段性 `dev -> master` 晋级，再独立评估公共 transport、文档协同方案和授权模板。
 
 ## 开放问题
 

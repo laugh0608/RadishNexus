@@ -1,8 +1,10 @@
 # ADR-0001：分支与 PR 治理
 
-状态：已接受
+状态：已替代
 
 日期：2026-08-27
+
+替代者：[ADR-0008：`dev` 优先的单维护者开发拓扑](0008-dev-first-development-governance.md)
 
 ## 背景
 
