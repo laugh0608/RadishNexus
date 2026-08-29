@@ -12,6 +12,7 @@ import (
 
 type recordingStore struct {
 	createDecisionCommand CreateDecisionCommand
+	recordCIRunCommand    RecordCompletedCIRunCommand
 	nexusPrincipal        authz.Principal
 	nexusTarget           entityref.Ref
 	nexusView             NexusView
@@ -28,6 +29,14 @@ func (*recordingStore) AcceptDecision(context.Context, AcceptDecisionCommand) (D
 
 func (*recordingStore) CreateTicketFromDecision(context.Context, CreateTicketCommand) (Ticket, error) {
 	return Ticket{}, nil
+}
+
+func (store *recordingStore) RecordCompletedCIRun(
+	_ context.Context,
+	command RecordCompletedCIRunCommand,
+) (CIRunReceipt, error) {
+	store.recordCIRunCommand = command
+	return CIRunReceipt{CIRun: CIRun{ID: command.CIRunID}}, nil
 }
 
 func (*recordingStore) ListRelations(context.Context, authz.Principal, entityref.Ref) ([]RelationProjection, error) {
@@ -103,6 +112,119 @@ func TestAcceptDecisionRejectsSystemPrincipalBeforeStore(t *testing.T) {
 	}, AcceptDecisionInput{DecisionID: "dec_1", Outcome: "yes", Rationale: "because"})
 	if !errors.Is(err, authz.ErrUnauthenticated) {
 		t.Fatalf("AcceptDecision() error = %v, want unauthenticated", err)
+	}
+}
+
+func TestRecordCompletedJenkinsRunBuildsVerifiedAtomicCommand(t *testing.T) {
+	t.Parallel()
+
+	store := &recordingStore{}
+	startedAt := time.Date(2026, 8, 29, 10, 0, 0, 0, time.FixedZone("source", 8*60*60))
+	completedAt := startedAt.Add(7 * time.Minute)
+	recordedAt := time.Date(2026, 8, 29, 2, 8, 0, 0, time.UTC)
+	service := NewService(
+		store,
+		&sequenceIDs{values: []string{"cir_1", "evt_1", "cor_1"}},
+		fixedClock{value: recordedAt},
+	)
+
+	receipt, err := service.RecordCompletedJenkinsRun(
+		context.Background(),
+		VerifiedJenkinsDelivery{
+			WorkspaceID:   "wrk_1",
+			SourceID:      "jenkins-main",
+			DeliveryID:    "delivery-1",
+			PayloadSHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+		RecordCompletedCIRunInput{
+			ComponentID:    "cmp_1",
+			ExternalRunKey: "auth-service/42",
+			Status:         "succeeded",
+			StartedAt:      &startedAt,
+			CompletedAt:    completedAt,
+		},
+	)
+	if err != nil {
+		t.Fatalf("RecordCompletedJenkinsRun() error = %v", err)
+	}
+	command := store.recordCIRunCommand
+	if receipt.CIRun.ID != "cir_1" || command.EventID != "evt_1" || command.CorrelationID != "cor_1" {
+		t.Fatalf("generated identifiers were not kept in one command: %#v", command)
+	}
+	if command.StartedAt == nil || !command.StartedAt.Equal(startedAt.UTC()) ||
+		!command.CompletedAt.Equal(completedAt.UTC()) || !command.RecordedAt.Equal(recordedAt) {
+		t.Fatalf("command times were not normalized to UTC: %#v", command)
+	}
+}
+
+func TestRecordCompletedJenkinsRunRejectsUnverifiedFactsBeforeStore(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		delivery VerifiedJenkinsDelivery
+		input    RecordCompletedCIRunInput
+	}{
+		{
+			name: "uppercase digest",
+			delivery: VerifiedJenkinsDelivery{
+				WorkspaceID: "wrk_1", SourceID: "jenkins-main", DeliveryID: "delivery-1",
+				PayloadSHA256: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+			},
+			input: validCompletedCIRunInput(),
+		},
+		{
+			name:     "nonterminal status",
+			delivery: validVerifiedJenkinsDelivery(),
+			input: func() RecordCompletedCIRunInput {
+				input := validCompletedCIRunInput()
+				input.Status = "running"
+				return input
+			}(),
+		},
+		{
+			name:     "completion before start",
+			delivery: validVerifiedJenkinsDelivery(),
+			input: func() RecordCompletedCIRunInput {
+				input := validCompletedCIRunInput()
+				startedAt := input.CompletedAt.Add(time.Minute)
+				input.StartedAt = &startedAt
+				return input
+			}(),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			store := &recordingStore{}
+			service := NewService(store, &sequenceIDs{values: []string{"cir_1", "evt_1", "cor_1"}}, fixedClock{})
+			_, err := service.RecordCompletedJenkinsRun(context.Background(), test.delivery, test.input)
+			if !errors.Is(err, authz.ErrInvalid) {
+				t.Fatalf("RecordCompletedJenkinsRun() error = %v, want invalid", err)
+			}
+			if store.recordCIRunCommand.CIRunID != "" {
+				t.Fatalf("invalid input reached Store: %#v", store.recordCIRunCommand)
+			}
+		})
+	}
+}
+
+func validVerifiedJenkinsDelivery() VerifiedJenkinsDelivery {
+	return VerifiedJenkinsDelivery{
+		WorkspaceID:   "wrk_1",
+		SourceID:      "jenkins-main",
+		DeliveryID:    "delivery-1",
+		PayloadSHA256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	}
+}
+
+func validCompletedCIRunInput() RecordCompletedCIRunInput {
+	return RecordCompletedCIRunInput{
+		ComponentID:    "cmp_1",
+		ExternalRunKey: "auth-service/42",
+		Status:         "succeeded",
+		CompletedAt:    time.Date(2026, 8, 29, 2, 7, 0, 0, time.UTC),
 	}
 }
 

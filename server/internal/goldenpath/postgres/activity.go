@@ -25,9 +25,10 @@ type activityEvent struct {
 }
 
 type activityEventPayload struct {
-	Status   string         `json:"status"`
-	Evidence *entityref.Ref `json:"evidence"`
-	Decision *entityref.Ref `json:"decision"`
+	Status    string         `json:"status"`
+	Evidence  *entityref.Ref `json:"evidence"`
+	Decision  *entityref.Ref `json:"decision"`
+	Component *entityref.Ref `json:"component"`
 }
 
 type activityRecord struct {
@@ -51,7 +52,9 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
 			actor_kind, actor_id, primary_entity_type, primary_entity_id,
 			occurred_at, payload
 		FROM radishnexus.domain_events
-		WHERE event_type IN ('decision.proposed', 'decision.accepted', 'ticket.created')
+		WHERE event_type IN (
+			'decision.proposed', 'decision.accepted', 'ticket.created', 'ci-run.recorded'
+		)
 		ORDER BY occurred_at, event_id
 	`)
 	if err != nil {
@@ -166,6 +169,11 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid ticket.created facts", event.eventID)
 		}
 		record.subjects = []entityref.Ref{*payload.Decision}
+	case "ci-run.recorded":
+		if event.target.Type != "ci-run" || !isTerminalCIRunStatus(payload.Status) || payload.Component == nil {
+			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid ci-run.recorded facts", event.eventID)
+		}
+		record.subjects = []entityref.Ref{*payload.Component}
 	default:
 		return activityRecord{}, fmt.Errorf("project Activity event %s: event type is not allowed", event.eventID)
 	}
@@ -176,4 +184,8 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		}
 	}
 	return record, nil
+}
+
+func isTerminalCIRunStatus(status string) bool {
+	return status == "succeeded" || status == "failed" || status == "canceled"
 }

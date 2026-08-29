@@ -204,6 +204,7 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 
 	assertDatabaseConstraints(t, ctx, pool, decision.ID, duplicateEventID)
 	assertNexusViewReadSlice(t, ctx, pool, store, service, decider, reader, admin, decision, ticket)
+	assertJenkinsCIRunSlice(t, ctx, pool, store, service)
 }
 
 func assertNexusViewReadSlice(

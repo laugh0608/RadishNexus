@@ -126,6 +126,26 @@ M0 最小字段：
 
 外部 Git 代码库的受控映射。RadishNexus 不托管 Git，只保存 provider、稳定外部 ID、URL、默认分支和关联 Component。Repository 凭据属于插件或集成 Secrets，不属于普通业务字段。
 
+### CI Run
+
+一次构建或流水线运行的独立事实。M0 正式切片冻结 `ci-run` 类型与 `cir_` ID 前缀，并先验证 Jenkins 完成事实；CI Run 归属一个 Component，但不等于 Repository、commit 或 Deployment。
+
+首批最小字段：
+
+| 字段 | 约束 |
+| --- | --- |
+| `component_id` | 同一 Workspace 内稳定且创建后不可修改的 Component |
+| `source_kind` | 当前只允许 `jenkins` |
+| `source_id` | 受控来源 adapter 的不透明稳定标识 |
+| `external_run_key` | source 作用域内稳定的外部运行标识，与 source 组合后唯一 |
+| `status` | `queued / running / succeeded / failed / canceled` |
+| `started_at` | 可选的来源开始时间 |
+| `completed_at` | `succeeded / failed / canceled` 时必填 |
+
+当前 application service 只记录完成终态，不定义 `queued / running` 的乱序更新、回退或重开语义。Jenkins delivery ID 是 receipt 的幂等身份，不是 CI Run ID；完全重复只返回既有 CI Run，相同 delivery 的 payload digest 改变则失败。receipt、CI Run、领域事件和 Outbox 原子提交，Secret 与原始 webhook body 不进入这些记录。精确边界见 [ADR-0006](adr/0006-verified-jenkins-delivery-and-ci-run.md)。
+
+CI Run 成功只表达构建事实，不能自动创建 Deployment。Repository、commit、Ticket 和其它上下文等待相应对象字段与关系方向冻结后再通过 EntityLink 表达。
+
 ### Environment
 
 一个稳定部署目标，例如 `development`、`staging` 或 `production`。Environment 承载部署保护策略、审批要求和 Secrets 引用，但不保存 Secrets 明文。

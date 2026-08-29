@@ -34,6 +34,7 @@ func M0Registry() Registry {
 		"entity-link": "lnk_",
 		"thread":      "thr_",
 		"ticket":      "tkt_",
+		"ci-run":      "cir_",
 	}
 }
 
