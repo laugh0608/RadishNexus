@@ -12,6 +12,9 @@ import (
 
 type recordingStore struct {
 	createDecisionCommand CreateDecisionCommand
+	nexusPrincipal        authz.Principal
+	nexusTarget           entityref.Ref
+	nexusView             NexusView
 }
 
 func (store *recordingStore) CreateDecisionFromThread(_ context.Context, command CreateDecisionCommand) (Decision, error) {
@@ -29,6 +32,16 @@ func (*recordingStore) CreateTicketFromDecision(context.Context, CreateTicketCom
 
 func (*recordingStore) ListRelations(context.Context, authz.Principal, entityref.Ref) ([]RelationProjection, error) {
 	return nil, nil
+}
+
+func (store *recordingStore) GetNexusView(
+	_ context.Context,
+	principal authz.Principal,
+	target entityref.Ref,
+) (NexusView, error) {
+	store.nexusPrincipal = principal
+	store.nexusTarget = target
+	return store.nexusView, nil
 }
 
 type sequenceIDs struct {
@@ -90,5 +103,32 @@ func TestAcceptDecisionRejectsSystemPrincipalBeforeStore(t *testing.T) {
 	}, AcceptDecisionInput{DecisionID: "dec_1", Outcome: "yes", Rationale: "because"})
 	if !errors.Is(err, authz.ErrUnauthenticated) {
 		t.Fatalf("AcceptDecision() error = %v, want unauthenticated", err)
+	}
+}
+
+func TestGetNexusViewValidatesTargetAndForwardsPrincipal(t *testing.T) {
+	t.Parallel()
+
+	principal := authz.Principal{Kind: authz.PrincipalUser, ID: "usr_1", WorkspaceID: "wrk_1"}
+	target := entityref.Ref{Type: "decision", ID: "dec_1"}
+	want := NexusView{Current: CurrentProjection{Ref: target, Status: "accepted"}}
+	store := &recordingStore{nexusView: want}
+	service := NewService(store, &sequenceIDs{}, fixedClock{})
+
+	got, err := service.GetNexusView(context.Background(), principal, target)
+	if err != nil {
+		t.Fatalf("GetNexusView() error = %v", err)
+	}
+	if got.Current.Status != "accepted" || store.nexusPrincipal != principal || store.nexusTarget != target {
+		t.Fatalf("GetNexusView() = %#v, store principal = %#v, target = %#v", got, store.nexusPrincipal, store.nexusTarget)
+	}
+
+	_, err = service.GetNexusView(
+		context.Background(),
+		principal,
+		entityref.Ref{Type: "thread", ID: "thr_1"},
+	)
+	if !errors.Is(err, authz.ErrInvalid) {
+		t.Fatalf("Thread GetNexusView() error = %v, want invalid", err)
 	}
 }

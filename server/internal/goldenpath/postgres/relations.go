@@ -40,6 +40,23 @@ func (store *Store) ListRelations(
 		return nil, authz.ErrNotFound
 	}
 
+	projections, err = listRelationProjections(ctx, tx, principal, source)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit relation projection transaction: %w", err)
+	}
+	return projections, nil
+}
+
+func listRelationProjections(
+	ctx context.Context,
+	tx pgx.Tx,
+	principal authz.Principal,
+	source entityref.Ref,
+) ([]goldenpath.RelationProjection, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT relation_type, to_type, to_id
 		FROM radishnexus.entity_links
@@ -64,7 +81,7 @@ func (store *Store) ListRelations(
 	}
 	rows.Close()
 
-	projections = make([]goldenpath.RelationProjection, 0, len(facts))
+	projections := make([]goldenpath.RelationProjection, 0, len(facts))
 	for _, fact := range facts {
 		targetExists, targetReadable, err := entityAccess(ctx, tx, principal, fact.target)
 		if err != nil {
@@ -90,10 +107,6 @@ func (store *Store) ListRelations(
 			Target:       fact.target,
 			Title:        title,
 		})
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("commit relation projection transaction: %w", err)
 	}
 	return projections, nil
 }
