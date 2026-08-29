@@ -166,6 +166,49 @@ func entityAccess(
 			)
 		`, principal.WorkspaceID, ref.ID).Scan(&exists)
 		return exists, readable, err
+	case "component":
+		var exists bool
+		err := tx.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM radishnexus.components
+				WHERE workspace_id = $1 AND id = $2
+			)
+		`, principal.WorkspaceID, ref.ID).Scan(&exists)
+		if err != nil {
+			return false, false, fmt.Errorf("check Component existence: %w", err)
+		}
+		if !exists {
+			return false, false, nil
+		}
+		readable, err := activeWorkspaceMember(ctx, tx, principal)
+		return true, readable, err
+	case "ci-run":
+		var componentID string
+		err := tx.QueryRow(ctx, `
+			SELECT component_id
+			FROM radishnexus.ci_runs
+			WHERE workspace_id = $1 AND id = $2
+			FOR SHARE
+		`, principal.WorkspaceID, ref.ID).Scan(&componentID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, false, nil
+		}
+		if err != nil {
+			return false, false, fmt.Errorf("load CI Run access facts: %w", err)
+		}
+		componentExists, componentReadable, err := entityAccess(
+			ctx,
+			tx,
+			principal,
+			entityref.Ref{Type: "component", ID: componentID},
+		)
+		if err != nil {
+			return false, false, err
+		}
+		if !componentExists {
+			return false, false, fmt.Errorf("CI Run %s references a missing Component", ref.ID)
+		}
+		return true, componentReadable, nil
 	default:
 		return false, false, nil
 	}
@@ -180,6 +223,8 @@ func entityTitle(ctx context.Context, tx pgx.Tx, workspaceID string, ref entityr
 		query = "SELECT question FROM radishnexus.decisions WHERE workspace_id = $1 AND id = $2"
 	case "project":
 		query = "SELECT name FROM radishnexus.projects WHERE workspace_id = $1 AND id = $2"
+	case "component":
+		query = "SELECT name FROM radishnexus.components WHERE workspace_id = $1 AND id = $2"
 	default:
 		return "", fmt.Errorf("unsupported visible relation target type %q", ref.Type)
 	}

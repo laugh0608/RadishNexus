@@ -31,20 +31,11 @@ func readProjectAccess(
 		return projectAccess{}, false, fmt.Errorf("load Project access facts: %w", err)
 	}
 
-	var membershipStatus string
-	err = tx.QueryRow(ctx, `
-		SELECT status
-		FROM radishnexus.workspace_memberships
-		WHERE workspace_id = $1 AND user_id = $2
-		FOR SHARE
-	`, principal.WorkspaceID, principal.ID).Scan(&membershipStatus)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return projectAccess{active: status == "active"}, false, nil
-	}
+	activeMember, err := activeWorkspaceMember(ctx, tx, principal)
 	if err != nil {
-		return projectAccess{}, false, fmt.Errorf("load Workspace membership: %w", err)
+		return projectAccess{}, false, err
 	}
-	if membershipStatus != "active" {
+	if !activeMember {
 		return projectAccess{active: status == "active"}, false, nil
 	}
 
@@ -64,6 +55,27 @@ func readProjectAccess(
 
 	canRead := visibility == "workspace" || role != authz.RoleNone
 	return projectAccess{role: role, active: status == "active"}, canRead, nil
+}
+
+func activeWorkspaceMember(
+	ctx context.Context,
+	tx pgx.Tx,
+	principal authz.Principal,
+) (bool, error) {
+	var status string
+	err := tx.QueryRow(ctx, `
+		SELECT status
+		FROM radishnexus.workspace_memberships
+		WHERE workspace_id = $1 AND user_id = $2
+		FOR SHARE
+	`, principal.WorkspaceID, principal.ID).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("load Workspace membership: %w", err)
+	}
+	return status == "active", nil
 }
 
 func readableThread(

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
 
 const (
@@ -48,11 +50,13 @@ func assertJenkinsCIRunSlice(
 		DeliveryID:    "delivery-42",
 		PayloadSHA256: jenkinsDigestA,
 	}
+	startedAt := time.Date(2026, 8, 28, 11, 50, 0, 0, time.UTC)
 	input := goldenpath.RecordCompletedCIRunInput{
 		ComponentID:    "cmp_auth",
 		ExternalRunKey: "auth-service/main/42",
 		Status:         "succeeded",
-		CompletedAt:    time.Date(2026, 8, 29, 11, 55, 0, 0, time.UTC),
+		StartedAt:      &startedAt,
+		CompletedAt:    time.Date(2026, 8, 28, 11, 55, 0, 0, time.UTC),
 	}
 
 	first, err := service.RecordCompletedJenkinsRun(ctx, delivery, input)
@@ -120,8 +124,120 @@ func assertJenkinsCIRunSlice(
 	}
 	assertTableCount(t, ctx, pool, "radishnexus.activity_items", 5)
 	assertCIRunActivityFacts(t, ctx, pool, first.CIRun.ID)
+	assertCIRunNexusView(t, ctx, pool, service, first.CIRun, delivery, input)
 	assertNoDeploymentEvent(t, ctx, pool)
 	assertInboundReceiptImmutable(t, ctx, pool, delivery.DeliveryID)
+}
+
+func assertCIRunNexusView(
+	t *testing.T,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	service *goldenpath.Service,
+	ciRun goldenpath.CIRun,
+	delivery goldenpath.VerifiedJenkinsDelivery,
+	input goldenpath.RecordCompletedCIRunInput,
+) {
+	t.Helper()
+	target := entityref.Ref{Type: "ci-run", ID: ciRun.ID}
+	reader := principal("usr_reader")
+	view, err := service.GetNexusView(ctx, reader, target)
+	if err != nil {
+		t.Fatalf("active Workspace member GetNexusView(CI Run) error = %v", err)
+	}
+	if view.Current.Ref != target || view.Current.Status != "succeeded" ||
+		view.Current.Title != "" || view.Current.GoverningProjectID != "" {
+		t.Fatalf("CI Run Current identity and status = %#v", view.Current)
+	}
+	if view.Current.StartedAt == nil || !view.Current.StartedAt.Equal(*input.StartedAt) ||
+		view.Current.CompletedAt == nil || !view.Current.CompletedAt.Equal(input.CompletedAt) ||
+		view.Current.RecordedAt == nil || !view.Current.RecordedAt.Equal(ciRun.CreatedAt) ||
+		!view.Current.UpdatedAt.Equal(ciRun.UpdatedAt) {
+		t.Fatalf("CI Run Current times = %#v, CI Run = %#v", view.Current, ciRun)
+	}
+	wantComponent := entityref.Ref{Type: "component", ID: "cmp_auth"}
+	if view.Current.Component == nil ||
+		view.Current.Component.State != goldenpath.ProjectionVisible ||
+		view.Current.Component.Ref != wantComponent ||
+		view.Current.Component.Title != "Authentication Service" {
+		t.Fatalf("CI Run Current Component = %#v", view.Current.Component)
+	}
+	if len(view.Relations) != 0 {
+		t.Fatalf("CI Run Relations = %#v, want empty", view.Relations)
+	}
+	if len(view.Timeline) != 1 {
+		t.Fatalf("CI Run Timeline length = %d, want 1: %#v", len(view.Timeline), view.Timeline)
+	}
+	item := view.Timeline[0]
+	if item.ActivityType != "ci-run.recorded" || item.Actor.Kind != "plugin" || item.Actor.ID != "" ||
+		!item.OccurredAt.Equal(input.CompletedAt) || len(item.SafeFacts) != 1 ||
+		item.SafeFacts["status"] != "succeeded" || len(item.Subjects) != 1 ||
+		item.Subjects[0].State != goldenpath.ProjectionVisible ||
+		item.Subjects[0].Ref != wantComponent || item.Subjects[0].Title != "Authentication Service" {
+		t.Fatalf("CI Run Timeline item = %#v", item)
+	}
+
+	encoded, err := json.Marshal(view)
+	if err != nil {
+		t.Fatalf("encode CI Run Nexus View error = %v", err)
+	}
+	for _, forbidden := range []string{
+		delivery.SourceID,
+		delivery.DeliveryID,
+		delivery.PayloadSHA256,
+		input.ExternalRunKey,
+		"receipt",
+		"secret",
+		"jenkins.example",
+	} {
+		if strings.Contains(strings.ToLower(string(encoded)), strings.ToLower(forbidden)) {
+			t.Fatalf("CI Run Nexus View leaks forbidden value %q: %s", forbidden, encoded)
+		}
+	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE radishnexus.components
+		SET lifecycle = 'retired', updated_at = clock_timestamp()
+		WHERE workspace_id = 'wrk_main' AND id = 'cmp_auth'
+	`); err != nil {
+		t.Fatalf("retire Component for read test error = %v", err)
+	}
+	if _, err := service.GetNexusView(ctx, reader, target); err != nil {
+		t.Fatalf("retired Component CI Run GetNexusView() error = %v", err)
+	}
+
+	nonMember := authz.Principal{
+		Kind: authz.PrincipalUser, ID: "usr_not_a_member", WorkspaceID: "wrk_main",
+	}
+	if _, err := service.GetNexusView(ctx, nonMember, target); !errors.Is(err, authz.ErrNotFound) {
+		t.Fatalf("non-member CI Run GetNexusView() error = %v, want not found", err)
+	}
+	crossWorkspace := authz.Principal{
+		Kind: authz.PrincipalUser, ID: "usr_contributor", WorkspaceID: "wrk_other",
+	}
+	if _, err := service.GetNexusView(ctx, crossWorkspace, target); !errors.Is(err, authz.ErrNotFound) {
+		t.Fatalf("cross-Workspace CI Run GetNexusView() error = %v, want not found", err)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE radishnexus.workspace_memberships
+		SET status = 'suspended'
+		WHERE workspace_id = 'wrk_main' AND user_id = 'usr_reader'
+	`); err != nil {
+		t.Fatalf("suspend Workspace member error = %v", err)
+	}
+	defer func() {
+		if _, restoreErr := pool.Exec(ctx, `
+			UPDATE radishnexus.workspace_memberships
+			SET status = 'active'
+			WHERE workspace_id = 'wrk_main' AND user_id = 'usr_reader'
+		`); restoreErr != nil {
+			t.Errorf("restore Workspace member error = %v", restoreErr)
+		}
+	}()
+	if _, err := service.GetNexusView(ctx, reader, target); !errors.Is(err, authz.ErrNotFound) {
+		t.Fatalf("suspended member CI Run GetNexusView() error = %v, want not found", err)
+	}
 }
 
 func assertConcurrentDuplicateDelivery(

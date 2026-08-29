@@ -170,7 +170,8 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		}
 		record.subjects = []entityref.Ref{*payload.Decision}
 	case "ci-run.recorded":
-		if event.target.Type != "ci-run" || !isTerminalCIRunStatus(payload.Status) || payload.Component == nil {
+		if event.target.Type != "ci-run" || event.actorKind != "plugin" || event.actorID == nil ||
+			!isTerminalCIRunStatus(payload.Status) || payload.Component == nil {
 			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid ci-run.recorded facts", event.eventID)
 		}
 		record.subjects = []entityref.Ref{*payload.Component}

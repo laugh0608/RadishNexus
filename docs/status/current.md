@@ -6,7 +6,7 @@
 
 产品定义、架构基线、仓库治理基线与 M0 正式服务纵向切片。
 
-当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和 `ci-run.recorded` 投影也已达到本地完成线。正式 `web/` React + TypeScript 基线与 Decision Nexus View 代表原型已经通过本地检查和浏览器复核；尚未建立插件 runtime 或客户端，也尚未开放业务 HTTP API。
+当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和 `ci-run.recorded` 投影已通过 PR #7 合入 `dev`，CI Run 的 Component 作用域授权与安全 Nexus View 读取也已达到本地完成线。正式 `web/` React + TypeScript 基线与 Decision Nexus View 代表原型已经通过本地检查和浏览器复核；尚未建立插件 runtime 或客户端，也尚未开放业务 HTTP API。
 
 ## 当前结论
 
@@ -39,12 +39,15 @@
 - ADR-0004 已冻结 Thread、Decision、Ticket 的 governing Project、首批角色与 restricted Thread 投影边界。
 - ADR-0005 已冻结连续编号、checksum、advisory lock、单 migration 事务和显式 forward-only 执行。
 - ADR-0006 已冻结 `ci-run` / `cir_`、Jenkins source 映射、完成态 CI Run、不可变 delivery receipt，以及 verified boundary 外的签名与 Secret 责任。
+- ADR-0007 已冻结活跃 Workspace 成员 → Component → CI Run 的 M0 读取链；owner Team、Project、EntityLink 和 Jenkins source 都不授予该读取权。
 - 正式 application service 已完成 Thread → Proposed Decision → Accepted Decision → Ticket，并把 EntityLink、领域事件和 Outbox 与业务状态放在同一事务。
 - Jenkins application service 只接收已完成来源认证和字段映射的 `VerifiedJenkinsDelivery`；receipt、CI Run、`ci-run.recorded` 和 Outbox 在同一事务提交，不保存 Secret 或原始 webhook body。
 - 相同 Jenkins delivery 和 digest 只返回既有 CI Run；digest 改变或不同 delivery 映射到同一 external run 时 fail closed，事件冲突会连同 receipt 与 CI Run 一起回滚。
 - 当前只接收 `succeeded / failed / canceled` 完成事实；尚未冻结 Jenkins HTTP route、HMAC/签名协议、失败审计、运行中更新或多 provider 抽象。
 - contributor 不能确认 Decision；decider 必须能读取全部 evidence 后才能人工确认；Project admin 也不会自动穿透 restricted Thread。
-- Nexus View application query 已能为 Decision 和 Ticket 返回 Current、Relations 和 Timeline，并在同一 repeatable-read 事务中按当前权限解析。
+- Nexus View application query 已能为 Decision、Ticket 和 CI Run 返回 Current、Relations 和 Timeline，并在同一 repeatable-read 事务中按当前权限解析。
+- CI Run Current 只返回 status、开始/完成/记录/更新时间和当前 Component；`ci-run.recorded` Timeline 保留通用 `plugin` kind 但隐藏 source ID，不返回 external run key、receipt、digest、Secret、原始 payload 或 Jenkins URL。
+- 非成员、暂停成员和跨 Workspace 主体读取 CI Run 均得到 not-found；Component retired 不删除或隐藏既有 CI Run 历史。
 - Relations 和 Timeline 对不可读目标只返回不含 EntityRef、类型、关系类型和标题的通用占位；hidden 目标不进入结果。
 - 最小认证 adapter 只把上游已验证的 UserID 与 WorkspaceID 转换为 application `Principal`，不读取或验证 Header、Cookie、Token 和 OIDC claims。
 - 内部 HTTP error mapping 已覆盖 `unauthenticated / forbidden / not found / conflict / invalid` 与未知失败；它不暴露原始错误，也尚未形成公共响应对象。
@@ -55,7 +58,7 @@
 - 在横向补全各模块前，先完成 Golden Path 纵向原型。
 - 仓库采用 `master` 稳定分支、`dev` 集成分支和主题分支；普通 PR 默认进入 `dev`。
 - `master` 允许 merge commit 和 rebase merge，禁用 squash merge，并要求变化回流 `dev`。
-- `Candidate Quality` 作为稳定聚合质量门；仓库定义已加入 M0 实验、正式 Go 服务和 Web App 的单元/状态测试、静态检查、构建与真实 PostgreSQL 集成测试，新增 Web job 与聚合门已在 GitHub 实际通过。
+- `Candidate Quality` 作为稳定聚合质量门；仓库定义已加入 M0 实验、正式 Go 服务和 Web App 的单元/状态测试、静态检查、构建与真实 PostgreSQL 集成测试，Web 基线与 Jenkins CI Run 核心 PR 均已在 GitHub 实际通过。
 - GitHub 远端默认分支为 `master`，`master` Ruleset 已启用并要求 PR、严格状态检查和已解决对话。
 - GitHub Private vulnerability reporting 已启用；未修复漏洞优先通过仓库 Security Advisory 私下报告，入口和备用联系方式以 [SECURITY.md](../../SECURITY.md) 为准。
 
@@ -77,25 +80,26 @@
 - [ADR-0004：Project 作用域下的协作对象与权限](../adr/0004-project-scoped-collaboration-permissions.md)
 - [ADR-0005：Forward-only PostgreSQL migration runner](../adr/0005-forward-only-postgresql-migrations.md)
 - [ADR-0006：已验证 Jenkins delivery 与 CI Run 原子记录](../adr/0006-verified-jenkins-delivery-and-ci-run.md)
+- [ADR-0007：Component 作用域下的 CI Run 读取](../adr/0007-component-scoped-ci-run-read.md)
 - [开发指南](../development/README.md)
 - [M0 核心契约实验](../../experiments/m0-core-contracts/README.md)
 - [正式 Go 服务](../../server/README.md)
 
 ## 下一步事项
 
-Jenkins CI Run 核心切片已经达到本地完成线。当前批次先收口实现并确认远端门禁，再进入独立读取切片：
+CI Run 读取切片已经达到本地完成线。当前批次先收口后端读取合同并确认远端门禁，再验证代表交互：
 
-1. 复核本分支 migration、事务、集成测试与文档一致性，提交后通过 PR 确认正式 Go Server、M0 Core Contracts 和 Candidate Quality 远端门禁；
-2. 从最新 `dev` 单独冻结 CI Run 的用户读取授权、Current/Timeline 安全展示字段和 Component 关联解析，不从 webhook source 身份推导用户权限；
-3. 读取面只暴露受控 status、时间和经权限解析的 Component，不返回 digest、receipt、Secret、原始 payload 或未经治理的 Jenkins URL；
-4. 后端读取合同稳定后，再以小切片把真实 CI Run 状态接入 Nexus View / Web 代表交互，不为了演示制造临时公共 API；
+1. 复核本分支授权矩阵、安全投影、真实 PostgreSQL 测试与 ADR-0007 一致性，提交后通过 PR 确认 Go Server 与 Candidate Quality 远端门禁；
+2. 从最新 `dev` 单独设计 CI Run Nexus View 的 Web 代表交互，覆盖 succeeded / failed、loading、error、唯一 Timeline 和窄屏，不显示来源标识、receipt 或未经治理的外部跳转；
+3. Web 原型继续使用明确标注且与后端安全合同同形的 fixture，直到浏览器验证证明需要真实 transport；不把 fixture 表述为联调或生产能力；
+4. 若代表交互证明需要后端接线，再独立冻结版本化 HTTP 路由、公共错误对象和响应 discriminated union，不制造临时 API；
 5. CI Run 读取体验稳定后，后端纵向顺位保持为显式 staging Deployment → 备份恢复。
 
-下一步完成线：Jenkins 核心 PR 合入 `dev` 且远端门禁全绿；随后 CI Run 读取切片能够在当前权限下稳定返回单一权威运行事实，并保持重复 delivery 不产生重复 Timeline。
+下一步完成线：CI Run 读取 PR 合入 `dev` 且远端门禁全绿；随后 Web 代表交互能清楚表达真实安全合同中的状态、时间、Component 和唯一 Timeline，并通过浏览器与窄屏复核。
 
-下一步停止线：不在核心切片补 Jenkins HTTP route 或签名协议，不暴露 receipt/digest，不启动 Flutter，不选择 CRDT，不建立通用 RBAC framework、Repository 占位、插件市场或多 CI provider 抽象，不把 CI 成功冒充 Deployment。
+下一步停止线：不在读取切片补 Jenkins HTTP route 或签名协议，不暴露 source ID、external run key、receipt/digest，不启动 Flutter，不选择 CRDT，不建立 restricted Component、通用 RBAC framework、Repository 占位、插件市场或多 CI provider 抽象，不把 CI 成功冒充 Deployment。
 
-后续顺位保持为 Jenkins CI Run 读取 → 显式 staging Deployment → 备份恢复，再独立评估文档协同方案和授权模板。
+后续顺位保持为 CI Run Web 代表交互 → 显式 staging Deployment → 备份恢复，再独立评估公共 transport、文档协同方案和授权模板。
 
 ## 开放问题
 

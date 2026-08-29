@@ -17,6 +17,10 @@ type CurrentProjection struct {
 	Title              string
 	Status             string
 	UpdatedAt          time.Time
+	Component          *SubjectProjection
+	StartedAt          *time.Time
+	CompletedAt        *time.Time
+	RecordedAt         *time.Time
 }
 
 type ActorRef struct {
@@ -59,8 +63,8 @@ func (service *Service) GetNexusView(
 	if err := entityref.M0Registry().Validate(target); err != nil {
 		return NexusView{}, fmt.Errorf("%w: target reference: %v", authz.ErrInvalid, err)
 	}
-	if target.Type != "decision" && target.Type != "ticket" {
-		return NexusView{}, fmt.Errorf("%w: Nexus View currently supports Decision and Ticket", authz.ErrInvalid)
+	if target.Type != "decision" && target.Type != "ticket" && target.Type != "ci-run" {
+		return NexusView{}, fmt.Errorf("%w: Nexus View currently supports Decision, Ticket, and CI Run", authz.ErrInvalid)
 	}
 	return service.store.GetNexusView(ctx, principal, target)
 }
