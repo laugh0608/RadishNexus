@@ -40,6 +40,23 @@ python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 
 检查器只验证能被仓库静态判定的基线，不声称远端 Ruleset 已启用，也不替代未来 Go、React、Rust、Flutter、数据库、浏览器或部署测试。
 
+## Web App
+
+先在 `web/` 使用 Node 24 LTS 与 npm 11 安装锁定依赖：
+
+```bash
+cd web
+npm ci
+```
+
+然后从仓库根运行：
+
+```bash
+./scripts/check-web.sh
+```
+
+该入口默认不访问网络，覆盖 Prettier、Oxlint、Vitest + jsdom、严格 TypeScript、Vite production build，以及 lockfile 来源、integrity、许可证和 lifecycle script 基线。CI 在 `npm ci` 后额外运行 `npm audit --audit-level=high`；本地需要刷新漏洞数据时可在获得网络与依赖操作授权后运行同一命令。
+
 ## M0 核心契约实验
 
 不需要数据库的 Go 测试与静态检查：

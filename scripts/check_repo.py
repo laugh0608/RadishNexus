@@ -359,12 +359,15 @@ def check_workflow_contract(errors: list[str]) -> None:
         "name: Repo Hygiene",
         "name: Repository Checker Tests",
         "name: M0 Core Contracts",
+        "name: Web App",
         "name: Candidate Quality",
         "./scripts/check-repo.sh",
         "./scripts/check-m0-core-contracts.sh",
+        "./scripts/check-web.sh",
         "python3 -m unittest discover -s scripts/tests",
         "go test -tags=integration ./...",
         "needs:\n      - repo-hygiene\n      - checker-tests\n      - m0-core-contracts",
+        "- web-app",
     )
     for fragment in required_fragments:
         if fragment not in text:
