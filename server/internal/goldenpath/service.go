@@ -52,6 +52,7 @@ type ProjectionState string
 const (
 	ProjectionVisible    ProjectionState = "visible"
 	ProjectionRestricted ProjectionState = "restricted"
+	ProjectionHidden     ProjectionState = "hidden"
 )
 
 // RelationProjection deliberately leaves all target fields empty when State
@@ -115,6 +116,7 @@ type Store interface {
 	AcceptDecision(context.Context, AcceptDecisionCommand) (Decision, error)
 	CreateTicketFromDecision(context.Context, CreateTicketCommand) (Ticket, error)
 	ListRelations(context.Context, authz.Principal, entityref.Ref) ([]RelationProjection, error)
+	GetNexusView(context.Context, authz.Principal, entityref.Ref) (NexusView, error)
 }
 
 type IDGenerator interface {

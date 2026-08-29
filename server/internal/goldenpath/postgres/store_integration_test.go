@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -184,10 +185,11 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 		t.Fatalf("Ticket relations = %#v", ticketRelations)
 	}
 
+	duplicateEventID := loadDomainEventID(t, ctx, pool, "decision.proposed", decision.ID)
 	atomicFailureService := goldenpath.NewService(store, &fixedIDs{values: []string{
 		"dec_atomic_failure",
 		"lnk_atomic_failure",
-		"evt_test_06",
+		duplicateEventID,
 	}}, clock)
 	_, err = atomicFailureService.CreateDecisionFromThread(ctx, invocation(contributor, "cor_atomic_failure"), goldenpath.CreateDecisionInput{
 		ThreadID: "thr_private",
@@ -200,7 +202,157 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 	assertAbsent(t, ctx, pool, "radishnexus.entity_links", "lnk_atomic_failure")
 	assertCounts(t, ctx, pool, 1, 2, 3, 3)
 
-	assertDatabaseConstraints(t, ctx, pool, decision.ID)
+	assertDatabaseConstraints(t, ctx, pool, decision.ID, duplicateEventID)
+	assertNexusViewReadSlice(t, ctx, pool, store, service, decider, reader, admin, decision, ticket)
+}
+
+func assertNexusViewReadSlice(
+	t *testing.T,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	store *goldenpostgres.Store,
+	service *goldenpath.Service,
+	decider authz.Principal,
+	reader authz.Principal,
+	admin authz.Principal,
+	decision goldenpath.Decision,
+	ticket goldenpath.Ticket,
+) {
+	t.Helper()
+
+	projected, err := store.RebuildActivityProjection(ctx)
+	if err != nil {
+		t.Fatalf("RebuildActivityProjection() error = %v", err)
+	}
+	if projected != 3 {
+		t.Fatalf("RebuildActivityProjection() projected = %d, want 3", projected)
+	}
+	assertTableCount(t, ctx, pool, "radishnexus.activity_items", 3)
+
+	decisionRef := entityref.Ref{Type: "decision", ID: decision.ID}
+	ticketRef := entityref.Ref{Type: "ticket", ID: ticket.ID}
+	deciderView := loadNexusView(t, ctx, service, decider, decisionRef)
+	assertDecisionNexusView(t, deciderView, decision, goldenpath.ProjectionVisible)
+
+	readerView := loadNexusView(t, ctx, service, reader, decisionRef)
+	assertDecisionNexusView(t, readerView, decision, goldenpath.ProjectionRestricted)
+	adminView := loadNexusView(t, ctx, service, admin, decisionRef)
+	assertDecisionNexusView(t, adminView, decision, goldenpath.ProjectionRestricted)
+
+	ticketView := loadNexusView(t, ctx, service, reader, ticketRef)
+	if ticketView.Current.Ref != ticketRef || ticketView.Current.Title != ticket.Title || ticketView.Current.Status != "open" {
+		t.Fatalf("Ticket Current = %#v", ticketView.Current)
+	}
+	if len(ticketView.Relations) != 1 || ticketView.Relations[0].State != goldenpath.ProjectionVisible ||
+		ticketView.Relations[0].Target != decisionRef {
+		t.Fatalf("Ticket Relations = %#v", ticketView.Relations)
+	}
+	if len(ticketView.Timeline) != 1 || ticketView.Timeline[0].ActivityType != "ticket.created" ||
+		len(ticketView.Timeline[0].Subjects) != 1 ||
+		ticketView.Timeline[0].Subjects[0].State != goldenpath.ProjectionVisible ||
+		ticketView.Timeline[0].Subjects[0].Ref != decisionRef {
+		t.Fatalf("Ticket Timeline = %#v", ticketView.Timeline)
+	}
+
+	projected, err = store.RebuildActivityProjection(ctx)
+	if err != nil {
+		t.Fatalf("idempotent RebuildActivityProjection() error = %v", err)
+	}
+	if projected != 3 {
+		t.Fatalf("idempotent RebuildActivityProjection() projected = %d, want 3", projected)
+	}
+	if rebuilt := loadNexusView(t, ctx, service, reader, decisionRef); !reflect.DeepEqual(rebuilt, readerView) {
+		t.Fatalf("idempotent rebuilt Decision Nexus View changed\n got: %#v\nwant: %#v", rebuilt, readerView)
+	}
+
+	_, err = pool.Exec(ctx, `
+		UPDATE radishnexus.outbox_deliveries
+		SET state = 'delivered', delivered_at = clock_timestamp()
+	`)
+	if err != nil {
+		t.Fatalf("mark Outbox deliveries complete: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM radishnexus.outbox_deliveries`); err != nil {
+		t.Fatalf("clean completed Outbox deliveries: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM radishnexus.activity_items`); err != nil {
+		t.Fatalf("clear Activity projection: %v", err)
+	}
+	assertTableCount(t, ctx, pool, "radishnexus.domain_events", 3)
+	assertTableCount(t, ctx, pool, "radishnexus.outbox_deliveries", 0)
+	assertTableCount(t, ctx, pool, "radishnexus.activity_items", 0)
+
+	projected, err = store.RebuildActivityProjection(ctx)
+	if err != nil {
+		t.Fatalf("rebuild after Outbox cleanup error = %v", err)
+	}
+	if projected != 3 {
+		t.Fatalf("rebuild after Outbox cleanup projected = %d, want 3", projected)
+	}
+	if rebuilt := loadNexusView(t, ctx, service, reader, decisionRef); !reflect.DeepEqual(rebuilt, readerView) {
+		t.Fatalf("Outbox-independent rebuilt Decision Nexus View changed\n got: %#v\nwant: %#v", rebuilt, readerView)
+	}
+	if rebuilt := loadNexusView(t, ctx, service, decider, decisionRef); !reflect.DeepEqual(rebuilt, deciderView) {
+		t.Fatalf("authorized rebuilt Decision Nexus View changed\n got: %#v\nwant: %#v", rebuilt, deciderView)
+	}
+	if rebuilt := loadNexusView(t, ctx, service, reader, ticketRef); !reflect.DeepEqual(rebuilt, ticketView) {
+		t.Fatalf("rebuilt Ticket Nexus View changed\n got: %#v\nwant: %#v", rebuilt, ticketView)
+	}
+}
+
+func loadNexusView(
+	t *testing.T,
+	ctx context.Context,
+	service *goldenpath.Service,
+	principal authz.Principal,
+	target entityref.Ref,
+) goldenpath.NexusView {
+	t.Helper()
+	view, err := service.GetNexusView(ctx, principal, target)
+	if err != nil {
+		t.Fatalf("%s GetNexusView(%s) error = %v", principal.ID, target.URI(), err)
+	}
+	return view
+}
+
+func assertDecisionNexusView(
+	t *testing.T,
+	view goldenpath.NexusView,
+	decision goldenpath.Decision,
+	subjectState goldenpath.ProjectionState,
+) {
+	t.Helper()
+	decisionRef := entityref.Ref{Type: "decision", ID: decision.ID}
+	if view.Current.Ref != decisionRef || view.Current.Title != decision.Question || view.Current.Status != "accepted" {
+		t.Fatalf("Decision Current = %#v", view.Current)
+	}
+	if len(view.Relations) != 1 || view.Relations[0].State != subjectState {
+		t.Fatalf("Decision Relations = %#v, want subject state %s", view.Relations, subjectState)
+	}
+	if len(view.Timeline) != 2 || view.Timeline[0].ActivityType != "decision.proposed" ||
+		view.Timeline[1].ActivityType != "decision.accepted" ||
+		view.Timeline[0].SafeFacts["status"] != "proposed" ||
+		view.Timeline[1].SafeFacts["status"] != "accepted" {
+		t.Fatalf("Decision Timeline = %#v", view.Timeline)
+	}
+	if len(view.Timeline[0].Subjects) != 1 || view.Timeline[0].Subjects[0].State != subjectState {
+		t.Fatalf("Decision proposed subjects = %#v, want state %s", view.Timeline[0].Subjects, subjectState)
+	}
+	if subjectState == goldenpath.ProjectionRestricted {
+		relation := view.Relations[0]
+		subject := view.Timeline[0].Subjects[0]
+		if relation.RelationType != "" || relation.Target != (entityref.Ref{}) || relation.Title != "" ||
+			subject.Ref != (entityref.Ref{}) || subject.Title != "" {
+			t.Fatalf("restricted Nexus View leaks relation or subject fields: relation=%#v subject=%#v", relation, subject)
+		}
+		return
+	}
+	threadRef := entityref.Ref{Type: "thread", ID: "thr_private"}
+	if view.Relations[0].Target != threadRef || view.Relations[0].Title != "Private rate-limit discussion" ||
+		view.Timeline[0].Subjects[0].Ref != threadRef ||
+		view.Timeline[0].Subjects[0].Title != "Private rate-limit discussion" {
+		t.Fatalf("visible Nexus View lost Thread source: relation=%#v subject=%#v", view.Relations[0], view.Timeline[0].Subjects[0])
+	}
 }
 
 func principal(userID string) authz.Principal {
@@ -268,13 +420,18 @@ func assertCounts(t *testing.T, ctx context.Context, pool *pgxpool.Pool, decisio
 		"radishnexus.domain_events":     events,
 		"radishnexus.outbox_deliveries": outbox,
 	} {
-		var got int
-		if err := pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&got); err != nil {
-			t.Fatalf("count %s error = %v", table, err)
-		}
-		if got != want {
-			t.Fatalf("count %s = %d, want %d", table, got, want)
-		}
+		assertTableCount(t, ctx, pool, table, want)
+	}
+}
+
+func assertTableCount(t *testing.T, ctx context.Context, pool *pgxpool.Pool, table string, want int) {
+	t.Helper()
+	var got int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&got); err != nil {
+		t.Fatalf("count %s error = %v", table, err)
+	}
+	if got != want {
+		t.Fatalf("count %s = %d, want %d", table, got, want)
 	}
 }
 
@@ -302,7 +459,32 @@ func assertAbsent(t *testing.T, ctx context.Context, pool *pgxpool.Pool, table, 
 	}
 }
 
-func assertDatabaseConstraints(t *testing.T, ctx context.Context, pool *pgxpool.Pool, decisionID string) {
+func loadDomainEventID(
+	t *testing.T,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	eventType string,
+	primaryID string,
+) string {
+	t.Helper()
+	var eventID string
+	if err := pool.QueryRow(ctx, `
+		SELECT event_id
+		FROM radishnexus.domain_events
+		WHERE event_type = $1 AND primary_entity_id = $2
+	`, eventType, primaryID).Scan(&eventID); err != nil {
+		t.Fatalf("load %s event for %s: %v", eventType, primaryID, err)
+	}
+	return eventID
+}
+
+func assertDatabaseConstraints(
+	t *testing.T,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	decisionID string,
+	eventID string,
+) {
 	t.Helper()
 
 	_, err := pool.Exec(ctx, `
@@ -337,8 +519,8 @@ func assertDatabaseConstraints(t *testing.T, ctx context.Context, pool *pgxpool.
 	_, err = pool.Exec(ctx, `
 		UPDATE radishnexus.domain_events
 		SET payload = '{"status":"tampered"}'::jsonb
-		WHERE event_id = 'evt_test_06'
-	`)
+		WHERE event_id = $1
+	`, eventID)
 	assertPGCode(t, err, "23514", "immutable domain event constraint")
 }
 
