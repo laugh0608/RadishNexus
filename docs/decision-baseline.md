@@ -161,7 +161,15 @@
 - 第一个公共业务端点是 Workspace 路径下的 Deployment Nexus View 安全 `GET`；Workspace 不写入 Session，每次请求都通过当前 active membership 把 verified user 转换为正式 application `Principal`。
 - 合法 Session 但 membership、Workspace、Deployment 或依赖对象不可读时保持 not-found 不可发现性；读取复用 ADR-0011 的 Environment + CI Run 组合权限，不建立客户端角色判断或第二套授权。
 - 公共 DTO 与内部 application struct 解耦，只返回结构化引用、终态、受控时间、权限过滤后的 Environment / CI Run、`deploys` 和 `deployment.recorded`；响应使用 `private, no-store` 和 `Vary: Cookie`。
-- Web 只在 canonical Deployment 页面通过同源 typed adapter 读取并运行时校验该 DTO；根路径静态 fixture 不得成为真实读取失败时的 fallback。精确路由、响应与验证边界以 [ADR-0014](adr/0014-session-scoped-deployment-nexus-view-transport.md) 为准。
+- Web 只在 canonical Deployment 页面通过同源 typed adapter 读取并运行时校验该 DTO；显式静态 prototype 不得成为真实读取失败时的 fallback。精确业务路由、响应与验证边界以 [ADR-0014](adr/0014-session-scoped-deployment-nexus-view-transport.md) 为准。
+
+### D-021 同源 Authenticated Web Shell
+
+- 浏览器页面、静态资源和 `/api/v1` 共享 ADR-0013 的唯一 HTTPS public origin；TLS reverse proxy 保持唯一公共入口，不开放 credentialed CORS 或第二个静态站点 origin。
+- Go server 只从必需的绝对 `RADISHNEXUS_WEB_ROOT` 交付 production build；HTML 路径显式 allowlist，未知路径不使用任意 SPA fallback。HTML `no-cache`、哈希资源 immutable cache，认证和业务 API 继续 `no-store`。
+- 根路径先 bootstrap 正式 Session，再使用现有 login / logout transport；密码和 Session token 不进入浏览器 storage。Workspace 选择不固定到 Session，业务请求仍按路径与 current membership 授权。
+- 在没有对象列表前，只允许用户用已知稳定 Deployment ID 进入 canonical 页面；原代表检视器移动到显式 `/prototype/nexus-view`，不参与真实失败 fallback。
+- 真实 PostgreSQL、正式 migration / application service、production Web build 和临时 HTTPS browser fixture 共同验证登录到 Deployment 再登出的完整链路。精确装配、页面、安全 Header 与验证边界以 [ADR-0015](adr/0015-same-origin-authenticated-web-shell.md) 为准。
 
 ## 尚未冻结
 
@@ -176,7 +184,6 @@
 - 免费书面授权的申请、签发、期限和撤销模板；
 - 免费评估或社区授权如何做到低摩擦、可离线验证且不依赖遥测或官方在线服务；
 - 产品域名、Logo 和中文品牌名；
-- authenticated Web Shell、Web 静态资源与 `/api/v1` 的 same-origin 交付方式；
 - 是否以及何时引入 AI 能力。
 
 ## 变更记录

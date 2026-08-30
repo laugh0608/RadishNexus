@@ -51,6 +51,10 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("configure trusted proxies: %w", err)
 	}
+	webHandler, err := httptransport.NewWebAppHandler(os.Getenv("RADISHNEXUS_WEB_ROOT"))
+	if err != nil {
+		return fmt.Errorf("configure Web App: %w", err)
+	}
 
 	poolConfig, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
@@ -93,7 +97,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(pool, authHandler, deploymentNexusViewHandler),
+		Handler:           newHandler(pool, authHandler, deploymentNexusViewHandler, webHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -132,6 +136,7 @@ func newHandler(
 	database databasePinger,
 	authHandler http.Handler,
 	deploymentNexusViewHandler http.Handler,
+	webHandler http.Handler,
 ) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", func(response http.ResponseWriter, _ *http.Request) {
@@ -146,10 +151,18 @@ func newHandler(
 		}
 		response.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("/health/live", healthMethodNotAllowed)
+	mux.HandleFunc("/health/ready", healthMethodNotAllowed)
 	mux.Handle("/api/v1/auth", authHandler)
 	mux.Handle("/api/v1/auth/", authHandler)
 	mux.Handle("/api/v1/workspaces", deploymentNexusViewHandler)
 	mux.Handle("/api/v1/workspaces/", deploymentNexusViewHandler)
+	mux.Handle("/", webHandler)
 
 	return httptransport.WithRequestID(mux)
+}
+
+func healthMethodNotAllowed(response http.ResponseWriter, _ *http.Request) {
+	response.Header().Set("Allow", http.MethodGet)
+	response.WriteHeader(http.StatusMethodNotAllowed)
 }

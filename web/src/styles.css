@@ -62,9 +62,223 @@ button {
 }
 
 button:focus-visible,
-a:focus-visible {
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
   outline: 3px solid rgba(75, 111, 47, 0.36);
   outline-offset: 3px;
+}
+
+.account-controls {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 14px;
+}
+
+.account-controls > span {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
+.account-controls small {
+  color: var(--faint);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.account-controls strong {
+  font-size: 12px;
+}
+
+.account-controls button {
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.account-controls button:disabled,
+.primary-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.auth-layout {
+  display: grid;
+  min-height: 690px;
+  place-items: center;
+}
+
+.auth-card {
+  width: min(100%, 520px);
+  padding: 52px 54px 56px;
+  border: 1px solid rgba(185, 191, 181, 0.76);
+  border-radius: 25px;
+  background: rgba(251, 250, 245, 0.95);
+  box-shadow: var(--shadow);
+}
+
+.auth-card h1,
+.shell-welcome h1 {
+  margin: 14px 0 0;
+  font-family: Georgia, "Songti SC", "STSong", serif;
+  font-size: clamp(34px, 5vw, 50px);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+
+.auth-card__intro,
+.shell-welcome > p,
+.workspace-launcher > div > p:last-child {
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.auth-form,
+.workspace-launcher form {
+  display: grid;
+  gap: 18px;
+  margin-top: 34px;
+}
+
+.auth-form label,
+.workspace-launcher label {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-form label > span,
+.workspace-launcher label > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.auth-form input,
+.workspace-launcher input,
+.workspace-launcher select {
+  width: 100%;
+  min-height: 48px;
+  padding: 11px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.auth-form input:disabled,
+.workspace-launcher input:disabled,
+.workspace-launcher select:disabled {
+  background: #ecece6;
+  color: var(--faint);
+}
+
+.auth-submit {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.form-error,
+.shell-alert {
+  margin: 0;
+  color: var(--error);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.shell-alert {
+  padding: 13px 16px;
+  margin-bottom: 16px;
+  border: 1px solid #d7a59c;
+  border-radius: 10px;
+  background: var(--error-soft);
+}
+
+.shell-home {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(380px, 1.1fr);
+  min-height: 680px;
+  overflow: hidden;
+  border: 1px solid rgba(185, 191, 181, 0.76);
+  border-radius: 25px;
+  background: rgba(251, 250, 245, 0.94);
+  box-shadow: var(--shadow);
+}
+
+.shell-welcome,
+.workspace-launcher {
+  display: grid;
+  align-content: center;
+  padding: 64px;
+}
+
+.shell-welcome {
+  position: relative;
+  overflow: hidden;
+  background: #19211f;
+  color: #fff;
+}
+
+.shell-welcome::after {
+  position: absolute;
+  right: -120px;
+  bottom: -140px;
+  width: 360px;
+  height: 360px;
+  border: 1px solid rgba(201, 240, 111, 0.25);
+  border-radius: 50%;
+  content: "";
+}
+
+.shell-welcome .section-kicker {
+  color: var(--accent);
+}
+
+.shell-welcome > p {
+  position: relative;
+  z-index: 1;
+  color: #bfc8c3;
+}
+
+.workspace-launcher {
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      rgba(201, 240, 111, 0.28),
+      transparent 20rem
+    ),
+    var(--paper);
+}
+
+.workspace-launcher h2 {
+  margin: 10px 0 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(28px, 3.4vw, 42px);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+
+.workspace-launcher .primary-button {
+  justify-self: start;
+}
+
+.button-link {
+  display: inline-grid;
+  place-items: center;
+  text-decoration: none;
 }
 
 code {
@@ -861,6 +1075,16 @@ code {
   .panel {
     min-height: auto;
   }
+
+  .shell-home {
+    grid-template-columns: 1fr;
+  }
+
+  .shell-welcome,
+  .workspace-launcher {
+    min-height: 420px;
+    padding: 52px;
+  }
 }
 
 @media (max-width: 680px) {
@@ -879,6 +1103,34 @@ code {
     display: grid;
     justify-self: stretch;
     gap: 7px;
+  }
+
+  .account-controls {
+    justify-self: stretch;
+    justify-content: space-between;
+  }
+
+  .account-controls > span {
+    justify-items: start;
+  }
+
+  .auth-layout {
+    min-height: 600px;
+  }
+
+  .auth-card {
+    padding: 38px 24px 42px;
+    border-radius: 18px;
+  }
+
+  .shell-home {
+    border-radius: 18px;
+  }
+
+  .shell-welcome,
+  .workspace-launcher {
+    min-height: 360px;
+    padding: 38px 24px;
   }
 
   .state-switcher > div {

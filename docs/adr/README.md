@@ -20,6 +20,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0012](0012-local-identity-and-session-foundation.md) | 已接受 | 本地身份与服务端 Session 基线 |
 | [ADR-0013](0013-public-authentication-transport.md) | 已接受 | 公共认证 Transport 与可信代理边界 |
 | [ADR-0014](0014-session-scoped-deployment-nexus-view-transport.md) | 已接受 | Session 作用域下的 Deployment Nexus View Transport |
+| [ADR-0015](0015-same-origin-authenticated-web-shell.md) | 已接受 | 同源 Authenticated Web Shell 与显式静态资源装配 |
 
 ## 新建规则
 

@@ -130,6 +130,16 @@ export function deploymentNexusViewLocation(
   }
 }
 
+export function deploymentNexusViewPagePath(
+  workspaceID: string,
+  deploymentID: string,
+): string | null {
+  if (!validPathID(workspaceID, "wrk_") || !validPathID(deploymentID, "dpl_")) {
+    return null;
+  }
+  return `/workspaces/${encodeURIComponent(workspaceID)}/deployments/${encodeURIComponent(deploymentID)}`;
+}
+
 export async function loadDeploymentNexusViewData(
   workspaceID: string,
   deploymentID: string,

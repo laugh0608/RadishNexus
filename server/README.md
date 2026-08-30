@@ -17,9 +17,10 @@
 - 把已验证 Session 用户转换为 application `Principal` 的认证 adapter；
 - Secure `__Host-` Cookie、精确 HTTPS Origin / Host、可信代理、客户端 IP 登录限流、request ID 与版本化安全错误对象；
 - Session 作用域的 Deployment Nexus View 公共只读 handler 与显式安全 DTO；
+- 同源 authenticated Web Shell、显式 production build root、页面 allowlist 与安全静态资源缓存；
 - PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验与 Activity 重建命令。
 
-公共 transport 已开放 `/api/v1/auth/sessions` 与 `/api/v1/auth/session` 的 login / resolve / logout 闭环，以及第一个 Deployment Nexus View 业务读取；其余业务读写仍未暴露为 HTTP API。认证入口要求精确 HTTPS public origin、精确 Host、显式可信代理链、客户端 IP 限流、受控 JSON、Secure Cookie 和 CSRF，不接受可信用户 Header、insecure Cookie 或 credentialed CORS。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret 或原始 webhook body。
+公共 transport 已开放 `/api/v1/auth/sessions` 与 `/api/v1/auth/session` 的 login / resolve / logout 闭环，以及第一个 Deployment Nexus View 业务读取；同一个 Go server 从显式 Web build root 交付 authenticated shell 和已注册页面，其余业务读写仍未暴露为 HTTP API。认证入口要求精确 HTTPS public origin、精确 Host、显式可信代理链、客户端 IP 限流、受控 JSON、Secure Cookie 和 CSRF，不接受可信用户 Header、insecure Cookie 或 credentialed CORS。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret 或原始 webhook body。
 
 当前 Activity 白名单包含 `decision.proposed`、`decision.accepted`、`ticket.created`、`ci-run.recorded` 和 `deployment.recorded`。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，不依赖 Outbox 投递状态，也尚未建立常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
 
@@ -78,9 +79,12 @@ DATABASE_URL=...
 RADISHNEXUS_PUBLIC_ORIGIN=https://nexus.example.com
 RADISHNEXUS_TRUSTED_PROXY_CIDRS=127.0.0.1/32
 RADISHNEXUS_HTTP_ADDR=127.0.0.1:8080
+RADISHNEXUS_WEB_ROOT=/srv/radishnexus/web
 ```
 
 `RADISHNEXUS_PUBLIC_ORIGIN` 必须是浏览器实际访问的精确 HTTPS origin；`RADISHNEXUS_TRUSTED_PROXY_CIDRS` 只列出直接连接 server 的 TLS reverse proxy 地址，不能为了方便信任用户网络。proxy 必须覆盖公网传入的 `X-Forwarded-Proto` / `X-Forwarded-For`、保留原始 `Host`，并向 server 提供单值 `X-Forwarded-Proto: https` 和完整客户端链。server 不提供 HTTP Cookie fallback。
+
+`RADISHNEXUS_WEB_ROOT` 必须是 `npm run build` 产出的 Vite `dist` 绝对目录；server 不隐式构建前端、不依赖工作目录，也不会在 build 缺失时退回 fixture。reverse proxy 应把页面、静态资源和 `/api/v1` 全部转发到这个 server，保持唯一 HTTPS origin。
 
 当前公共认证路由为：
 
@@ -89,6 +93,16 @@ RADISHNEXUS_HTTP_ADDR=127.0.0.1:8080
 - `DELETE /api/v1/auth/session`：要求精确 `Origin`、CSRF cookie 与 `X-CSRF-Token`，成功撤销 Session、清除 Cookie 并返回 `204`。
 
 登录 JSON 最大 4096 bytes，不接受未知字段；所有认证响应均 `no-store`，错误使用带 server-generated `request_id` 的稳定 JSON envelope。进程内 IP 限流不替代 reverse proxy 的全局限流、TLS、Header 清洗和安全日志责任。完整边界见 [ADR-0013](../docs/adr/0013-public-authentication-transport.md)。
+
+## Authenticated Web Shell
+
+正式 Web 页面为：
+
+- `/`：Session bootstrap、login、Workspace 选择、已知 Deployment ID 入口和 logout；
+- `/workspaces/{workspace_id}/deployments/{deployment_id}`：先验证 Session，再消费正式 Deployment Nexus View DTO；
+- `/prototype/nexus-view`：与真实入口隔离的静态代表状态检视器。
+
+只有上述 HTML 路径和 build 的 `/assets/` 文件会由 Web handler 交付；未知路径返回 `404`。HTML 使用 `no-cache`，哈希资源使用长期 immutable cache，认证和业务 API 继续 `no-store`。完整 same-origin、CSP、启动失败、Session bootstrap 和 fixture 边界见 [ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md)。
 
 ## Deployment Nexus View 读取
 
