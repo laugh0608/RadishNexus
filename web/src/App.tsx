@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { NexusView } from "./nexus-view/NexusView";
 import {
-  failedCIRunNexusViewFixture,
-  succeededCIRunNexusViewFixture,
+  failedDeploymentNexusViewFixture,
+  succeededDeploymentNexusViewFixture,
 } from "./nexus-view/fixture";
 import type { NexusViewState } from "./nexus-view/model";
 
 type PrototypeMode = "succeeded" | "failed" | "loading" | "error";
 
 const prototypeStates: Record<PrototypeMode, NexusViewState> = {
-  succeeded: { status: "ready", data: succeededCIRunNexusViewFixture },
-  failed: { status: "ready", data: failedCIRunNexusViewFixture },
+  succeeded: { status: "ready", data: succeededDeploymentNexusViewFixture },
+  failed: { status: "ready", data: failedDeploymentNexusViewFixture },
   loading: { status: "loading" },
   error: {
     status: "error",
@@ -75,7 +75,7 @@ export function App() {
 
       <footer className="prototype-footer">
         <span>Representative slice / M0</span>
-        <span>CI Run · Component · Timeline</span>
+        <span>Deployment · Environment · CI Run · Timeline</span>
       </footer>
     </div>
   );

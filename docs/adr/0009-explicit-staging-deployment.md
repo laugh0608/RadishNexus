@@ -103,3 +103,5 @@ forward-only migration `004_staging_deployment_core.sql` 增加正式 Environmen
 7. Activity 重建得到唯一 `deployment.recorded`，只保留 status、Environment 与 CI Run 引用。
 
 引入 Deployment 读取、授权管理入口、执行引擎、production、审批、回滚、公共 transport 或外部动作审计前，必须以独立纵向切片继续冻结边界。
+
+实施记录：2026-08-30，ADR-0011 已以独立纵向切片冻结 Deployment 的 Workspace 作用域安全读取与 Web 代表交互；授权管理、执行引擎、production、审批、回滚和公共 transport 仍未进入本 ADR。

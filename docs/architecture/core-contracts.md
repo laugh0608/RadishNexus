@@ -143,6 +143,13 @@ request_context
 - Deployment 是不可变终态事实，同一 Environment 与 CI Run 组合唯一；它保留 authorization、actor、source 和时间，但不冒充外部执行日志或通用 Audit。
 - 成功命令原子写入 Deployment、asserted user `deploys` 关系、`deployment.recorded` 和 Outbox。事件只保留 status、Environment 与 CI Run 引用。精确边界见 [ADR-0009](../adr/0009-explicit-staging-deployment.md)。
 
+### Environment 与 Deployment 的 M0 读取
+
+- Environment 当前没有 restricted 可见性或对象成员字段；同一 Workspace 的 active 成员可以读取，非成员、暂停成员和跨 Workspace 主体不可发现。归档不会隐藏已有 Deployment 历史。
+- Deployment 只有在当前主体同时能读取目标 Environment 与来源 CI Run 时才可读取；环境级部署授权只控制写命令，不控制历史发现。
+- Deployment Current 只返回终态、started / completed / recorded 时间、Environment 和来源 CI Run；Relations 与 Timeline 再次复用当前权限，不返回 authorization、调用 source、Jenkins receipt、digest、Secret、原始 payload 或外部 URL。
+- 不可读 Deployment 统一返回 not-found；未来 Environment 或 CI Run 权限收紧后，不能返回残缺 Current 暗示其存在。精确边界见 [ADR-0011](../adr/0011-workspace-scoped-deployment-read.md)。
+
 ### EntityLink 写入
 
 创建 EntityLink 必须同时满足：

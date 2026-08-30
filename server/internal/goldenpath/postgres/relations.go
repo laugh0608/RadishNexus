@@ -182,6 +182,22 @@ func entityAccess(
 		}
 		readable, err := activeWorkspaceMember(ctx, tx, principal)
 		return true, readable, err
+	case "environment":
+		var exists bool
+		err := tx.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM radishnexus.environments
+				WHERE workspace_id = $1 AND id = $2
+			)
+		`, principal.WorkspaceID, ref.ID).Scan(&exists)
+		if err != nil {
+			return false, false, fmt.Errorf("check Environment existence: %w", err)
+		}
+		if !exists {
+			return false, false, nil
+		}
+		readable, err := activeWorkspaceMember(ctx, tx, principal)
+		return true, readable, err
 	case "ci-run":
 		var componentID string
 		err := tx.QueryRow(ctx, `
@@ -209,6 +225,41 @@ func entityAccess(
 			return false, false, fmt.Errorf("CI Run %s references a missing Component", ref.ID)
 		}
 		return true, componentReadable, nil
+	case "deployment":
+		var environmentID string
+		var ciRunID string
+		err := tx.QueryRow(ctx, `
+			SELECT environment_id, ci_run_id
+			FROM radishnexus.deployments
+			WHERE workspace_id = $1 AND id = $2
+			FOR SHARE
+		`, principal.WorkspaceID, ref.ID).Scan(&environmentID, &ciRunID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, false, nil
+		}
+		if err != nil {
+			return false, false, fmt.Errorf("load Deployment access facts: %w", err)
+		}
+		for _, subject := range []entityref.Ref{
+			{Type: "environment", ID: environmentID},
+			{Type: "ci-run", ID: ciRunID},
+		} {
+			subjectExists, subjectReadable, err := entityAccess(ctx, tx, principal, subject)
+			if err != nil {
+				return false, false, err
+			}
+			if !subjectExists {
+				return false, false, fmt.Errorf(
+					"Deployment %s references a missing %s",
+					ref.ID,
+					subject.Type,
+				)
+			}
+			if !subjectReadable {
+				return true, false, nil
+			}
+		}
+		return true, true, nil
 	default:
 		return false, false, nil
 	}
@@ -225,6 +276,10 @@ func entityTitle(ctx context.Context, tx pgx.Tx, workspaceID string, ref entityr
 		query = "SELECT name FROM radishnexus.projects WHERE workspace_id = $1 AND id = $2"
 	case "component":
 		query = "SELECT name FROM radishnexus.components WHERE workspace_id = $1 AND id = $2"
+	case "environment":
+		query = "SELECT name FROM radishnexus.environments WHERE workspace_id = $1 AND id = $2"
+	case "ci-run":
+		return "CI Run", nil
 	default:
 		return "", fmt.Errorf("unsupported visible relation target type %q", ref.Type)
 	}

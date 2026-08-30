@@ -135,7 +135,8 @@
 - CI Run 的 M0 用户读取沿 active Workspace 成员 → Component → CI Run 解析；owner Team、Project、EntityLink 和 Jenkins source 都不授予读取权，不可读对象返回 not-found。
 - M0 staging Deployment 只由明确用户通过受控 `web / api` 调用记录；调用者必须是 active Workspace 成员，并持有目标 active staging Environment 的 active 显式授权。
 - Project 角色、owner Team、CI source 和成功构建都不隐式授予部署能力。记录必须保留实际操作者、所用授权、来源 CI Run 与 Environment，并与 `deploys` 关系、领域事件和 Outbox 原子提交。
-- 当前 Deployment command 只记录调用方已经确认的外部终态事实，不执行部署、不读取 Secret，也不支持 production、审批、回滚或运行中状态。精确技术契约以 [ADR-0006](adr/0006-verified-jenkins-delivery-and-ci-run.md)、[ADR-0007](adr/0007-component-scoped-ci-run-read.md) 与 [ADR-0009](adr/0009-explicit-staging-deployment.md) 为准。
+- M0 Deployment 读取要求同 Workspace 的 active 成员同时能读取目标 Environment 与来源 CI Run；写授权不授予读取、也不是读取历史的必要条件。不可读对象统一返回 not-found，Environment 归档不隐藏既有事实。
+- 当前 Deployment command 只记录调用方已经确认的外部终态事实，不执行部署、不读取 Secret，也不支持 production、审批、回滚或运行中状态。精确技术契约以 [ADR-0006](adr/0006-verified-jenkins-delivery-and-ci-run.md)、[ADR-0007](adr/0007-component-scoped-ci-run-read.md)、[ADR-0009](adr/0009-explicit-staging-deployment.md) 与 [ADR-0011](adr/0011-workspace-scoped-deployment-read.md) 为准。
 
 ### D-018 可验证 PostgreSQL 备份恢复
 
@@ -171,3 +172,4 @@
 - 2026-08-28：接受 ADR-0005，冻结显式、可校验、事务化的 forward-only PostgreSQL migration 基线。
 - 2026-08-29：冻结完成态 CI Run 的 verified delivery、Component 作用域读取，以及显式 staging Deployment 与环境级授权边界。
 - 2026-08-30：接受 ADR-0010，冻结 PostgreSQL 17 同 major 的显式备份、空目标恢复、migration 校验与 Activity 重建边界。
+- 2026-08-30：接受 ADR-0011，冻结 Workspace 作用域下组合 Environment 与 CI Run 权限的 Deployment 安全读取边界。

@@ -1,6 +1,6 @@
 # RadishNexus Web
 
-`web/` 是 RadishNexus 第一正式产品形态的 React + TypeScript 入口。当前实现 Decision 与 CI Run Nexus View 代表原型，用来验证 Current、Relations、Timeline、安全投影与关键页面状态；默认入口展示 CI Run 的 succeeded / failed 交互，不代表业务 HTTP API、完整 Web Shell、导航或聊天能力已经开放。
+`web/` 是 RadishNexus 第一正式产品形态的 React + TypeScript 入口。当前实现 Decision、CI Run 与 Deployment Nexus View 代表原型，用来验证 Current、Relations、Timeline、安全投影与关键页面状态；默认入口展示 Deployment 的 succeeded / failed 交互，不代表业务 HTTP API、完整 Web Shell、导航或聊天能力已经开放。
 
 ## 本地运行
 
@@ -26,7 +26,8 @@ npm run dev
 - `restricted` 条目在类型上不携带 EntityRef、对象类型、关系类型、标题、来源或时间；`hidden` 条目不进入客户端数据。
 - fixture 是明确标注的静态代表数据，不通过临时 endpoint 或无类型 `fetch` 暗示公共 API 已冻结。
 - CI Run fixture 与后端安全投影同形，只包含状态、四个受控时间、当前 Component 与唯一 `ci-run.recorded`；不包含 source ID、external run key、delivery receipt、digest、Secret、原始 payload 或外部 URL。
-- 状态检视器只用于人工复核 succeeded、failed、loading 与 error；Decision 的 empty 与 restricted 行为继续由组件测试覆盖。检视器不是未来产品导航。
+- Deployment fixture 只包含终态、三个受控时间、Environment、来源 CI Run、`deploys` Relation 与唯一 `deployment.recorded`；不包含 authorization、调用 source、Jenkins 来源字段或执行日志，并明确区分“来源构建成功”和“部署失败”。
+- 状态检视器只用于人工复核 Deployment 的 succeeded、failed、loading 与 error；Decision 的 empty / restricted 和 CI Run 的安全状态继续由组件测试覆盖。检视器不是未来产品导航。
 - 当前不引入 router、状态库、组件库、图标包或远程字体。
 
 ## 依赖与许可证

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
 
 func assertStagingDeploymentSlice(
@@ -23,6 +25,8 @@ func assertStagingDeploymentSlice(
 	store *goldenpostgres.Store,
 	service *goldenpath.Service,
 	ciRun goldenpath.CIRun,
+	sourceDelivery goldenpath.VerifiedJenkinsDelivery,
+	sourceInput goldenpath.RecordCompletedCIRunInput,
 ) {
 	t.Helper()
 	seedDeploymentTargets(t, ctx, pool)
@@ -116,6 +120,140 @@ func assertStagingDeploymentSlice(
 	}
 	assertTableCount(t, ctx, pool, "radishnexus.activity_items", 6)
 	assertDeploymentActivityFacts(t, ctx, pool, deployment.ID, ciRun.ID)
+	assertDeploymentNexusView(
+		t,
+		ctx,
+		pool,
+		service,
+		deployment,
+		input,
+		sourceDelivery,
+		sourceInput,
+	)
+}
+
+func assertDeploymentNexusView(
+	t *testing.T,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	service *goldenpath.Service,
+	deployment goldenpath.Deployment,
+	input goldenpath.RecordStagingDeploymentInput,
+	sourceDelivery goldenpath.VerifiedJenkinsDelivery,
+	sourceInput goldenpath.RecordCompletedCIRunInput,
+) {
+	t.Helper()
+	target := entityref.Ref{Type: "deployment", ID: deployment.ID}
+	reader := principal("usr_reader")
+	view, err := service.GetNexusView(ctx, reader, target)
+	if err != nil {
+		t.Fatalf("active Workspace member GetNexusView(Deployment) error = %v", err)
+	}
+	if view.Current.Ref != target || view.Current.Status != deployment.Status ||
+		view.Current.Title != "" || view.Current.GoverningProjectID != "" ||
+		!view.Current.UpdatedAt.Equal(deployment.RecordedAt) {
+		t.Fatalf("Deployment Current identity and status = %#v", view.Current)
+	}
+	if view.Current.StartedAt == nil || !view.Current.StartedAt.Equal(*input.StartedAt) ||
+		view.Current.CompletedAt == nil || !view.Current.CompletedAt.Equal(input.CompletedAt) ||
+		view.Current.RecordedAt == nil || !view.Current.RecordedAt.Equal(deployment.RecordedAt) {
+		t.Fatalf("Deployment Current times = %#v, Deployment = %#v", view.Current, deployment)
+	}
+	wantEnvironment := entityref.Ref{Type: "environment", ID: input.EnvironmentID}
+	if view.Current.Environment == nil ||
+		view.Current.Environment.State != goldenpath.ProjectionVisible ||
+		view.Current.Environment.Ref != wantEnvironment ||
+		view.Current.Environment.Title != "Staging" {
+		t.Fatalf("Deployment Current Environment = %#v", view.Current.Environment)
+	}
+	wantCIRun := entityref.Ref{Type: "ci-run", ID: input.CIRunID}
+	if view.Current.CIRun == nil ||
+		view.Current.CIRun.State != goldenpath.ProjectionVisible ||
+		view.Current.CIRun.Ref != wantCIRun || view.Current.CIRun.Title != "CI Run" {
+		t.Fatalf("Deployment Current CI Run = %#v", view.Current.CIRun)
+	}
+	if len(view.Relations) != 1 ||
+		view.Relations[0].State != goldenpath.ProjectionVisible ||
+		view.Relations[0].RelationType != "deploys" ||
+		view.Relations[0].Target != wantCIRun || view.Relations[0].Title != "CI Run" {
+		t.Fatalf("Deployment Relations = %#v", view.Relations)
+	}
+	if len(view.Timeline) != 1 {
+		t.Fatalf("Deployment Timeline length = %d, want 1: %#v", len(view.Timeline), view.Timeline)
+	}
+	item := view.Timeline[0]
+	if item.ActivityType != "deployment.recorded" || item.Actor.Kind != "user" ||
+		item.Actor.ID != deployment.RecordedBy || !item.OccurredAt.Equal(input.CompletedAt) ||
+		len(item.SafeFacts) != 1 || item.SafeFacts["status"] != deployment.Status ||
+		len(item.Subjects) != 2 ||
+		item.Subjects[0].State != goldenpath.ProjectionVisible ||
+		item.Subjects[0].Ref != wantEnvironment || item.Subjects[0].Title != "Staging" ||
+		item.Subjects[1].State != goldenpath.ProjectionVisible ||
+		item.Subjects[1].Ref != wantCIRun || item.Subjects[1].Title != "CI Run" {
+		t.Fatalf("Deployment Timeline item = %#v", item)
+	}
+
+	encoded, err := json.Marshal(view)
+	if err != nil {
+		t.Fatalf("encode Deployment Nexus View error = %v", err)
+	}
+	for _, forbidden := range []string{
+		"dpa_staging_contributor",
+		sourceDelivery.SourceID,
+		sourceDelivery.DeliveryID,
+		sourceDelivery.PayloadSHA256,
+		sourceInput.ExternalRunKey,
+		"receipt",
+		"secret",
+	} {
+		if strings.Contains(strings.ToLower(string(encoded)), strings.ToLower(forbidden)) {
+			t.Fatalf("Deployment Nexus View leaks forbidden value %q: %s", forbidden, encoded)
+		}
+	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE radishnexus.environments
+		SET status = 'archived', updated_at = clock_timestamp()
+		WHERE workspace_id = 'wrk_main' AND id = 'env_staging'
+	`); err != nil {
+		t.Fatalf("archive Environment for read test error = %v", err)
+	}
+	if _, err := service.GetNexusView(ctx, reader, target); err != nil {
+		t.Fatalf("archived Environment Deployment GetNexusView() error = %v", err)
+	}
+
+	nonMember := authz.Principal{
+		Kind: authz.PrincipalUser, ID: "usr_not_a_member", WorkspaceID: "wrk_main",
+	}
+	if _, err := service.GetNexusView(ctx, nonMember, target); !errors.Is(err, authz.ErrNotFound) {
+		t.Fatalf("non-member Deployment GetNexusView() error = %v, want not found", err)
+	}
+	crossWorkspace := authz.Principal{
+		Kind: authz.PrincipalUser, ID: "usr_contributor", WorkspaceID: "wrk_other",
+	}
+	if _, err := service.GetNexusView(ctx, crossWorkspace, target); !errors.Is(err, authz.ErrNotFound) {
+		t.Fatalf("cross-Workspace Deployment GetNexusView() error = %v, want not found", err)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE radishnexus.workspace_memberships
+		SET status = 'suspended'
+		WHERE workspace_id = 'wrk_main' AND user_id = 'usr_reader'
+	`); err != nil {
+		t.Fatalf("suspend Workspace member for Deployment read error = %v", err)
+	}
+	defer func() {
+		if _, restoreErr := pool.Exec(ctx, `
+			UPDATE radishnexus.workspace_memberships
+			SET status = 'active'
+			WHERE workspace_id = 'wrk_main' AND user_id = 'usr_reader'
+		`); restoreErr != nil {
+			t.Errorf("restore Workspace member after Deployment read error = %v", restoreErr)
+		}
+	}()
+	if _, err := service.GetNexusView(ctx, reader, target); !errors.Is(err, authz.ErrNotFound) {
+		t.Fatalf("suspended member Deployment GetNexusView() error = %v, want not found", err)
+	}
 }
 
 func seedDeploymentTargets(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {

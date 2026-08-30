@@ -87,7 +87,7 @@ npm ci
 ./scripts/check-server-postgres.sh
 ```
 
-两个 PostgreSQL 入口复用 `run-postgres-go-integration.sh`，只操作各自任务专属容器并在退出时自动清理；默认不会隐式拉取缺失镜像。
+两个 PostgreSQL 入口复用 `run-postgres-go-integration.sh`，只操作各自任务专属容器并在退出时自动清理；默认不会隐式拉取缺失镜像。共享 runner 只有在容器内连续两次真实 `psql SELECT 1` 成功后才通过 readiness，避免 PostgreSQL 初始化重启窗口让宿主端测试遇到瞬时 EOF。
 
 使用两个独立的固定 PostgreSQL 17 容器，验证版本化 backup manifest、custom archive、全新空目标恢复、正式 migration、Activity 重建和关键失败路径：
 

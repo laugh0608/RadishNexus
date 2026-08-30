@@ -105,23 +105,49 @@ func loadCurrentProjection(
 		)
 		if err == nil {
 			componentRef := entityref.Ref{Type: "component", ID: componentID}
-			exists, canRead, accessErr := entityAccess(ctx, tx, principal, componentRef)
-			if accessErr != nil {
-				return goldenpath.CurrentProjection{}, accessErr
-			}
-			if !exists || !canRead {
-				return goldenpath.CurrentProjection{}, authz.ErrNotFound
-			}
-			componentTitle, titleErr := entityTitle(ctx, tx, principal.WorkspaceID, componentRef)
-			if titleErr != nil {
-				return goldenpath.CurrentProjection{}, titleErr
-			}
-			current.Component = &goldenpath.SubjectProjection{
-				State: goldenpath.ProjectionVisible,
-				Ref:   componentRef,
-				Title: componentTitle,
+			current.Component, err = visibleSubjectProjection(ctx, tx, principal, componentRef)
+			if err != nil {
+				return goldenpath.CurrentProjection{}, err
 			}
 			current.RecordedAt = &recordedAt
+		}
+	case "deployment":
+		var environmentID string
+		var ciRunID string
+		var recordedAt time.Time
+		err = tx.QueryRow(ctx, `
+			SELECT environment_id, ci_run_id, status, started_at, completed_at, recorded_at
+			FROM radishnexus.deployments
+			WHERE workspace_id = $1 AND id = $2
+		`, principal.WorkspaceID, target.ID).Scan(
+			&environmentID,
+			&ciRunID,
+			&current.Status,
+			&current.StartedAt,
+			&current.CompletedAt,
+			&recordedAt,
+		)
+		if err == nil {
+			current.Environment, err = visibleSubjectProjection(
+				ctx,
+				tx,
+				principal,
+				entityref.Ref{Type: "environment", ID: environmentID},
+			)
+			if err != nil {
+				return goldenpath.CurrentProjection{}, err
+			}
+			current.CIRun, err = visibleSubjectProjection(
+				ctx,
+				tx,
+				principal,
+				entityref.Ref{Type: "ci-run", ID: ciRunID},
+			)
+			if err != nil {
+				return goldenpath.CurrentProjection{}, err
+			}
+			current.RecordedAt = &recordedAt
+			current.UpdatedAt = recordedAt
 		}
 	default:
 		return current, fmt.Errorf("load Current projection: unsupported target type %q", target.Type)
@@ -133,6 +159,30 @@ func loadCurrentProjection(
 		return goldenpath.CurrentProjection{}, fmt.Errorf("load %s Current projection: %w", target.Type, err)
 	}
 	return current, nil
+}
+
+func visibleSubjectProjection(
+	ctx context.Context,
+	tx pgx.Tx,
+	principal authz.Principal,
+	ref entityref.Ref,
+) (*goldenpath.SubjectProjection, error) {
+	exists, canRead, err := entityAccess(ctx, tx, principal, ref)
+	if err != nil {
+		return nil, err
+	}
+	if !exists || !canRead {
+		return nil, authz.ErrNotFound
+	}
+	title, err := entityTitle(ctx, tx, principal.WorkspaceID, ref)
+	if err != nil {
+		return nil, err
+	}
+	return &goldenpath.SubjectProjection{
+		State: goldenpath.ProjectionVisible,
+		Ref:   ref,
+		Title: title,
+	}, nil
 }
 
 func listTimeline(

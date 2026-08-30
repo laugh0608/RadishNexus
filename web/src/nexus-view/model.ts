@@ -1,4 +1,5 @@
-export type NexusEntityType = "decision" | "thread" | "ticket";
+export type NexusEntityType =
+  "decision" | "thread" | "ticket" | "ci-run" | "environment";
 
 export interface DecisionNexusCurrent {
   entityRef: string;
@@ -40,7 +41,32 @@ export interface CIRunNexusCurrent {
   updatedAtLabel: string;
 }
 
-export type NexusCurrent = DecisionNexusCurrent | CIRunNexusCurrent;
+export type DeploymentStatus = "succeeded" | "failed" | "canceled";
+
+export interface DeploymentSubject {
+  entityRef: string;
+  name: string;
+}
+
+export interface DeploymentNexusCurrent {
+  entityRef: string;
+  entityType: "deployment";
+  eyebrow: string;
+  status: DeploymentStatus;
+  statusLabel: string;
+  summary: string;
+  environment: DeploymentSubject;
+  ciRun: DeploymentSubject;
+  startedAt: string;
+  startedAtLabel: string;
+  completedAt: string;
+  completedAtLabel: string;
+  recordedAt: string;
+  recordedAtLabel: string;
+}
+
+export type NexusCurrent =
+  DecisionNexusCurrent | CIRunNexusCurrent | DeploymentNexusCurrent;
 
 export interface ReadableNexusRelation {
   visibility: "readable";

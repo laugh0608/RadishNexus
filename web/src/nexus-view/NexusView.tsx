@@ -1,6 +1,7 @@
 import type {
   CIRunNexusCurrent,
   DecisionNexusCurrent,
+  DeploymentNexusCurrent,
   NexusRelation,
   NexusTimelineItem,
   NexusViewData,
@@ -85,11 +86,7 @@ function ErrorNexusView({ message, onRetry }: ErrorNexusViewProps) {
 function ReadyNexusView({ data }: { data: NexusViewData }) {
   return (
     <main className="nexus-layout">
-      {data.current.entityType === "ci-run" ? (
-        <CIRunCurrentCard current={data.current} />
-      ) : (
-        <DecisionCurrentCard current={data.current} />
-      )}
+      <CurrentCard current={data.current} />
 
       <div className="nexus-columns">
         <RelationsPanel
@@ -100,6 +97,17 @@ function ReadyNexusView({ data }: { data: NexusViewData }) {
       </div>
     </main>
   );
+}
+
+function CurrentCard({ current }: { current: NexusViewData["current"] }) {
+  switch (current.entityType) {
+    case "ci-run":
+      return <CIRunCurrentCard current={current} />;
+    case "deployment":
+      return <DeploymentCurrentCard current={current} />;
+    case "decision":
+      return <DecisionCurrentCard current={current} />;
+  }
 }
 
 function DecisionCurrentCard({ current }: { current: DecisionNexusCurrent }) {
@@ -153,12 +161,12 @@ function CIRunCurrentCard({ current }: { current: CIRunNexusCurrent }) {
           <h1 id="nexus-current-title">CI Run</h1>
           <p className="current-card__summary">{current.summary}</p>
         </div>
-        <div className="ci-run-context">
-          <div className="component-stamp" aria-label="所属 Component">
-            <span>Component</span>
-            <strong>{current.component.name}</strong>
-            <code>{current.component.entityRef}</code>
-          </div>
+        <div className="nexus-context">
+          <ContextStamp
+            label="Component"
+            title={current.component.name}
+            entityRef={current.component.entityRef}
+          />
           <EntityStamp entityRef={current.entityRef} />
         </div>
       </div>
@@ -189,6 +197,63 @@ function CIRunCurrentCard({ current }: { current: CIRunNexusCurrent }) {
   );
 }
 
+function DeploymentCurrentCard({
+  current,
+}: {
+  current: DeploymentNexusCurrent;
+}) {
+  return (
+    <article
+      className="current-card current-card--deployment"
+      aria-labelledby="nexus-current-title"
+    >
+      <CurrentTopline
+        eyebrow={current.eyebrow}
+        status={current.status}
+        statusLabel={current.statusLabel}
+      />
+
+      <div className="current-card__body current-card__body--deployment">
+        <div>
+          <h1 id="nexus-current-title">Deployment</h1>
+          <p className="current-card__summary">{current.summary}</p>
+        </div>
+        <div className="nexus-context">
+          <ContextStamp
+            label="Environment"
+            title={current.environment.name}
+            entityRef={current.environment.entityRef}
+          />
+          <ContextStamp
+            label="Source CI Run"
+            title={current.ciRun.name}
+            entityRef={current.ciRun.entityRef}
+          />
+          <EntityStamp entityRef={current.entityRef} />
+        </div>
+      </div>
+
+      <dl className="current-meta current-meta--deployment">
+        <TimeMetaItem
+          label="Started"
+          dateTime={current.startedAt}
+          value={current.startedAtLabel}
+        />
+        <TimeMetaItem
+          label="Completed"
+          dateTime={current.completedAt}
+          value={current.completedAtLabel}
+        />
+        <TimeMetaItem
+          label="Recorded"
+          dateTime={current.recordedAt}
+          value={current.recordedAtLabel}
+        />
+      </dl>
+    </article>
+  );
+}
+
 function CurrentTopline({
   eyebrow,
   status,
@@ -213,6 +278,24 @@ function EntityStamp({ entityRef }: { entityRef: string }) {
   return (
     <div className="entity-stamp" aria-label="稳定实体引用">
       <span>EntityRef</span>
+      <code>{entityRef}</code>
+    </div>
+  );
+}
+
+function ContextStamp({
+  label,
+  title,
+  entityRef,
+}: {
+  label: string;
+  title: string;
+  entityRef: string;
+}) {
+  return (
+    <div className="context-stamp" aria-label={label}>
+      <span>{label}</span>
+      <strong>{title}</strong>
       <code>{entityRef}</code>
     </div>
   );
@@ -268,7 +351,9 @@ function RelationsPanel({
           description={
             currentEntityType === "ci-run"
               ? "当前安全合同没有投影 Repository、commit 或 Deployment 关系。"
-              : "当前 Decision 还没有你可以看到的关联对象。"
+              : currentEntityType === "deployment"
+                ? "当前 Deployment 没有其它你可以看到的关联对象。"
+                : "当前 Decision 还没有你可以看到的关联对象。"
           }
         />
       ) : (

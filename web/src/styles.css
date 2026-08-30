@@ -336,13 +336,13 @@ code {
   background: rgba(255, 255, 255, 0.48);
 }
 
-.ci-run-context {
+.nexus-context {
   display: grid;
   align-self: end;
   gap: 10px;
 }
 
-.component-stamp {
+.context-stamp {
   display: grid;
   gap: 6px;
   padding: 17px 18px;
@@ -351,7 +351,7 @@ code {
   background: #f2fadf;
 }
 
-.component-stamp span {
+.context-stamp span {
   color: var(--accent-dark);
   font-size: 10px;
   font-weight: 740;
@@ -359,13 +359,13 @@ code {
   text-transform: uppercase;
 }
 
-.component-stamp strong {
+.context-stamp strong {
   font-family: Georgia, "Songti SC", serif;
   font-size: 18px;
   font-weight: 500;
 }
 
-.component-stamp code {
+.context-stamp code {
   overflow: hidden;
   color: #5c6b54;
   font-size: 10px;
@@ -395,9 +395,14 @@ code {
   border-top: 1px solid var(--line);
 }
 
-.current-meta--ci-run dd {
+.current-meta--ci-run dd,
+.current-meta--deployment dd {
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 11px;
+}
+
+.current-meta--deployment {
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .current-meta > div {
@@ -828,7 +833,7 @@ code {
     width: min(100%, 360px);
   }
 
-  .ci-run-context {
+  .nexus-context {
     width: min(100%, 360px);
   }
 

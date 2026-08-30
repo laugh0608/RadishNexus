@@ -352,6 +352,12 @@ func TestGetNexusViewValidatesTargetAndForwardsPrincipal(t *testing.T) {
 		t.Fatalf("CI Run GetNexusView() error = %v, target = %#v", err, store.nexusTarget)
 	}
 
+	deploymentTarget := entityref.Ref{Type: "deployment", ID: "dpl_1"}
+	_, err = service.GetNexusView(context.Background(), principal, deploymentTarget)
+	if err != nil || store.nexusTarget != deploymentTarget {
+		t.Fatalf("Deployment GetNexusView() error = %v, target = %#v", err, store.nexusTarget)
+	}
+
 	_, err = service.GetNexusView(
 		context.Background(),
 		principal,

@@ -16,6 +16,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0008](0008-dev-first-development-governance.md) | 已接受 | `dev` 优先的单维护者开发拓扑 |
 | [ADR-0009](0009-explicit-staging-deployment.md) | 已接受 | 显式 staging Deployment 与环境级授权 |
 | [ADR-0010](0010-verified-postgresql-backup-and-restore.md) | 已接受 | 可验证 PostgreSQL 备份与全新实例恢复 |
+| [ADR-0011](0011-workspace-scoped-deployment-read.md) | 已接受 | Workspace 作用域下的 Deployment 安全读取 |
 
 ## 新建规则
 
