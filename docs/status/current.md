@@ -161,6 +161,20 @@
 
 当前停止线：除三个认证路由和 Deployment Nexus View 读取外不继续开放业务 handler；不信任用户身份或转发 Header，不提供 insecure Cookie / HTTP fallback，不把每进程限流冒充多副本或公网全局保护，不让 Web 用 fixture、任意 SPA fallback 或 stale cache 隐藏真实失败。自部署拓扑闭环前不铺开 Deployment 列表 / 写入、OIDC、邀请、密码重置、MFA 或账号合并；其余 Deployment executor、Flutter、CRDT、通用 RBAC、Repository、插件市场和多 provider 停止线保持不变。
 
+## 明日事项（2026-08-31）
+
+明日核心目标是为首个正式 Docker Compose 自部署方式建立一个小而完整、可复验的新实例切片，不继续扩展产品功能面：
+
+1. 先审阅现有 server 启动配置、migration / bootstrap、Web build root、健康检查和备份恢复入口，列出 Compose 必须装配的真实合同，不另造第二套配置或初始化逻辑；
+2. 冻结 TLS reverse proxy、Go server、production Web build 与 PostgreSQL 的进程、网络和持久化职责，明确 public origin、可信代理 CIDR、仅内部暴露的端口、数据库 volume 与 Secret 输入边界；
+3. 评估并固定 reverse proxy 与基础镜像的版本、digest、许可证、维护和供应链边界；任何新镜像拉取、依赖引入或 lockfile 变化先单独说明并取得授权；
+4. 设计显式的一次性 migration 与 bootstrap 操作：不得随应用启动自动迁移，不生成默认账号或密码，不把 bootstrap 密码写入 Compose 文件、环境变量、日志或镜像层；
+5. 在上述边界接受后实现最小 Compose 与新实例演练，先验证空实例的 PostgreSQL readiness → 显式 migration → 一次性 bootstrap → HTTPS Web 登录 → Session；如需复核 canonical Deployment，只能显式使用任务专属 Golden Path fixture 或受控恢复数据，不能随产品启动注入默认业务数据。若实现前仍有镜像或 Secret 方案未冻结，则明日只交付 ADR / 运行设计和可执行验证计划，不用临时 fallback 冒充完成。
+
+明日完成线：一个全新、空数据目录的受控开发实例能从固定工件启动 PostgreSQL、reverse proxy、Go server 与 production Web build；migration 和 bootstrap 仍由明确人工命令触发；浏览器只能经唯一 HTTPS origin 访问，健康检查、启动日志和运维命令能让实例管理员区分数据库未就绪、Web build 缺失、origin / proxy 配置错误与账号尚未初始化，同时不向匿名浏览器泄漏内部状态。
+
+明日停止线：不开放新的业务 handler，不加入 Deployment 列表或写入，不自动执行 migration / bootstrap，不提供默认 credential，不把 Go server 或 PostgreSQL 直接暴露为公共端口，不以 `latest`、未固定来源镜像、明文 Secret、HTTP Cookie fallback 或放宽可信代理范围换取演示成功。
+
 ## 开放问题
 
 - PostgreSQL 正式支持版本矩阵，以及生产升级的 forward repair 与恢复流程；

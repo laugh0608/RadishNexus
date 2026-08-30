@@ -4,6 +4,8 @@
 
 日期：2026-08-30
 
+部分已替代：[ADR-0015](0015-same-origin-authenticated-web-shell.md) 已替代“Web 根路径继续保留静态状态检视器”的阶段性决定；本 ADR 的业务路由、权限、公共 DTO 与缓存合同继续有效。
+
 ## 背景
 
 ADR-0011 已冻结 Deployment 的 application 读取权限和安全投影，但当时本地身份、Session、可信代理与公共错误对象尚未建立，因此明确禁止为了原型增加临时业务路由。ADR-0012 与 ADR-0013 随后建立了服务端 opaque Session、当前 Workspace membership resolver、精确 HTTPS public origin、可信代理、Secure Cookie、request ID 和版本化错误对象。

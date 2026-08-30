@@ -57,6 +57,14 @@ npm ci
 
 该入口默认不访问网络，覆盖 Prettier、Oxlint、Vitest + jsdom、严格 TypeScript、Vite production build，以及 lockfile 来源、integrity、许可证和 lifecycle script 基线。CI 在 `npm ci` 后额外运行 `npm audit --audit-level=high`；本地需要刷新漏洞数据时可在获得网络与依赖操作授权后运行同一命令。
 
+需要人工复核 production Web build、正式 Session transport 与真实 PostgreSQL 的完整 HTTPS 浏览器链路时运行：
+
+```bash
+./scripts/run-authenticated-web-browser-fixture.sh
+```
+
+该入口先执行 Web production build，再启动任务专属 PostgreSQL 容器和带临时证书的 HTTPS fixture，输出 origin、测试账号、canonical Deployment path 与 stop 文件，并等待人工浏览器复核。它不会隐式拉取缺失镜像，测试账号不属于产品默认 credential；创建输出的 stop 文件后，脚本会退出并清理容器与临时状态。精确浏览器复核步骤和安全边界见 [Web App](../web/README.md) 与 [ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md)。
+
 ## M0 核心契约实验
 
 不需要数据库的 Go 测试与静态检查：

@@ -1,8 +1,8 @@
 # RadishNexus 总体架构
 
-状态：方向基线，Go 服务基础已冻结
+状态：方向基线，M0.5 / M1 首批纵向边界已冻结
 
-日期：2026-08-28
+日期：2026-08-30
 
 ## 架构目标
 
@@ -246,27 +246,20 @@ M0.5 已建立第一条可验证恢复路径：显式命令生成版本化 manif
 - Attention Item、Activity、导出包和 AI 插件必须复用同一对象权限语义；
 - 第一阶段优先 TLS、静态加密、RBAC、审计和备份安全，不默认承诺全局端到端加密。
 
-## 预期仓库布局
+## 当前仓库布局
 
-当前已经从单一 `server/` Go module 起步；其余目录只在对应应用、SDK、插件或部署产物真正进入实现时创建：
+当前已经建立根级 `web/` React App、唯一正式 `server/` Go module、可丢弃的 `experiments/` 和共享 `scripts/`；SDK、插件、公共契约或部署目录只在对应产物真正进入实现时创建：
 
 ```text
 RadishNexus/
-├── apps/
-│   └── web/
+├── web/
 ├── server/
 │   ├── cmd/
 │   └── internal/
-├── sdk/
-│   ├── plugin-go/
-│   ├── plugin-rust/
-│   └── plugin-ts/
-├── plugins/
-│   └── jenkins/
-├── contracts/
-├── deploy/
+├── experiments/
+├── scripts/
 ├── docs/
 └── LICENSE
 ```
 
-SDK 和插件目录必须拥有独立许可证，不能因位于同一仓库而模糊授权边界。
+未来 SDK 和插件目录必须拥有独立许可证，不能因位于同一仓库而模糊授权边界；Docker Compose 等部署产物在边界冻结前也不创建占位 `deploy/` 结构。

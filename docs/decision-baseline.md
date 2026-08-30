@@ -2,7 +2,7 @@
 
 状态：已确认的初始产品决策
 
-日期：2026-08-29
+日期：2026-08-30
 
 本文件用于防止后续讨论静默改变当前方向。修改“已确认”事项时，必须同时记录修改日期、原因、影响和迁移方式。
 
@@ -199,3 +199,4 @@
 - 2026-08-30：接受 ADR-0011，冻结 Workspace 作用域下组合 Environment 与 CI Run 权限的 Deployment 安全读取边界。
 - 2026-08-30：接受 ADR-0012 与 ADR-0013，冻结本地账号、首次管理员、服务端 Session、CSRF、Workspace 选择、可信代理与公共认证 transport 安全合同。
 - 2026-08-30：接受 ADR-0014，冻结首个 Session 作用域 Deployment Nexus View 业务读取路由、公共 DTO、缓存和 Web 消费边界。
+- 2026-08-30：接受 ADR-0015，冻结同源 authenticated Web Shell、显式 production build root、页面 allowlist、静态缓存与真实 HTTPS browser → PostgreSQL 验证边界。
