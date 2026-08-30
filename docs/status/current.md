@@ -6,7 +6,7 @@
 
 产品定义、架构基线、仓库治理基线与 M0.5 Golden Path 纵向原型。
 
-当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和安全读取已经建立。正式 Environment、环境级写授权、显式终态 staging Deployment、`deploys` 关系、`deployment.recorded` 投影与 Workspace 作用域安全读取已经通过真实 PostgreSQL 验证。PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验和 Activity 重建已经由 ADR-0010、显式 CLI 与双实例演练建立。上述 M0 正式服务、Web 代表原型与恢复基线已通过 PR #9 的远端 `Candidate Quality`，使用 merge commit 晋级 `master` 并 fast-forward 回流 `dev`。正式 `web/` React + TypeScript 基线现已覆盖 Decision、CI Run 与 Deployment Nexus View 代表交互；本地账号的公共 login / session / logout transport 已通过真实 PostgreSQL 与 HTTPS 浏览器验证，尚未建立插件 runtime、客户端或业务 HTTP API。
+当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和安全读取已经建立。正式 Environment、环境级写授权、显式终态 staging Deployment、`deploys` 关系、`deployment.recorded` 投影与 Workspace 作用域安全读取已经通过真实 PostgreSQL 验证。PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验和 Activity 重建已经由 ADR-0010、显式 CLI 与双实例演练建立。上述 M0 正式服务、Web 代表原型与恢复基线已通过 PR #9 的远端 `Candidate Quality`，使用 merge commit 晋级 `master` 并 fast-forward 回流 `dev`。正式 `web/` React + TypeScript 基线现已覆盖 Decision、CI Run 与 Deployment Nexus View 代表交互；本地账号的公共 login / session / logout transport 已通过真实 PostgreSQL 与 HTTPS 浏览器验证，第一个 Session 作用域的 Deployment Nexus View 业务读取端点与 Web 类型化消费已经建立，尚未建立完整 Web Shell、插件 runtime 或客户端。
 
 ## 当前结论
 
@@ -45,6 +45,7 @@
 - ADR-0011 已冻结 active Workspace 成员同时复用 Environment 与 CI Run 当前权限的 Deployment 安全读取；环境级部署授权只控制写入，不控制历史发现。
 - ADR-0012 已冻结一次性本地管理员、本地账号、Argon2id verifier、服务端 opaque Session、CSRF、当前 Workspace membership 与恢复后登录态失效边界。
 - ADR-0013 已冻结精确 HTTPS public origin / Host、可信代理 CIDR、客户端 IP 解析、每进程登录限流、JSON 上限和 login / session / logout 公共路由；不信任用户转发 Header，也不把进程内限流冒充跨副本全局保护。
+- ADR-0014 已冻结 `GET /api/v1/workspaces/{workspace_id}/deployments/{deployment_id}/nexus-view`、路径 Workspace 选择、Session → current membership → `Principal`、显式公共 DTO、不可发现性与 `private, no-store` 缓存边界。
 - 正式 application service 已完成 Thread → Proposed Decision → Accepted Decision → Ticket，并把 EntityLink、领域事件和 Outbox 与业务状态放在同一事务。
 - Jenkins application service 只接收已完成来源认证和字段映射的 `VerifiedJenkinsDelivery`；receipt、CI Run、`ci-run.recorded` 和 Outbox 在同一事务提交，不保存 Secret 或原始 webhook body。
 - 相同 Jenkins delivery 和 digest 只返回既有 CI Run；digest 改变或不同 delivery 映射到同一 external run 时 fail closed，事件冲突会连同 receipt 与 CI Run 一起回滚。
@@ -65,13 +66,16 @@
 - Relations 和 Timeline 对不可读目标只返回不含 EntityRef、类型、关系类型和标题的通用占位；hidden 目标不进入结果。
 - 最小认证 adapter 只把 Session resolver 已验证的 UserID 与 WorkspaceID 转换为 application `Principal`，不读取或信任用户身份 Header 和 OIDC claims。
 - 公共 HTTP error mapping 与响应对象已覆盖认证、CSRF、安全 transport、proxy、限流、body / media type、`unauthenticated / forbidden / not found / conflict / invalid` 与未知失败；它不暴露原始错误，并由 server-generated request ID 关联。
+- 第一个业务 HTTP handler 只接受安全 `GET`，复用认证 transport、当前 Workspace membership 和正式 Deployment query；无 membership、跨 Workspace、未知或不可读对象统一保持不可发现，projection 漂移在发送响应前 fail closed。
+- Deployment 公共 DTO 使用显式 `data` envelope 与结构化 ref，只返回终态、nullable started time、completed / recorded time、可读 Environment / CI Run、`deploys` 和 `deployment.recorded`；不直接序列化内部 application struct。
 - Decision Nexus View 代表原型已经表达 Current、Relations 和 Timeline，并覆盖 loading、empty、error、restricted placeholder 与窄屏布局。
 - CI Run Nexus View 代表交互已经表达 succeeded / failed、四个受控时间、当前 Component、唯一 `ci-run.recorded` Timeline、loading、error 与窄屏布局；构建结果没有被表现为 Deployment。
 - CI Run Web fixture 与后端安全投影同形，不携带 source ID、external run key、delivery receipt、digest、Secret、原始 payload 或未经治理的外部 URL；浏览器验证未发现必须新增 transport 的需求。
 - Deployment Nexus View 代表交互已经表达 succeeded / failed、三个受控时间、Environment、来源 CI Run、`deploys` Relation 与唯一 `deployment.recorded` Timeline；失败态明确保留来源构建成功事实，不把失败 Deployment 改写成 CI Run 失败。
 - Deployment Web fixture 不携带 authorization、调用 source、Jenkins 来源字段或执行日志；桌面与 390px 窄屏真实浏览器复核通过，并修正了旧 CI Run 页面标题漂移。
 - Web 原型只消费权限过滤后的 discriminated union；`restricted` 形状不携带 EntityRef、对象类型、关系类型、标题、来源或时间，`hidden` 目标不进入客户端数据。
-- 原型使用明确标注的静态 fixture；本轮浏览器复核没有暴露必须新增内部 handler 的需求，因此没有为了联调制造临时业务 API。
+- Web 根路径继续使用明确标注的静态 fixture；canonical `/workspaces/{workspace_id}/deployments/{deployment_id}` 页面通过同源、no-store 的类型化 adapter 消费真实公共 DTO，运行时拒绝漂移响应，不以 fixture 作为失败 fallback。
+- Web fixture 已统一修正为 `entity://type/id` canonical 引用和正式 `tkt_` 前缀；真实浏览器网络边界验证了 API request、nullable started time、Relations 与 Timeline 渲染且没有 console warning / error。
 - `web/` 已建立 Prettier、Oxlint、Vitest + jsdom、严格 TypeScript、Vite production build 与 lockfile 供应链检查；`Candidate Quality` 已加入独立 `Web App` job，并已在本批次 PR 中实际通过。
 - 在横向补全各模块前，先完成 Golden Path 纵向原型。
 - 仓库采用 `master` 稳定分支和 `dev` 日常开发/集成分支；单维护者串行任务默认直接在 `dev` 推进，主题分支只用于明确要求、外部贡献、并行写入或风险隔离。
@@ -105,6 +109,7 @@
 - [ADR-0011：Workspace 作用域下的 Deployment 安全读取](../adr/0011-workspace-scoped-deployment-read.md)
 - [ADR-0012：本地身份与服务端 Session 基线](../adr/0012-local-identity-and-session-foundation.md)
 - [ADR-0013：公共认证 Transport 与可信代理边界](../adr/0013-public-authentication-transport.md)
+- [ADR-0014：Session 作用域下的 Deployment Nexus View Transport](../adr/0014-session-scoped-deployment-nexus-view-transport.md)
 - [开发指南](../development/README.md)
 - [M0 核心契约实验](../../experiments/m0-core-contracts/README.md)
 - [正式 Go 服务](../../server/README.md)
@@ -129,16 +134,20 @@
 14. ADR-0013 与正式 transport 已建立必需 public origin / Host、显式可信代理 CIDR、右向左客户端 IP 解析、每 IP 每分钟 5 次窗口、4096 个有界客户端和 4 个并发密码校验；不可信 plaintext、转发 Header spoofing 和畸形链均在 credential verifier 前失败。
 15. `POST /api/v1/auth/sessions`、`GET /api/v1/auth/session` 与 `DELETE /api/v1/auth/session` 已开放；登录限制为 4096-byte JSON，响应只返回安全 Session context，Cookie / Origin / CSRF / database digest、`no-store`、server-generated request ID 和版本化错误对象复用同一合同。
 16. 真实 PostgreSQL HTTP integration 已覆盖 login → Cookie → session → logout → revoked Session；真实 Chrome HTTPS 复核已证明 Session Cookie 为 `Secure / HttpOnly / SameSite=Strict`、CSRF Cookie 可读但同样 Secure / Strict、错误 CSRF 不撤销、正确 CSRF 清除 Cookie、第二 HTTPS Origin 登录得到 `403 csrf_failed`。
+17. ADR-0014 与第一个业务 HTTP handler 已建立路径 Workspace 选择、Session → current membership → `Principal` → 正式 query、显式公共 DTO、not-found 不可发现性、投影一致性验证和 `private, no-store` / `Vary: Cookie`。
+18. 真实 PostgreSQL HTTP integration 已覆盖有效 Session 读取完整 Deployment Nexus View，以及跨 Workspace 与未知 Deployment 的同形 `404 not_found`；输出不包含 authorization、Jenkins 来源、receipt、digest、Secret 或内部投影字段。
+19. Web canonical Deployment 页面已通过同源 typed adapter 消费公共 snake_case DTO，覆盖 runtime validation、nullable started time、canonical EntityRef、loading、error 与 retry；根路径的静态代表状态检视器继续独立保留。
+20. Web 单元、lint、严格 TypeScript 与 production build 已通过；真实 Chrome 以网络边界响应验证了 canonical URL、API 请求和成功页面，未发现 console warning / error。真实 PostgreSQL HTTP 与浏览器 adapter 目前是两段证据，尚未冒充一次完整的 HTTPS browser → PostgreSQL E2E。
 
 ## 下一步
 
-本地身份、Session 与公共认证 transport 已达到本地完成线。下一步以 Deployment Nexus View 作为第一个只读业务 HTTP 端点，先冻结 Workspace 选择位置、公共 response DTO、Session → current membership → `Principal` 适配、not-found / restricted 投影和缓存边界，再交付从真实 PostgreSQL 到 Web 消费的最薄纵向切片；不直接把内部 application struct 暴露成公共兼容合同。
+Deployment Nexus View 的第一个只读业务端点和 Web 类型化消费已达到本地完成线。下一步优先建立最小 authenticated Web Shell：冻结 Web 静态资源与 `/api/v1` 的 same-origin 交付边界，消费现有 login / session / logout，选择当前 Workspace，并在真实 HTTPS + PostgreSQL 环境中从登录进入 canonical Deployment 页面。该切片先关闭浏览器到真实数据的完整证据缺口，不同时开放 Deployment 列表、写入 API 或第二个业务对象端点。
 
 文档协同技术方案与免费书面授权模板继续作为独立 M0 缺口评估，不与认证/transport 同时铺开。当前 `dev` 切片不立即再次晋级 `master`；积累下一组可独立演示、测试和退出的候选后再创建阶段 PR。
 
-当前完成线：新实例能够通过显式 CLI 且只有一次成功地建立本地管理员与 Workspace owner；密码使用严格、版本化 Argon2id verifier，登录失败、Session digest、CSRF、Workspace membership 和撤销语义由 application service 与 PostgreSQL 共同约束；公共 login / session / logout 在精确 HTTPS origin / Host、可信代理、客户端 IP 限流、JSON 上限、Secure Cookie、request ID 与错误对象的唯一合同下开放，恢复保留账号 verifier 但不恢复登录态。
+当前完成线：新实例能够通过显式 CLI 且只有一次成功地建立本地管理员与 Workspace owner；公共 login / session / logout 在精确 HTTPS origin / Host、可信代理、限流、Secure Cookie、CSRF、request ID 与错误对象的唯一合同下开放；Deployment Nexus View 通过路径 Workspace、当前 membership、正式 `Principal` 和 application query 安全读取，并由 Web canonical 页面运行时校验后展示。恢复保留账号 verifier 但不恢复登录态。
 
-当前停止线：除三个认证路由外不开放业务 HTTP handler，不信任用户身份或转发 Header，不提供 insecure Cookie / HTTP fallback，不把每进程限流冒充多副本或公网全局保护。第一个业务端点必须复用 Session resolver、当前 Workspace membership、既有 application 权限和版本化 transport，不建立 fixture 身份或第二套错误语义。不同时铺开 OIDC、邀请、密码重置、MFA 或账号合并；其余 Deployment、备份、Flutter、CRDT、通用 RBAC、Repository、插件市场和多 provider 停止线保持不变。
+当前停止线：除三个认证路由和 Deployment Nexus View 读取外不继续开放业务 handler；不信任用户身份或转发 Header，不提供 insecure Cookie / HTTP fallback，不把每进程限流冒充多副本或公网全局保护，不让 Web 用 fixture 或 stale cache 隐藏真实失败。Authenticated Web Shell 完成前不铺开 Deployment 列表 / 写入、OIDC、邀请、密码重置、MFA 或账号合并；其余 Deployment executor、Flutter、CRDT、通用 RBAC、Repository、插件市场和多 provider 停止线保持不变。
 
 ## 开放问题
 

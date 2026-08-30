@@ -13,6 +13,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
+	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/httptransport"
@@ -77,10 +79,21 @@ func run() error {
 			loginPasswordConcurrencyLimit,
 		),
 	)
+	nexusViewService := goldenpath.NewService(
+		goldenpostgres.New(pool),
+		goldenpath.CryptoIDGenerator{},
+		goldenpath.SystemClock{},
+	)
+	deploymentNexusViewHandler := httptransport.NewDeploymentNexusViewHandler(
+		authService,
+		nexusViewService,
+		sessionPolicy,
+		proxyPolicy,
+	)
 
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(pool, authHandler),
+		Handler:           newHandler(pool, authHandler, deploymentNexusViewHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -115,7 +128,11 @@ type databasePinger interface {
 	Ping(context.Context) error
 }
 
-func newHandler(database databasePinger, authHandler http.Handler) http.Handler {
+func newHandler(
+	database databasePinger,
+	authHandler http.Handler,
+	deploymentNexusViewHandler http.Handler,
+) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", func(response http.ResponseWriter, _ *http.Request) {
 		response.WriteHeader(http.StatusNoContent)
@@ -131,6 +148,8 @@ func newHandler(database databasePinger, authHandler http.Handler) http.Handler 
 	})
 	mux.Handle("/api/v1/auth", authHandler)
 	mux.Handle("/api/v1/auth/", authHandler)
+	mux.Handle("/api/v1/workspaces", deploymentNexusViewHandler)
+	mux.Handle("/api/v1/workspaces/", deploymentNexusViewHandler)
 
 	return httptransport.WithRequestID(mux)
 }

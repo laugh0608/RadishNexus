@@ -103,6 +103,19 @@ func TestWriteErrorUsesVersionedSafeEnvelope(t *testing.T) {
 	}
 }
 
+func TestWriteErrorPreservesCallerNoStoreScope(t *testing.T) {
+	t.Parallel()
+	response := httptest.NewRecorder()
+	response.Header().Set("Cache-Control", "private, no-store")
+	requestID := "req_00000000000000000000000000000000"
+	if err := WriteError(response, requestID, authz.ErrNotFound); err != nil {
+		t.Fatalf("WriteError() error = %v", err)
+	}
+	if response.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("Cache-Control = %q", response.Header().Get("Cache-Control"))
+	}
+}
+
 func TestWriteErrorRejectsMissingRequestIDBeforeWriting(t *testing.T) {
 	t.Parallel()
 	response := httptest.NewRecorder()

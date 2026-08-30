@@ -147,7 +147,9 @@ func WriteError(response http.ResponseWriter, requestID string, err error) error
 		return fmt.Errorf("marshal public error response: %w", marshalErr)
 	}
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
-	response.Header().Set("Cache-Control", "no-store")
+	if response.Header().Get("Cache-Control") == "" {
+		response.Header().Set("Cache-Control", "no-store")
+	}
 	response.Header().Set("X-Request-ID", requestID)
 	response.WriteHeader(mapping.StatusCode)
 	if _, writeErr := response.Write(append(body, '\n')); writeErr != nil {

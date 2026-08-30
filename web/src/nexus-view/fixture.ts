@@ -2,7 +2,7 @@ import type { NexusViewData } from "./model";
 
 export const decisionNexusViewFixture: NexusViewData = {
   current: {
-    entityRef: "decision:dec_01JZ7RADISHNEXUS",
+    entityRef: "entity://decision/dec_01JZ7RADISHNEXUS",
     entityType: "decision",
     eyebrow: "Decision · Authentication",
     title: "首期认证先采用本地账号，并为 OIDC 保留验证边界",
@@ -19,7 +19,7 @@ export const decisionNexusViewFixture: NexusViewData = {
   relations: [
     {
       visibility: "readable",
-      entityRef: "thread:thr_01JZ7CONTEXT",
+      entityRef: "entity://thread/thr_01JZ7CONTEXT",
       entityType: "thread",
       entityTypeLabel: "Thread",
       relationType: "evidence_for",
@@ -29,7 +29,7 @@ export const decisionNexusViewFixture: NexusViewData = {
     },
     {
       visibility: "readable",
-      entityRef: "ticket:tic_01JZ7IMPLEMENT",
+      entityRef: "entity://ticket/tkt_01JZ7IMPLEMENT",
       entityType: "ticket",
       entityTypeLabel: "Ticket",
       relationType: "implements",
@@ -89,7 +89,7 @@ export const emptyDecisionNexusViewFixture: NexusViewData = {
 
 export const succeededCIRunNexusViewFixture = {
   current: {
-    entityRef: "ci-run:cir_01K3RADISHNEXUS",
+    entityRef: "entity://ci-run/cir_01K3RADISHNEXUS",
     entityType: "ci-run",
     eyebrow: "CI Run · Completed build fact",
     status: "succeeded",
@@ -97,7 +97,7 @@ export const succeededCIRunNexusViewFixture = {
     summary:
       "一次构建流水线已经完成，并被记录为成功。此事实只说明构建结果，不表示任何 Environment 已经部署。",
     component: {
-      entityRef: "component:cmp_identity",
+      entityRef: "entity://component/cmp_identity",
       name: "Identity Service",
     },
     startedAt: "2026-08-29T09:12:18+08:00",
@@ -155,7 +155,7 @@ export const failedCIRunNexusViewFixture = {
 
 export const succeededDeploymentNexusViewFixture = {
   current: {
-    entityRef: "deployment:dpl_01K3RADISHNEXUS",
+    entityRef: "entity://deployment/dpl_01K3RADISHNEXUS",
     entityType: "deployment",
     eyebrow: "Deployment · Explicit staging fact",
     status: "succeeded",
@@ -163,11 +163,11 @@ export const succeededDeploymentNexusViewFixture = {
     summary:
       "一名持有目标 Environment 显式授权的成员，记录了一次已经完成的 staging 部署事实。该记录保留构建来源，但不表示 RadishNexus 执行了外部部署。",
     environment: {
-      entityRef: "environment:env_staging",
+      entityRef: "entity://environment/env_staging",
       name: "Staging",
     },
     ciRun: {
-      entityRef: "ci-run:cir_01K3RADISHNEXUS",
+      entityRef: "entity://ci-run/cir_01K3RADISHNEXUS",
       name: "来源 CI Run",
     },
     startedAt: "2026-08-29T09:20:03+08:00",
@@ -180,7 +180,7 @@ export const succeededDeploymentNexusViewFixture = {
   relations: [
     {
       visibility: "readable",
-      entityRef: "ci-run:cir_01K3RADISHNEXUS",
+      entityRef: "entity://ci-run/cir_01K3RADISHNEXUS",
       entityType: "ci-run",
       entityTypeLabel: "CI Run",
       relationType: "deploys",

@@ -1,6 +1,6 @@
 # RadishNexus Web
 
-`web/` 是 RadishNexus 第一正式产品形态的 React + TypeScript 入口。当前实现 Decision、CI Run 与 Deployment Nexus View 代表原型，用来验证 Current、Relations、Timeline、安全投影与关键页面状态；默认入口展示 Deployment 的 succeeded / failed 交互，不代表业务 HTTP API、完整 Web Shell、导航或聊天能力已经开放。
+`web/` 是 RadishNexus 第一正式产品形态的 React + TypeScript 入口。当前根路径保留 Decision、CI Run 与 Deployment Nexus View 代表原型，canonical `/workspaces/{workspace_id}/deployments/{deployment_id}` 页面已经通过类型化 adapter 消费第一个真实业务 HTTP DTO。它验证 Current、Relations、Timeline、安全投影与关键页面状态，但不代表 authenticated Web Shell、导航或聊天能力已经开放。
 
 ## 本地运行
 
@@ -22,13 +22,15 @@ npm run dev
 
 ## 当前边界
 
-- 原型只消费已经按当前主体过滤的 `NexusViewData`，不接收角色或权限集合，也不在浏览器中重新判断对象可读性。
+- Web 只消费已经按当前主体过滤的 `NexusViewData`，不接收角色或权限集合，也不在浏览器中重新判断对象可读性。
 - `restricted` 条目在类型上不携带 EntityRef、对象类型、关系类型、标题、来源或时间；`hidden` 条目不进入客户端数据。
-- fixture 是明确标注的静态代表数据，不通过临时 endpoint 或无类型 `fetch` 暗示公共 API 已冻结。
+- 根路径 fixture 是明确标注的静态代表数据，不作为 canonical 页面请求失败时的 fallback。
+- canonical Deployment 页面只调用同源 `/api/v1/workspaces/{workspace_id}/deployments/{deployment_id}/nexus-view`，使用 `credentials: same-origin`、`cache: no-store`、显式公开 DTO 和运行时校验；未知形状不会被当成成功页面。
+- 公共结构化 ref 只在展示 adapter 中转换为 `entity://type/id`；静态 fixtures 与组件断言也使用同一 canonical 引用格式和正式类型前缀。
 - CI Run fixture 与后端安全投影同形，只包含状态、四个受控时间、当前 Component 与唯一 `ci-run.recorded`；不包含 source ID、external run key、delivery receipt、digest、Secret、原始 payload 或外部 URL。
 - Deployment fixture 只包含终态、三个受控时间、Environment、来源 CI Run、`deploys` Relation 与唯一 `deployment.recorded`；不包含 authorization、调用 source、Jenkins 来源字段或执行日志，并明确区分“来源构建成功”和“部署失败”。
 - 状态检视器只用于人工复核 Deployment 的 succeeded、failed、loading 与 error；Decision 的 empty / restricted 和 CI Run 的安全状态继续由组件测试覆盖。检视器不是未来产品导航。
-- 当前不引入 router、状态库、组件库、图标包或远程字体。
+- 当前 canonical 路径由最小 pathname adapter 识别，不引入 router、状态库、组件库、图标包或远程字体。login / session bootstrap、Workspace 导航和同源静态资源交付仍待后续切片。
 
 ## 依赖与许可证
 

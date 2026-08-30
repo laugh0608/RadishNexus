@@ -57,7 +57,7 @@ export interface DeploymentNexusCurrent {
   summary: string;
   environment: DeploymentSubject;
   ciRun: DeploymentSubject;
-  startedAt: string;
+  startedAt: string | null;
   startedAtLabel: string;
   completedAt: string;
   completedAtLabel: string;

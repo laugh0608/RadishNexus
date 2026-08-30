@@ -3,9 +3,14 @@
 package postgres_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -14,8 +19,11 @@ import (
 
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
+	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/httptransport"
 )
 
 func assertStagingDeploymentSlice(
@@ -210,6 +218,7 @@ func assertDeploymentNexusView(
 			t.Fatalf("Deployment Nexus View leaks forbidden value %q: %s", forbidden, encoded)
 		}
 	}
+	assertDeploymentNexusViewHTTP(t, ctx, pool, service, deployment, sourceDelivery, sourceInput)
 
 	if _, err := pool.Exec(ctx, `
 		UPDATE radishnexus.environments
@@ -254,6 +263,119 @@ func assertDeploymentNexusView(
 	if _, err := service.GetNexusView(ctx, reader, target); !errors.Is(err, authz.ErrNotFound) {
 		t.Fatalf("suspended member Deployment GetNexusView() error = %v, want not found", err)
 	}
+}
+
+func assertDeploymentNexusViewHTTP(
+	t *testing.T,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	service *goldenpath.Service,
+	deployment goldenpath.Deployment,
+	sourceDelivery goldenpath.VerifiedJenkinsDelivery,
+	sourceInput goldenpath.RecordCompletedCIRunInput,
+) {
+	t.Helper()
+	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+	passwordHash, err := authn.NewArgon2idHasher().Hash("integration reader password")
+	if err != nil {
+		t.Fatalf("hash HTTP integration password: %v", err)
+	}
+	sessionToken := deploymentHTTPToken(7)
+	csrfToken := deploymentHTTPToken(8)
+	tokenDigest := sha256.Sum256([]byte(sessionToken))
+	csrfDigest := sha256.Sum256([]byte(csrfToken))
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO radishnexus.local_accounts (
+			user_id, login_name, password_hash, created_at, password_changed_at
+		) VALUES ('usr_reader', 'http.reader', $1, $2, $2)
+	`, passwordHash, now); err != nil {
+		t.Fatalf("seed HTTP integration local account: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO radishnexus.user_sessions (
+			id, user_id, token_digest, csrf_token_digest, created_at, expires_at
+		) VALUES ('ses_deployment_http', 'usr_reader', $1, $2, $3, $4)
+	`, tokenDigest[:], csrfDigest[:], now, now.Add(authn.SessionLifetime)); err != nil {
+		t.Fatalf("seed HTTP integration Session: %v", err)
+	}
+	authService := authn.NewService(authpostgres.New(pool), nil, nil, fixedClock{now: now})
+	sessionPolicy, err := httptransport.NewBrowserSessionPolicy("https://nexus.example.test")
+	if err != nil {
+		t.Fatalf("NewBrowserSessionPolicy() error = %v", err)
+	}
+	proxyPolicy, err := httptransport.NewTrustedProxyPolicy("10.0.0.0/8")
+	if err != nil {
+		t.Fatalf("NewTrustedProxyPolicy() error = %v", err)
+	}
+	handler := httptransport.WithRequestID(httptransport.NewDeploymentNexusViewHandler(
+		authService,
+		service,
+		sessionPolicy,
+		proxyPolicy,
+	))
+
+	request := deploymentHTTPRequest("wrk_main", deployment.ID, sessionToken)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("HTTP Deployment Nexus View = status %d, headers %#v, body %q", response.Code, response.Header(), response.Body.String())
+	}
+	encoded := response.Body.String()
+	for _, required := range []string{
+		deployment.ID,
+		deployment.EnvironmentID,
+		deployment.CIRunID,
+		`"status":"succeeded"`,
+		`"relation_type":"deploys"`,
+		`"activity_type":"deployment.recorded"`,
+	} {
+		if !strings.Contains(encoded, required) {
+			t.Fatalf("HTTP Deployment Nexus View missing %q: %s", required, encoded)
+		}
+	}
+	for _, forbidden := range []string{
+		"dpa_staging_contributor",
+		sourceDelivery.SourceID,
+		sourceDelivery.DeliveryID,
+		sourceDelivery.PayloadSHA256,
+		sourceInput.ExternalRunKey,
+		"authorization",
+		"projection_version",
+		"safe_facts",
+		"secret",
+	} {
+		if strings.Contains(strings.ToLower(encoded), strings.ToLower(forbidden)) {
+			t.Fatalf("HTTP Deployment Nexus View leaks forbidden value %q: %s", forbidden, encoded)
+		}
+	}
+
+	for _, test := range []struct {
+		workspaceID  string
+		deploymentID string
+	}{
+		{workspaceID: "wrk_other", deploymentID: deployment.ID},
+		{workspaceID: "wrk_main", deploymentID: "dpl_unknown"},
+	} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, deploymentHTTPRequest(test.workspaceID, test.deploymentID, sessionToken))
+		if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"not_found"`) {
+			t.Fatalf("HTTP unreadable Deployment = status %d, body %q", response.Code, response.Body.String())
+		}
+	}
+}
+
+func deploymentHTTPRequest(workspaceID string, deploymentID string, token string) *http.Request {
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"https://nexus.example.test/api/v1/workspaces/"+workspaceID+"/deployments/"+deploymentID+"/nexus-view",
+		nil,
+	)
+	request.AddCookie(&http.Cookie{Name: httptransport.SessionCookieName, Value: token})
+	return request
+}
+
+func deploymentHTTPToken(value byte) string {
+	return base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{value}, 32))
 }
 
 func seedDeploymentTargets(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {

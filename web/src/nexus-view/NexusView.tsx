@@ -316,14 +316,18 @@ function TimeMetaItem({
   value,
 }: {
   label: string;
-  dateTime: string;
+  dateTime: string | null;
   value: string;
 }) {
   return (
     <div>
       <dt>{label}</dt>
       <dd>
-        <time dateTime={dateTime}>{value}</time>
+        {dateTime === null ? (
+          <span>{value}</span>
+        ) : (
+          <time dateTime={dateTime}>{value}</time>
+        )}
       </dd>
     </div>
   );

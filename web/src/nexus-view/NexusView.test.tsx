@@ -59,8 +59,10 @@ describe("NexusView", () => {
     ).toBeDefined();
     expect(screen.getByRole("heading", { name: "Relations" })).toBeDefined();
     expect(screen.getByRole("heading", { name: "Timeline" })).toBeDefined();
-    expect(screen.getByText("thread:thr_01JZ7CONTEXT")).toBeDefined();
-    expect(screen.getByText("ticket:tic_01JZ7IMPLEMENT")).toBeDefined();
+    expect(screen.getByText("entity://thread/thr_01JZ7CONTEXT")).toBeDefined();
+    expect(
+      screen.getByText("entity://ticket/tkt_01JZ7IMPLEMENT"),
+    ).toBeDefined();
     expect(screen.getAllByText("受限对象")).toHaveLength(1);
     expect(screen.getAllByText("受限动态")).toHaveLength(1);
     expect(screen.queryByText(/restricted:|secret:/iu)).toBeNull();
@@ -76,8 +78,10 @@ describe("NexusView", () => {
     expect(screen.getByRole("heading", { name: "CI Run" })).toBeDefined();
     expect(screen.getByText("构建成功")).toBeDefined();
     expect(screen.getByText("Identity Service")).toBeDefined();
-    expect(screen.getByText("component:cmp_identity")).toBeDefined();
-    expect(screen.getByText("ci-run:cir_01K3RADISHNEXUS")).toBeDefined();
+    expect(screen.getByText("entity://component/cmp_identity")).toBeDefined();
+    expect(
+      screen.getByText("entity://ci-run/cir_01K3RADISHNEXUS"),
+    ).toBeDefined();
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
     expect(screen.getByText("受控自动化 · ci-run.recorded")).toBeDefined();
 
@@ -121,9 +125,13 @@ describe("NexusView", () => {
     expect(screen.getByRole("heading", { name: "Deployment" })).toBeDefined();
     expect(screen.getByText("部署成功")).toBeDefined();
     expect(screen.getByText("Staging")).toBeDefined();
-    expect(screen.getByText("environment:env_staging")).toBeDefined();
-    expect(screen.getAllByText("ci-run:cir_01K3RADISHNEXUS")).toHaveLength(2);
-    expect(screen.getByText("deployment:dpl_01K3RADISHNEXUS")).toBeDefined();
+    expect(screen.getByText("entity://environment/env_staging")).toBeDefined();
+    expect(
+      screen.getAllByText("entity://ci-run/cir_01K3RADISHNEXUS"),
+    ).toHaveLength(2);
+    expect(
+      screen.getByText("entity://deployment/dpl_01K3RADISHNEXUS"),
+    ).toBeDefined();
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
     expect(screen.getByText("萝卜 · deployment.recorded")).toBeDefined();
     expect(container.textContent).toContain(

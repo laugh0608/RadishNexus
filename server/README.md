@@ -16,9 +16,10 @@
 - 一次性本地管理员 bootstrap、Argon2id credential、账号锁定、opaque Session、CSRF digest 与当前 Workspace membership resolver；
 - 把已验证 Session 用户转换为 application `Principal` 的认证 adapter；
 - Secure `__Host-` Cookie、精确 HTTPS Origin / Host、可信代理、客户端 IP 登录限流、request ID 与版本化安全错误对象；
+- Session 作用域的 Deployment Nexus View 公共只读 handler 与显式安全 DTO；
 - PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验与 Activity 重建命令。
 
-公共 transport 已开放 `/api/v1/auth/sessions` 与 `/api/v1/auth/session` 的 login / resolve / logout 闭环；业务读写仍未暴露为 HTTP API。认证入口要求精确 HTTPS public origin、精确 Host、显式可信代理链、客户端 IP 限流、受控 JSON、Secure Cookie 和 CSRF，不接受可信用户 Header、insecure Cookie 或 credentialed CORS。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret 或原始 webhook body。
+公共 transport 已开放 `/api/v1/auth/sessions` 与 `/api/v1/auth/session` 的 login / resolve / logout 闭环，以及第一个 Deployment Nexus View 业务读取；其余业务读写仍未暴露为 HTTP API。认证入口要求精确 HTTPS public origin、精确 Host、显式可信代理链、客户端 IP 限流、受控 JSON、Secure Cookie 和 CSRF，不接受可信用户 Header、insecure Cookie 或 credentialed CORS。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret 或原始 webhook body。
 
 当前 Activity 白名单包含 `decision.proposed`、`decision.accepted`、`ticket.created`、`ci-run.recorded` 和 `deployment.recorded`。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，不依赖 Outbox 投递状态，也尚未建立常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
 
@@ -26,9 +27,9 @@ CI Run 的 M0 用户读取由所属 Component 控制：同一 Workspace 的活�
 
 staging Deployment 只记录外部已经完成的终态事实，不执行部署。目标必须是 active staging Environment，来源必须是 succeeded CI Run，调用者必须是 active Workspace 用户并持有该 Environment 的显式授权；Project 角色、owner Team 和 CI source 不隐式授予部署能力。Deployment、`deploys` 关系、`deployment.recorded` 和 Outbox 同事务提交。
 
-Deployment 的 M0 读取与写授权分离：同一 Workspace 的 active 成员只有同时能读取目标 Environment 与来源 CI Run 时才可读取；非成员、暂停成员和跨 Workspace 主体得到 not-found，Environment 归档不隐藏既有历史。Current 只返回终态、受控时间、Environment 与来源 CI Run；Relations 和 Timeline 复用当前权限，不返回 authorization ID、调用 source、Jenkins receipt、digest、Secret、原始 payload 或外部 URL。该 query 仍是内部 application contract；授权管理入口、production、审批、回滚和执行引擎均未建立。
+Deployment 的 M0 读取与写授权分离：同一 Workspace 的 active 成员只有同时能读取目标 Environment 与来源 CI Run 时才可读取；非成员、暂停成员和跨 Workspace 主体得到 not-found，Environment 归档不隐藏既有历史。Current 只返回终态、受控时间、Environment 与来源 CI Run；Relations 和 Timeline 复用当前权限，不返回 authorization ID、调用 source、Jenkins receipt、digest、Secret、原始 payload 或外部 URL。该 query 已通过独立公共 DTO 开放为第一个只读业务端点；授权管理入口、production、审批、回滚和执行引擎均未建立。
 
-本地认证以不可变小写 ASCII login、Argon2id verifier、5 次失败后 15 分钟账号锁定和 24 小时绝对有效的服务端 Session 为基线。数据库只保存 Session / CSRF token 的 SHA-256 digest；Session 不固定 Workspace，业务调用必须以当前 active membership 解析 `VerifiedUser`。登录 transport 另按客户端 IP 每分钟限制 5 次尝试、每进程最多并发 4 个密码校验并有界跟踪 4096 个客户端；多副本或公网部署仍必须在 reverse proxy / gateway 增加全局限流。OIDC、邀请、密码重置、MFA 与业务 HTTP 路由尚未建立。不可读资源由 application service 返回 `not found`，transport 不把它改写成 `forbidden`。
+本地认证以不可变小写 ASCII login、Argon2id verifier、5 次失败后 15 分钟账号锁定和 24 小时绝对有效的服务端 Session 为基线。数据库只保存 Session / CSRF token 的 SHA-256 digest；Session 不固定 Workspace，业务调用必须以当前 active membership 解析 `VerifiedUser`。登录 transport 另按客户端 IP 每分钟限制 5 次尝试、每进程最多并发 4 个密码校验并有界跟踪 4096 个客户端；多副本或公网部署仍必须在 reverse proxy / gateway 增加全局限流。OIDC、邀请、密码重置、MFA 与其它业务 HTTP 路由尚未建立。不可读资源由 application service 返回 `not found`，Deployment handler 还会把不可用 membership 收敛为同形 `not_found`。
 
 ## 本地检查
 
@@ -88,6 +89,14 @@ RADISHNEXUS_HTTP_ADDR=127.0.0.1:8080
 - `DELETE /api/v1/auth/session`：要求精确 `Origin`、CSRF cookie 与 `X-CSRF-Token`，成功撤销 Session、清除 Cookie 并返回 `204`。
 
 登录 JSON 最大 4096 bytes，不接受未知字段；所有认证响应均 `no-store`，错误使用带 server-generated `request_id` 的稳定 JSON envelope。进程内 IP 限流不替代 reverse proxy 的全局限流、TLS、Header 清洗和安全日志责任。完整边界见 [ADR-0013](../docs/adr/0013-public-authentication-transport.md)。
+
+## Deployment Nexus View 读取
+
+当前唯一公共业务路由为：
+
+- `GET /api/v1/workspaces/{workspace_id}/deployments/{deployment_id}/nexus-view`：用 Session cookie 在路径 Workspace 中重新验证 active membership，转换为 application `Principal` 后读取权限过滤的 Deployment Current、Relations 和 Timeline。
+
+成功响应使用显式 `data` envelope、结构化 `{type, id}` ref、nullable `started_at` 与安全可见实体，不直接序列化内部 `goldenpath.NexusView`。无 membership、跨 Workspace、未知或不可读对象保持不可发现；所有结果使用 `Cache-Control: private, no-store` 和 `Vary: Cookie`。完整公共 DTO、错误、缓存和 Web 消费边界见 [ADR-0014](../docs/adr/0014-session-scoped-deployment-nexus-view-transport.md)。
 
 ## 最小备份与恢复
 
