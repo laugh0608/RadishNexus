@@ -113,6 +113,6 @@ ORM 能减少简单 CRUD，但多态 EntityRef、deferred 领域约束、Outbox�
 go mod verify                                    PASS
 ```
 
-实施状态：2026-08-28，单一 `server/` module、EntityRef、首个事务与权限切片以及 `Candidate Quality` 服务检查已经落地。备份恢复和正式升级失败演练仍未完成；M0 实验继续保留，直到正式服务覆盖 Activity 重建和外部 delivery 幂等场景。
+实施状态：2026-08-30，单一 `server/` module、EntityRef、正式事务与权限切片、Activity 重建、外部 delivery 幂等、PostgreSQL 17 同 major 备份恢复和 `Candidate Quality` 服务检查已经落地。跨版本正式升级、forward repair 与生产恢复窗口仍未完成；M0 实验继续保留，直到 Golden Path 正式服务达到阶段晋级完成线。
 
 本 ADR 已同步工程标准、当前状态和 ADR 索引。若需要改用第三方 Web 框架、ORM 或 `database/sql`，应以新 ADR 替代本记录。

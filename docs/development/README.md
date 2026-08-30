@@ -40,9 +40,10 @@ pwsh ./scripts/check-repo.ps1
 ```bash
 ./scripts/check-server.sh
 ./scripts/check-server-postgres.sh
+./scripts/check-server-backup-restore.sh
 ```
 
-正式服务当前只开放存活与就绪检查；业务写入仍通过 application service 验证，认证和公共 HTTP 契约冻结前不建立临时业务 API。范围和 migration 入口见[正式 Go 服务](../../server/README.md)。
+前两个入口覆盖无数据库检查与单实例真实 PostgreSQL 业务边界；备份恢复入口使用两个独立 PostgreSQL 17 容器验证 custom archive、全新空目标恢复、migration 和 Activity 重建。正式服务当前只开放存活与就绪检查；业务写入仍通过 application service 验证，认证和公共 HTTP 契约冻结前不建立临时业务 API。范围、migration 和备份恢复入口见[正式 Go 服务](../../server/README.md)。
 
 正式 React Web App 的格式、Lint、组件状态测试、严格 TypeScript、production build 与锁依赖入口为：
 

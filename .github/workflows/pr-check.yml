@@ -134,6 +134,9 @@ jobs:
           DATABASE_URL: postgres://radishnexus_test:radishnexus-test-only@127.0.0.1:5432/radishnexus_server_test?sslmode=disable
         run: go test -tags=integration ./...
 
+      - name: Test PostgreSQL backup and restore
+        run: ./scripts/check-server-backup-restore.sh
+
   web-app:
     name: Web App
     runs-on: ubuntu-latest

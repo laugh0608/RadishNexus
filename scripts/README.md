@@ -88,3 +88,11 @@ npm ci
 ```
 
 两个 PostgreSQL 入口复用 `run-postgres-go-integration.sh`，只操作各自任务专属容器并在退出时自动清理；默认不会隐式拉取缺失镜像。
+
+使用两个独立的固定 PostgreSQL 17 容器，验证版本化 backup manifest、custom archive、全新空目标恢复、正式 migration、Activity 重建和关键失败路径：
+
+```bash
+./scripts/check-server-backup-restore.sh
+```
+
+该入口在源实例通过 application service 生成 Thread → Decision → Ticket → CI Run → staging Deployment fixture，比较恢复前后所有纳入表和 Activity 全量快照，并证明 migration manifest 漂移、dump 损坏和非空目标均 fail closed。脚本只删除自己创建的临时目录、网络和容器，也不会隐式拉取缺失镜像。

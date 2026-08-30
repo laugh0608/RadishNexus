@@ -42,5 +42,5 @@
 - 可安装插件或 Plugin SDK；
 - Flutter 移动端或 PC 客户端；
 - Jenkins Webhook 接入、签名验证、Secret 管理、插件 runtime，或 GitLab 等其他外部系统集成；
-- 部署执行引擎、production Deployment、升级、备份恢复和高可用能力；
+- 部署执行引擎、production Deployment、跨版本升级、生产级备份策略和高可用能力；
 - 已完成专业法律审查的许可证文本。

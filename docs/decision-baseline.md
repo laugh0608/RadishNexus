@@ -137,6 +137,15 @@
 - Project 角色、owner Team、CI source 和成功构建都不隐式授予部署能力。记录必须保留实际操作者、所用授权、来源 CI Run 与 Environment，并与 `deploys` 关系、领域事件和 Outbox 原子提交。
 - 当前 Deployment command 只记录调用方已经确认的外部终态事实，不执行部署、不读取 Secret，也不支持 production、审批、回滚或运行中状态。精确技术契约以 [ADR-0006](adr/0006-verified-jenkins-delivery-and-ci-run.md)、[ADR-0007](adr/0007-component-scoped-ci-run-read.md) 与 [ADR-0009](adr/0009-explicit-staging-deployment.md) 为准。
 
+### D-018 可验证 PostgreSQL 备份恢复
+
+- M0.5 整库备份使用版本化 manifest 与 PostgreSQL custom archive；它不是开放 `.nexus` 导出格式。
+- 源库必须与当前 migration artifact identity 完全一致，所有非系统 relation 必须由当前二进制完整分类；未知 relation、large object、非默认 extension、Secret、Token、原始 webhook payload 和本机授权材料不得因全库 dump 自动进入默认数据范围。
+- 当前只支持 PostgreSQL 17 同 major 往返。恢复只接受全新空目标，不提供 `--clean`、自动覆盖或隐式服务启动 migration。
+- 当前 PostgreSQL 工具桥接只支持显式 `sslmode=disable` 的本地或受控私有连接；TLS config 不能近似降级为较弱校验，远程 TLS 备份需要独立连接契约。
+- `activity_items` 数据不进入备份；恢复权威事实后显式执行 forward-only migration 校验，并从不可变领域事件原子重建 Activity。
+- manifest / dump 校验失败、migration 漂移、工具 major 不匹配和非空目标必须 fail closed。精确工件、恢复顺序与验证边界以 [ADR-0010](adr/0010-verified-postgresql-backup-and-restore.md) 为准。
+
 ## 尚未冻结
 
 以下事项仍需在实现前通过原型或 ADR 决定：
@@ -161,3 +170,4 @@
 - 2026-08-28：接受 ADR-0004，冻结 Thread → Decision → Ticket 的 Project 作用域、最小角色和私密关系投影边界。
 - 2026-08-28：接受 ADR-0005，冻结显式、可校验、事务化的 forward-only PostgreSQL migration 基线。
 - 2026-08-29：冻结完成态 CI Run 的 verified delivery、Component 作用域读取，以及显式 staging Deployment 与环境级授权边界。
+- 2026-08-30：接受 ADR-0010，冻结 PostgreSQL 17 同 major 的显式备份、空目标恢复、migration 校验与 Activity 重建边界。

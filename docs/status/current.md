@@ -1,12 +1,12 @@
 # RadishNexus 当前状态
 
-状态日期：2026-08-29
+状态日期：2026-08-30
 
 ## 当前阶段
 
 产品定义、架构基线、仓库治理基线与 M0 正式服务纵向切片。
 
-当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和 `ci-run.recorded` 投影已通过 PR #7 合入 `dev`，CI Run 的 Component 作用域授权与安全 Nexus View 读取已通过 PR #8 合入 `dev`。正式 Environment、环境级授权、显式终态 staging Deployment、`deploys` 关系和 `deployment.recorded` 投影已经在本地 `dev` 建立并通过真实 PostgreSQL 验证。正式 `web/` React + TypeScript 基线、Decision Nexus View 代表原型与 CI Run Nexus View 代表交互已经通过本地检查和浏览器复核；尚未建立插件 runtime 或客户端，也尚未开放业务 HTTP API。
+当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和 `ci-run.recorded` 投影已通过 PR #7 合入 `dev`，CI Run 的 Component 作用域授权与安全 Nexus View 读取已通过 PR #8 合入 `dev`。正式 Environment、环境级授权、显式终态 staging Deployment、`deploys` 关系和 `deployment.recorded` 投影已经在本地 `dev` 建立并通过真实 PostgreSQL 验证。PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验和 Activity 重建已经由 ADR-0010、显式 CLI 与双实例演练建立。正式 `web/` React + TypeScript 基线、Decision Nexus View 代表原型与 CI Run Nexus View 代表交互已经通过本地检查和浏览器复核；尚未建立插件 runtime 或客户端，也尚未开放业务 HTTP API。
 
 ## 当前结论
 
@@ -41,6 +41,7 @@
 - ADR-0006 已冻结 `ci-run` / `cir_`、Jenkins source 映射、完成态 CI Run、不可变 delivery receipt，以及 verified boundary 外的签名与 Secret 责任。
 - ADR-0007 已冻结活跃 Workspace 成员 → Component → CI Run 的 M0 读取链；owner Team、Project、EntityLink 和 Jenkins source 都不授予该读取权。
 - ADR-0009 已冻结 `deployment` / `dpl_`、正式 Environment、环境级显式部署授权、终态 staging Deployment 和 `deploys` 原子关系；Project 角色、owner Team、CI source 和成功构建都不授予或触发部署能力。
+- ADR-0010 已冻结本地受控连接上 PostgreSQL 17 同 major 的版本化 backup manifest、custom archive、全新空目标恢复、migration 校验和 Activity 重建；它不是 `.nexus` 开放导出格式，当前工具桥接不近似转译 TLS 配置。
 - 正式 application service 已完成 Thread → Proposed Decision → Accepted Decision → Ticket，并把 EntityLink、领域事件和 Outbox 与业务状态放在同一事务。
 - Jenkins application service 只接收已完成来源认证和字段映射的 `VerifiedJenkinsDelivery`；receipt、CI Run、`ci-run.recorded` 和 Outbox 在同一事务提交，不保存 Secret 或原始 webhook body。
 - 相同 Jenkins delivery 和 digest 只返回既有 CI Run；digest 改变或不同 delivery 映射到同一 external run 时 fail closed，事件冲突会连同 receipt 与 CI Run 一起回滚。
@@ -48,6 +49,10 @@
 - `RecordStagingDeployment` 只接受明确用户的 `web / api` invocation；目标必须是 active staging Environment，来源必须是 succeeded CI Run，调用者必须是 active Workspace 成员并持有该 Environment 的 active 显式授权。
 - Deployment、所使用的 authorization、操作者、来源和受控时间进入不可变权威记录；Deployment、asserted user `deploys` 关系、`deployment.recorded` 与 Outbox 同事务提交，任一步失败全部回滚。
 - CI Run application service 不调用 Deployment service；真实 PostgreSQL 用例已证明 CI Run 成功后、显式命令前不存在 Deployment 或 `deployment.*` 事件。当前 command 只记录外部已完成终态，不执行部署、不读取 Secret，也不支持 production、审批、回滚或运行中状态。
+- `nexus-backup` 只备份与当前 migration artifact identity 完全一致且 relation 已完整分类的数据库；未知 relation、migration 漂移和非 PostgreSQL 17 来源均 fail closed。
+- 备份工件固定包含 manifest 与 custom-format dump，保留稳定 ID、业务表、授权 provenance、EntityLink、领域事件、inbound receipt、必要 Outbox 与 migration history；`activity_items` 数据默认排除。
+- `nexus-restore` 只接受 checksum 完整的受信工件和全新空目标，不使用 `--clean` 或自动覆盖；恢复通过显式 TOC 先装载 EntityType 注册表，再以单事务恢复其余事实、运行正式 migration 并重建 Activity。
+- 双实例 PostgreSQL 17 演练已经证明恢复前后所有纳入表与 Activity 全量快照一致；manifest migration 漂移、dump 损坏和非空目标重复恢复均失败且不改变受保护目标。
 - contributor 不能确认 Decision；decider 必须能读取全部 evidence 后才能人工确认；Project admin 也不会自动穿透 restricted Thread。
 - Nexus View application query 已能为 Decision、Ticket 和 CI Run 返回 Current、Relations 和 Timeline，并在同一 repeatable-read 事务中按当前权限解析。
 - Deployment 尚未进入 Nexus View、Web、搜索、通知或 Attention Item；`deployment.recorded` 已具备可重建事实，但本切片不为展示制造临时读取入口。
@@ -65,7 +70,7 @@
 - 在横向补全各模块前，先完成 Golden Path 纵向原型。
 - 仓库采用 `master` 稳定分支和 `dev` 日常开发/集成分支；单维护者串行任务默认直接在 `dev` 推进，主题分支只用于明确要求、外部贡献、并行写入或风险隔离。
 - `master` 允许 merge commit 和 rebase merge，禁用 squash merge，并要求变化回流 `dev`。
-- `Candidate Quality` 作为稳定聚合质量门；仓库定义已加入 M0 实验、正式 Go 服务和 Web App 的单元/状态测试、静态检查、构建与真实 PostgreSQL 集成测试，Web 基线与 Jenkins CI Run 核心 PR 均已在 GitHub 实际通过。
+- `Candidate Quality` 作为稳定聚合质量门；仓库定义已加入 M0 实验、正式 Go 服务、双实例备份恢复和 Web App 的单元/状态测试、静态检查、构建与真实 PostgreSQL 集成测试。Web 基线与 Jenkins CI Run 核心 PR 已在 GitHub 实际通过，新增备份恢复步骤仍待后续 PR 远端复验。
 - GitHub 远端默认分支为 `master`，`master` Ruleset 已启用并要求 PR、严格状态检查和已解决对话。
 - GitHub Private vulnerability reporting 已启用；未修复漏洞优先通过仓库 Security Advisory 私下报告，入口和备用联系方式以 [SECURITY.md](../../SECURITY.md) 为准。
 
@@ -90,25 +95,30 @@
 - [ADR-0007：Component 作用域下的 CI Run 读取](../adr/0007-component-scoped-ci-run-read.md)
 - [ADR-0008：`dev` 优先的单维护者开发拓扑](../adr/0008-dev-first-development-governance.md)
 - [ADR-0009：显式 staging Deployment 与环境级授权](../adr/0009-explicit-staging-deployment.md)
+- [ADR-0010：可验证 PostgreSQL 备份与全新实例恢复](../adr/0010-verified-postgresql-backup-and-restore.md)
 - [开发指南](../development/README.md)
 - [M0 核心契约实验](../../experiments/m0-core-contracts/README.md)
 - [正式 Go 服务](../../server/README.md)
 
-## 明日事项（2026-08-30）
+## 今日进展（2026-08-30）
 
-明日主目标是完成最小备份恢复纵向切片的契约冻结、实现和全新 PostgreSQL 实例恢复演练。显式 staging Deployment 的最小领域、Environment 归属、环境级授权、终态状态、CI Run 关系、领域事件与事务边界已经由 ADR-0009、migration 004、application service 和真实 PostgreSQL 测试完成；仓库采用 ADR-0008 的 `dev` 优先开发拓扑，继续直接在 `dev` 推进：
+今日已经完成最小备份恢复纵向切片：
 
-1. 先冻结备份范围、恢复前提、manifest、schema migration history 与 Secret 排除边界；备份必须包含稳定 ID、业务权威表、授权 provenance、EntityLink、不可变领域事件、receipt 和必要 Outbox 状态，但默认不包含 Secret、Token、外部实例凭据或本机授权材料；
-2. 以一个全新 PostgreSQL 实例做真实恢复演练，不在原库上用复制 schema 或测试事务冒充恢复；恢复后显式运行 forward-only migration，并拒绝 migration checksum 漂移或目标库已有冲突状态；
-3. 验证 Thread → Decision → Ticket → CI Run → staging Deployment 的稳定引用、关系来源、actor、authorization、delivery receipt 和事件 correlation 保持一致；清空派生 Activity 后必须能从领域事件重建等价结果；
-4. 备份和恢复命令必须显式执行、失败即停、保留上下文，不自动覆盖已有实例，不把“导出成功”冒充“可恢复”；具体 PostgreSQL 支持版本和 forward repair 仍需由本切片证据收敛；
-5. 最小备份恢复稳定后，再将成组能力通过 `dev -> master` PR 晋级并确认远端 Candidate Quality；公共 transport、Deployment 读取/UI、文档协同方案和授权模板仍分别评估。
+1. ADR-0010 冻结 PostgreSQL 17 同 major、format version 1 manifest、custom archive、完整 relation 分类、Secret 排除、空目标与单事务恢复边界；
+2. `nexus-backup` 与 `nexus-restore` 已建立显式命令，备份输出使用同级临时目录和完成后原子改名，恢复拒绝 `--clean`、自动覆盖和 migration 漂移；
+3. 恢复命令检查 archive TOC 并显式提前装载 `entity_types`，解决 `valid_entity_id` 函数无法被 `pg_dump` 自动推断的数据依赖，同时保持原数据库 check constraint 不变；
+4. 双独立 PostgreSQL 17 容器已经完成 source fixture → backup → fresh target restore → formal migration → Activity rebuild 的真实往返；所有纳入表与 Activity 全量快照一致；
+5. manifest migration checksum 漂移、dump 损坏和非空目标重复恢复均已有失败验证；前两种 preflight 失败后目标保持空，重复恢复不会改变既有目标数据。
 
-下一步完成线：使用受控 fixture 数据生成不含 Secrets 的备份，在全新 PostgreSQL 目标上恢复并通过正式 migration/仓库检查；恢复前后稳定 ID、业务表、授权与 receipt、EntityLink、领域事件和关键计数一致，Activity 从不可变事件重建后等价，失败或冲突目标不会留下伪成功状态。
+## 下一步
 
-下一步停止线：不自动覆盖或清空现有数据库，不把数据库 dump 当作已经验证的恢复，不把 Secret、Token、Jenkins 凭据或原始 payload 纳入默认备份，不补 Jenkins HTTP route 或签名协议，不启动 Flutter、CRDT、通用 RBAC、Repository 占位、插件市场、多 provider、production Deployment、审批或回滚，也不为 Deployment 展示制造临时公共 API。
+最小备份恢复已经达到本地完成线。下一步先完成人工差异复核；获得单独授权后，再按 ADR-0008 在 `dev` 精确提交和 push，并创建阶段性 `dev -> master` PR，确认远端 `Candidate Quality` 后使用 merge commit 晋级，随后把最新 `master` 回流 `dev`。
 
-后续顺位保持为最小备份恢复 → 阶段性 `dev -> master` 晋级，再独立评估公共 transport、Deployment 读取/UI、文档协同方案和授权模板。
+阶段晋级前不并行启动新的产品切片。晋级完成后，再根据 Golden Path 剩余缺口和 M1 入口独立评估公共 transport、Deployment 读取/UI、文档协同技术方案与免费书面授权模板，不默认同时开展。
+
+当前完成线：受控 fixture 生成不含 Activity 派生数据或 Secrets 的版本化备份，在第二个全新 PostgreSQL 17 实例恢复并通过正式 migration；恢复前后稳定 ID、业务表、授权与 receipt、EntityLink、领域事件、Outbox 和 Activity 重建结果一致，失败或冲突目标不会被报告为成功。
+
+当前停止线：不自动覆盖或清空现有数据库，不把一次 dump 当作已经验证的恢复，不把 Secret、Token、Jenkins 凭据或原始 payload 纳入默认备份，不承诺跨 PostgreSQL major、加密、远程保留或 PITR，不补 Jenkins HTTP route 或签名协议，不启动 Flutter、CRDT、通用 RBAC、Repository 占位、插件市场、多 provider、production Deployment、审批或回滚，也不为 Deployment 展示制造临时公共 API。
 
 ## 开放问题
 

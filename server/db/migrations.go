@@ -33,6 +33,33 @@ type migration struct {
 	upSQL    string
 }
 
+// MigrationRecord is the stable, serializable identity of one embedded
+// migration artifact. The SQL body is deliberately not exposed.
+type MigrationRecord struct {
+	Sequence int    `json:"sequence"`
+	Name     string `json:"name"`
+	Checksum string `json:"checksum"`
+}
+
+// CurrentMigrationHistory returns the exact migration artifact identities
+// embedded in this binary. Backup manifests use this to reject history drift
+// without copying migration SQL into the artifact.
+func CurrentMigrationHistory() ([]MigrationRecord, error) {
+	migrations, err := loadMigrations(migrationFiles)
+	if err != nil {
+		return nil, err
+	}
+	records := make([]MigrationRecord, len(migrations))
+	for index, item := range migrations {
+		records[index] = MigrationRecord{
+			Sequence: item.sequence,
+			Name:     item.name,
+			Checksum: item.checksum,
+		}
+	}
+	return records, nil
+}
+
 // Migrate applies every pending migration in its own transaction. It refuses
 // changed history and concurrent runners. Rollback is deliberately not an
 // automated production capability: restore and forward repair are deployment

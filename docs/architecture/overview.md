@@ -220,6 +220,8 @@ M0 契约把不可变领域事件事实与可变投递状态作逻辑分离，�
 - 升级前检查和失败停止线；
 - 不依赖 RadishNexus 官方云才能完成的核心运行路径。
 
+M0.5 已建立第一条可验证恢复路径：显式命令生成版本化 manifest 与 PostgreSQL custom archive，只在本地或受控私有连接的全新空 PostgreSQL 17 目标上以单事务恢复，随后执行正式 forward-only migration 校验并从不可变领域事件重建 Activity。当前工件是同 major 整库运维备份，不是 `.nexus` 开放导出，也不包含自动覆盖、TLS 工具桥接、跨大版本承诺、远程存储、加密或 Secret 备份。精确边界见 [ADR-0010](../adr/0010-verified-postgresql-backup-and-restore.md)。
+
 ### 可移植上下文包
 
 除整库备份外，规划可移植 `.nexus` 导出包，用于项目迁移、归档和离线检查。建议包含：

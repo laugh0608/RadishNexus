@@ -36,3 +36,18 @@ func TestLoadMigrationsUsesOnlyForwardSQLAndHashesArtifact(t *testing.T) {
 		t.Fatalf("checksum length = %d", len(loaded[0].checksum))
 	}
 }
+
+func TestCurrentMigrationHistoryReturnsEmbeddedArtifactIdentities(t *testing.T) {
+	history, err := CurrentMigrationHistory()
+	if err != nil {
+		t.Fatalf("CurrentMigrationHistory() error = %v", err)
+	}
+	if len(history) != 4 {
+		t.Fatalf("CurrentMigrationHistory() length = %d, want 4", len(history))
+	}
+	for index, record := range history {
+		if record.Sequence != index+1 || record.Name == "" || len(record.Checksum) != 64 {
+			t.Fatalf("CurrentMigrationHistory()[%d] = %#v", index, record)
+		}
+	}
+}
