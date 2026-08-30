@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
@@ -19,6 +20,7 @@ const (
 
 type BrowserSessionPolicy struct {
 	publicOrigin string
+	publicHost   string
 }
 
 func NewBrowserSessionPolicy(publicOrigin string) (BrowserSessionPolicy, error) {
@@ -28,11 +30,18 @@ func NewBrowserSessionPolicy(publicOrigin string) (BrowserSessionPolicy, error) 
 	}
 	if parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil ||
 		parsed.Opaque != "" || parsed.Path != "" || parsed.RawQuery != "" || parsed.ForceQuery ||
-		parsed.Fragment != "" ||
+		parsed.Fragment != "" || parsed.Port() == "443" || parsed.Host != strings.ToLower(parsed.Host) ||
 		parsed.String() != publicOrigin {
 		return BrowserSessionPolicy{}, fmt.Errorf("public origin must be an exact https origin")
 	}
-	return BrowserSessionPolicy{publicOrigin: publicOrigin}, nil
+	return BrowserSessionPolicy{publicOrigin: publicOrigin, publicHost: parsed.Host}, nil
+}
+
+func (policy BrowserSessionPolicy) ValidateHost(request *http.Request) error {
+	if request.Host != policy.publicHost {
+		return ErrInvalidPublicOrigin
+	}
+	return nil
 }
 
 func (policy BrowserSessionPolicy) ValidateOrigin(request *http.Request) error {

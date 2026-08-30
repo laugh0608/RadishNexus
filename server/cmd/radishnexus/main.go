@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,6 +12,17 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
+	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/httptransport"
+)
+
+const (
+	loginAttemptLimit             = 5
+	loginWindowDuration           = time.Minute
+	loginTrackedClientLimit       = 4096
+	loginPasswordConcurrencyLimit = 4
 )
 
 func main() {
@@ -29,6 +41,14 @@ func run() error {
 	if address == "" {
 		address = "127.0.0.1:8080"
 	}
+	sessionPolicy, err := httptransport.NewBrowserSessionPolicy(os.Getenv("RADISHNEXUS_PUBLIC_ORIGIN"))
+	if err != nil {
+		return fmt.Errorf("configure public browser origin: %w", err)
+	}
+	proxyPolicy, err := httptransport.NewTrustedProxyPolicy(os.Getenv("RADISHNEXUS_TRUSTED_PROXY_CIDRS"))
+	if err != nil {
+		return fmt.Errorf("configure trusted proxies: %w", err)
+	}
 
 	poolConfig, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
@@ -40,10 +60,27 @@ func run() error {
 		return err
 	}
 	defer pool.Close()
+	authService := authn.NewService(
+		authpostgres.New(pool),
+		authn.NewArgon2idHasher(),
+		authn.CryptoSecretGenerator{},
+		authn.SystemClock{},
+	)
+	authHandler := httptransport.NewAuthHandler(
+		authService,
+		sessionPolicy,
+		proxyPolicy,
+		httptransport.NewLoginGuard(
+			loginAttemptLimit,
+			loginWindowDuration,
+			loginTrackedClientLimit,
+			loginPasswordConcurrencyLimit,
+		),
+	)
 
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(pool),
+		Handler:           newHandler(pool, authHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -78,7 +115,7 @@ type databasePinger interface {
 	Ping(context.Context) error
 }
 
-func newHandler(database databasePinger) http.Handler {
+func newHandler(database databasePinger, authHandler http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", func(response http.ResponseWriter, _ *http.Request) {
 		response.WriteHeader(http.StatusNoContent)
@@ -92,6 +129,8 @@ func newHandler(database databasePinger) http.Handler {
 		}
 		response.WriteHeader(http.StatusNoContent)
 	})
+	mux.Handle("/api/v1/auth", authHandler)
+	mux.Handle("/api/v1/auth/", authHandler)
 
-	return mux
+	return httptransport.WithRequestID(mux)
 }

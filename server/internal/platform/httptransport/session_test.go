@@ -16,6 +16,8 @@ func TestBrowserSessionPolicyRequiresExactHTTPSOrigin(t *testing.T) {
 	t.Parallel()
 	for _, invalid := range []string{
 		"http://nexus.example.test",
+		"https://NEXUS.example.test",
+		"https://nexus.example.test:443",
 		"https://nexus.example.test/",
 		"https://nexus.example.test/path",
 		"https://user@nexus.example.test",
@@ -30,12 +32,19 @@ func TestBrowserSessionPolicyRequiresExactHTTPSOrigin(t *testing.T) {
 	}
 	request := httptest.NewRequest(http.MethodPost, "https://nexus.example.test/api/v1/auth/sessions", nil)
 	request.Header.Set("Origin", "https://nexus.example.test")
+	if err := policy.ValidateHost(request); err != nil {
+		t.Fatalf("ValidateHost() error = %v", err)
+	}
 	if err := policy.ValidateOrigin(request); err != nil {
 		t.Fatalf("ValidateOrigin() error = %v", err)
 	}
 	request.Header.Set("Origin", "https://evil.example.test")
 	if err := policy.ValidateOrigin(request); !errors.Is(err, authn.ErrInvalidCSRFToken) {
 		t.Fatalf("ValidateOrigin() mismatch error = %v", err)
+	}
+	request.Host = "alternate.example.test"
+	if err := policy.ValidateHost(request); !errors.Is(err, ErrInvalidPublicOrigin) {
+		t.Fatalf("ValidateHost() mismatch error = %v", err)
 	}
 }
 

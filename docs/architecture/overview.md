@@ -109,7 +109,7 @@ Flutter 与 React 不强求共享 UI 代码。
 - Plugin Manager、Secrets 和配置；
 - 数据迁移、健康检查和系统诊断。
 
-M1 Identity 首段使用一次性显式 bootstrap 建立本地账号、首个 Workspace owner 和服务端 opaque Session；OIDC 延后并复用同一 user、membership 与 Session 边界。Session 不携带固定 Workspace 授权，路由选择稳定 Workspace ID 后必须重新验证 active membership。浏览器 Cookie、CSRF、request ID、版本化错误对象和恢复时 Session 失效语义见 [ADR-0012](../adr/0012-local-identity-and-session-foundation.md)。
+M1 Identity 首段使用一次性显式 bootstrap 建立本地账号、首个 Workspace owner 和服务端 opaque Session；OIDC 延后并复用同一 user、membership 与 Session 边界。Session 不携带固定 Workspace 授权，路由选择稳定 Workspace ID 后必须重新验证 active membership。浏览器 Cookie、CSRF、request ID、版本化错误对象和恢复时 Session 失效语义见 [ADR-0012](../adr/0012-local-identity-and-session-foundation.md)；精确 public origin、可信代理、客户端 IP、登录限流和三个公共认证路由见 [ADR-0013](../adr/0013-public-authentication-transport.md)。
 
 ### 内建业务模块
 

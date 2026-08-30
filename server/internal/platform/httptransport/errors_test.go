@@ -32,6 +32,16 @@ func TestMapApplicationError(t *testing.T) {
 			want: ErrorMapping{StatusCode: http.StatusUnauthorized, Code: "invalid_credentials", Message: "invalid credentials"},
 		},
 		{
+			name: "rate limited",
+			err:  ErrLoginRateLimited,
+			want: ErrorMapping{StatusCode: http.StatusTooManyRequests, Code: "rate_limited", Message: "too many login attempts"},
+		},
+		{
+			name: "method not allowed",
+			err:  ErrMethodNotAllowed,
+			want: ErrorMapping{StatusCode: http.StatusMethodNotAllowed, Code: "method_not_allowed", Message: "method not allowed"},
+		},
+		{
 			name: "csrf",
 			err:  authn.ErrInvalidCSRFToken,
 			want: ErrorMapping{StatusCode: http.StatusForbidden, Code: "csrf_failed", Message: "csrf validation failed"},

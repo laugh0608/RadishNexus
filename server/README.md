@@ -15,10 +15,10 @@
 - 为 Decision、Ticket、CI Run 和 Deployment 返回 Current、Relations 和 Timeline 的权限过滤 Nexus View query；
 - 一次性本地管理员 bootstrap、Argon2id credential、账号锁定、opaque Session、CSRF digest 与当前 Workspace membership resolver；
 - 把已验证 Session 用户转换为 application `Principal` 的认证 adapter；
-- Secure `__Host-` Cookie、精确 HTTPS Origin、request ID 与版本化安全错误对象的 transport 合同；
+- Secure `__Host-` Cookie、精确 HTTPS Origin / Host、可信代理、客户端 IP 登录限流、request ID 与版本化安全错误对象；
 - PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验与 Activity 重建命令。
 
-业务写入和登录尚未暴露为 HTTP API。公共 transport 已冻结 `/api/v1`、request ID、错误对象、Cookie 与 CSRF 合同，但在 public origin、代理来源与 IP 限流形成部署证据前，调用方仍直接通过 application service 验证身份、领域与权限边界。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret 或原始 webhook body。
+公共 transport 已开放 `/api/v1/auth/sessions` 与 `/api/v1/auth/session` 的 login / resolve / logout 闭环；业务读写仍未暴露为 HTTP API。认证入口要求精确 HTTPS public origin、精确 Host、显式可信代理链、客户端 IP 限流、受控 JSON、Secure Cookie 和 CSRF，不接受可信用户 Header、insecure Cookie 或 credentialed CORS。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret 或原始 webhook body。
 
 当前 Activity 白名单包含 `decision.proposed`、`decision.accepted`、`ticket.created`、`ci-run.recorded` 和 `deployment.recorded`。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，不依赖 Outbox 投递状态，也尚未建立常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
 
@@ -28,7 +28,7 @@ staging Deployment 只记录外部已经完成的终态事实，不执行部署�
 
 Deployment 的 M0 读取与写授权分离：同一 Workspace 的 active 成员只有同时能读取目标 Environment 与来源 CI Run 时才可读取；非成员、暂停成员和跨 Workspace 主体得到 not-found，Environment 归档不隐藏既有历史。Current 只返回终态、受控时间、Environment 与来源 CI Run；Relations 和 Timeline 复用当前权限，不返回 authorization ID、调用 source、Jenkins receipt、digest、Secret、原始 payload 或外部 URL。该 query 仍是内部 application contract；授权管理入口、production、审批、回滚和执行引擎均未建立。
 
-本地认证以不可变小写 ASCII login、Argon2id verifier、5 次失败后 15 分钟账号锁定和 24 小时绝对有效的服务端 Session 为基线。数据库只保存 Session / CSRF token 的 SHA-256 digest；Session 不固定 Workspace，业务调用必须以当前 active membership 解析 `VerifiedUser`。OIDC、邀请、密码重置、MFA 与公共登录路由尚未建立。不可读资源由 application service 返回 `not found`，transport 不把它改写成 `forbidden`。
+本地认证以不可变小写 ASCII login、Argon2id verifier、5 次失败后 15 分钟账号锁定和 24 小时绝对有效的服务端 Session 为基线。数据库只保存 Session / CSRF token 的 SHA-256 digest；Session 不固定 Workspace，业务调用必须以当前 active membership 解析 `VerifiedUser`。登录 transport 另按客户端 IP 每分钟限制 5 次尝试、每进程最多并发 4 个密码校验并有界跟踪 4096 个客户端；多副本或公网部署仍必须在 reverse proxy / gateway 增加全局限流。OIDC、邀请、密码重置、MFA 与业务 HTTP 路由尚未建立。不可读资源由 application service 返回 `not found`，transport 不把它改写成 `forbidden`。
 
 ## 本地检查
 
@@ -67,6 +67,27 @@ unset bootstrap_password
 密码必须为 15–128 个 Unicode 字符且最多 1024 bytes。命令通过 PostgreSQL transaction advisory lock 保证只有一个调用成功，创建 local account、user、Workspace 和 `owner` membership；已经存在任何本地账号时失败，不提供覆盖或默认密码。成功输出只包含稳定 user / Workspace ID 与规范化 login。
 
 密码 verifier 属于受保护的权威恢复数据，会进入 PostgreSQL 运维备份；`user_sessions` 只备份 schema、不备份数据，恢复后所有旧 Session 与 CSRF token 失效。该边界不授权 `.nexus` 可移植导出携带 credential。
+
+## 公共认证入口
+
+完成 migration 和一次性 bootstrap 后，server 还要求以下部署配置：
+
+```text
+DATABASE_URL=...
+RADISHNEXUS_PUBLIC_ORIGIN=https://nexus.example.com
+RADISHNEXUS_TRUSTED_PROXY_CIDRS=127.0.0.1/32
+RADISHNEXUS_HTTP_ADDR=127.0.0.1:8080
+```
+
+`RADISHNEXUS_PUBLIC_ORIGIN` 必须是浏览器实际访问的精确 HTTPS origin；`RADISHNEXUS_TRUSTED_PROXY_CIDRS` 只列出直接连接 server 的 TLS reverse proxy 地址，不能为了方便信任用户网络。proxy 必须覆盖公网传入的 `X-Forwarded-Proto` / `X-Forwarded-For`、保留原始 `Host`，并向 server 提供单值 `X-Forwarded-Proto: https` 和完整客户端链。server 不提供 HTTP Cookie fallback。
+
+当前公共认证路由为：
+
+- `POST /api/v1/auth/sessions`：JSON `login_name` / `password`，成功返回 `201`、Session context 和两个 Secure Cookie；
+- `GET /api/v1/auth/session`：用 Session cookie 返回当前 user、active Workspace membership 与绝对过期时间；
+- `DELETE /api/v1/auth/session`：要求精确 `Origin`、CSRF cookie 与 `X-CSRF-Token`，成功撤销 Session、清除 Cookie 并返回 `204`。
+
+登录 JSON 最大 4096 bytes，不接受未知字段；所有认证响应均 `no-store`，错误使用带 server-generated `request_id` 的稳定 JSON envelope。进程内 IP 限流不替代 reverse proxy 的全局限流、TLS、Header 清洗和安全日志责任。完整边界见 [ADR-0013](../docs/adr/0013-public-authentication-transport.md)。
 
 ## 最小备份与恢复
 

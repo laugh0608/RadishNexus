@@ -13,6 +13,16 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 )
 
+var (
+	ErrSecureTransportRequired = errors.New("secure transport required")
+	ErrInvalidPublicOrigin     = errors.New("invalid public origin")
+	ErrInvalidProxyChain       = errors.New("invalid trusted proxy chain")
+	ErrLoginRateLimited        = errors.New("login rate limited")
+	ErrPayloadTooLarge         = errors.New("request payload too large")
+	ErrUnsupportedMediaType    = errors.New("unsupported media type")
+	ErrMethodNotAllowed        = errors.New("method not allowed")
+)
+
 type ErrorMapping struct {
 	StatusCode int
 	Code       string
@@ -34,6 +44,48 @@ type ErrorResponse struct {
 // separately without exposing their cause to the caller.
 func MapApplicationError(err error) ErrorMapping {
 	switch {
+	case errors.Is(err, ErrSecureTransportRequired):
+		return ErrorMapping{
+			StatusCode: http.StatusBadRequest,
+			Code:       "secure_transport_required",
+			Message:    "secure transport required",
+		}
+	case errors.Is(err, ErrInvalidPublicOrigin):
+		return ErrorMapping{
+			StatusCode: http.StatusBadRequest,
+			Code:       "invalid_origin",
+			Message:    "invalid public origin",
+		}
+	case errors.Is(err, ErrInvalidProxyChain):
+		return ErrorMapping{
+			StatusCode: http.StatusBadRequest,
+			Code:       "invalid_proxy_chain",
+			Message:    "invalid proxy chain",
+		}
+	case errors.Is(err, ErrLoginRateLimited):
+		return ErrorMapping{
+			StatusCode: http.StatusTooManyRequests,
+			Code:       "rate_limited",
+			Message:    "too many login attempts",
+		}
+	case errors.Is(err, ErrPayloadTooLarge):
+		return ErrorMapping{
+			StatusCode: http.StatusRequestEntityTooLarge,
+			Code:       "payload_too_large",
+			Message:    "request payload too large",
+		}
+	case errors.Is(err, ErrUnsupportedMediaType):
+		return ErrorMapping{
+			StatusCode: http.StatusUnsupportedMediaType,
+			Code:       "unsupported_media_type",
+			Message:    "application/json is required",
+		}
+	case errors.Is(err, ErrMethodNotAllowed):
+		return ErrorMapping{
+			StatusCode: http.StatusMethodNotAllowed,
+			Code:       "method_not_allowed",
+			Message:    "method not allowed",
+		}
 	case errors.Is(err, authn.ErrInvalidCredentials):
 		return ErrorMapping{
 			StatusCode: http.StatusUnauthorized,

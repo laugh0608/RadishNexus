@@ -7,7 +7,10 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -19,6 +22,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/httptransport"
 )
 
 type integrationSecrets struct {
@@ -229,6 +233,73 @@ func TestLocalIdentityBootstrapLoginAndSessionLifecycle(t *testing.T) {
 	`)
 	if err != nil || commandTag.RowsAffected() != 1 {
 		t.Fatalf("delete revoked user session = %d, %v", commandTag.RowsAffected(), err)
+	}
+
+	httpService := authn.NewService(
+		store,
+		authn.NewArgon2idHasher(),
+		&integrationSecrets{
+			ids:    []string{"ses_http_integration"},
+			tokens: []string{integrationToken(3), integrationToken(4)},
+		},
+		integrationClock{now: unlockedAt},
+	)
+	sessionPolicy, err := httptransport.NewBrowserSessionPolicy("https://nexus.example.test")
+	if err != nil {
+		t.Fatalf("NewBrowserSessionPolicy() error = %v", err)
+	}
+	proxyPolicy, err := httptransport.NewTrustedProxyPolicy("10.0.0.0/8")
+	if err != nil {
+		t.Fatalf("NewTrustedProxyPolicy() error = %v", err)
+	}
+	httpHandler := httptransport.WithRequestID(httptransport.NewAuthHandler(
+		httpService,
+		sessionPolicy,
+		proxyPolicy,
+		httptransport.NewLoginGuard(5, time.Minute, 8, 2),
+	))
+
+	loginRequest := httptest.NewRequest(
+		http.MethodPost,
+		"https://nexus.example.test/api/v1/auth/sessions",
+		strings.NewReader(`{"login_name":"admin","password":"correct horse battery staple"}`),
+	)
+	loginRequest.Header.Set("Content-Type", "application/json")
+	loginRequest.Header.Set("Origin", "https://nexus.example.test")
+	loginResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(loginResponse, loginRequest)
+	if loginResponse.Code != http.StatusCreated {
+		t.Fatalf("HTTP login = status %d, body %q", loginResponse.Code, loginResponse.Body.String())
+	}
+	cookies := loginResponse.Result().Cookies()
+	if len(cookies) != 2 || !cookies[0].Secure || !cookies[0].HttpOnly || !cookies[1].Secure || cookies[1].HttpOnly {
+		t.Fatalf("HTTP login cookies = %#v", cookies)
+	}
+	if strings.Contains(loginResponse.Body.String(), integrationToken(3)) ||
+		strings.Contains(loginResponse.Body.String(), integrationToken(4)) {
+		t.Fatalf("HTTP login body contains a session secret: %q", loginResponse.Body.String())
+	}
+
+	resolveRequest := httptest.NewRequest(http.MethodGet, "https://nexus.example.test/api/v1/auth/session", nil)
+	resolveRequest.AddCookie(cookies[0])
+	resolveResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(resolveResponse, resolveRequest)
+	if resolveResponse.Code != http.StatusOK || !strings.Contains(resolveResponse.Body.String(), bootstrap.UserID) {
+		t.Fatalf("HTTP session = status %d, body %q", resolveResponse.Code, resolveResponse.Body.String())
+	}
+
+	logoutRequest := httptest.NewRequest(http.MethodDelete, "https://nexus.example.test/api/v1/auth/session", nil)
+	logoutRequest.Header.Set("Origin", "https://nexus.example.test")
+	logoutRequest.Header.Set(httptransport.CSRFHeaderName, integrationToken(4))
+	logoutRequest.AddCookie(cookies[0])
+	logoutRequest.AddCookie(cookies[1])
+	logoutResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(logoutResponse, logoutRequest)
+	if logoutResponse.Code != http.StatusNoContent || len(logoutResponse.Result().Cookies()) != 2 {
+		t.Fatalf("HTTP logout = status %d, body %q, cookies %#v", logoutResponse.Code, logoutResponse.Body.String(), logoutResponse.Result().Cookies())
+	}
+	if _, err := httpService.ResolveSession(ctx, integrationToken(3)); !errors.Is(err, authn.ErrInvalidSession) {
+		t.Fatalf("HTTP revoked session error = %v", err)
 	}
 }
 

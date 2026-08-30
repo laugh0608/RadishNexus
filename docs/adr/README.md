@@ -18,6 +18,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0010](0010-verified-postgresql-backup-and-restore.md) | 已接受 | 可验证 PostgreSQL 备份与全新实例恢复 |
 | [ADR-0011](0011-workspace-scoped-deployment-read.md) | 已接受 | Workspace 作用域下的 Deployment 安全读取 |
 | [ADR-0012](0012-local-identity-and-session-foundation.md) | 已接受 | 本地身份与服务端 Session 基线 |
+| [ADR-0013](0013-public-authentication-transport.md) | 已接受 | 公共认证 Transport 与可信代理边界 |
 
 ## 新建规则
 

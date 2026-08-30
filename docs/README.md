@@ -35,10 +35,10 @@
 
 ## 当前边界
 
-当前已经建立仓库治理、正式 Go 服务基础、Thread → Decision → Ticket application service、已验证 Jenkins delivery → CI Run、显式 staging Deployment、可重建 Activity、Decision / Ticket / CI Run / Deployment Nexus View application query，以及可运行的 React Web 代表原型，但不代表以下产品能力已经实现：
+当前已经建立仓库治理、正式 Go 服务基础、Thread → Decision → Ticket application service、已验证 Jenkins delivery → CI Run、显式 staging Deployment、可重建 Activity、Decision / Ticket / CI Run / Deployment Nexus View application query、本地账号与公共 Session transport，以及可运行的 React Web 代表原型，但不代表以下产品能力已经实现：
 
 - 可供真实团队日常使用的完整 Web App、Web Shell 或导航；
-- 对外业务 HTTP API、完整认证或真实工作区数据联调；
+- 对外业务 HTTP API、OIDC / MFA 等完整身份能力或真实工作区数据联调；
 - 可安装插件或 Plugin SDK；
 - Flutter 移动端或 PC 客户端；
 - Jenkins Webhook 接入、签名验证、Secret 管理、插件 runtime，或 GitLab 等其他外部系统集成；
