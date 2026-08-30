@@ -1,6 +1,6 @@
 # 参与 RadishNexus
 
-感谢你参与 RadishNexus。项目当前处于产品定义、仓库治理和 Golden Path 预研阶段，贡献的首要目标是验证“讨论、决策、执行、构建和部署上下文不断链”，而不是快速堆叠聊天、工单或插件数量。
+感谢你参与 RadishNexus。项目当前处于 M0 正式服务与 Golden Path 纵向切片阶段，贡献的首要目标是验证“讨论、决策、执行、构建和部署上下文不断链”，而不是快速堆叠聊天、工单或插件数量。
 
 ## 开始之前
 
@@ -30,8 +30,10 @@
 
 ## 分支、提交与 Pull Request
 
-- `master` 是受保护稳定主线，`dev` 是日常集成分支。
-- 普通贡献从 `feature/*`、`fix/*`、`docs/*`、`proposal/*`、`experiment/*`、`refactor/*`、`test/*` 或 `chore/*` 向 `dev` 发起 PR。
+- `master` 是受保护稳定主线，`dev` 是单维护者阶段的默认日常开发与集成分支。
+- 仓库所有者的串行常规开发可以直接在 `dev` 完成；当前 `dev` 不启用分支保护，普通 push 不自动触发 CI，提交前必须执行与风险匹配的本地验证。
+- 外部贡献、并行开发、风险隔离或明确需要评审时，从最新 `dev` 创建 `feature/*`、`fix/*`、`docs/*`、`proposal/*`、`experiment/*`、`refactor/*`、`test/*` 或 `chore/*`，并向 `dev` 发起 PR。
+- Agent 不得只因自身默认工作流为普通纵向切片创建 `codex/*`、worktree 或临时 PR；需要隔离时应先说明真实原因或遵循项目所有者明确要求。
 - 只有阶段性 `dev` 晋级或明确的 `hotfix/*` 才向 `master` 发起 PR。
 - 不直接 push 到 `master`，不 force push 共享分支。
 - `master` 允许 merge commit 与 rebase merge，禁用 squash merge；阶段 PR 优先 merge commit。
@@ -39,7 +41,7 @@
 - 提交遵循 Conventional Commits，例如 `feat(decision): add superseded state`、`fix(authz): hide private relation metadata`、`docs(governance): define ruleset baseline`。
 - 提交使用贡献者自己的 Git 身份，不添加 AI 协作者署名。
 
-完整规则见 [ADR 0001](docs/adr/0001-branch-and-pr-governance.md)。
+完整规则见 [ADR 0008](docs/adr/0008-dev-first-development-governance.md)。
 
 ## 实现与数据要求
 
@@ -72,6 +74,40 @@ pwsh ./scripts/check-repo.ps1
 ```bash
 python3 -m unittest discover -s scripts/tests -p "test_*.py"
 ```
+
+M0 核心契约 Go 检查：
+
+```bash
+./scripts/check-m0-core-contracts.sh
+```
+
+修改 M0 schema、事务、事件、Outbox 或 Activity 时，还需运行真实 PostgreSQL 边界测试：
+
+```bash
+./scripts/check-m0-core-contracts-postgres.sh
+```
+
+修改正式 Go 服务时运行：
+
+```bash
+./scripts/check-server.sh
+```
+
+涉及 migration、权限、业务事务、EntityLink、领域事件或 Outbox 时，还需运行：
+
+```bash
+./scripts/check-server-postgres.sh
+```
+
+PostgreSQL 脚本使用固定镜像、随机本机端口和任务专属临时容器，结束后自动删除且不保留数据卷；镜像不存在时不会隐式下载。详细边界分别见 [M0 核心契约实验](experiments/m0-core-contracts/README.md)和[正式 Go 服务](server/README.md)。
+
+修改正式 React Web App 时，先在 `web/` 运行 `npm ci`，再从仓库根运行：
+
+```bash
+./scripts/check-web.sh
+```
+
+该入口覆盖格式、Lint、组件状态测试、严格 TypeScript、production build 与锁依赖基线。依赖漏洞数据需要联网刷新；CI 额外执行 `npm audit --audit-level=high`。
 
 实现代码进入仓库后，还必须执行与改动范围匹配的 Go、React / TypeScript、Rust 或 Flutter 格式化、静态分析、测试和构建。PR 只记录真实执行过的命令，并明确列出未执行、受环境阻塞或需要人工完成的验证。
 

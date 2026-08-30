@@ -12,7 +12,7 @@
 
 ## 启用前置条件
 
-1. `master`、`dev` 和默认 PR 目标已按治理文档建立；
+1. `master`、`dev` 的职责以及直接 `dev` 开发、可选 `dev` PR 的边界已按治理文档建立；
 2. `.github/workflows/pr-check.yml` 已在远端至少成功产生一次 `Candidate Quality`；
 3. 仓库级合并方式与模板一致；
 4. 当前操作者具有管理 Ruleset 的权限；

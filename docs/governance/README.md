@@ -7,7 +7,8 @@
 - [仓库治理基线](repository-governance.md)：分支、提交、PR、CI、Ruleset 与维护边界。
 - [Agent 协作规范](agent-collaboration.md)：人类与自动化 Agent 共同工作时的授权、验证和交接要求。
 - [文档治理](documentation-governance.md)：文档分层、真相源和更新矩阵。
-- [ADR-0001：分支与 PR 治理](../adr/0001-branch-and-pr-governance.md)：当前分支模型及其取舍。
+- [ADR-0008：`dev` 优先的单维护者开发拓扑](../adr/0008-dev-first-development-governance.md)：当前分支模型及其取舍。
+- [ADR-0001：分支与 PR 治理](../adr/0001-branch-and-pr-governance.md)：已替代的初始化分支模型，保留为历史记录。
 
 仓库根目录的 [AGENTS.md](../../AGENTS.md) 是可直接执行的协作规则，[CONTRIBUTING.md](../../CONTRIBUTING.md) 是贡献者入口。两者应与本目录保持语义一致。
 

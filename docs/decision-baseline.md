@@ -2,7 +2,7 @@
 
 状态：已确认的初始产品决策
 
-日期：2026-08-27
+日期：2026-08-29
 
 本文件用于防止后续讨论静默改变当前方向。修改“已确认”事项时，必须同时记录修改日期、原因、影响和迁移方式。
 
@@ -96,11 +96,61 @@
 - 引用、反向链接、时间线、通知、搜索和 AI 扩展不得绕过目标对象权限。
 - 首期使用 PostgreSQL 实现关系和查询，不引入图数据库。
 
+### D-013 首批 M0 核心字段边界
+
+- Project、Initiative、Component、Decision、Environment 和 EntityLink 已冻结首批最小业务字段与状态不变量，精确含义以[领域模型](domain-model.md)为准。
+- 六类对象都显式归属 Workspace，并使用创建后不可变、不复用的稳定 ID；名称、key、URL 和数据库行号不构成身份。
+- Project 的默认可见性不能放宽其内部私密对象；Environment 独立于 Component，production 分类不能因 UI 简化而失去保护语义。
+- Decision 的 Accepted、Rejected 和 Superseded 状态都必须保留相应主体、理由、时间与证据，自动提炼不能直接确认 Decision。
+- EntityLink 分开记录 asserted / derived 事实强度与 user / system / plugin / import 来源，移除关系不能删除旧来源证据。
+- 首批 ID 前缀、引用序列化、授权结果和事件持久化边界已由 ADR-0002 接受；其余类型前缀和物理 schema 仍需原型验证。
+
+### D-014 Go 服务端基础栈
+
+- 首期正式服务使用单一 `server/` Go module，并保持模块化单体。
+- HTTP server、路由和测试使用 Go 标准库；当前不引入 Web 框架。
+- PostgreSQL 使用原生 `pgx/v5` 与 `pgxpool`，SQL 手写并版本化；当前不引入 ORM 或 query builder。
+- 事务由 application service 显式控制，领域层不暴露驱动类型或 SQL 错误字符串。
+- SQL 代码生成和完整服务目录层级仍需在真实纵向切片中收窄决定。
+
+### D-015 首个协作权限切片
+
+- Thread、Decision 和 Ticket 各自保存不可变的 governing Project 授权上下文；业务关系仍由 EntityLink 表达。
+- Thread 与 Ticket 的首批类型前缀分别为 `thr_` 和 `tkt_`，具体 ID 生成算法仍未冻结。
+- Project 首批角色为 `viewer / contributor / decider / admin`；只有 `decider` 和 `admin` 可以 Accepted Decision。
+- restricted Thread 需要显式 Thread 成员权限，Project 角色不会自动穿透；无权限关系目标只显示不含标识和展示字段的通用占位。
+- 认证协议仍未冻结，application service 只接收认证 adapter 提供的显式 Principal。
+
+### D-016 PostgreSQL migration 基线
+
+- migration 使用连续编号、SHA-256 artifact 校验、session advisory lock 和单 migration 事务。
+- schema 变更通过独立命令显式执行，不成为服务副本启动的隐藏副作用。
+- 正式 runner 只向前推进；自动 down SQL 不作为生产回滚承诺，已提交升级依赖备份恢复或经过验证的 forward repair。
+- 当前不为未出现的模板、在线 DDL 或多数据库需求引入额外 migration 依赖。
+
+### D-017 CI Run 与 staging Deployment 边界
+
+- `ci-run` / `cir_` 与 `deployment` / `dpl_` 是不同的稳定业务身份；构建成功不自动创建 Deployment，也不证明外部部署已经发生。
+- Jenkins 核心只接收已完成来源认证、重放校验和字段映射的 verified delivery，并原子记录完成态 CI Run、幂等 receipt、领域事件和 Outbox；不保存 Secret 或原始 webhook body。
+- CI Run 的 M0 用户读取沿 active Workspace 成员 → Component → CI Run 解析；owner Team、Project、EntityLink 和 Jenkins source 都不授予读取权，不可读对象返回 not-found。
+- M0 staging Deployment 只由明确用户通过受控 `web / api` 调用记录；调用者必须是 active Workspace 成员，并持有目标 active staging Environment 的 active 显式授权。
+- Project 角色、owner Team、CI source 和成功构建都不隐式授予部署能力。记录必须保留实际操作者、所用授权、来源 CI Run 与 Environment，并与 `deploys` 关系、领域事件和 Outbox 原子提交。
+- 当前 Deployment command 只记录调用方已经确认的外部终态事实，不执行部署、不读取 Secret，也不支持 production、审批、回滚或运行中状态。精确技术契约以 [ADR-0006](adr/0006-verified-jenkins-delivery-and-ci-run.md)、[ADR-0007](adr/0007-component-scoped-ci-run-read.md) 与 [ADR-0009](adr/0009-explicit-staging-deployment.md) 为准。
+
+### D-018 可验证 PostgreSQL 备份恢复
+
+- M0.5 整库备份使用版本化 manifest 与 PostgreSQL custom archive；它不是开放 `.nexus` 导出格式。
+- 源库必须与当前 migration artifact identity 完全一致，所有非系统 relation 必须由当前二进制完整分类；未知 relation、large object、非默认 extension、Secret、Token、原始 webhook payload 和本机授权材料不得因全库 dump 自动进入默认数据范围。
+- 当前只支持 PostgreSQL 17 同 major 往返。恢复只接受全新空目标，不提供 `--clean`、自动覆盖或隐式服务启动 migration。
+- 当前 PostgreSQL 工具桥接只支持显式 `sslmode=disable` 的本地或受控私有连接；TLS config 不能近似降级为较弱校验，远程 TLS 备份需要独立连接契约。
+- `activity_items` 数据不进入备份；恢复权威事实后显式执行 forward-only migration 校验，并从不可变领域事件原子重建 Activity。
+- manifest / dump 校验失败、migration 漂移、工具 major 不匹配和非空目标必须 fail closed。精确工件、恢复顺序与验证边界以 [ADR-0010](adr/0010-verified-postgresql-backup-and-restore.md) 为准。
+
 ## 尚未冻结
 
 以下事项仍需在实现前通过原型或 ADR 决定：
 
-- Go Web 框架和数据库访问库；
+- SQL 代码生成；
 - 文档编辑器与 CRDT 具体技术；
 - 插件后端首版采用 WASM、独立进程还是只提供声明式自动化；
 - SDK 和官方插件统一采用 Apache-2.0、MIT 或按组件选择；
@@ -115,3 +165,9 @@
 
 - 2026-08-27：建立初始决策基线。
 - 2026-08-27：确认 Decision、研发资产分层、Golden Path 以及 EntityLink/Activity 基线。
+- 2026-08-28：冻结首批 M0 核心对象字段与不变量，并接受 ADR-0002 的稳定引用、授权与事件投影边界。
+- 2026-08-28：接受 ADR-0003，冻结标准库 HTTP、原生 `pgx/v5` 与手写版本化 SQL 的首期服务端基线。
+- 2026-08-28：接受 ADR-0004，冻结 Thread → Decision → Ticket 的 Project 作用域、最小角色和私密关系投影边界。
+- 2026-08-28：接受 ADR-0005，冻结显式、可校验、事务化的 forward-only PostgreSQL migration 基线。
+- 2026-08-29：冻结完成态 CI Run 的 verified delivery、Component 作用域读取，以及显式 staging Deployment 与环境级授权边界。
+- 2026-08-30：接受 ADR-0010，冻结 PostgreSQL 17 同 major 的显式备份、空目标恢复、migration 校验与 Activity 重建边界。

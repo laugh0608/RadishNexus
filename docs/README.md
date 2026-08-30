@@ -9,13 +9,14 @@
 3. [Golden Path](golden-path.md)：定义最薄纵向原型、演示故事和验收标准。
 4. [决策基线](decision-baseline.md)：记录已确认且不得静默漂移的决策。
 5. [总体架构](architecture/overview.md)：说明技术栈、模块边界和部署形态。
-6. [插件系统](architecture/plugin-system.md)：说明为什么做插件、哪些能力适合插件，以及停止线。
-7. [许可与分发策略](licensing-strategy.md)：说明核心、SDK、插件和免费授权的边界。
-8. [产品路线图](roadmap.md)：说明从 Web-first MVP 到 Flutter 客户端的推进顺序。
-9. [当前状态](status/current.md)：唯一的当前阶段、下一步和开放问题入口。
-10. [仓库治理](governance/README.md)：说明分支、PR、Ruleset、Agent 和文档协作规则。
-11. [架构决策记录](adr/README.md)：解释长期工程与治理取舍及其后果。
-12. [开发指南](development/README.md)：说明跨语言工程、测试、安全和兼容性标准。
+6. [核心实体、授权与事件契约](architecture/core-contracts.md)：说明稳定引用、权限解析、Outbox 和 Activity 的 M0 契约基线。
+7. [插件系统](architecture/plugin-system.md)：说明为什么做插件、哪些能力适合插件，以及停止线。
+8. [许可与分发策略](licensing-strategy.md)：说明核心、SDK、插件和免费授权的边界。
+9. [产品路线图](roadmap.md)：说明从 Web-first MVP 到 Flutter 客户端的推进顺序。
+10. [当前状态](status/current.md)：唯一的当前阶段、下一步和开放问题入口。
+11. [仓库治理](governance/README.md)：说明分支、PR、Ruleset、Agent 和文档协作规则。
+12. [架构决策记录](adr/README.md)：解释长期工程与治理取舍及其后果。
+13. [开发指南](development/README.md)：说明跨语言工程、测试、安全和兼容性标准。
 
 ## 文档职责
 
@@ -24,6 +25,7 @@
 - Golden Path 的演示故事与验收标准只写在 `golden-path.md`。
 - 已确认决策只写在 `decision-baseline.md`，修改时必须写明原因和日期。
 - 架构原则写在 `architecture/`，实现细节应在真正开发后通过 ADR 补充。
+- 稳定引用、授权解析、事件和投影的跨模块技术契约写在 `architecture/core-contracts.md`，其接受状态由对应 ADR 管理。
 - 长期工程和治理取舍写在 `adr/`；已接受结论用新 ADR 替代，不静默重写历史。
 - 分支、PR、Ruleset、Agent 和文档维护规则写在 `governance/`。
 - 跨语言工程基线写在 `development/`；模块实现说明应随未来代码就近维护。
@@ -33,11 +35,12 @@
 
 ## 当前边界
 
-当前已经建立仓库治理、贡献模板和静态检查基线，但不代表以下产品能力已经实现：
+当前已经建立仓库治理、正式 Go 服务基础、Thread → Decision → Ticket application service、已验证 Jenkins delivery → CI Run、显式 staging Deployment、可重建 Activity、Decision / Ticket / CI Run Nexus View application query，以及可运行的 React Web 代表原型，但不代表以下产品能力已经实现：
 
-- 可运行的 Web App；
+- 可供真实团队日常使用的完整 Web App、Web Shell 或导航；
+- 对外业务 HTTP API、完整认证或 Deployment Nexus View 读取面；
 - 可安装插件或 Plugin SDK；
 - Flutter 移动端或 PC 客户端；
-- Jenkins、GitLab 或其他外部系统集成；
-- 生产部署、升级、备份和高可用能力；
+- Jenkins Webhook 接入、签名验证、Secret 管理、插件 runtime，或 GitLab 等其他外部系统集成；
+- 部署执行引擎、production Deployment、跨版本升级、生产级备份策略和高可用能力；
 - 已完成专业法律审查的许可证文本。

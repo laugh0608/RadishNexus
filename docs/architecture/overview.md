@@ -1,8 +1,8 @@
 # RadishNexus 总体架构
 
-状态：方向基线，具体库尚未冻结
+状态：方向基线，Go 服务基础已冻结
 
-日期：2026-08-27
+日期：2026-08-28
 
 ## 架构目标
 
@@ -135,28 +135,27 @@ Flutter 与 React 不强求共享 UI 代码。
 跨模块关联不直接泄漏数据库表结构。每个对象拥有稳定引用，例如：
 
 ```text
-entity://message/msg_123
+entity://thread/thr_123
 entity://decision/dec_234
-entity://ticket/ticket_456
-entity://document/doc_789
-entity://component/comp_321
-entity://ci-run/run_001
+entity://ticket/tkt_456
+entity://component/cmp_321
 entity://environment/env_002
-entity://deployment/dep_003
 ```
 
 引用必须经过原对象权限检查。能够看到工单不表示自动获得关联私密频道或文档的读取权。
+
+类型注册、结构化表示、Workspace 解析和受限占位的 M0 基线见[核心实体、授权与事件契约](core-contracts.md)。Thread、Decision、Ticket 的首段 Project 作用域与物理 schema 已由 ADR-0004、ADR-0005 和正式 migration 落地；Component、CI Run 的来源与读取边界已由 ADR-0006、ADR-0007 和 migration 003 落地；Environment、显式 staging Deployment 与环境级授权已由 ADR-0009 和 migration 004 落地。具体 ID 生成算法及 Document、Repository 等其余对象 schema 仍未冻结。
 
 ## EntityLink 与 Nexus View
 
 跨模块关系使用一等 `EntityLink` 记录，而不是让每个模块分别维护不可追溯的关联字段。EntityLink 至少保存关系类型、两端实体、来源、创建者、建立时间和状态。
 
-关系有两种来源：
+关系的事实强度分为：
 
 - asserted：用户或受权系统明确确认的事实；
 - derived：插件、导入器或规则推导的关系。
 
-两者必须在 API 和 UI 中可区分。自动推导的关系不能冒充人工确认的 Decision 或 Deployment 事实。
+关系来源另行记录为 user、system、plugin 或 import，并指向具体来源主体。事实强度与来源是两个维度：用户可以明确确认 `derived-from` 关系，插件也只能在获权范围内写入推导关系。两者必须在 API 和 UI 中可区分，自动推导的关系不能冒充人工确认的 Decision 或 Deployment 事实。
 
 每个主要对象通过 Nexus View 统一提供：
 
@@ -172,8 +171,8 @@ entity://deployment/dep_003
 首期使用 PostgreSQL Transactional Outbox 保证业务写入和事件记录的一致性。事件至少包含：
 
 - event ID 和 type；
-- workspace/project；
-- actor；
+- workspace 和可选 project context；
+- actor 和 source；
 - primary entity；
 - correlation ID 和 causation ID；
 - occurred time；
@@ -181,6 +180,8 @@ entity://deployment/dep_003
 - 最小且经过权限评估的 payload。
 
 Activity 不是 Outbox 的副本。Outbox 用于可靠投递，Activity 是可重建、可权限过滤的产品时间线投影；审计日志则保存安全与合规所需的操作证据。三者可以来自同一领域事件，但保留不同职责和生命周期。
+
+M0 契约把不可变领域事件事实与可变投递状态作逻辑分离，避免已投递 Outbox 清理后无法重建 Activity 或验证备份；具体一表或分表由 PostgreSQL 原型决定。详见[核心实体、授权与事件契约](core-contracts.md)和 [ADR-0002](../adr/0002-stable-entity-reference-and-event-projection.md)。
 
 早期不强制引入独立消息中间件。只有插件吞吐、跨进程可靠消费或服务拆分形成真实需求后，再评估 NATS JetStream 等方案。
 
@@ -219,6 +220,8 @@ Activity 不是 Outbox 的副本。Outbox 用于可靠投递，Activity 是可�
 - 升级前检查和失败停止线；
 - 不依赖 RadishNexus 官方云才能完成的核心运行路径。
 
+M0.5 已建立第一条可验证恢复路径：显式命令生成版本化 manifest 与 PostgreSQL custom archive，只在本地或受控私有连接的全新空 PostgreSQL 17 目标上以单事务恢复，随后执行正式 forward-only migration 校验并从不可变领域事件重建 Activity。当前工件是同 major 整库运维备份，不是 `.nexus` 开放导出，也不包含自动覆盖、TLS 工具桥接、跨大版本承诺、远程存储、加密或 Secret 备份。精确边界见 [ADR-0010](../adr/0010-verified-postgresql-backup-and-restore.md)。
+
 ### 可移植上下文包
 
 除整库备份外，规划可移植 `.nexus` 导出包，用于项目迁移、归档和离线检查。建议包含：
@@ -243,7 +246,7 @@ Activity 不是 Outbox 的副本。Outbox 用于可靠投递，Activity 是可�
 
 ## 预期仓库布局
 
-真正进入实现时可从以下布局起步，但目录名仍需通过实现 ADR 确认：
+当前已经从单一 `server/` Go module 起步；其余目录只在对应应用、SDK、插件或部署产物真正进入实现时创建：
 
 ```text
 RadishNexus/

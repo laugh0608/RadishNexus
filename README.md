@@ -4,7 +4,7 @@
 
 RadishNexus 是 Radish 家族中的团队协作项目。它把私聊、团队频道、决策、工单、协作文档和 CI/CD 上下文放进同一个工作空间，让一次讨论能够持续关联到结论、任务、软件组件、构建、发布和复盘，而不是把多个独立产品简单拼接在一起。
 
-项目当前处于产品定义、架构基线与仓库治理基线阶段，尚未进入正式实现。第一产品形态是 React + TypeScript Web App；Flutter 客户端在 Web 产品达到阶段门槛后再启动，并统一覆盖移动端与 PC 端。
+项目当前处于 M0 正式服务与 Web 代表原型纵向切片阶段。正式 `server/` Go module 已实现 Thread → Decision → Ticket、已验证 Jenkins delivery → CI Run、显式 staging Deployment 的领域、权限和事务切片，并建立可重建 Activity、Decision / Ticket / CI Run Nexus View 读取、最小 transport 边界，以及 PostgreSQL 17 同 major 的可验证备份恢复。正式 `web/` React + TypeScript 基线已经建立 Decision 与 CI Run Nexus View 代表交互，但业务 HTTP API、Deployment 读取和完整 Web Shell 尚未开放。Flutter 客户端在 Web 产品达到阶段门槛后再启动，并统一覆盖移动端与 PC 端。
 
 ## 已确认基线
 
@@ -40,15 +40,19 @@ RadishNexus 是 Radish 家族中的团队协作项目。它把私聊、团队频
 
 ## 协作与仓库治理
 
-- `master` 是稳定分支，`dev` 是日常集成分支；普通变更默认通过主题分支向 `dev` 提交 PR。
+- `master` 是稳定分支，`dev` 是单维护者阶段的日常开发与集成分支；串行常规任务默认直接在 `dev` 推进，主题分支只在外部贡献、并行或风险隔离等有真实收益时使用。
 - `master` 只接受 PR，允许 merge commit 与 rebase merge，禁用 squash merge；合入后必须回流 `dev`。
-- `Candidate Quality` 是稳定聚合质量门，当前验证仓库卫生和检查器本身，后续随真实代码接入各技术栈检查。
+- `Candidate Quality` 是稳定聚合质量门，当前验证仓库卫生、检查器、M0 核心契约实验、正式 Go 服务、双 PostgreSQL 实例备份恢复，以及 React Web App 的格式、Lint、状态测试、构建和依赖边界。
 - 仓库中的 Ruleset JSON 是版本化模板，不表示 GitHub 远端设置已经生效。
 
 开始贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [协作约定](AGENTS.md)。安全问题按 [SECURITY.md](SECURITY.md) 私下报告。当前本地基线可运行：
 
 ```bash
 ./scripts/check-repo.sh
+./scripts/check-server.sh
+./scripts/check-server-postgres.sh
+./scripts/check-server-backup-restore.sh
+./scripts/check-web.sh
 ```
 
 ## 名称

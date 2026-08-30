@@ -20,7 +20,7 @@ Golden Path 用最薄的可运行产品验证 RadishNexus 的核心价值，而�
 4. 从该 Decision 创建一个 Ticket，不复制原始讨论正文；
 5. Ticket 关联 `auth-service` Component 和设计 Document；
 6. Jenkins Webhook 写入一次 CI Run，并在原 Thread 与 Ticket 中显示状态；
-7. 成功构建形成一次到 `staging` Environment 的 Deployment；
+7. 成功构建后，持有目标 Environment 显式授权的成员通过受控操作记录一次到 `staging` 的 Deployment；
 8. 打开任意对象的 Nexus View，都能看到当前状态、关系和完整时间线；
 9. 备份并恢复到新实例后，上述关系和来源仍然存在。
 
@@ -61,11 +61,11 @@ Golden Path 用最薄的可运行产品验证 RadishNexus 的核心价值，而�
 
 ### 人工确认决策
 
-系统可以生成 Decision 草案，但只有有权限的人能够 Accepted。自动摘要不能被展示成已经确认的团队结论。
+系统可以生成 Decision 草案，但只有具备确认权限且能够读取全部 evidence 的人才能 Accepted。Project 管理角色不会自动穿透 restricted Thread；自动摘要不能被展示成已经确认的团队结论。
 
 ### 构建不等于部署
 
-CI Run 和 Deployment 是两个对象。原型可以通过受控操作创建 staging Deployment，但不能因构建成功自动伪造生产部署事实。
+CI Run 和 Deployment 是两个对象。原型只能由持有目标 Environment 显式授权的成员通过受控操作记录 staging Deployment；构建成功既不自动触发 Deployment，也不证明外部部署已经发生，更不能伪造生产部署事实。
 
 ### 外部系统故障隔离
 

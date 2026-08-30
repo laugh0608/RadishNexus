@@ -1,8 +1,8 @@
 # 工程标准
 
-状态：初始基线
+状态：M0 工程基线
 
-日期：2026-08-27
+日期：2026-08-29
 
 ## 总体原则
 
@@ -21,19 +21,27 @@
 - 错误保留上下文和可判定类型，不依赖字符串匹配实现业务分支。
 - 数据库事务只包围需要原子性的最小范围；外部网络调用不放入长事务。
 - 包级可变状态和隐式单例应避免；依赖通过清晰构造边界传入。
+- 首期 HTTP server、路由和测试使用标准库 `net/http`、`http.ServeMux` 和 `httptest`，不引入 Web 框架。
+- PostgreSQL 使用原生 `pgx/v5` 与 `pgxpool`，不通过 `database/sql` adapter；首个固定版本为 `v5.10.0`。
+- SQL 手写、版本化并接受真实 PostgreSQL 集成测试；首期不引入 ORM 或 query builder。
+- PostgreSQL migration 使用连续 `NNN_name.sql`、完整 artifact SHA-256、session advisory lock 和单 migration 事务；只允许显式 forward 执行，不随服务启动隐式迁移。
+- SQL 代码生成和完整服务目录层级仍需按真实实现收窄决定。
 
-具体 Web 框架和数据访问库尚未冻结，选型必须通过原型和 ADR，不写入通用规则假装已经决定。
+精确边界与替代条件见 [ADR-0003](../adr/0003-go-service-foundation.md)和 [ADR-0005](../adr/0005-forward-only-postgresql-migrations.md)。
 
 ## React 与 TypeScript
 
 - Web App 是第一产品形态，使用严格 TypeScript；不得用广泛 `any` 绕过契约问题。
+- 首个正式 Web 基线使用 Node 24 LTS、npm 11、React 19、Vite 8 与 TypeScript 6；依赖范围保存在 `web/package.json`，实际版本由 lockfile v3 固定。
+- 首批代码使用 Oxlint、Prettier、Vitest、Testing Library 与 jsdom；router、状态库、编辑器和组件库仍需等真实第二用例再决定。
 - API 类型优先从版本化契约生成或集中维护，不在页面中散布无类型 `fetch`。
 - 服务端状态、客户端交互状态和编辑草稿状态分开建模；缓存不能成为新的业务真相源。
 - 组件必须考虑键盘操作、语义标签、焦点、加载、空态、错误和权限拒绝。
 - Nexus View 等复杂页面先保证对象关系和信息层级清晰，再添加动画和装饰。
 - 破坏性或高风险操作必须显示对象、范围、后果和可恢复性，不能只提供通用确认框。
+- `restricted` 客户端形状不得携带目标 EntityRef、对象类型、关系类型、标题、来源或时间；`hidden` 目标不进入响应，前端不得通过角色或权限集合重新推导可见性。
 
-具体状态管理、路由、编辑器和组件库属于尚未冻结事项。
+本地可信入口为 `./scripts/check-web.sh`；它在已安装锁定依赖的前提下保持无网络，执行格式、Lint、状态测试、严格类型检查、production build 和依赖基线检查。CI 另行使用 `npm audit` 刷新漏洞数据。
 
 ## Rust
 
@@ -88,6 +96,7 @@ Flutter 客户端在 Web 达到独立阶段门槛后再启动。启动后：
 
 - 只在能明确降低风险或维护成本时引入依赖；检查许可证、维护状态和供应链风险。
 - 依赖版本和锁文件随变更提交，禁止从浮动分支或未固定下载地址执行构建代码。
+- Web 依赖默认禁止 lifecycle scripts，只允许官方 npm registry、SHA-512 integrity 和已审阅 SPDX 许可证；任何来源、许可证或脚本漂移必须先解释并更新自动化基线。
 - 生成内容必须有来源、生成命令和漂移检查；能在 CI 稳定生成时不要手工维护副本。
 - 开放 SDK、协议和插件进入各自目录时必须同时建立独立许可证边界。
 

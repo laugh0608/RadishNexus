@@ -1,0 +1,41 @@
+{
+  "name": "@radishnexus/web",
+  "version": "0.0.0",
+  "private": true,
+  "license": "SEE LICENSE IN ../LICENSE",
+  "type": "module",
+  "engines": {
+    "node": ">=24.11.0 <25",
+    "npm": ">=11.6.0 <12"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check:dependencies": "node scripts/check-dependencies.mjs",
+    "audit": "npm audit --audit-level=high",
+    "check": "npm run format:check && npm run lint && npm run test && npm run build && npm run check:dependencies"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "jsdom": "^30.0.1",
+    "oxlint": "^1.79.0",
+    "prettier": "^3.9.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.10"
+  }
+}

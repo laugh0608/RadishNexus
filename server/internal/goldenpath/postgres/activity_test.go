@@ -1,0 +1,155 @@
+package postgres
+
+import (
+	"testing"
+	"time"
+
+	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
+)
+
+func TestProjectActivityEventUsesOnlyAllowedSafeFacts(t *testing.T) {
+	t.Parallel()
+
+	event := activityEvent{
+		eventID:       "evt_1",
+		eventType:     "decision.proposed",
+		schemaVersion: 1,
+		workspaceID:   "wrk_1",
+		actorKind:     "user",
+		target:        entityref.Ref{Type: "decision", ID: "dec_1"},
+		occurredAt:    time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC),
+		payload: []byte(`{
+			"status":"proposed",
+			"evidence":{"type":"thread","id":"thr_1"},
+			"untrusted_title":"must not enter safe facts"
+		}`),
+	}
+
+	record, err := projectActivityEvent(event)
+	if err != nil {
+		t.Fatalf("projectActivityEvent() error = %v", err)
+	}
+	if len(record.safeFacts) != 1 || record.safeFacts["status"] != "proposed" {
+		t.Fatalf("safeFacts = %#v", record.safeFacts)
+	}
+	if len(record.subjects) != 1 || record.subjects[0] != (entityref.Ref{Type: "thread", ID: "thr_1"}) {
+		t.Fatalf("subjects = %#v", record.subjects)
+	}
+}
+
+func TestProjectActivityEventRejectsUnsupportedSchema(t *testing.T) {
+	t.Parallel()
+
+	_, err := projectActivityEvent(activityEvent{
+		eventID:       "evt_1",
+		eventType:     "ticket.created",
+		schemaVersion: 2,
+		target:        entityref.Ref{Type: "ticket", ID: "tkt_1"},
+		payload:       []byte(`{"status":"open","decision":{"type":"decision","id":"dec_1"}}`),
+	})
+	if err == nil {
+		t.Fatal("projectActivityEvent() error = nil, want unsupported schema error")
+	}
+}
+
+func TestProjectActivityEventAcceptsCompletedCIRunFacts(t *testing.T) {
+	t.Parallel()
+	sourceID := "jenkins-main"
+
+	record, err := projectActivityEvent(activityEvent{
+		eventID:       "evt_ci_1",
+		eventType:     "ci-run.recorded",
+		schemaVersion: 1,
+		workspaceID:   "wrk_1",
+		actorKind:     "plugin",
+		actorID:       &sourceID,
+		target:        entityref.Ref{Type: "ci-run", ID: "cir_1"},
+		occurredAt:    time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC),
+		payload:       []byte(`{"status":"failed","component":{"type":"component","id":"cmp_1"}}`),
+	})
+	if err != nil {
+		t.Fatalf("projectActivityEvent() error = %v", err)
+	}
+	if len(record.safeFacts) != 1 || record.safeFacts["status"] != "failed" {
+		t.Fatalf("safeFacts = %#v", record.safeFacts)
+	}
+	if len(record.subjects) != 1 || record.subjects[0] != (entityref.Ref{Type: "component", ID: "cmp_1"}) {
+		t.Fatalf("subjects = %#v", record.subjects)
+	}
+}
+
+func TestProjectActivityEventRejectsCIRunUserActor(t *testing.T) {
+	t.Parallel()
+	userID := "usr_1"
+
+	_, err := projectActivityEvent(activityEvent{
+		eventID:       "evt_ci_1",
+		eventType:     "ci-run.recorded",
+		schemaVersion: 1,
+		workspaceID:   "wrk_1",
+		actorKind:     "user",
+		actorID:       &userID,
+		target:        entityref.Ref{Type: "ci-run", ID: "cir_1"},
+		occurredAt:    time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC),
+		payload:       []byte(`{"status":"failed","component":{"type":"component","id":"cmp_1"}}`),
+	})
+	if err == nil {
+		t.Fatal("projectActivityEvent() error = nil, want invalid CI Run actor error")
+	}
+}
+
+func TestProjectActivityEventAcceptsExplicitDeploymentFacts(t *testing.T) {
+	t.Parallel()
+	userID := "usr_1"
+
+	record, err := projectActivityEvent(activityEvent{
+		eventID:       "evt_deployment_1",
+		eventType:     "deployment.recorded",
+		schemaVersion: 1,
+		workspaceID:   "wrk_1",
+		actorKind:     "user",
+		actorID:       &userID,
+		target:        entityref.Ref{Type: "deployment", ID: "dpl_1"},
+		occurredAt:    time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC),
+		payload: []byte(`{
+			"status":"succeeded",
+			"environment":{"type":"environment","id":"env_1"},
+			"ci_run":{"type":"ci-run","id":"cir_1"}
+		}`),
+	})
+	if err != nil {
+		t.Fatalf("projectActivityEvent() error = %v", err)
+	}
+	if len(record.safeFacts) != 1 || record.safeFacts["status"] != "succeeded" {
+		t.Fatalf("safeFacts = %#v", record.safeFacts)
+	}
+	if len(record.subjects) != 2 ||
+		record.subjects[0] != (entityref.Ref{Type: "environment", ID: "env_1"}) ||
+		record.subjects[1] != (entityref.Ref{Type: "ci-run", ID: "cir_1"}) {
+		t.Fatalf("subjects = %#v", record.subjects)
+	}
+}
+
+func TestProjectActivityEventRejectsDeploymentPluginActor(t *testing.T) {
+	t.Parallel()
+	pluginID := "plugin_1"
+
+	_, err := projectActivityEvent(activityEvent{
+		eventID:       "evt_deployment_1",
+		eventType:     "deployment.recorded",
+		schemaVersion: 1,
+		workspaceID:   "wrk_1",
+		actorKind:     "plugin",
+		actorID:       &pluginID,
+		target:        entityref.Ref{Type: "deployment", ID: "dpl_1"},
+		occurredAt:    time.Date(2026, 8, 29, 8, 0, 0, 0, time.UTC),
+		payload: []byte(`{
+			"status":"succeeded",
+			"environment":{"type":"environment","id":"env_1"},
+			"ci_run":{"type":"ci-run","id":"cir_1"}
+		}`),
+	})
+	if err == nil {
+		t.Fatal("projectActivityEvent() error = nil, want invalid Deployment actor error")
+	}
+}
