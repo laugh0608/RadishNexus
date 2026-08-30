@@ -51,6 +51,7 @@ var (
 		"radishnexus.environment_deployment_authorizations",
 		"radishnexus.environments",
 		"radishnexus.inbound_deliveries",
+		"radishnexus.local_accounts",
 		"radishnexus.outbox_deliveries",
 		"radishnexus.project_memberships",
 		"radishnexus.projects",
@@ -65,6 +66,7 @@ var (
 	}
 	excludedDataTables = []string{
 		"radishnexus.activity_items",
+		"radishnexus.user_sessions",
 	}
 	toolVersionPattern = regexp.MustCompile(`\b([0-9]+)(?:\.[0-9]+)+\b`)
 )

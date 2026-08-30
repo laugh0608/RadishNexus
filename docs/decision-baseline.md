@@ -119,7 +119,7 @@
 - Thread 与 Ticket 的首批类型前缀分别为 `thr_` 和 `tkt_`，具体 ID 生成算法仍未冻结。
 - Project 首批角色为 `viewer / contributor / decider / admin`；只有 `decider` 和 `admin` 可以 Accepted Decision。
 - restricted Thread 需要显式 Thread 成员权限，Project 角色不会自动穿透；无权限关系目标只显示不含标识和展示字段的通用占位。
-- 认证协议仍未冻结，application service 只接收认证 adapter 提供的显式 Principal。
+- 协作 application service 只接收认证 adapter 提供的显式 Principal；本地身份与 Session 协议由 D-019 单独冻结。
 
 ### D-016 PostgreSQL migration 基线
 
@@ -147,6 +147,15 @@
 - `activity_items` 数据不进入备份；恢复权威事实后显式执行 forward-only migration 校验，并从不可变领域事件原子重建 Activity。
 - manifest / dump 校验失败、migration 漂移、工具 major 不匹配和非空目标必须 fail closed。精确工件、恢复顺序与验证边界以 [ADR-0010](adr/0010-verified-postgresql-backup-and-restore.md) 为准。
 
+### D-019 本地身份与服务端 Session
+
+- M1 首段先建立自部署可用的本地账号，OIDC 延后并复用相同 user、membership 与服务端 Session 边界，不建立第二套权限主体。
+- 新实例通过显式、一次性的 `nexus-bootstrap --password-stdin` 创建首个 user、Workspace 与 `owner` membership；不随服务启动初始化，不生成默认密码，也不接受命令参数密码。
+- 本地密码使用版本化 Argon2id verifier；不存在、禁用、锁定和错误密码统一失败，连续 5 次错误锁定 15 分钟。账号锁定不替代公共 transport 的客户端 IP 限流。
+- Session 是 24 小时绝对有效的服务端 opaque token，数据库只保存 Session / CSRF token digest。Session 不固定 Workspace，业务请求必须以当前 active membership 解析 `VerifiedUser`。
+- 浏览器合同固定 Secure `__Host-` Cookie、SameSite Strict、精确 HTTPS Origin、CSRF cookie + Header + digest、服务端 request ID 与 `/api/v1` 版本化安全错误对象；部署门禁完成前不开放公共登录或业务路由。
+- `local_accounts` 纳入受控 PostgreSQL 运维备份，`user_sessions` 只恢复 schema，恢复后旧登录态全部失效。精确边界以 [ADR-0012](adr/0012-local-identity-and-session-foundation.md) 为准。
+
 ## 尚未冻结
 
 以下事项仍需在实现前通过原型或 ADR 决定：
@@ -160,6 +169,7 @@
 - 免费书面授权的申请、签发、期限和撤销模板；
 - 免费评估或社区授权如何做到低摩擦、可离线验证且不依赖遥测或官方在线服务；
 - 产品域名、Logo 和中文品牌名；
+- 公共认证 transport 的可信代理、客户端 IP 来源与分层限流参数；
 - 是否以及何时引入 AI 能力。
 
 ## 变更记录
@@ -173,3 +183,4 @@
 - 2026-08-29：冻结完成态 CI Run 的 verified delivery、Component 作用域读取，以及显式 staging Deployment 与环境级授权边界。
 - 2026-08-30：接受 ADR-0010，冻结 PostgreSQL 17 同 major 的显式备份、空目标恢复、migration 校验与 Activity 重建边界。
 - 2026-08-30：接受 ADR-0011，冻结 Workspace 作用域下组合 Environment 与 CI Run 权限的 Deployment 安全读取边界。
+- 2026-08-30：接受 ADR-0012，冻结本地账号、首次管理员、服务端 Session、CSRF、Workspace 选择与公共 transport 安全合同。

@@ -118,16 +118,20 @@
 7. ADR-0011、正式 application query 与真实 PostgreSQL 测试已建立 Deployment 的 Environment + CI Run 组合读取权限、not-found 失败语义、归档历史保留与敏感字段排除；
 8. Web 默认代表入口已切换为 Deployment succeeded / failed，并完成 loading、error、桌面与 390px 窄屏复核；原型仍使用明示静态 fixture，没有新增临时业务 HTTP handler。
 9. PostgreSQL 集成共享 runner 已统一为连续两次真实 `psql SELECT 1` 后才放行，消除了容器初始化重启窗口的一次宿主端 EOF；M0、正式服务与双实例恢复入口已重新实际通过。
+10. ADR-0012 已确认 M1 先建立本地账号与服务端 Session，OIDC 延后并复用同一 user、membership 与 Session 边界；首次管理员、Workspace `owner / member`、密码、账号锁定、Cookie、CSRF、request ID、版本化错误对象和 Workspace 选择语义已经冻结。
+11. migration 005、Argon2id verifier、一次性 `nexus-bootstrap --password-stdin`、opaque Session、CSRF digest、当前 membership resolver 与 PostgreSQL store 已落地；数据库不保存原始 Session / CSRF token，CLI 不接受命令参数密码或默认凭据。
+12. 本地认证 unit 与真实 PostgreSQL integration 已覆盖并发 bootstrap 只允许一个成功、5 次失败锁定 15 分钟、24 小时绝对 Session、成功登录重置、跨 Workspace 拒绝与单向撤销；公共登录和业务 HTTP 路由仍未开放。
+13. 备份 relation 分类已把 `local_accounts` 纳入权威数据、把 `user_sessions` 归为只恢复 schema；双实例往返证明恢复后的 Argon2id verifier 仍能校验原密码，旧 Session 数据为空。
 
 ## 下一步
 
-Deployment Nexus View 读取与 Web 代表交互已经达到本地完成线。下一步先完成本切片差异复核和 `dev` 提交；随后优先收敛 M1 公共 transport 的前置认证决策，先确认首期只做本地账号还是同时加入 OIDC，再冻结 session、首次管理员、Workspace 选择、CSRF、request ID 与版本化错误对象，最后决定第一个只读 HTTP 端点。认证契约未冻结前不以临时 Header 或 fixture handler 开放业务 API。
+本地身份与 Session foundation 已达到本地完成线。下一步先完成本切片差异复核、仓库门禁和 `dev` 提交；随后建立公共认证 transport 的暴露门禁：精确 public origin 配置、可信代理与客户端 IP 来源、登录速率限制、JSON body 上限及真实 HTTPS Cookie / CSRF 浏览器证据。门禁完成后才开放 login / session / logout，并以 Deployment Nexus View 评估第一个只读业务 HTTP 端点，不以临时 Header、insecure Cookie 或 fixture handler 形成第二套认证口径。
 
 文档协同技术方案与免费书面授权模板继续作为独立 M0 缺口评估，不与认证/transport 同时铺开。当前 `dev` 切片不立即再次晋级 `master`；积累下一组可独立演示、测试和退出的候选后再创建阶段 PR。
 
-当前完成线：没有部署写授权的 active Workspace 成员能够在同一 repeatable-read 查询中安全读取 Deployment Current、`deploys` Relation 和 `deployment.recorded` Timeline；非成员、暂停成员、跨 Workspace 主体与不可读依赖得到 not-found，归档 Environment 不隐藏历史，服务端输出和 Web fixture 不包含 authorization、Jenkins 来源或 Secret，桌面与窄屏代表交互通过验证。
+当前完成线：新实例能够通过显式 CLI 且只有一次成功地建立本地管理员与 Workspace owner；密码使用严格、版本化 Argon2id verifier，登录失败、Session digest、CSRF、Workspace membership 和撤销语义由 application service 与 PostgreSQL 共同约束；公共 transport 的 Cookie、Origin、request ID 与错误对象已有唯一合同，恢复保留账号 verifier 但不恢复登录态。
 
-当前停止线：不新增临时业务 HTTP handler，不把读取权限当作部署能力，不从 CI Run 构建结果自动生成或反向推断 Deployment，不开放 authorization 或外部来源敏感字段，不实现 production、审批、回滚、执行引擎、搜索、通知或 Attention Item；同时不自动覆盖数据库、不承诺跨 PostgreSQL major、远程保留或 PITR，也不启动 Flutter、CRDT、通用 RBAC、Repository 占位、插件市场或多 provider。
+当前停止线：不开放公共 login、Session 或业务 HTTP handler，不信任用户 Header，不提供 insecure Cookie / HTTP fallback；public origin、可信代理、客户端 IP 与限流证据完成前不把账号锁定冒充完整抗滥用能力。不同时铺开 OIDC、邀请、密码重置、MFA 或账号合并；其余 Deployment、备份、Flutter、CRDT、通用 RBAC、Repository、插件市场和多 provider 停止线保持不变。
 
 ## 开放问题
 
@@ -139,7 +143,7 @@ Deployment Nexus View 读取与 Web 代表交互已经达到本地完成线。�
 - Decision 的复核周期和替代交互；
 - `.nexus` 上下文包的开放格式与脱敏规则；
 - SDK 和插件的具体开放源码许可证；
-- 认证第一阶段只做本地账号，还是同时加入 OIDC；
+- OIDC provider、claim mapping、账号关联与本地应急登录策略；
 - 消息和文档搜索边界；
 - 免费书面授权的签发与撤销规则；
 - 免费评估是否公开授予，或使用离线自助签发；

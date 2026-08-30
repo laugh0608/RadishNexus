@@ -59,6 +59,10 @@ Project、Initiative、Component、Decision、Environment 和 EntityLink 共享�
 
 一个独立组织的最高数据、成员、配置和授权边界。任何实体、事件、搜索索引和插件数据都必须能够明确归属到一个 Workspace。
 
+首期 Workspace membership 独立保存 `status: active / suspended` 与 `role: owner / member`。`owner` 表示 Workspace 级管理责任，不自动授予 restricted Project、私密协作对象或 Environment Deployment 权限；这些能力仍由对应对象的显式授权决定。用户 Session 不固定 Workspace，业务请求选择 Workspace 后必须以当前 active membership 重新解析权限。
+
+M1 本地身份基线以不可变小写 ASCII `login_name` 关联 `users`，密码只保存 Argon2id verifier；服务端 Session 只保存 opaque token 与 CSRF token 的 digest。`local_accounts` 纳入受控 PostgreSQL 运维备份，`user_sessions` 只保留 schema，恢复后旧登录态全部失效。精确边界见 [ADR-0012](adr/0012-local-identity-and-session-foundation.md)。
+
 ### Team
 
 稳定的人员责任边界，用于成员管理、默认权限和软件资产所有权。首期可以只实现简单团队和成员关系，不建设复杂组织架构。

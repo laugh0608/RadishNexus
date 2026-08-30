@@ -13,11 +13,12 @@
 - 正式 Environment、环境级部署授权与不可变 Deployment schema；
 - 从领域事件原子、幂等重建的 Activity projection version 1；
 - 为 Decision、Ticket、CI Run 和 Deployment 返回 Current、Relations 和 Timeline 的权限过滤 Nexus View query；
-- 把已验证用户身份转换为 application `Principal` 的最小认证 adapter；
-- 把 application sentinel error 转换为内部 HTTP 状态与安全机器码的显式映射。
+- 一次性本地管理员 bootstrap、Argon2id credential、账号锁定、opaque Session、CSRF digest 与当前 Workspace membership resolver；
+- 把已验证 Session 用户转换为 application `Principal` 的认证 adapter；
+- Secure `__Host-` Cookie、精确 HTTPS Origin、request ID 与版本化安全错误对象的 transport 合同；
 - PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验与 Activity 重建命令。
 
-业务写入尚未暴露为 HTTP API。认证 adapter、公共错误对象和 API 版本策略冻结前，调用方应直接通过 application service 测试领域与权限边界。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret 或原始 webhook body。
+业务写入和登录尚未暴露为 HTTP API。公共 transport 已冻结 `/api/v1`、request ID、错误对象、Cookie 与 CSRF 合同，但在 public origin、代理来源与 IP 限流形成部署证据前，调用方仍直接通过 application service 验证身份、领域与权限边界。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret 或原始 webhook body。
 
 当前 Activity 白名单包含 `decision.proposed`、`decision.accepted`、`ticket.created`、`ci-run.recorded` 和 `deployment.recorded`。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，不依赖 Outbox 投递状态，也尚未建立常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
 
@@ -27,7 +28,7 @@ staging Deployment 只记录外部已经完成的终态事实，不执行部署�
 
 Deployment 的 M0 读取与写授权分离：同一 Workspace 的 active 成员只有同时能读取目标 Environment 与来源 CI Run 时才可读取；非成员、暂停成员和跨 Workspace 主体得到 not-found，Environment 归档不隐藏既有历史。Current 只返回终态、受控时间、Environment 与来源 CI Run；Relations 和 Timeline 复用当前权限，不返回 authorization ID、调用 source、Jenkins receipt、digest、Secret、原始 payload 或外部 URL。该 query 仍是内部 application contract；授权管理入口、production、审批、回滚和执行引擎均未建立。
 
-当前认证 adapter 不读取 Header、Cookie、Token 或 OIDC claims，也不负责验证凭据；未来的本地 session 或 OIDC verifier 只有在成功认证后才能向它提供 `VerifiedUser`。HTTP error mapping 不是公共响应 schema，也不写 response body；未来 handler 仍需单独确定 request ID、日志、内容类型和公共错误对象。不可读资源由 application service 返回 `not found`，transport 不把它改写成 `forbidden`。
+本地认证以不可变小写 ASCII login、Argon2id verifier、5 次失败后 15 分钟账号锁定和 24 小时绝对有效的服务端 Session 为基线。数据库只保存 Session / CSRF token 的 SHA-256 digest；Session 不固定 Workspace，业务调用必须以当前 active membership 解析 `VerifiedUser`。OIDC、邀请、密码重置、MFA 与公共登录路由尚未建立。不可读资源由 application service 返回 `not found`，transport 不把它改写成 `forbidden`。
 
 ## 本地检查
 
@@ -47,6 +48,25 @@ go run ./cmd/nexus-migrate
 ```
 
 runner 使用 session advisory lock 防止并发执行，每个 migration 单独事务提交，并拒绝已应用文件发生漂移。它只支持向前迁移；当前已建立 PostgreSQL 17 同 major 的最小恢复，跨版本生产升级仍需补齐失败中断、forward repair、兼容窗口和恢复限制。
+
+## 首次本地管理员
+
+先显式完成 migration，再在新实例上执行一次 bootstrap。命令只从标准输入读取密码；密码不得放入命令参数、环境变量、日志或 shell history：
+
+```text
+read -r -s bootstrap_password
+printf '\n'
+printf '%s\n' "$bootstrap_password" | DATABASE_URL=... go run ./cmd/nexus-bootstrap \
+  --login admin \
+  --display-name "First Admin" \
+  --workspace-name "First Workspace" \
+  --password-stdin
+unset bootstrap_password
+```
+
+密码必须为 15–128 个 Unicode 字符且最多 1024 bytes。命令通过 PostgreSQL transaction advisory lock 保证只有一个调用成功，创建 local account、user、Workspace 和 `owner` membership；已经存在任何本地账号时失败，不提供覆盖或默认密码。成功输出只包含稳定 user / Workspace ID 与规范化 login。
+
+密码 verifier 属于受保护的权威恢复数据，会进入 PostgreSQL 运维备份；`user_sessions` 只备份 schema、不备份数据，恢复后所有旧 Session 与 CSRF token 失效。该边界不授权 `.nexus` 可移植导出携带 credential。
 
 ## 最小备份与恢复
 

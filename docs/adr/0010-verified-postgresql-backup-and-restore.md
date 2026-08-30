@@ -104,3 +104,7 @@ Activity 是权限过滤投影。把它当作权威备份会形成第二套事�
 6. 修改 manifest migration checksum、损坏 dump 和对非空目标重复恢复均必须失败，且目标在前两种 preflight 失败后保持空，重复恢复不改变既有数据。
 
 进入跨版本升级、自动调度、远程对象存储、加密备份、Secret backup、增量备份、point-in-time recovery 或 `.nexus` 导出前，必须分别补齐新的数据边界和恢复证据。
+
+## 后续演进
+
+[ADR-0012](0012-local-identity-and-session-foundation.md) 随 migration 005 引入本地账号与服务端 Session 后，显式把 `local_accounts` 归为运维恢复所需的权威数据，把 `user_sessions` 归为只恢复 schema、不恢复数据的实例登录态。密码 verifier 因此随受控 PostgreSQL 备份保留，opaque Session 与 CSRF token digest 不进入数据工件；该变化不授权未来 `.nexus` 可移植导出携带 verifier、Token 或其它 credential。

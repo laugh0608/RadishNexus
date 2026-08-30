@@ -8,9 +8,9 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 )
 
-// VerifiedUser is the minimal output expected from a future local-session or
-// OIDC verifier. It intentionally contains no token, cookie, claim set, or
-// transport metadata.
+// VerifiedUser is the minimal output produced by the local-session verifier
+// and expected from a future OIDC verifier. It intentionally contains no
+// token, cookie, claim set, or transport metadata.
 type VerifiedUser struct {
 	UserID      string
 	WorkspaceID string
