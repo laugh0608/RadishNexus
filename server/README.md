@@ -18,6 +18,7 @@
 - Secure `__Host-` Cookie、精确 HTTPS Origin / Host、可信代理、客户端 IP 登录限流、request ID 与版本化安全错误对象；
 - Session 作用域的 Deployment Nexus View 公共只读 handler 与显式安全 DTO；
 - 同源 authenticated Web Shell、显式 production build root、页面 allowlist 与安全静态资源缓存；
+- 可选文件 Secret 覆盖数据库 URL 密码的公共 runtime config；
 - PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验与 Activity 重建命令。
 
 公共 transport 已开放 `/api/v1/auth/sessions` 与 `/api/v1/auth/session` 的 login / resolve / logout 闭环，以及第一个 Deployment Nexus View 业务读取；同一个 Go server 从显式 Web build root 交付 authenticated shell 和已注册页面，其余业务读写仍未暴露为 HTTP API。认证入口要求精确 HTTPS public origin、精确 Host、显式可信代理链、客户端 IP 限流、受控 JSON、Secure Cookie 和 CSRF，不接受可信用户 Header、insecure Cookie 或 credentialed CORS。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret 或原始 webhook body。
@@ -50,6 +51,8 @@ go run ./cmd/nexus-migrate
 ```
 
 runner 使用 session advisory lock 防止并发执行，每个 migration 单独事务提交，并拒绝已应用文件发生漂移。它只支持向前迁移；当前已建立 PostgreSQL 17 同 major 的最小恢复，跨版本生产升级仍需补齐失败中断、forward repair、兼容窗口和恢复限制。
+
+直接运行仍可把完整连接串放在 `DATABASE_URL`。受控部署也可以让 `DATABASE_URL` 只包含 PostgreSQL 用户、地址和数据库名，再用绝对路径 `RADISHNEXUS_DATABASE_PASSWORD_FILE` 输入单行密码；所有 server、migration、bootstrap、backup 和 restore 入口复用同一解析逻辑。两处同时提供密码、相对路径、空值、多行或读取失败都会显式拒绝，错误不会回显 Secret。正式 Compose 用法见 [`deploy/README.md`](../deploy/README.md)。
 
 ## 首次本地管理员
 

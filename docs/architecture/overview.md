@@ -2,7 +2,7 @@
 
 状态：方向基线，M0.5 / M1 首批纵向边界已冻结
 
-日期：2026-08-30
+日期：2026-08-31
 
 ## 架构目标
 
@@ -224,6 +224,8 @@ M0 契约把不可变领域事件事实与可变投递状态作逻辑分离，�
 
 M0.5 已建立第一条可验证恢复路径：显式命令生成版本化 manifest 与 PostgreSQL custom archive，只在本地或受控私有连接的全新空 PostgreSQL 17 目标上以单事务恢复，随后执行正式 forward-only migration 校验并从不可变领域事件重建 Activity。当前工件是同 major 整库运维备份，不是 `.nexus` 开放导出，也不包含自动覆盖、TLS 工具桥接、跨大版本承诺、远程存储、加密或 Secret 备份。精确边界见 [ADR-0010](../adr/0010-verified-postgresql-backup-and-restore.md)。
 
+M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 Caddy 是唯一宿主 HTTPS 入口，Go server 同源交付 production Web build 与 API，PostgreSQL 只位于内部数据网络；migration、一次性 bootstrap、backup 和 restore 继续使用现有显式 CLI，数据库密码通过按 service 挂载的文件 Secret 输入。该拓扑已经从全新命名 volume 验证 PostgreSQL readiness、migration、一次 bootstrap、重复 bootstrap 拒绝、HTTPS login / Session / logout、转发 Header 清洗和非公开应用/数据库端口；它仍不是公网证书、高可用或跨 major 升级方案。精确边界见 [ADR-0016](../adr/0016-minimal-docker-compose-self-hosting.md) 和 [`deploy/README.md`](../../deploy/README.md)。
+
 ### 可移植上下文包
 
 除整库备份外，规划可移植 `.nexus` 导出包，用于项目迁移、归档和离线检查。建议包含：
@@ -248,7 +250,7 @@ M0.5 已建立第一条可验证恢复路径：显式命令生成版本化 manif
 
 ## 当前仓库布局
 
-当前已经建立根级 `web/` React App、唯一正式 `server/` Go module、可丢弃的 `experiments/` 和共享 `scripts/`；SDK、插件、公共契约或部署目录只在对应产物真正进入实现时创建：
+当前已经建立根级 `web/` React App、唯一正式 `server/` Go module、受控 `deploy/` Compose 工件、可丢弃的 `experiments/` 和共享 `scripts/`；SDK、插件与公共契约目录只在对应产物真正进入实现时创建：
 
 ```text
 RadishNexus/
@@ -256,10 +258,11 @@ RadishNexus/
 ├── server/
 │   ├── cmd/
 │   └── internal/
+├── deploy/
 ├── experiments/
 ├── scripts/
 ├── docs/
 └── LICENSE
 ```
 
-未来 SDK 和插件目录必须拥有独立许可证，不能因位于同一仓库而模糊授权边界；Docker Compose 等部署产物在边界冻结前也不创建占位 `deploy/` 结构。
+未来 SDK 和插件目录必须拥有独立许可证，不能因位于同一仓库而模糊授权边界；`deploy/` 只承载已经冻结且可复验的部署工件，不提前放置高可用、Kubernetes 或公网生产占位结构。

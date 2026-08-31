@@ -15,6 +15,7 @@ import (
 
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/runtimeconfig"
 )
 
 const maxPasswordInputBytes = 1026
@@ -42,9 +43,9 @@ func run(args []string, stdin io.Reader, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		return errors.New("DATABASE_URL is required")
+	databaseURL, err := runtimeconfig.DatabaseURL(os.Getenv, os.ReadFile)
+	if err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)

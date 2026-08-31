@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/laugh0608/RadishNexus/server/internal/backuprestore"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/runtimeconfig"
 )
 
 func main() {
@@ -43,9 +44,9 @@ func run(
 	if outputDirectory == "" {
 		return errors.New("--output is required")
 	}
-	databaseURL := getenv("DATABASE_URL")
-	if databaseURL == "" {
-		return errors.New("DATABASE_URL is required")
+	databaseURL, err := runtimeconfig.DatabaseURL(getenv, os.ReadFile)
+	if err != nil {
+		return err
 	}
 
 	config, err := pgx.ParseConfig(databaseURL)

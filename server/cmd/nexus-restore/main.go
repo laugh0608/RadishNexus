@@ -15,6 +15,7 @@ import (
 
 	"github.com/laugh0608/RadishNexus/server/internal/backuprestore"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/runtimeconfig"
 )
 
 func main() {
@@ -45,9 +46,9 @@ func run(
 	if inputDirectory == "" {
 		return errors.New("--input is required")
 	}
-	databaseURL := getenv("DATABASE_URL")
-	if databaseURL == "" {
-		return errors.New("DATABASE_URL is required")
+	databaseURL, err := runtimeconfig.DatabaseURL(getenv, os.ReadFile)
+	if err != nil {
+		return err
 	}
 
 	config, err := pgx.ParseConfig(databaseURL)

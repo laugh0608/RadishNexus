@@ -18,6 +18,7 @@ MAX_FILE_BYTES = 10 * 1024 * 1024
 
 REQUIRED_FILES = (
     ".editorconfig",
+    ".dockerignore",
     ".gitattributes",
     ".gitignore",
     "AGENTS.md",
@@ -36,6 +37,7 @@ REQUIRED_FILES = (
     ".github/workflows/pr-check.yml",
     "docs/README.md",
     "docs/adr/0001-branch-and-pr-governance.md",
+    "docs/adr/0016-minimal-docker-compose-self-hosting.md",
     "docs/adr/README.md",
     "docs/development/README.md",
     "docs/development/engineering-standards.md",
@@ -43,6 +45,11 @@ REQUIRED_FILES = (
     "docs/governance/agent-collaboration.md",
     "docs/governance/documentation-governance.md",
     "docs/governance/repository-governance.md",
+    "deploy/.env.example",
+    "deploy/Caddyfile",
+    "deploy/Dockerfile",
+    "deploy/README.md",
+    "deploy/compose.yaml",
     "experiments/m0-core-contracts/README.md",
     "experiments/m0-core-contracts/go.mod",
     "experiments/m0-core-contracts/go.sum",
@@ -52,6 +59,7 @@ REQUIRED_FILES = (
     "scripts/check-m0-core-contracts.sh",
     "scripts/check-repo.ps1",
     "scripts/check-repo.sh",
+    "scripts/check-self-hosted-compose.sh",
     "scripts/check_repo.py",
     "scripts/tests/test_check_repo.py",
 )

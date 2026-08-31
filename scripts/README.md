@@ -104,3 +104,13 @@ npm ci
 ```
 
 该入口在源实例通过 application service 生成 Thread → Decision → Ticket → CI Run → staging Deployment fixture，比较恢复前后所有纳入表和 Activity 全量快照，并证明 migration manifest 漂移、dump 损坏和非空目标均 fail closed。脚本只删除自己创建的临时目录、网络和容器，也不会隐式拉取缺失镜像。
+
+## Docker Compose 自部署开发拓扑
+
+在五个 `tag@sha256` 官方基础镜像已经显式准备、本机允许 Docker build 读取现有 Go / npm 锁定依赖后，运行：
+
+```bash
+./scripts/check-self-hosted-compose.sh
+```
+
+该入口不会拉取缺失镜像。它创建任务专属 Compose project、临时数据库 Secret、PostgreSQL volume、Caddy CA 和随机本机 HTTPS 端口，验证 Compose/Caddy 配置、固定 image build、PostgreSQL readiness、显式 migration、唯一一次 bootstrap、HTTPS login / Session / logout、Secure Cookie 以及 Go server / PostgreSQL 无宿主端口。退出时只删除自己的临时 project、volume、network 与临时目录，保留本地构建出的 application / operation image cache。运行边界和人工入口见 [部署说明](../deploy/README.md)与 [ADR-0016](../docs/adr/0016-minimal-docker-compose-self-hosting.md)。

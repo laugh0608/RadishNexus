@@ -18,6 +18,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/httptransport"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/runtimeconfig"
 )
 
 const (
@@ -35,9 +36,9 @@ func main() {
 }
 
 func run() error {
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		return errors.New("DATABASE_URL is required")
+	databaseURL, err := runtimeconfig.DatabaseURL(os.Getenv, os.ReadFile)
+	if err != nil {
+		return err
 	}
 	address := os.Getenv("RADISHNEXUS_HTTP_ADDR")
 	if address == "" {
