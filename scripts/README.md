@@ -81,6 +81,16 @@ npm ci
 
 后者只操作任务专属容器和其中的 `m0_core` schema，结束后自动删除容器；默认不会隐式拉取缺失镜像。实验范围和手工数据库入口见 [M0 核心契约实验](../experiments/m0-core-contracts/README.md)。
 
+## 消息实时收发实验
+
+使用 Go 标准库和本机 `httptest` 验证单进程 Message command 幂等、SSE 增量与断线回放、权限撤销、游标过期和慢消费者隔离：
+
+```bash
+./scripts/check-messaging-realtime.sh
+```
+
+入口运行竞态测试、`go vet` 与 module 整洁检查，不需要数据库或外网。实验使用测试专用 `X-Experiment-User` 注入 principal，不属于正式认证或公共协议；完整边界和删除条件见[消息实时收发实验](../experiments/messaging-realtime/README.md)与 [ADR-0017](../docs/adr/0017-channel-message-boundary-and-single-process-realtime.md)。
+
 ## 正式 Go 服务
 
 不需要数据库的单元测试、`go vet`、`go mod tidy -diff` 与 module checksum 验证：

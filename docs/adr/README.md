@@ -22,6 +22,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0014](0014-session-scoped-deployment-nexus-view-transport.md) | 已接受 | Session 作用域下的 Deployment Nexus View Transport |
 | [ADR-0015](0015-same-origin-authenticated-web-shell.md) | 已接受 | 同源 Authenticated Web Shell 与显式静态资源装配 |
 | [ADR-0016](0016-minimal-docker-compose-self-hosting.md) | 已接受 | 最小 Docker Compose 自部署开发拓扑 |
+| [ADR-0017](0017-channel-message-boundary-and-single-process-realtime.md) | 已接受 | Channel / Message 边界与单进程实时收发实验 |
 
 ## 新建规则
 

@@ -1,12 +1,12 @@
 # RadishNexus 当前状态
 
-状态日期：2026-08-31
+状态日期：2026-09-01
 
 ## 当前阶段
 
 产品定义、架构基线、仓库治理基线与 M0.5 Golden Path / M1 Web 平台基础纵向原型。
 
-当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和安全读取已经建立。正式 Environment、环境级写授权、显式终态 staging Deployment、`deploys` 关系、`deployment.recorded` 投影与 Workspace 作用域安全读取已经通过真实 PostgreSQL 验证。PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验和 Activity 重建已经由 ADR-0010、显式 CLI 与双实例演练建立。上述 M0 正式服务、Web 代表原型与恢复基线已通过 PR #9 的远端 `Candidate Quality`，使用 merge commit 晋级 `master` 并 fast-forward 回流 `dev`。正式 `web/` React + TypeScript 基线现已覆盖 Decision、CI Run 与 Deployment Nexus View 代表交互；本地账号的公共 login / session / logout transport、第一个 Session 作用域的 Deployment Nexus View 业务读取端点，以及同源 authenticated Web Shell 已经建立。真实 PostgreSQL + production Web build + HTTPS 浏览器现已从登录、Workspace 选择进入 canonical Deployment 并完成登出。首个正式 `deploy/` Docker Compose 开发拓扑也已从全新命名 volume 完成固定工件、显式 migration / bootstrap、唯一 Caddy HTTPS origin、文件 Secret、持久化 PostgreSQL 和认证闭环演练；完整产品导航、插件 runtime、公网生产拓扑和客户端尚未建立。
+当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和安全读取已经建立。正式 Environment、环境级写授权、显式终态 staging Deployment、`deploys` 关系、`deployment.recorded` 投影与 Workspace 作用域安全读取已经通过真实 PostgreSQL 验证。PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验和 Activity 重建已经由 ADR-0010、显式 CLI 与双实例演练建立。上述 M0 正式服务、Web 代表原型与恢复基线已通过 PR #9 的远端 `Candidate Quality`，使用 merge commit 晋级 `master` 并 fast-forward 回流 `dev`。正式 `web/` React + TypeScript 基线现已覆盖 Decision、CI Run 与 Deployment Nexus View 代表交互；本地账号的公共 login / session / logout transport、第一个 Session 作用域的 Deployment Nexus View 业务读取端点，以及同源 authenticated Web Shell 已经建立。真实 PostgreSQL + production Web build + HTTPS 浏览器现已从登录、Workspace 选择进入 canonical Deployment 并完成登出。首个正式 `deploy/` Docker Compose 开发拓扑也已从全新命名 volume 完成固定工件、显式 migration / bootstrap、唯一 Caddy HTTPS origin、文件 Secret、持久化 PostgreSQL 和认证闭环演练。Channel / Message / messaging-origin Thread 的最小字段、幂等、权限、来源与实时恢复语义现已由 ADR-0017 冻结，并通过零依赖单进程 HTTP + SSE 可丢弃实验；这些沟通对象尚未进入正式 PostgreSQL、公共 transport 或 Web。完整产品导航、插件 runtime、公网生产拓扑和客户端尚未建立。
 
 ## 当前结论
 
@@ -48,6 +48,7 @@
 - ADR-0014 已冻结 `GET /api/v1/workspaces/{workspace_id}/deployments/{deployment_id}/nexus-view`、路径 Workspace 选择、Session → current membership → `Principal`、显式公共 DTO、不可发现性与 `private, no-store` 缓存边界。
 - ADR-0015 已冻结同源 authenticated Web Shell、显式绝对 production build root、HTML 页面 allowlist、静态资源缓存与安全 Header；它只替代 ADR-0014 中根路径保留静态检视器的阶段性决定。
 - ADR-0016 已冻结首个 Docker Compose 开发拓扑的 Caddy / Go server / PostgreSQL / operation 职责、固定镜像 digest、内部网络、文件 Secret、显式初始化与失败语义；该拓扑不是公网生产、高可用或跨 PostgreSQL major 方案。
+- ADR-0017 已冻结 `channel` / `chn_`、`message` / `msg_`、Message 写入幂等、messaging-origin Thread 的 Channel 权限层、`started-from` 来源、正文最小化和 canonical resync；SSE 只用于 M0.5 单进程实验，M2 版本化 WebSocket 目标不变。
 - 正式 application service 已完成 Thread → Proposed Decision → Accepted Decision → Ticket，并把 EntityLink、领域事件和 Outbox 与业务状态放在同一事务。
 - Jenkins application service 只接收已完成来源认证和字段映射的 `VerifiedJenkinsDelivery`；receipt、CI Run、`ci-run.recorded` 和 Outbox 在同一事务提交，不保存 Secret 或原始 webhook body。
 - 相同 Jenkins delivery 和 digest 只返回既有 CI Run；digest 改变或不同 delivery 映射到同一 external run 时 fail closed，事件冲突会连同 receipt 与 CI Run 一起回滚。
@@ -120,47 +121,40 @@
 - [ADR-0014：Session 作用域下的 Deployment Nexus View Transport](../adr/0014-session-scoped-deployment-nexus-view-transport.md)
 - [ADR-0015：同源 Authenticated Web Shell 与显式静态资源装配](../adr/0015-same-origin-authenticated-web-shell.md)
 - [ADR-0016：最小 Docker Compose 自部署开发拓扑](../adr/0016-minimal-docker-compose-self-hosting.md)
+- [ADR-0017：Channel / Message 边界与单进程实时收发实验](../adr/0017-channel-message-boundary-and-single-process-realtime.md)
 - [开发指南](../development/README.md)
 - [M0 核心契约实验](../../experiments/m0-core-contracts/README.md)
+- [消息实时收发实验](../../experiments/messaging-realtime/README.md)
 - [正式 Go 服务](../../server/README.md)
 - [Docker Compose 自部署开发拓扑](../../deploy/README.md)
 
-## 今日进展（2026-08-31）
+## 今日进展（2026-09-01）
 
-今日已经完成首个正式 Docker Compose 自部署开发拓扑的决策、实现和新实例证据，没有扩展产品功能面：
+今日完成了 Golden Path 沟通入口的对象与技术边界冻结，没有把可丢弃实验接入正式产品：
 
-1. ADR-0016 已接受，冻结 Caddy、Go server、production Web build、PostgreSQL 与四类 operation 的单一职责、内部网络、持久卷、固定镜像 digest、Secret 和失败语义；
-2. `deploy/compose.yaml`、固定 multi-platform 基础镜像的 multi-stage `deploy/Dockerfile`、Caddy 配置、非密 `.env` 示例和运行手册已经建立；只有 Caddy 发布唯一 HTTPS 端口，应用与 PostgreSQL 均无宿主端口；
-3. 数据库密码改用按 service 授权的 Compose Secret 文件。公共 runtime config 只在内存中把密码安全编码到现有 PostgreSQL URL，server、migration、bootstrap、backup 和 restore 复用同一入口；既有完整 `DATABASE_URL` 仍兼容；
-4. application、operation 与 Caddy 容器使用只读根文件系统、`no-new-privileges` 和明确 capability 集；Caddy 官方二进制所需的 `NET_BIND_SERVICE` 是唯一加回的 capability，当前仍只监听非特权 HTTPS 端口；
-5. `./scripts/check-self-hosted-compose.sh` 已建立隔离演练：随机 project、临时 Secret、随机 HTTPS 端口、全新 volumes，退出时只删除本次工件，不触碰用户实例或备份；
-6. 完整演练已通过 PostgreSQL ready → 显式 migration → 第一次 bootstrap 成功 → 第二次 bootstrap 拒绝 → app / Caddy healthy → CA 校验 → login `201` → Session `200` → logout `204` → 已撤销 Session `401`；
-7. 演练登录刻意携带伪造 `X-Forwarded-For`、`X-Forwarded-Host` 与 `X-Forwarded-Proto`，Caddy 清洗后认证仍按可信直接 peer 和精确 origin 工作；真实 port binding 检查确认 Go server 与 PostgreSQL 没有宿主映射；
-8. 真实 Chrome 再次复核 authenticated Web Shell，登录、Workspace、canonical Deployment 的 Current / Relations / Timeline 与退出均通过，最终业务页 console 为 0 warning / 0 error；
-9. Go server、Web、repository checker、Compose / Caddy 静态配置、Dockerfile build check、固定镜像构建和仓库演练均已实际执行；没有新增应用依赖或改变 lockfile。
+1. 盘点确认既有 Workspace membership、Project 角色、restricted Thread、EntityLink、领域事件、Outbox、Activity 和公共错误语义可以复用；正式缺口集中在 Channel、Message、Message → Thread 来源和实时恢复；
+2. ADR-0017 已接受，冻结 `channel` / `chn_` 与 `message` / `msg_` 最小字段、16 KiB 不可变 UTF-8 正文、Project / restricted Channel、发送能力和归档语义；
+3. Message 幂等范围固定为 `(workspace_id, channel_id, author_id, client_operation_id)`；相同正文返回既有对象，不同正文冲突，幂等键不进入 EntityRef、领域事件、Activity 或其他读者可见投影；
+4. messaging-origin Thread 新增不可变 origin Channel 授权层，并用 `thread --started-from--> message` asserted + user EntityLink 保留来源；Thread → Decision 继续 `derived-from`，Decision → Ticket 继续 `implements`，全链不复制 Message 正文；
+5. 可丢弃 `experiments/messaging-realtime/` 采用零新增依赖的 Go HTTP command + SSE，验证 cursor、`Last-Event-ID` 有界回放、process generation、canonical resync、空闲权限撤销和慢消费者隔离；这不替代 M2 WebSocket 目标；
+6. 竞态测试已证明 64 路并发重试只有一个创建者，跨 Channel Message ID 不重复，断线可补发，回放过期只返回无业务数据控制事件，权限撤销后连接关闭且重连不可发现，1,000 次发布不受慢订阅阻塞；
+7. 正式 server 的统一 15 秒写超时被识别为长连接接入前的明确边界；本轮未绕过它开放实验路由，也未新增 Session、CSRF、Origin、公共 API 或 Web fixture；
+8. 实验检查已加入仓库脚本和 `Candidate Quality` 独立 job；没有新增第三方依赖或改变任何 lockfile。
 
 ## 下一步
 
-自部署开发拓扑已经达到本地完成线。下一优先级回到 M0.5 Golden Path 尚未贯通的上游沟通入口：先冻结单 Workspace 下 Channel / Message / Thread 的最小对象、权限、稳定引用、事件与实时收发技术边界，再交付一个能从真实讨论进入既有 Thread → Decision → Ticket 链的小而完整纵向切片。该工作必须先复用现有 Workspace membership、EntityLink、Activity、Outbox 和错误语义，不另造聊天专用身份或权限系统。
+下一优先级是把已冻结边界实现为第一个正式、最薄 PostgreSQL 纵向切片，而不是继续扩写实验：
+
+1. migration 注册 Channel、Message 和 `started-from`，建立 Channel membership、Message 幂等唯一约束、messaging-origin Thread 约束与备份 relation 分类；
+2. application service 在真实事务中复用当前 Workspace / Project / Channel / Thread 权限，原子创建 Message 或 Thread、EntityLink、领域事件和 Outbox，并覆盖回滚、权限撤销和重复提交；
+3. 先建立 canonical Message query 与 Session 作用域 command。实时公共 transport 必须先解决独立 timeout、heartbeat、Caddy flush、连接上限与优雅关闭，不能直接复用实验 Header 或进程内对象；
+4. Web 只交付一个 Channel 的历史、发送和从 Message 发起 Thread，并接入既有 Decision / Ticket 链；真实 PostgreSQL + HTTPS + Caddy + 浏览器复验后再决定是否保留临时 SSE transport。
 
 文档协同技术评估、免费书面授权模板和版本化结构化导入导出仍是独立 M0 / M1 缺口，按路线图后续逐项推进，不与第一个沟通切片同时铺开。当前 `dev` 批次尚未提交或晋级 `master`；是否提交、创建阶段 PR 或写入远程状态需项目所有者另行明确授权。
 
-当前完成线：受控开发者可以从固定工件建立全新 Compose 实例，显式 migration 和且仅一次 bootstrap 后经唯一 HTTPS origin 登录；Secret 不进入 Compose 环境或镜像，应用和数据库不发布宿主端口，健康、日志、备份恢复与失败定位都有明确入口。既有 authenticated Web Shell 与 Deployment Nexus View 的权限、Cookie、CSRF、origin、proxy 和缓存合同保持不变。
+当前完成线：可以明确解释 Message 如何以稳定身份和幂等 command 进入 Channel、如何不复制正文地发起 Thread 并成为 Decision evidence，以及 canonical query、关系、Activity 和实时推送如何复用当前权限；单进程实验已经用真实 HTTP 连接与竞态测试暴露重连、过期、撤销和慢消费者失败语义。
 
-当前停止线：不把当前 Compose 冒充公网生产、高可用或跨 major 升级方案；不自动 migration / bootstrap，不提供默认 credential，不放宽可信代理，不引入 HTTP fallback、浮动镜像或明文 Secret。下一个沟通切片不同时建设完整聊天、搜索、附件、通知、WebSocket 集群、CRDT、插件市场或 Flutter。
-
-## 明日事项（2026-09-01）
-
-明日核心目标是为 Golden Path 的真实讨论入口做最小边界冻结，而不是立即铺开完整聊天：
-
-1. 盘点现有 `threads`、Workspace membership、Project、EntityLink、领域事件、Outbox 与 Activity 合同，明确哪些可直接复用、哪些对象仍缺失；
-2. 对照 Golden Path 的“讨论 → Decision → Ticket”故事，冻结 Channel、Message、Thread 的最小字段、归属、公开 / restricted 可见性、作者与不可变来源边界；
-3. 用可丢弃技术实验验证单进程实时收发、重连、重复提交幂等和权限变化后的订阅收敛，不提前承诺集群协议或独立消息中间件；
-4. 形成 ADR 或专题设计与可执行验证计划；只有对象、权限和事件边界足够明确时，才开始一个最薄的 migration + application service + transport + Web 纵向切片。
-
-明日完成线：能够明确解释一条 Message 如何进入 Thread、Thread 如何在不复制全文的前提下成为 Decision evidence，以及关系、Activity 和实时推送如何复用同一当前权限；至少一个真实技术实验能证明选择的实时传输方向可行并暴露失败语义。
-
-明日停止线：不建立完整聊天 UI、附件、表情、搜索、未读、通知或多副本消息系统；不让引用授予权限，不把客户端身份、频道可见性或订阅状态当作可信服务端授权，不在边界未冻结时直接扩展公共 API。
+当前停止线：实验不是正式 server、公共 API 或产品协议；不建立完整聊天 UI、附件、表情、搜索、未读、通知、多副本 fan-out 或独立消息中间件；不让引用、旧 membership、客户端身份或订阅状态授予权限；不在独立长连接合同落地前把 SSE / WebSocket 挂入现有 15 秒 listener。
 
 ## 开放问题
 

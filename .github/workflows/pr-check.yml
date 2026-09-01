@@ -96,6 +96,23 @@ jobs:
           DATABASE_URL: postgres://radishnexus_test:radishnexus-test-only@127.0.0.1:5432/radishnexus_m0_test?sslmode=disable
         run: go test -tags=integration ./...
 
+  messaging-realtime:
+    name: Messaging Realtime Experiment
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: experiments/messaging-realtime/go.mod
+          cache: false
+
+      - name: Check messaging realtime experiment
+        run: ./scripts/check-messaging-realtime.sh
+
   go-server:
     name: Go Server
     runs-on: ubuntu-latest
@@ -171,6 +188,7 @@ jobs:
       - repo-hygiene
       - checker-tests
       - m0-core-contracts
+      - messaging-realtime
       - go-server
       - web-app
 
@@ -181,6 +199,7 @@ jobs:
           REPO_HYGIENE_RESULT: ${{ needs.repo-hygiene.result }}
           CHECKER_TESTS_RESULT: ${{ needs.checker-tests.result }}
           M0_CORE_CONTRACTS_RESULT: ${{ needs.m0-core-contracts.result }}
+          MESSAGING_REALTIME_RESULT: ${{ needs.messaging-realtime.result }}
           GO_SERVER_RESULT: ${{ needs.go-server.result }}
           WEB_APP_RESULT: ${{ needs.web-app.result }}
         run: |
@@ -192,11 +211,12 @@ jobs:
             echo "| Repo Hygiene | ${REPO_HYGIENE_RESULT} |"
             echo "| Repository Checker Tests | ${CHECKER_TESTS_RESULT} |"
             echo "| M0 Core Contracts | ${M0_CORE_CONTRACTS_RESULT} |"
+            echo "| Messaging Realtime Experiment | ${MESSAGING_REALTIME_RESULT} |"
             echo "| Go Server | ${GO_SERVER_RESULT} |"
             echo "| Web App | ${WEB_APP_RESULT} |"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-          if [[ "${REPO_HYGIENE_RESULT}" != "success" || "${CHECKER_TESTS_RESULT}" != "success" || "${M0_CORE_CONTRACTS_RESULT}" != "success" || "${GO_SERVER_RESULT}" != "success" || "${WEB_APP_RESULT}" != "success" ]]; then
+          if [[ "${REPO_HYGIENE_RESULT}" != "success" || "${CHECKER_TESTS_RESULT}" != "success" || "${M0_CORE_CONTRACTS_RESULT}" != "success" || "${MESSAGING_REALTIME_RESULT}" != "success" || "${GO_SERVER_RESULT}" != "success" || "${WEB_APP_RESULT}" != "success" ]]; then
             echo "Candidate quality checks did not all succeed." >&2
             exit 1
           fi
