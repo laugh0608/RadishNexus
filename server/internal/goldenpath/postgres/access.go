@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -9,6 +10,106 @@ import (
 
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 )
+
+type channelAccess struct {
+	projectID  string
+	visibility string
+	status     string
+	project    projectAccess
+}
+
+type messageAccessFacts struct {
+	channelID string
+	threadID  *string
+}
+
+func readableChannel(
+	ctx context.Context,
+	tx pgx.Tx,
+	principal authz.Principal,
+	channelID string,
+) (channelAccess, error) {
+	var access channelAccess
+	err := tx.QueryRow(ctx, `
+		SELECT governing_project_id, visibility, status
+		FROM radishnexus.channels
+		WHERE workspace_id = $1 AND id = $2
+		FOR SHARE
+	`, principal.WorkspaceID, channelID).Scan(
+		&access.projectID,
+		&access.visibility,
+		&access.status,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return channelAccess{}, authz.ErrNotFound
+	}
+	if err != nil {
+		return channelAccess{}, fmt.Errorf("load Channel access facts: %w", err)
+	}
+
+	project, canReadProject, err := readProjectAccess(ctx, tx, principal, access.projectID)
+	if err != nil {
+		return channelAccess{}, err
+	}
+	if !canReadProject {
+		return channelAccess{}, authz.ErrNotFound
+	}
+	access.project = project
+	if access.visibility == "restricted" {
+		var allowed bool
+		err = tx.QueryRow(ctx, `
+			SELECT true
+			FROM radishnexus.channel_memberships
+			WHERE workspace_id = $1 AND channel_id = $2 AND user_id = $3
+			FOR SHARE
+		`, principal.WorkspaceID, channelID, principal.ID).Scan(&allowed)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return channelAccess{}, authz.ErrNotFound
+		}
+		if err != nil {
+			return channelAccess{}, fmt.Errorf("load restricted Channel membership: %w", err)
+		}
+	}
+	return access, nil
+}
+
+func readableMessage(
+	ctx context.Context,
+	tx pgx.Tx,
+	principal authz.Principal,
+	messageID string,
+) (messageAccessFacts, error) {
+	var facts messageAccessFacts
+	var threadID sql.NullString
+	err := tx.QueryRow(ctx, `
+		SELECT channel_id, thread_id
+		FROM radishnexus.messages
+		WHERE workspace_id = $1 AND id = $2
+		FOR SHARE
+	`, principal.WorkspaceID, messageID).Scan(&facts.channelID, &threadID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return messageAccessFacts{}, authz.ErrNotFound
+	}
+	if err != nil {
+		return messageAccessFacts{}, fmt.Errorf("load Message access facts: %w", err)
+	}
+	if _, err := readableChannel(ctx, tx, principal, facts.channelID); err != nil {
+		return messageAccessFacts{}, err
+	}
+	if threadID.Valid {
+		facts.threadID = &threadID.String
+		if err := requireReadableThreadInChannel(
+			ctx,
+			tx,
+			principal,
+			threadID.String,
+			facts.channelID,
+		); err != nil {
+			return messageAccessFacts{}, err
+		}
+	}
+	return facts, nil
+}
 
 func readProjectAccess(
 	ctx context.Context,
@@ -86,12 +187,13 @@ func readableThread(
 ) (string, projectAccess, error) {
 	var projectID string
 	var visibility string
+	var originChannelID sql.NullString
 	err := tx.QueryRow(ctx, `
-		SELECT governing_project_id, visibility
+		SELECT governing_project_id, visibility, origin_channel_id
 		FROM radishnexus.threads
 		WHERE workspace_id = $1 AND id = $2
 		FOR SHARE
-	`, principal.WorkspaceID, threadID).Scan(&projectID, &visibility)
+	`, principal.WorkspaceID, threadID).Scan(&projectID, &visibility, &originChannelID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", projectAccess{}, authz.ErrNotFound
 	}
@@ -105,6 +207,18 @@ func readableThread(
 	}
 	if !canReadProject {
 		return "", projectAccess{}, authz.ErrNotFound
+	}
+	if originChannelID.Valid {
+		channel, err := readableChannel(ctx, tx, principal, originChannelID.String)
+		if err != nil {
+			return "", projectAccess{}, err
+		}
+		if channel.projectID != projectID {
+			return "", projectAccess{}, fmt.Errorf(
+				"Thread %s origin Channel has a different governing Project",
+				threadID,
+			)
+		}
 	}
 	if visibility == "restricted" {
 		var allowed bool
@@ -122,6 +236,35 @@ func readableThread(
 		}
 	}
 	return projectID, access, nil
+}
+
+func requireReadableThreadInChannel(
+	ctx context.Context,
+	tx pgx.Tx,
+	principal authz.Principal,
+	threadID string,
+	channelID string,
+) error {
+	if _, _, err := readableThread(ctx, tx, principal, threadID); err != nil {
+		return err
+	}
+	var originChannelID sql.NullString
+	err := tx.QueryRow(ctx, `
+		SELECT origin_channel_id
+		FROM radishnexus.threads
+		WHERE workspace_id = $1 AND id = $2
+		FOR SHARE
+	`, principal.WorkspaceID, threadID).Scan(&originChannelID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return authz.ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("load Thread origin Channel: %w", err)
+	}
+	if !originChannelID.Valid || originChannelID.String != channelID {
+		return authz.ErrNotFound
+	}
+	return nil
 }
 
 func requireReadableDecisionEvidence(

@@ -11,12 +11,33 @@ import (
 )
 
 type recordingStore struct {
+	createMessageCommand    CreateMessageCommand
+	startThreadCommand      StartThreadFromMessageCommand
 	createDecisionCommand   CreateDecisionCommand
 	recordCIRunCommand      RecordCompletedCIRunCommand
 	recordDeploymentCommand RecordStagingDeploymentCommand
 	nexusPrincipal          authz.Principal
 	nexusTarget             entityref.Ref
 	nexusView               NexusView
+}
+
+func (store *recordingStore) CreateMessage(
+	_ context.Context,
+	command CreateMessageCommand,
+) (CreateMessageResult, error) {
+	store.createMessageCommand = command
+	return CreateMessageResult{
+		Message: Message{ID: command.MessageID, Body: command.Body},
+		Created: true,
+	}, nil
+}
+
+func (store *recordingStore) StartThreadFromMessage(
+	_ context.Context,
+	command StartThreadFromMessageCommand,
+) (Thread, error) {
+	store.startThreadCommand = command
+	return Thread{ID: command.ThreadID, Title: command.Title}, nil
 }
 
 func (store *recordingStore) CreateDecisionFromThread(_ context.Context, command CreateDecisionCommand) (Decision, error) {

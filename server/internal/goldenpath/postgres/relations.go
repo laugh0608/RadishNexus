@@ -118,6 +118,44 @@ func entityAccess(
 	ref entityref.Ref,
 ) (exists bool, canRead bool, err error) {
 	switch ref.Type {
+	case "channel":
+		_, err := readableChannel(ctx, tx, principal, ref.ID)
+		if errors.Is(err, authz.ErrNotFound) {
+			exists, lookupErr := entityExists(
+				ctx,
+				tx,
+				"radishnexus.channels",
+				principal.WorkspaceID,
+				ref.ID,
+			)
+			if lookupErr != nil {
+				return false, false, fmt.Errorf("check restricted Channel existence: %w", lookupErr)
+			}
+			return exists, false, nil
+		}
+		if err != nil {
+			return false, false, err
+		}
+		return true, true, nil
+	case "message":
+		_, err := readableMessage(ctx, tx, principal, ref.ID)
+		if errors.Is(err, authz.ErrNotFound) {
+			exists, lookupErr := entityExists(
+				ctx,
+				tx,
+				"radishnexus.messages",
+				principal.WorkspaceID,
+				ref.ID,
+			)
+			if lookupErr != nil {
+				return false, false, fmt.Errorf("check restricted Message existence: %w", lookupErr)
+			}
+			return exists, false, nil
+		}
+		if err != nil {
+			return false, false, err
+		}
+		return true, true, nil
 	case "thread":
 		_, _, err := readableThread(ctx, tx, principal, ref.ID)
 		if errors.Is(err, authz.ErrNotFound) {
@@ -265,6 +303,21 @@ func entityAccess(
 	}
 }
 
+func entityExists(
+	ctx context.Context,
+	tx pgx.Tx,
+	table string,
+	workspaceID string,
+	id string,
+) (bool, error) {
+	var exists bool
+	query := "SELECT EXISTS (SELECT 1 FROM " + table + " WHERE workspace_id = $1 AND id = $2)"
+	if err := tx.QueryRow(ctx, query, workspaceID, id).Scan(&exists); err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 func entityTitle(ctx context.Context, tx pgx.Tx, workspaceID string, ref entityref.Ref) (string, error) {
 	var query string
 	switch ref.Type {
@@ -274,6 +327,11 @@ func entityTitle(ctx context.Context, tx pgx.Tx, workspaceID string, ref entityr
 		query = "SELECT question FROM radishnexus.decisions WHERE workspace_id = $1 AND id = $2"
 	case "project":
 		query = "SELECT name FROM radishnexus.projects WHERE workspace_id = $1 AND id = $2"
+	case "channel":
+		query = "SELECT name FROM radishnexus.channels WHERE workspace_id = $1 AND id = $2"
+	case "message":
+		// Relation projections must not turn Message bodies into ambient metadata.
+		return "Message", nil
 	case "component":
 		query = "SELECT name FROM radishnexus.components WHERE workspace_id = $1 AND id = $2"
 	case "environment":

@@ -6,7 +6,7 @@
 
 产品定义、架构基线、仓库治理基线与 M0.5 Golden Path / M1 Web 平台基础纵向原型。
 
-当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和安全读取已经建立。正式 Environment、环境级写授权、显式终态 staging Deployment、`deploys` 关系、`deployment.recorded` 投影与 Workspace 作用域安全读取已经通过真实 PostgreSQL 验证。PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验和 Activity 重建已经由 ADR-0010、显式 CLI 与双实例演练建立。上述 M0 正式服务、Web 代表原型与恢复基线已通过 PR #9 的远端 `Candidate Quality`，使用 merge commit 晋级 `master` 并 fast-forward 回流 `dev`。正式 `web/` React + TypeScript 基线现已覆盖 Decision、CI Run 与 Deployment Nexus View 代表交互；本地账号的公共 login / session / logout transport、第一个 Session 作用域的 Deployment Nexus View 业务读取端点，以及同源 authenticated Web Shell 已经建立。真实 PostgreSQL + production Web build + HTTPS 浏览器现已从登录、Workspace 选择进入 canonical Deployment 并完成登出。首个正式 `deploy/` Docker Compose 开发拓扑也已从全新命名 volume 完成固定工件、显式 migration / bootstrap、唯一 Caddy HTTPS origin、文件 Secret、持久化 PostgreSQL 和认证闭环演练。Channel / Message / messaging-origin Thread 的最小字段、幂等、权限、来源与实时恢复语义现已由 ADR-0017 冻结，并通过零依赖单进程 HTTP + SSE 可丢弃实验；这些沟通对象尚未进入正式 PostgreSQL、公共 transport 或 Web。完整产品导航、插件 runtime、公网生产拓扑和客户端尚未建立。
+当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和安全读取已经建立。正式 Environment、环境级写授权、显式终态 staging Deployment、`deploys` 关系、`deployment.recorded` 投影与 Workspace 作用域安全读取已经通过真实 PostgreSQL 验证。PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验和 Activity 重建已经由 ADR-0010、显式 CLI 与双实例演练建立。上述 M0 正式服务、Web 代表原型与恢复基线已通过 PR #9 的远端 `Candidate Quality`，使用 merge commit 晋级 `master` 并 fast-forward 回流 `dev`。正式 `web/` React + TypeScript 基线现已覆盖 Decision、CI Run 与 Deployment Nexus View 代表交互；本地账号的公共 login / session / logout transport、第一个 Session 作用域的 Deployment Nexus View 业务读取端点，以及同源 authenticated Web Shell 已经建立。真实 PostgreSQL + production Web build + HTTPS 浏览器现已从登录、Workspace 选择进入 canonical Deployment 并完成登出。首个正式 `deploy/` Docker Compose 开发拓扑也已从全新命名 volume 完成固定工件、显式 migration / bootstrap、唯一 Caddy HTTPS origin、文件 Secret、持久化 PostgreSQL 和认证闭环演练。Channel / Message / messaging-origin Thread 的最小字段、幂等、权限、来源与实时恢复语义已由 ADR-0017 冻结并通过零依赖单进程 HTTP + SSE 可丢弃实验；migration 006、正式 application service 与 PostgreSQL / 备份恢复验证现已落地，但 canonical Message query、公共 transport 和 Web 尚未建立。完整产品导航、插件 runtime、公网生产拓扑和客户端尚未建立。
 
 ## 当前结论
 
@@ -49,6 +49,8 @@
 - ADR-0015 已冻结同源 authenticated Web Shell、显式绝对 production build root、HTML 页面 allowlist、静态资源缓存与安全 Header；它只替代 ADR-0014 中根路径保留静态检视器的阶段性决定。
 - ADR-0016 已冻结首个 Docker Compose 开发拓扑的 Caddy / Go server / PostgreSQL / operation 职责、固定镜像 digest、内部网络、文件 Secret、显式初始化与失败语义；该拓扑不是公网生产、高可用或跨 PostgreSQL major 方案。
 - ADR-0017 已冻结 `channel` / `chn_`、`message` / `msg_`、Message 写入幂等、messaging-origin Thread 的 Channel 权限层、`started-from` 来源、正文最小化和 canonical resync；SSE 只用于 M0.5 单进程实验，M2 版本化 WebSocket 目标不变。
+- migration 006 已正式注册 Channel、Message 与 `started-from`，并以外键、唯一约束和 deferred constraint trigger 固化同 Workspace / Project / Channel 来源、不可变 Message、单一 Thread 来源与幂等边界。
+- 正式 application service 已能原子创建 Message 和从 Message 发起 Thread；事件与实时 Outbox 不携带正文或 `client_operation_id`，messaging-origin Thread 继续贯通既有 Decision / Ticket 链。
 - 正式 application service 已完成 Thread → Proposed Decision → Accepted Decision → Ticket，并把 EntityLink、领域事件和 Outbox 与业务状态放在同一事务。
 - Jenkins application service 只接收已完成来源认证和字段映射的 `VerifiedJenkinsDelivery`；receipt、CI Run、`ci-run.recorded` 和 Outbox 在同一事务提交，不保存 Secret 或原始 webhook body。
 - 相同 Jenkins delivery 和 digest 只返回既有 CI Run；digest 改变或不同 delivery 映射到同一 external run 时 fail closed，事件冲突会连同 receipt 与 CI Run 一起回滚。
@@ -130,7 +132,7 @@
 
 ## 今日进展（2026-09-01）
 
-今日完成了 Golden Path 沟通入口的对象与技术边界冻结，没有把可丢弃实验接入正式产品：
+今日完成了 Golden Path 沟通入口从边界冻结到正式 PostgreSQL application slice 的第一段推进；可丢弃 SSE 实验仍未接入正式产品：
 
 1. 盘点确认既有 Workspace membership、Project 角色、restricted Thread、EntityLink、领域事件、Outbox、Activity 和公共错误语义可以复用；正式缺口集中在 Channel、Message、Message → Thread 来源和实时恢复；
 2. ADR-0017 已接受，冻结 `channel` / `chn_` 与 `message` / `msg_` 最小字段、16 KiB 不可变 UTF-8 正文、Project / restricted Channel、发送能力和归档语义；
@@ -138,21 +140,25 @@
 4. messaging-origin Thread 新增不可变 origin Channel 授权层，并用 `thread --started-from--> message` asserted + user EntityLink 保留来源；Thread → Decision 继续 `derived-from`，Decision → Ticket 继续 `implements`，全链不复制 Message 正文；
 5. 可丢弃 `experiments/messaging-realtime/` 采用零新增依赖的 Go HTTP command + SSE，验证 cursor、`Last-Event-ID` 有界回放、process generation、canonical resync、空闲权限撤销和慢消费者隔离；这不替代 M2 WebSocket 目标；
 6. 竞态测试已证明 64 路并发重试只有一个创建者，跨 Channel Message ID 不重复，断线可补发，回放过期只返回无业务数据控制事件，权限撤销后连接关闭且重连不可发现，1,000 次发布不受慢订阅阻塞；
-7. 正式 server 的统一 15 秒写超时被识别为长连接接入前的明确边界；本轮未绕过它开放实验路由，也未新增 Session、CSRF、Origin、公共 API 或 Web fixture；
-8. 实验检查已加入仓库脚本和 `Candidate Quality` 独立 job；没有新增第三方依赖或改变任何 lockfile。
+7. migration 006 已注册 Channel、Message、Channel membership 和 `started-from`，以数据库约束固化 Message 不可变、同 Channel reply、单一 Thread 来源与 printable ASCII 幂等键；
+8. 正式 application service 已在真实事务中实现 Message 创建、同正文重试、变化正文冲突和从 Message 发起 Thread，复用当前 Workspace / Project / Channel / Thread 权限；
+9. `message.created` 与 `thread.started` 只写安全引用并交给独立 `realtime-dispatcher` Outbox consumer；Message 正文和幂等键不进入事件、Activity 或关系投影；
+10. 真实 PostgreSQL 已验证并发重试只有一个创建者、权限撤销立即隐藏既有 Message / Thread、事件冲突整单回滚、跨 Channel reply 和无来源 Thread 失败；`Message → Thread → Decision` 已贯通；
+11. PostgreSQL 17 双实例备份恢复已纳入非空 Channel、Message 和 messaging-origin Thread fixture，恢复前后权威表快照一致，Activity 仍从事件重建且不复制消息噪声；
+12. 正式 server 的统一 15 秒写超时仍是长连接接入前的明确边界；本轮未绕过它开放实验路由，也未新增 Session、CSRF、Origin、公共 API、Web fixture、第三方依赖或 lockfile 变化。
 
 ## 下一步
 
-下一优先级是把已冻结边界实现为第一个正式、最薄 PostgreSQL 纵向切片，而不是继续扩写实验：
+下一优先级是在已落地的 PostgreSQL command slice 上建立可恢复的 canonical 读取与 Session 作用域短请求，而不是直接搬运实验 transport：
 
-1. migration 注册 Channel、Message 和 `started-from`，建立 Channel membership、Message 幂等唯一约束、messaging-origin Thread 约束与备份 relation 分类；
-2. application service 在真实事务中复用当前 Workspace / Project / Channel / Thread 权限，原子创建 Message 或 Thread、EntityLink、领域事件和 Outbox，并覆盖回滚、权限撤销和重复提交；
-3. 先建立 canonical Message query 与 Session 作用域 command。实时公共 transport 必须先解决独立 timeout、heartbeat、Caddy flush、连接上限与优雅关闭，不能直接复用实验 Header 或进程内对象；
-4. Web 只交付一个 Channel 的历史、发送和从 Message 发起 Thread，并接入既有 Decision / Ticket 链；真实 PostgreSQL + HTTPS + Caddy + 浏览器复验后再决定是否保留临时 SSE transport。
+1. 冻结 canonical Message query 的稳定顺序、分页边界、权限撤销与安全 DTO，并先用真实 PostgreSQL application query 验证；
+2. 为单 Channel 历史、发送和从 Message 发起 Thread 建立 Session 作用域短请求 transport，复用现有 membership、CSRF、Origin、错误与 `no-store` 合同；
+3. Web 只交付一个 Channel 的历史、发送和发起 Thread，并接入既有 Decision / Ticket 链；
+4. 完成真实 PostgreSQL + HTTPS + Caddy + 浏览器复验后，再决定是否保留临时 SSE transport；实时入口必须先解决独立 timeout、heartbeat、Caddy flush、连接上限与优雅关闭。
 
-文档协同技术评估、免费书面授权模板和版本化结构化导入导出仍是独立 M0 / M1 缺口，按路线图后续逐项推进，不与第一个沟通切片同时铺开。当前 `dev` 批次尚未提交或晋级 `master`；是否提交、创建阶段 PR 或写入远程状态需项目所有者另行明确授权。
+文档协同技术评估、免费书面授权模板和版本化结构化导入导出仍是独立 M0 / M1 缺口，按路线图后续逐项推进，不与第一个沟通切片同时铺开。ADR 与可丢弃实验批次已在 `dev` 提交为 `e5c5c55`；当前正式 PostgreSQL application slice 尚未提交或晋级 `master`，创建阶段 PR 或写入远程状态仍需项目所有者另行明确授权。
 
-当前完成线：可以明确解释 Message 如何以稳定身份和幂等 command 进入 Channel、如何不复制正文地发起 Thread 并成为 Decision evidence，以及 canonical query、关系、Activity 和实时推送如何复用当前权限；单进程实验已经用真实 HTTP 连接与竞态测试暴露重连、过期、撤销和慢消费者失败语义。
+当前完成线：正式数据库与 application service 已证明 Message 能以稳定身份和幂等 command 进入 Channel、能够不复制正文地发起 Thread 并成为 Decision evidence，关系、Activity、备份恢复和权限撤销复用同一权威语义；canonical Message query、Session transport、Web 和正式实时连接仍属于下一完成线。
 
 当前停止线：实验不是正式 server、公共 API 或产品协议；不建立完整聊天 UI、附件、表情、搜索、未读、通知、多副本 fan-out 或独立消息中间件；不让引用、旧 membership、客户端身份或订阅状态授予权限；不在独立长连接合同落地前把 SSE / WebSocket 挂入现有 15 秒 listener。
 

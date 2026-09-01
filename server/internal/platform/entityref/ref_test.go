@@ -14,6 +14,8 @@ func TestParseFrozenCollaborationReferences(t *testing.T) {
 		wantID   string
 	}{
 		{raw: "entity://thread/thr_01K4THREAD", wantType: "thread", wantID: "thr_01K4THREAD"},
+		{raw: "entity://channel/chn_01K4CHANNEL", wantType: "channel", wantID: "chn_01K4CHANNEL"},
+		{raw: "entity://message/msg_01K4MESSAGE", wantType: "message", wantID: "msg_01K4MESSAGE"},
 		{raw: "entity://decision/dec_01K4DECISION", wantType: "decision", wantID: "dec_01K4DECISION"},
 		{raw: "entity://ticket/tkt_01K4TICKET", wantType: "ticket", wantID: "tkt_01K4TICKET"},
 		{raw: "entity://ci-run/cir_01K4CIRUN", wantType: "ci-run", wantID: "cir_01K4CIRUN"},
@@ -42,7 +44,7 @@ func TestParseRejectsNonCanonicalReferences(t *testing.T) {
 		raw  string
 		want error
 	}{
-		{name: "unknown type", raw: "entity://message/msg_1", want: ErrUnknownType},
+		{name: "unknown type", raw: "entity://document/doc_1", want: ErrUnknownType},
 		{name: "wrong thread prefix", raw: "entity://thread/prototype-thread-1", want: ErrInvalidReference},
 		{name: "wrong ticket prefix", raw: "entity://ticket/tic_1", want: ErrInvalidReference},
 		{name: "query", raw: "entity://decision/dec_1?view=full", want: ErrInvalidReference},

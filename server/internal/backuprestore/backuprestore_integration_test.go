@@ -215,19 +215,19 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 		) VALUES
 			('wrk_backup', 'prj_backup', 'usr_contributor', 'contributor', '2026-08-30T01:00:00Z'),
 			('wrk_backup', 'prj_backup', 'usr_decider', 'decider', '2026-08-30T01:00:00Z');
-		INSERT INTO radishnexus.threads (
-			id, workspace_id, governing_project_id, title, visibility, created_by,
-			created_at, updated_at
+		INSERT INTO radishnexus.channels (
+			id, workspace_id, governing_project_id, name, visibility, status,
+			created_by_kind, created_by_id, created_at, updated_at
 		) VALUES (
-			'thr_backup', 'wrk_backup', 'prj_backup', 'Backup contract discussion',
-			'restricted', 'usr_contributor',
+			'chn_backup', 'wrk_backup', 'prj_backup', 'Backup Channel',
+			'restricted', 'active', 'user', 'usr_contributor',
 			'2026-08-30T01:00:00Z', '2026-08-30T01:00:00Z'
 		);
-		INSERT INTO radishnexus.thread_memberships (
-			workspace_id, thread_id, user_id, created_at
+		INSERT INTO radishnexus.channel_memberships (
+			workspace_id, channel_id, user_id, created_at
 		) VALUES
-			('wrk_backup', 'thr_backup', 'usr_contributor', '2026-08-30T01:00:00Z'),
-			('wrk_backup', 'thr_backup', 'usr_decider', '2026-08-30T01:00:00Z');
+			('wrk_backup', 'chn_backup', 'usr_contributor', '2026-08-30T01:00:00Z'),
+			('wrk_backup', 'chn_backup', 'usr_decider', '2026-08-30T01:00:00Z');
 		INSERT INTO radishnexus.components (
 			id, workspace_id, key, name, type, owner_team_id, lifecycle,
 			created_by_kind, created_by_id, created_at, updated_at
@@ -287,11 +287,40 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 			CorrelationID: correlationID,
 		}
 	}
+	message, err := service.CreateMessage(
+		ctx,
+		invocation(contributor, "cor_backup_message"),
+		goldenpath.CreateMessageInput{
+			ChannelID:         "chn_backup",
+			ClientOperationID: "backup-fixture:message-1",
+			Body:              "Preserve this authoritative message body exactly.",
+		},
+	)
+	if err != nil {
+		t.Fatalf("create backup Message: %v", err)
+	}
+	thread, err := service.StartThreadFromMessage(
+		ctx,
+		invocation(contributor, "cor_backup_thread"),
+		goldenpath.StartThreadFromMessageInput{
+			MessageID: message.Message.ID, Title: "Backup contract discussion", Visibility: "restricted",
+		},
+	)
+	if err != nil {
+		t.Fatalf("create backup Thread from Message: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO radishnexus.thread_memberships (
+			workspace_id, thread_id, user_id, created_at
+		) VALUES ('wrk_backup', $1, 'usr_decider', '2026-08-30T01:30:00Z')
+	`, thread.ID); err != nil {
+		t.Fatalf("seed backup Thread decider membership: %v", err)
+	}
 	decision, err := service.CreateDecisionFromThread(
 		ctx,
 		invocation(contributor, "cor_backup_decision"),
 		goldenpath.CreateDecisionInput{
-			ThreadID: "thr_backup",
+			ThreadID: thread.ID,
 			Question: "How should the backup contract preserve context?",
 		},
 	)

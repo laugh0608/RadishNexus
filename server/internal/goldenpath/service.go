@@ -112,6 +112,8 @@ type CreateTicketCommand struct {
 // Store owns the database transaction for each command so permission facts,
 // business state, domain events, links, and Outbox state commit atomically.
 type Store interface {
+	CreateMessage(context.Context, CreateMessageCommand) (CreateMessageResult, error)
+	StartThreadFromMessage(context.Context, StartThreadFromMessageCommand) (Thread, error)
 	CreateDecisionFromThread(context.Context, CreateDecisionCommand) (Decision, error)
 	AcceptDecision(context.Context, AcceptDecisionCommand) (Decision, error)
 	CreateTicketFromDecision(context.Context, CreateTicketCommand) (Ticket, error)

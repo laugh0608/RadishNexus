@@ -146,7 +146,7 @@ entity://environment/env_002
 
 引用必须经过原对象权限检查。能够看到工单不表示自动获得关联私密频道或文档的读取权。
 
-类型注册、结构化表示、Workspace 解析和受限占位的 M0 基线见[核心实体、授权与事件契约](core-contracts.md)。Thread、Decision、Ticket 的首段 Project 作用域与物理 schema 已由 ADR-0004、ADR-0005 和正式 migration 落地；Component、CI Run 的来源与读取边界已由 ADR-0006、ADR-0007 和 migration 003 落地；Environment、显式 staging Deployment、环境级写授权与安全读取已由 ADR-0009、ADR-0011 和 migration 004 落地；Channel、Message 与 messaging-origin Thread 的最小身份、来源和权限边界已由 ADR-0017 冻结，但尚未进入正式 schema。具体 ID 生成算法及 Document、Repository 等其余对象 schema 仍未冻结。
+类型注册、结构化表示、Workspace 解析和受限占位的 M0 基线见[核心实体、授权与事件契约](core-contracts.md)。Thread、Decision、Ticket 的首段 Project 作用域与物理 schema 已由 ADR-0004、ADR-0005 和正式 migration 落地；Component、CI Run 的来源与读取边界已由 ADR-0006、ADR-0007 和 migration 003 落地；Environment、显式 staging Deployment、环境级写授权与安全读取已由 ADR-0009、ADR-0011 和 migration 004 落地；Channel、Message 与 messaging-origin Thread 的最小身份、来源、权限和幂等边界已由 ADR-0017 与 migration 006 落地。具体 ID 生成算法及 Document、Repository 等其余对象 schema 仍未冻结。
 
 ## EntityLink 与 Nexus View
 

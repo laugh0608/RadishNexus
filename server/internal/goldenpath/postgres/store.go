@@ -378,10 +378,14 @@ func insertEvent(ctx context.Context, tx pgx.Tx, event eventRecord) error {
 }
 
 func insertOutbox(ctx context.Context, tx pgx.Tx, eventID string) error {
+	return insertOutboxFor(ctx, tx, eventID, "activity-projector")
+}
+
+func insertOutboxFor(ctx context.Context, tx pgx.Tx, eventID string, consumer string) error {
 	_, err := tx.Exec(ctx, `
 		INSERT INTO radishnexus.outbox_deliveries (event_id, consumer)
-		VALUES ($1, 'activity-projector')
-	`, eventID)
+		VALUES ($1, $2)
+	`, eventID, consumer)
 	if err != nil {
 		return mapDatabaseError("insert Outbox delivery", err)
 	}

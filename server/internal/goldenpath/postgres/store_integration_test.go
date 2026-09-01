@@ -205,6 +205,7 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 	assertDatabaseConstraints(t, ctx, pool, decision.ID, duplicateEventID)
 	assertNexusViewReadSlice(t, ctx, pool, store, service, decider, reader, admin, decision, ticket)
 	assertJenkinsCIRunSlice(t, ctx, pool, store, service)
+	assertMessagingSlice(t, ctx, pool, store, service)
 }
 
 func assertNexusViewReadSlice(
@@ -399,6 +400,17 @@ func seedGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 			('wrk_main', 'prj_auth', 'usr_decider', 'decider'),
 			('wrk_main', 'prj_auth', 'usr_reader', 'viewer'),
 			('wrk_main', 'prj_auth', 'usr_admin', 'admin');
+		INSERT INTO radishnexus.channels (
+			id, workspace_id, governing_project_id, name, visibility, status,
+			created_by_kind, created_by_id
+		) VALUES
+			('chn_project', 'wrk_main', 'prj_auth', 'Project Channel', 'project', 'active', 'user', 'usr_contributor'),
+			('chn_restricted', 'wrk_main', 'prj_auth', 'Restricted Channel', 'restricted', 'active', 'user', 'usr_contributor'),
+			('chn_archived', 'wrk_main', 'prj_auth', 'Archived Channel', 'project', 'archived', 'user', 'usr_contributor'),
+			('chn_other', 'wrk_other', 'prj_other', 'Other Channel', 'project', 'active', 'user', 'usr_contributor');
+		INSERT INTO radishnexus.channel_memberships (workspace_id, channel_id, user_id) VALUES
+			('wrk_main', 'chn_restricted', 'usr_contributor'),
+			('wrk_main', 'chn_restricted', 'usr_decider');
 		INSERT INTO radishnexus.threads (
 			id, workspace_id, governing_project_id, title, visibility, created_by
 		) VALUES

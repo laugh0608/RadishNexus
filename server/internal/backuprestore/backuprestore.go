@@ -41,6 +41,8 @@ const (
 var (
 	includedDataTables = []string{
 		"public.radishnexus_schema_migrations",
+		"radishnexus.channel_memberships",
+		"radishnexus.channels",
 		"radishnexus.ci_runs",
 		"radishnexus.components",
 		"radishnexus.decisions",
@@ -52,6 +54,7 @@ var (
 		"radishnexus.environments",
 		"radishnexus.inbound_deliveries",
 		"radishnexus.local_accounts",
+		"radishnexus.messages",
 		"radishnexus.outbox_deliveries",
 		"radishnexus.project_memberships",
 		"radishnexus.projects",

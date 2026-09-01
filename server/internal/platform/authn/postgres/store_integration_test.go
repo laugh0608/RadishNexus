@@ -74,7 +74,10 @@ func TestLocalIdentityBootstrapLoginAndSessionLifecycle(t *testing.T) {
 	}
 	t.Cleanup(pool.Close)
 	store := authpostgres.New(pool)
-	now := time.Date(2026, 8, 30, 6, 0, 0, 0, time.UTC)
+	// Session deletion is guarded against the database wall clock. Keep the
+	// service clock aligned with the integration run so this assertion does not
+	// become date-dependent.
+	now := time.Now().UTC().Truncate(time.Second)
 	password := "correct horse battery staple"
 
 	type bootstrapOutcome struct {
