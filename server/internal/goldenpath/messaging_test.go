@@ -78,6 +78,106 @@ func TestCreateMessageRejectsInvalidFactsBeforeStore(t *testing.T) {
 	}
 }
 
+func TestListChannelMessagesValidatesAndNormalizesCursor(t *testing.T) {
+	t.Parallel()
+
+	principal := authz.Principal{
+		Kind: authz.PrincipalUser, ID: "usr_1", WorkspaceID: "wrk_1",
+	}
+	localTime := time.Date(2026, 9, 1, 18, 30, 0, 123000000, time.FixedZone("source", 8*60*60))
+	want := MessagePage{Messages: []MessageProjection{{ID: "msg_1", Body: "body"}}}
+	store := &recordingStore{messagePage: want}
+	service := NewService(store, &sequenceIDs{}, fixedClock{})
+
+	got, err := service.ListChannelMessages(context.Background(), principal, ListChannelMessagesInput{
+		ChannelID: "chn_1",
+		Before: &MessagePageCursor{
+			CreatedAt: localTime,
+			MessageID: "msg_cursor",
+		},
+		Limit: 25,
+	})
+	if err != nil {
+		t.Fatalf("ListChannelMessages() error = %v", err)
+	}
+	if !store.listMessagesCalled || store.listMessagesPrincipal != principal ||
+		store.listMessagesInput.ChannelID != "chn_1" || store.listMessagesInput.Limit != 25 {
+		t.Fatalf("ListChannelMessages Store input = %#v, principal = %#v", store.listMessagesInput, store.listMessagesPrincipal)
+	}
+	if store.listMessagesInput.Before == nil ||
+		!store.listMessagesInput.Before.CreatedAt.Equal(localTime.UTC()) ||
+		store.listMessagesInput.Before.CreatedAt.Location() != time.UTC ||
+		store.listMessagesInput.Before.MessageID != "msg_cursor" {
+		t.Fatalf("normalized Message cursor = %#v", store.listMessagesInput.Before)
+	}
+	if len(got.Messages) != 1 || got.Messages[0].ID != "msg_1" {
+		t.Fatalf("ListChannelMessages() = %#v", got)
+	}
+}
+
+func TestListChannelMessagesRejectsInvalidBoundaryBeforeStore(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name      string
+		principal authz.Principal
+		input     ListChannelMessagesInput
+	}{
+		{
+			name:      "system principal",
+			principal: authz.Principal{Kind: authz.PrincipalSystem, ID: "system", WorkspaceID: "wrk_1"},
+			input:     ListChannelMessagesInput{ChannelID: "chn_1", Limit: 1},
+		},
+		{
+			name:      "invalid channel",
+			principal: validMessagingInvocation().Principal,
+			input:     ListChannelMessagesInput{ChannelID: "channel_1", Limit: 1},
+		},
+		{
+			name:      "zero limit",
+			principal: validMessagingInvocation().Principal,
+			input:     ListChannelMessagesInput{ChannelID: "chn_1", Limit: 0},
+		},
+		{
+			name:      "oversized limit",
+			principal: validMessagingInvocation().Principal,
+			input:     ListChannelMessagesInput{ChannelID: "chn_1", Limit: MaxMessagePageSize + 1},
+		},
+		{
+			name:      "zero cursor time",
+			principal: validMessagingInvocation().Principal,
+			input: ListChannelMessagesInput{
+				ChannelID: "chn_1", Limit: 1,
+				Before: &MessagePageCursor{MessageID: "msg_cursor"},
+			},
+		},
+		{
+			name:      "invalid cursor ID",
+			principal: validMessagingInvocation().Principal,
+			input: ListChannelMessagesInput{
+				ChannelID: "chn_1", Limit: 1,
+				Before: &MessagePageCursor{CreatedAt: now, MessageID: "message_cursor"},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			store := &recordingStore{}
+			service := NewService(store, &sequenceIDs{}, fixedClock{})
+			_, err := service.ListChannelMessages(context.Background(), test.principal, test.input)
+			if !errors.Is(err, authz.ErrInvalid) && !errors.Is(err, authz.ErrUnauthenticated) {
+				t.Fatalf("ListChannelMessages() error = %v, want invalid or unauthenticated", err)
+			}
+			if store.listMessagesCalled {
+				t.Fatalf("invalid input reached Store: %#v", store.listMessagesInput)
+			}
+		})
+	}
+}
+
 func TestStartThreadFromMessageBuildsAtomicCommand(t *testing.T) {
 	t.Parallel()
 

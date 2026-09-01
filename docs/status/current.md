@@ -6,7 +6,7 @@
 
 产品定义、架构基线、仓库治理基线与 M0.5 Golden Path / M1 Web 平台基础纵向原型。
 
-当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和安全读取已经建立。正式 Environment、环境级写授权、显式终态 staging Deployment、`deploys` 关系、`deployment.recorded` 投影与 Workspace 作用域安全读取已经通过真实 PostgreSQL 验证。PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验和 Activity 重建已经由 ADR-0010、显式 CLI 与双实例演练建立。上述 M0 正式服务、Web 代表原型与恢复基线已通过 PR #9 的远端 `Candidate Quality`，使用 merge commit 晋级 `master` 并 fast-forward 回流 `dev`。正式 `web/` React + TypeScript 基线现已覆盖 Decision、CI Run 与 Deployment Nexus View 代表交互；本地账号的公共 login / session / logout transport、第一个 Session 作用域的 Deployment Nexus View 业务读取端点，以及同源 authenticated Web Shell 已经建立。真实 PostgreSQL + production Web build + HTTPS 浏览器现已从登录、Workspace 选择进入 canonical Deployment 并完成登出。首个正式 `deploy/` Docker Compose 开发拓扑也已从全新命名 volume 完成固定工件、显式 migration / bootstrap、唯一 Caddy HTTPS origin、文件 Secret、持久化 PostgreSQL 和认证闭环演练。Channel / Message / messaging-origin Thread 的最小字段、幂等、权限、来源与实时恢复语义已由 ADR-0017 冻结并通过零依赖单进程 HTTP + SSE 可丢弃实验；migration 006、正式 application service 与 PostgreSQL / 备份恢复验证现已落地，但 canonical Message query、公共 transport 和 Web 尚未建立。完整产品导航、插件 runtime、公网生产拓扑和客户端尚未建立。
+当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和安全读取已经建立。正式 Environment、环境级写授权、显式终态 staging Deployment、`deploys` 关系、`deployment.recorded` 投影与 Workspace 作用域安全读取已经通过真实 PostgreSQL 验证。PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验和 Activity 重建已经由 ADR-0010、显式 CLI 与双实例演练建立。上述 M0 正式服务、Web 代表原型与恢复基线已通过 PR #9 的远端 `Candidate Quality`，使用 merge commit 晋级 `master` 并 fast-forward 回流 `dev`。正式 `web/` React + TypeScript 基线现已覆盖 Decision、CI Run 与 Deployment Nexus View 代表交互；本地账号的公共 login / session / logout transport、第一个 Session 作用域的 Deployment Nexus View 业务读取端点，以及同源 authenticated Web Shell 已经建立。真实 PostgreSQL + production Web build + HTTPS 浏览器现已从登录、Workspace 选择进入 canonical Deployment 并完成登出。首个正式 `deploy/` Docker Compose 开发拓扑也已从全新命名 volume 完成固定工件、显式 migration / bootstrap、唯一 Caddy HTTPS origin、文件 Secret、持久化 PostgreSQL 和认证闭环演练。Channel / Message / messaging-origin Thread 的最小字段、幂等、权限、来源与实时恢复语义已由 ADR-0017 冻结并通过零依赖单进程 HTTP + SSE 可丢弃实验；migration 006、正式 command application service、canonical Message application query 与 PostgreSQL / 备份恢复验证现已落地，但公共 transport 和 Web 尚未建立。完整产品导航、插件 runtime、公网生产拓扑和客户端尚未建立。
 
 ## 当前结论
 
@@ -51,6 +51,7 @@
 - ADR-0017 已冻结 `channel` / `chn_`、`message` / `msg_`、Message 写入幂等、messaging-origin Thread 的 Channel 权限层、`started-from` 来源、正文最小化和 canonical resync；SSE 只用于 M0.5 单进程实验，M2 版本化 WebSocket 目标不变。
 - migration 006 已正式注册 Channel、Message 与 `started-from`，并以外键、唯一约束和 deferred constraint trigger 固化同 Workspace / Project / Channel 来源、不可变 Message、单一 Thread 来源与幂等边界。
 - 正式 application service 已能原子创建 Message 和从 Message 发起 Thread；事件与实时 Outbox 不携带正文或 `client_operation_id`，messaging-origin Thread 继续贯通既有 Decision / Ticket 链。
+- canonical Message application query 已按当前 Channel + Thread 权限过滤正文，以 `(created_at, message_id)` exclusive keyset 稳定向更旧内容分页；application boundary 尚不是公共 cursor 协议。
 - 正式 application service 已完成 Thread → Proposed Decision → Accepted Decision → Ticket，并把 EntityLink、领域事件和 Outbox 与业务状态放在同一事务。
 - Jenkins application service 只接收已完成来源认证和字段映射的 `VerifiedJenkinsDelivery`；receipt、CI Run、`ci-run.recorded` 和 Outbox 在同一事务提交，不保存 Secret 或原始 webhook body。
 - 相同 Jenkins delivery 和 digest 只返回既有 CI Run；digest 改变或不同 delivery 映射到同一 external run 时 fail closed，事件冲突会连同 receipt 与 CI Run 一起回滚。
@@ -146,19 +147,21 @@
 10. 真实 PostgreSQL 已验证并发重试只有一个创建者、权限撤销立即隐藏既有 Message / Thread、事件冲突整单回滚、跨 Channel reply 和无来源 Thread 失败；`Message → Thread → Decision` 已贯通；
 11. PostgreSQL 17 双实例备份恢复已纳入非空 Channel、Message 和 messaging-origin Thread fixture，恢复前后权威表快照一致，Activity 仍从事件重建且不复制消息噪声；
 12. 正式 server 的统一 15 秒写超时仍是长连接接入前的明确边界；本轮未绕过它开放实验路由，也未新增 Session、CSRF、Origin、公共 API、Web fixture、第三方依赖或 lockfile 变化。
+13. canonical Message application query 已建立：每页 `1..100` 条，最新页向旧页使用排他 keyset，同时间戳由 Message ID 决胜，页内保持时间正序，DTO 不含 `client_operation_id`；
+14. 真实 PostgreSQL 已验证分页无重复、新消息只在刷新头页时出现、restricted Thread 回复在 limit 前过滤、Channel 权限撤销后查询不可发现，归档 Channel 仍可读取历史。
 
 ## 下一步
 
-下一优先级是在已落地的 PostgreSQL command slice 上建立可恢复的 canonical 读取与 Session 作用域短请求，而不是直接搬运实验 transport：
+下一优先级是在已落地的 PostgreSQL command 与 canonical query 上建立 Session 作用域短请求，而不是直接搬运实验 transport：
 
-1. 冻结 canonical Message query 的稳定顺序、分页边界、权限撤销与安全 DTO，并先用真实 PostgreSQL application query 验证；
-2. 为单 Channel 历史、发送和从 Message 发起 Thread 建立 Session 作用域短请求 transport，复用现有 membership、CSRF、Origin、错误与 `no-store` 合同；
+1. 为单 Channel 历史、发送和从 Message 发起 Thread 冻结 Session 作用域短请求路由、opaque cursor、请求 / 响应 DTO、CSRF、Origin、错误与 `no-store` 合同；
+2. 复用当前认证 adapter 和 application service 实现上述 handler，并以真实 Session + PostgreSQL 覆盖权限撤销、重复发送和非法 cursor；
 3. Web 只交付一个 Channel 的历史、发送和发起 Thread，并接入既有 Decision / Ticket 链；
 4. 完成真实 PostgreSQL + HTTPS + Caddy + 浏览器复验后，再决定是否保留临时 SSE transport；实时入口必须先解决独立 timeout、heartbeat、Caddy flush、连接上限与优雅关闭。
 
-文档协同技术评估、免费书面授权模板和版本化结构化导入导出仍是独立 M0 / M1 缺口，按路线图后续逐项推进，不与第一个沟通切片同时铺开。ADR 与可丢弃实验批次已在 `dev` 提交为 `e5c5c55`；当前正式 PostgreSQL application slice 尚未提交或晋级 `master`，创建阶段 PR 或写入远程状态仍需项目所有者另行明确授权。
+文档协同技术评估、免费书面授权模板和版本化结构化导入导出仍是独立 M0 / M1 缺口，按路线图后续逐项推进，不与第一个沟通切片同时铺开。ADR / 可丢弃实验与正式 PostgreSQL command slice 已在 `dev` 分别提交为 `e5c5c55`、`ef6c838`；当前 canonical query 批次尚未提交或晋级 `master`，创建阶段 PR 或写入远程状态仍需项目所有者另行明确授权。
 
-当前完成线：正式数据库与 application service 已证明 Message 能以稳定身份和幂等 command 进入 Channel、能够不复制正文地发起 Thread 并成为 Decision evidence，关系、Activity、备份恢复和权限撤销复用同一权威语义；canonical Message query、Session transport、Web 和正式实时连接仍属于下一完成线。
+当前完成线：正式数据库与 application service 已证明 Message 能以稳定身份和幂等 command 进入 Channel、能够不复制正文地发起 Thread 并成为 Decision evidence；canonical query 已以稳定、无重复、权限过滤的 keyset 分页恢复权威正文，关系、Activity、备份恢复和权限撤销复用同一语义。Session transport、Web 和正式实时连接仍属于下一完成线。
 
 当前停止线：实验不是正式 server、公共 API 或产品协议；不建立完整聊天 UI、附件、表情、搜索、未读、通知、多副本 fan-out 或独立消息中间件；不让引用、旧 membership、客户端身份或订阅状态授予权限；不在独立长连接合同落地前把 SSE / WebSocket 挂入现有 15 秒 listener。
 

@@ -12,6 +12,10 @@ import (
 
 type recordingStore struct {
 	createMessageCommand    CreateMessageCommand
+	listMessagesPrincipal   authz.Principal
+	listMessagesInput       ListChannelMessagesInput
+	messagePage             MessagePage
+	listMessagesCalled      bool
 	startThreadCommand      StartThreadFromMessageCommand
 	createDecisionCommand   CreateDecisionCommand
 	recordCIRunCommand      RecordCompletedCIRunCommand
@@ -19,6 +23,17 @@ type recordingStore struct {
 	nexusPrincipal          authz.Principal
 	nexusTarget             entityref.Ref
 	nexusView               NexusView
+}
+
+func (store *recordingStore) ListChannelMessages(
+	_ context.Context,
+	principal authz.Principal,
+	input ListChannelMessagesInput,
+) (MessagePage, error) {
+	store.listMessagesCalled = true
+	store.listMessagesPrincipal = principal
+	store.listMessagesInput = input
+	return store.messagePage, nil
 }
 
 func (store *recordingStore) CreateMessage(

@@ -200,6 +200,7 @@ M0 command 只记录调用方已经确认的外部终态，不执行部署、不
 - Message 使用 `message` / `msg_` 稳定引用，保存不可变 `channel_id`、可选 `thread_id`、服务端 `author_id`、原始 UTF-8 `body`、`client_operation_id` 与 `created_at`；
 - Message 正文 M0.5 上限 16 KiB，不支持编辑、删除、附件或富文本变换；幂等范围为 `(workspace_id, channel_id, author_id, client_operation_id)`，相同键不同正文必须冲突；
 - `client_operation_id` 只用于写入幂等，不是 EntityID，也不进入其它读者可见的实时投影、领域事件或 Activity；
+- canonical Channel 历史按 `(created_at, message_id)` 稳定排序并使用 exclusive keyset 向更旧消息翻页；带 `thread_id` 的回复只有在当前 Thread 也可读时才进入结果，幂等键不进入可读 DTO；
 - Message 与 Thread 保存原始讨论；讨论可以产生 Ticket、Document 或 Decision，但转换后仍保留结构化双向引用。
 
 ### M0 协作作用域

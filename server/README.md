@@ -5,6 +5,7 @@
 - 标准库 HTTP 存活与就绪检查；
 - 基于原生 `pgx/v5`、连续编号与 SHA-256 漂移检测的显式 PostgreSQL migration；
 - Channel / Message / messaging-origin Thread 的正式 schema、权限和幂等 application service；
+- 权限过滤、稳定 keyset 分页的 canonical Channel Message application query；
 - Thread → Decision → Ticket 的 application service；
 - 已验证 Jenkins delivery → 完成态 CI Run 的 application service；
 - 显式授权用户记录终态 staging Deployment 的 application service；
@@ -24,7 +25,7 @@
 
 公共 transport 已开放 `/api/v1/auth/sessions` 与 `/api/v1/auth/session` 的 login / resolve / logout 闭环，以及第一个 Deployment Nexus View 业务读取；同一个 Go server 从显式 Web build root 交付 authenticated shell 和已注册页面，其余业务读写仍未暴露为 HTTP API。认证入口要求精确 HTTPS public origin、精确 Host、显式可信代理链、客户端 IP 限流、受控 JSON、Secure Cookie 和 CSRF，不接受可信用户 Header、insecure Cookie 或 credentialed CORS。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret 或原始 webhook body。
 
-Channel / Message command 当前只存在于 transport-independent application service。migration 006 固化 Channel membership、Message 不可变和幂等唯一范围、同 Channel reply、messaging-origin Thread 的 `origin_channel_id` 与唯一 `started-from` Message 来源；创建 Message 或 Thread 时，业务事实、安全最小化事件与 `realtime-dispatcher` Outbox 在同一事务提交。当前没有 canonical Message list query、Session 作用域消息路由或正式实时连接，实验 SSE Header 和进程内 cursor 不属于公共协议。
+Channel / Message command 与 canonical query 当前只存在于 transport-independent application service。migration 006 固化 Channel membership、Message 不可变和幂等唯一范围、同 Channel reply、messaging-origin Thread 的 `origin_channel_id` 与唯一 `started-from` Message 来源；创建 Message 或 Thread 时，业务事实、安全最小化事件与 `realtime-dispatcher` Outbox 在同一事务提交。canonical query 返回最新一页并按 `(created_at, message_id)` 以 exclusive keyset 向更旧内容翻页，先过滤当前不可读 Thread 回复，且不返回 `client_operation_id`。当前没有 Session 作用域消息路由或正式实时连接；application keyset 尚未形成公开 cursor 编码，实验 SSE Header 和进程内 cursor 也不属于公共协议。
 
 当前 Activity 白名单包含 `decision.proposed`、`decision.accepted`、`ticket.created`、`ci-run.recorded` 和 `deployment.recorded`。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，不依赖 Outbox 投递状态，也尚未建立常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
 

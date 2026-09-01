@@ -8,11 +8,13 @@ import (
 	"unicode/utf8"
 
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
 
 const (
 	MaxMessageBodyBytes       = 16 * 1024
 	MaxClientOperationIDBytes = 128
+	MaxMessagePageSize        = 100
 )
 
 type Message struct {
@@ -29,6 +31,31 @@ type Message struct {
 type CreateMessageResult struct {
 	Message Message
 	Created bool
+}
+
+// MessageProjection is the canonical readable Message shape. It deliberately
+// excludes client_operation_id because idempotency state is private to the
+// authoring command boundary.
+type MessageProjection struct {
+	ID        string
+	ChannelID string
+	ThreadID  *string
+	AuthorID  string
+	Body      string
+	CreatedAt time.Time
+}
+
+// MessagePageCursor is an internal exclusive keyset boundary. A future
+// transport must encode it as an opaque token rather than exposing its fields
+// as a public cursor contract.
+type MessagePageCursor struct {
+	CreatedAt time.Time
+	MessageID string
+}
+
+type MessagePage struct {
+	Messages    []MessageProjection
+	OlderCursor *MessagePageCursor
 }
 
 type Thread struct {
@@ -48,6 +75,12 @@ type CreateMessageInput struct {
 	ThreadID          string
 	ClientOperationID string
 	Body              string
+}
+
+type ListChannelMessagesInput struct {
+	ChannelID string
+	Before    *MessagePageCursor
+	Limit     int
 }
 
 type StartThreadFromMessageInput struct {
@@ -120,6 +153,44 @@ func (service *Service) CreateMessage(
 		Body:              input.Body,
 		OccurredAt:        service.clock.Now().UTC(),
 	})
+}
+
+func (service *Service) ListChannelMessages(
+	ctx context.Context,
+	principal authz.Principal,
+	input ListChannelMessagesInput,
+) (MessagePage, error) {
+	if err := principal.ValidateUser(); err != nil {
+		return MessagePage{}, err
+	}
+	if err := entityref.M0Registry().Validate(entityref.Ref{
+		Type: "channel",
+		ID:   input.ChannelID,
+	}); err != nil {
+		return MessagePage{}, fmt.Errorf("%w: Channel reference: %v", authz.ErrInvalid, err)
+	}
+	if input.Limit < 1 || input.Limit > MaxMessagePageSize {
+		return MessagePage{}, fmt.Errorf(
+			"%w: Message page size must be between 1 and %d",
+			authz.ErrInvalid,
+			MaxMessagePageSize,
+		)
+	}
+	if input.Before != nil {
+		if input.Before.CreatedAt.IsZero() {
+			return MessagePage{}, fmt.Errorf("%w: Message page cursor time is required", authz.ErrInvalid)
+		}
+		if err := entityref.M0Registry().Validate(entityref.Ref{
+			Type: "message",
+			ID:   input.Before.MessageID,
+		}); err != nil {
+			return MessagePage{}, fmt.Errorf("%w: Message page cursor ID: %v", authz.ErrInvalid, err)
+		}
+		cursor := *input.Before
+		cursor.CreatedAt = cursor.CreatedAt.UTC()
+		input.Before = &cursor
+	}
+	return service.store.ListChannelMessages(ctx, principal, input)
 }
 
 func (service *Service) StartThreadFromMessage(

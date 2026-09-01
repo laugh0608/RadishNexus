@@ -27,6 +27,7 @@ func assertMessagingSlice(
 ) {
 	t.Helper()
 	contributor := principal("usr_contributor")
+	decider := principal("usr_decider")
 	reader := principal("usr_reader")
 
 	_, err := service.CreateMessage(ctx, invocation(reader, "cor_message_forbidden"), goldenpath.CreateMessageInput{
@@ -129,6 +130,17 @@ func assertMessagingSlice(
 	if err != nil || !reply.Created || reply.Message.ThreadID == nil || *reply.Message.ThreadID != thread.ID {
 		t.Fatalf("Thread reply = %#v, error = %v", reply, err)
 	}
+	assertRestrictedChannelMessageQuery(
+		t,
+		ctx,
+		service,
+		contributor,
+		decider,
+		reader,
+		first.Message,
+		reply.Message,
+	)
+	assertCanonicalMessagePagination(t, ctx, store, service, contributor)
 
 	relations, err := service.ListRelations(ctx, contributor, entityref.Ref{Type: "thread", ID: thread.ID})
 	if err != nil {
@@ -161,6 +173,13 @@ func assertMessagingSlice(
 	_, err = service.CreateMessage(ctx, invocation(contributor, "cor_message_after_revoke"), input)
 	if !errors.Is(err, authz.ErrNotFound) {
 		t.Fatalf("duplicate Message after Channel revoke error = %v, want not found", err)
+	}
+	_, err = service.ListChannelMessages(ctx, contributor, goldenpath.ListChannelMessagesInput{
+		ChannelID: "chn_restricted",
+		Limit:     10,
+	})
+	if !errors.Is(err, authz.ErrNotFound) {
+		t.Fatalf("ListChannelMessages() after Channel revoke error = %v, want not found", err)
 	}
 	_, err = service.CreateDecisionFromThread(
 		ctx,
@@ -195,6 +214,199 @@ func assertMessagingSlice(
 	}
 	if messagingActivities != 0 {
 		t.Fatalf("messaging Activity items = %d, want 0", messagingActivities)
+	}
+}
+
+func assertRestrictedChannelMessageQuery(
+	t *testing.T,
+	ctx context.Context,
+	service *goldenpath.Service,
+	contributor authz.Principal,
+	decider authz.Principal,
+	reader authz.Principal,
+	root goldenpath.Message,
+	reply goldenpath.Message,
+) {
+	t.Helper()
+	contributorPage, err := service.ListChannelMessages(
+		ctx,
+		contributor,
+		goldenpath.ListChannelMessagesInput{ChannelID: "chn_restricted", Limit: 10},
+	)
+	if err != nil {
+		t.Fatalf("contributor ListChannelMessages() error = %v", err)
+	}
+	assertMessagePageIDs(t, contributorPage, root.ID, reply.ID)
+	if contributorPage.OlderCursor != nil || contributorPage.Messages[0].Body != root.Body ||
+		contributorPage.Messages[1].Body != reply.Body ||
+		contributorPage.Messages[1].ThreadID == nil ||
+		*contributorPage.Messages[1].ThreadID != *reply.ThreadID {
+		t.Fatalf("contributor Message page = %#v", contributorPage)
+	}
+
+	deciderPage, err := service.ListChannelMessages(
+		ctx,
+		decider,
+		goldenpath.ListChannelMessagesInput{ChannelID: "chn_restricted", Limit: 1},
+	)
+	if err != nil {
+		t.Fatalf("Channel member ListChannelMessages() error = %v", err)
+	}
+	assertMessagePageIDs(t, deciderPage, root.ID)
+	if deciderPage.Messages[0].ThreadID != nil {
+		t.Fatalf("Channel member page leaked restricted Thread reply: %#v", deciderPage)
+	}
+
+	_, err = service.ListChannelMessages(
+		ctx,
+		reader,
+		goldenpath.ListChannelMessagesInput{ChannelID: "chn_restricted", Limit: 10},
+	)
+	if !errors.Is(err, authz.ErrNotFound) {
+		t.Fatalf("non-member ListChannelMessages() error = %v, want not found", err)
+	}
+	archivedPage, err := service.ListChannelMessages(
+		ctx,
+		reader,
+		goldenpath.ListChannelMessagesInput{ChannelID: "chn_archived", Limit: 10},
+	)
+	if err != nil || len(archivedPage.Messages) != 0 || archivedPage.OlderCursor != nil {
+		t.Fatalf("archived Channel Message page = %#v, error = %v", archivedPage, err)
+	}
+}
+
+func assertCanonicalMessagePagination(
+	t *testing.T,
+	ctx context.Context,
+	store *goldenpostgres.Store,
+	service *goldenpath.Service,
+	contributor authz.Principal,
+) {
+	t.Helper()
+	base := time.Date(2026, 9, 1, 7, 0, 0, 0, time.UTC)
+	fixtures := []struct {
+		id        string
+		eventID   string
+		operation string
+		body      string
+		createdAt time.Time
+	}{
+		{id: "msg_page_a", eventID: "evt_message_page_a", operation: "page:a", body: "Page A", createdAt: base},
+		{id: "msg_page_b", eventID: "evt_message_page_b", operation: "page:b", body: "Page B", createdAt: base.Add(time.Minute)},
+		{id: "msg_page_c", eventID: "evt_message_page_c", operation: "page:c", body: "Page C", createdAt: base.Add(time.Minute)},
+		{id: "msg_page_d", eventID: "evt_message_page_d", operation: "page:d", body: "Page D", createdAt: base.Add(2 * time.Minute)},
+		{id: "msg_page_e", eventID: "evt_message_page_e", operation: "page:e", body: "Page E", createdAt: base.Add(3 * time.Minute)},
+	}
+	for _, fixture := range fixtures {
+		result, err := store.CreateMessage(ctx, goldenpath.CreateMessageCommand{
+			Invocation:        invocation(contributor, "cor_"+fixture.operation),
+			MessageID:         fixture.id,
+			EventID:           fixture.eventID,
+			ChannelID:         "chn_project",
+			ClientOperationID: fixture.operation,
+			Body:              fixture.body,
+			OccurredAt:        fixture.createdAt,
+		})
+		if err != nil || !result.Created {
+			t.Fatalf("seed canonical Message %s = %#v, error = %v", fixture.id, result, err)
+		}
+	}
+
+	firstPage, err := service.ListChannelMessages(
+		ctx,
+		contributor,
+		goldenpath.ListChannelMessagesInput{ChannelID: "chn_project", Limit: 2},
+	)
+	if err != nil {
+		t.Fatalf("first canonical Message page error = %v", err)
+	}
+	assertMessagePageIDs(t, firstPage, "msg_page_d", "msg_page_e")
+	assertOlderCursor(t, firstPage, "msg_page_d", base.Add(2*time.Minute))
+
+	newest, err := store.CreateMessage(ctx, goldenpath.CreateMessageCommand{
+		Invocation:        invocation(contributor, "cor_page_f"),
+		MessageID:         "msg_page_f",
+		EventID:           "evt_message_page_f",
+		ChannelID:         "chn_project",
+		ClientOperationID: "page:f",
+		Body:              "Page F",
+		OccurredAt:        base.Add(4 * time.Minute),
+	})
+	if err != nil || !newest.Created {
+		t.Fatalf("seed newer canonical Message = %#v, error = %v", newest, err)
+	}
+
+	secondPage, err := service.ListChannelMessages(
+		ctx,
+		contributor,
+		goldenpath.ListChannelMessagesInput{
+			ChannelID: "chn_project", Before: firstPage.OlderCursor, Limit: 2,
+		},
+	)
+	if err != nil {
+		t.Fatalf("second canonical Message page error = %v", err)
+	}
+	assertMessagePageIDs(t, secondPage, "msg_page_b", "msg_page_c")
+	assertOlderCursor(t, secondPage, "msg_page_b", base.Add(time.Minute))
+
+	thirdPage, err := service.ListChannelMessages(
+		ctx,
+		contributor,
+		goldenpath.ListChannelMessagesInput{
+			ChannelID: "chn_project", Before: secondPage.OlderCursor, Limit: 2,
+		},
+	)
+	if err != nil {
+		t.Fatalf("third canonical Message page error = %v", err)
+	}
+	assertMessagePageIDs(t, thirdPage, "msg_page_a")
+	if thirdPage.OlderCursor != nil {
+		t.Fatalf("last canonical Message page has older cursor: %#v", thirdPage.OlderCursor)
+	}
+
+	refreshed, err := service.ListChannelMessages(
+		ctx,
+		contributor,
+		goldenpath.ListChannelMessagesInput{ChannelID: "chn_project", Limit: 2},
+	)
+	if err != nil {
+		t.Fatalf("refreshed canonical Message page error = %v", err)
+	}
+	assertMessagePageIDs(t, refreshed, "msg_page_e", "msg_page_f")
+
+	viewerPage, err := service.ListChannelMessages(
+		ctx,
+		principal("usr_reader"),
+		goldenpath.ListChannelMessagesInput{ChannelID: "chn_project", Limit: 2},
+	)
+	if err != nil {
+		t.Fatalf("Project viewer canonical Message page error = %v", err)
+	}
+	assertMessagePageIDs(t, viewerPage, "msg_page_e", "msg_page_f")
+}
+
+func assertMessagePageIDs(t *testing.T, page goldenpath.MessagePage, want ...string) {
+	t.Helper()
+	if len(page.Messages) != len(want) {
+		t.Fatalf("Message page length = %d, want %d: %#v", len(page.Messages), len(want), page)
+	}
+	for index, messageID := range want {
+		if page.Messages[index].ID != messageID {
+			t.Fatalf("Message page[%d].ID = %q, want %q: %#v", index, page.Messages[index].ID, messageID, page)
+		}
+	}
+}
+
+func assertOlderCursor(
+	t *testing.T,
+	page goldenpath.MessagePage,
+	wantMessageID string,
+	wantCreatedAt time.Time,
+) {
+	t.Helper()
+	if page.OlderCursor == nil || page.OlderCursor.MessageID != wantMessageID ||
+		!page.OlderCursor.CreatedAt.Equal(wantCreatedAt) {
+		t.Fatalf("Message older cursor = %#v, want %s at %v", page.OlderCursor, wantMessageID, wantCreatedAt)
 	}
 }
 

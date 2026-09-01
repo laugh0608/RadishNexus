@@ -134,6 +134,117 @@ func (store *Store) CreateMessage(
 	return goldenpath.CreateMessageResult{Message: message, Created: true}, nil
 }
 
+func (store *Store) ListChannelMessages(
+	ctx context.Context,
+	principal authz.Principal,
+	input goldenpath.ListChannelMessagesInput,
+) (page goldenpath.MessagePage, err error) {
+	if err := principal.ValidateUser(); err != nil {
+		return page, err
+	}
+
+	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return page, fmt.Errorf("begin list Channel Messages transaction: %w", err)
+	}
+	defer rollback(ctx, tx, &err)
+
+	if _, err := readableChannel(ctx, tx, principal, input.ChannelID); err != nil {
+		return page, err
+	}
+
+	var beforeTime any
+	var beforeMessageID any
+	if input.Before != nil {
+		beforeTime = input.Before.CreatedAt
+		beforeMessageID = input.Before.MessageID
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT message.id, message.channel_id, message.thread_id,
+			message.author_id, message.body, message.created_at
+		FROM radishnexus.messages AS message
+		WHERE message.workspace_id = $1
+		  AND message.channel_id = $2
+		  AND (
+			message.thread_id IS NULL
+			OR EXISTS (
+				SELECT 1
+				FROM radishnexus.threads AS thread
+				WHERE thread.workspace_id = message.workspace_id
+				  AND thread.id = message.thread_id
+				  AND thread.origin_channel_id = message.channel_id
+				  AND (
+					thread.visibility = 'project'
+					OR EXISTS (
+						SELECT 1
+						FROM radishnexus.thread_memberships AS membership
+						WHERE membership.workspace_id = thread.workspace_id
+						  AND membership.thread_id = thread.id
+						  AND membership.user_id = $3
+					)
+				  )
+			)
+		  )
+		  AND (
+			$4::timestamptz IS NULL
+			OR (message.created_at, message.id) < ($4::timestamptz, $5::text)
+		  )
+		ORDER BY message.created_at DESC, message.id DESC
+		LIMIT $6
+	`, principal.WorkspaceID, input.ChannelID, principal.ID,
+		beforeTime, beforeMessageID, input.Limit+1)
+	if err != nil {
+		return page, fmt.Errorf("list canonical Channel Messages: %w", err)
+	}
+	messages := make([]goldenpath.MessageProjection, 0, input.Limit+1)
+	for rows.Next() {
+		var message goldenpath.MessageProjection
+		var threadID sql.NullString
+		if err := rows.Scan(
+			&message.ID,
+			&message.ChannelID,
+			&threadID,
+			&message.AuthorID,
+			&message.Body,
+			&message.CreatedAt,
+		); err != nil {
+			rows.Close()
+			return page, fmt.Errorf("scan canonical Channel Message: %w", err)
+		}
+		if threadID.Valid {
+			value := threadID.String
+			message.ThreadID = &value
+		}
+		messages = append(messages, message)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return page, fmt.Errorf("iterate canonical Channel Messages: %w", err)
+	}
+	rows.Close()
+
+	hasOlder := len(messages) > input.Limit
+	if hasOlder {
+		messages = messages[:input.Limit]
+	}
+	for left, right := 0, len(messages)-1; left < right; left, right = left+1, right-1 {
+		messages[left], messages[right] = messages[right], messages[left]
+	}
+	page.Messages = messages
+	if hasOlder {
+		oldest := messages[0]
+		page.OlderCursor = &goldenpath.MessagePageCursor{
+			CreatedAt: oldest.CreatedAt,
+			MessageID: oldest.ID,
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return goldenpath.MessagePage{}, fmt.Errorf("commit list Channel Messages: %w", err)
+	}
+	return page, nil
+}
+
 func (store *Store) StartThreadFromMessage(
 	ctx context.Context,
 	command goldenpath.StartThreadFromMessageCommand,

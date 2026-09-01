@@ -277,6 +277,17 @@ safe_facts
 
 一项操作可以同时产生领域事件、Activity 和 Audit，但它们的 payload、保留周期和读取权限分别定义，不能通过复制同一 JSON 假装职责相同。
 
+## Canonical Message query
+
+正式 application query 以 Channel 和当前用户 `Principal` 为作用域，直接读取权威 Message 表。它不是 Activity、实时 replay 或搜索投影：
+
+- 每页先按当前 Workspace、Project 与 Channel 权限判定；归档 Channel 保留历史读取，权限撤销或跨 Workspace 查询保持不可发现；
+- root Message 在 Channel 可读时返回；带 `thread_id` 的回复还必须通过该 Thread 的当前读取权限，不可读回复在应用分页前直接隐藏，不形成占位或数量侧信道；
+- 稳定总序为 `(created_at, message_id)`；首次读取选择最新一页，页内按时间正序返回，向前翻页使用最旧一项的 exclusive `before` keyset，Message ID 负责同一时间戳的确定性决胜；
+- application page size 必须在 `1..100`，只有确实存在更旧的可读 Message 时才返回 older boundary；客户端在实时恢复或重新进入 Channel 时重新读取最新页；
+- 可读 Message DTO 只包含稳定 ID、Channel、可选 Thread、作者、原始正文与服务端创建时间，不返回 `client_operation_id`、事件、Outbox 或内部实时 cursor；
+- application boundary 的时间与 Message ID 只是内部查询结构。未来 HTTP transport 必须将其编码为不透明、版本化的 cursor，并继续重新授权；cursor 本身不授予读取权，也不是数据库 offset、快照令牌或实时 replay cursor。
+
 ## Golden Path 契约走查
 
 1. 用户在 Project Channel 发送不可变 Message；重复 `client_operation_id` 与同正文只返回既有 Message，不同正文冲突。正式 application service 已将 Message、`message.created` 与 Outbox 原子提交，事件和 Activity 不复制正文。
@@ -313,6 +324,6 @@ M0 实验与正式纵向切片累计必须证明：
 - 关系类型注册表的完整方向、基数和 metadata schema；
 - Team 角色继承、对象分享、跨 Project 转换和管理员 break-glass 策略；
 - 领域事件保留、压缩和 projection version 迁移策略；
-- 其余公共 HTTP / OpenAPI 契约、权威列表游标和并发控制字段；Channel / Message 的进程内实时 cursor 不是公共列表游标，现有认证错误对象与首个 Deployment DTO 已分别由 ADR-0013、ADR-0014 冻结。
+- 其余公共 HTTP / OpenAPI 契约、canonical Message keyset 的公开 opaque 编码和并发控制字段；Channel / Message 的进程内实时 cursor 不是公共列表游标，现有认证错误对象与首个 Deployment DTO 已分别由 ADR-0013、ADR-0014 冻结。
 
 这些事项必须通过后续纵向切片验证，不能由 Web 框架或 ORM 默认行为替项目作出决定。
