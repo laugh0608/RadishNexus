@@ -84,6 +84,7 @@ type ListChannelMessagesInput struct {
 }
 
 type StartThreadFromMessageInput struct {
+	ChannelID  string
 	MessageID  string
 	Title      string
 	Visibility string
@@ -105,6 +106,7 @@ type StartThreadFromMessageCommand struct {
 	ThreadID   string
 	LinkID     string
 	EventID    string
+	ChannelID  string
 	MessageID  string
 	Title      string
 	Visibility string
@@ -119,9 +121,23 @@ func (service *Service) CreateMessage(
 	if err := validateInvocation(invocation); err != nil {
 		return CreateMessageResult{}, err
 	}
-	if input.ChannelID == "" || !validClientOperationID(input.ClientOperationID) {
+	if err := entityref.M0Registry().Validate(entityref.Ref{
+		Type: "channel",
+		ID:   input.ChannelID,
+	}); err != nil {
+		return CreateMessageResult{}, fmt.Errorf("%w: Channel reference: %v", authz.ErrInvalid, err)
+	}
+	if input.ThreadID != "" {
+		if err := entityref.M0Registry().Validate(entityref.Ref{
+			Type: "thread",
+			ID:   input.ThreadID,
+		}); err != nil {
+			return CreateMessageResult{}, fmt.Errorf("%w: Thread reference: %v", authz.ErrInvalid, err)
+		}
+	}
+	if !validClientOperationID(input.ClientOperationID) {
 		return CreateMessageResult{}, fmt.Errorf(
-			"%w: channel ID and canonical client operation ID are required",
+			"%w: canonical client operation ID is required",
 			authz.ErrInvalid,
 		)
 	}
@@ -202,10 +218,22 @@ func (service *Service) StartThreadFromMessage(
 		return Thread{}, err
 	}
 	title := strings.TrimSpace(input.Title)
-	if input.MessageID == "" || title == "" ||
+	if err := entityref.M0Registry().Validate(entityref.Ref{
+		Type: "channel",
+		ID:   input.ChannelID,
+	}); err != nil {
+		return Thread{}, fmt.Errorf("%w: Channel reference: %v", authz.ErrInvalid, err)
+	}
+	if err := entityref.M0Registry().Validate(entityref.Ref{
+		Type: "message",
+		ID:   input.MessageID,
+	}); err != nil {
+		return Thread{}, fmt.Errorf("%w: Message reference: %v", authz.ErrInvalid, err)
+	}
+	if !utf8.ValidString(input.Title) || strings.ContainsRune(input.Title, '\x00') || title == "" ||
 		(input.Visibility != "project" && input.Visibility != "restricted") {
 		return Thread{}, fmt.Errorf(
-			"%w: message ID, title, and project or restricted visibility are required",
+			"%w: title and project or restricted visibility are required",
 			authz.ErrInvalid,
 		)
 	}
@@ -228,6 +256,7 @@ func (service *Service) StartThreadFromMessage(
 		ThreadID:   threadID,
 		LinkID:     linkID,
 		EventID:    eventID,
+		ChannelID:  input.ChannelID,
 		MessageID:  input.MessageID,
 		Title:      title,
 		Visibility: input.Visibility,

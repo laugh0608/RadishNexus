@@ -263,6 +263,9 @@ func (store *Store) StartThreadFromMessage(
 	if err != nil {
 		return thread, err
 	}
+	if message.channelID != command.ChannelID {
+		return thread, authz.ErrNotFound
+	}
 	channel, err := readableChannel(ctx, tx, command.Principal, message.channelID)
 	if err != nil {
 		return thread, err

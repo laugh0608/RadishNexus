@@ -303,7 +303,7 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 		ctx,
 		invocation(contributor, "cor_backup_thread"),
 		goldenpath.StartThreadFromMessageInput{
-			MessageID: message.Message.ID, Title: "Backup contract discussion", Visibility: "restricted",
+			ChannelID: "chn_backup", MessageID: message.Message.ID, Title: "Backup contract discussion", Visibility: "restricted",
 		},
 	)
 	if err != nil {

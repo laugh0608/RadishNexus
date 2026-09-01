@@ -19,13 +19,14 @@
 - 把已验证 Session 用户转换为 application `Principal` 的认证 adapter；
 - Secure `__Host-` Cookie、精确 HTTPS Origin / Host、可信代理、客户端 IP 登录限流、request ID 与版本化安全错误对象；
 - Session 作用域的 Deployment Nexus View 公共只读 handler 与显式安全 DTO；
+- Session 作用域的 Channel Message 历史、幂等发送和 Message → Thread 公共 handler；
 - 同源 authenticated Web Shell、显式 production build root、页面 allowlist 与安全静态资源缓存；
 - 可选文件 Secret 覆盖数据库 URL 密码的公共 runtime config；
 - PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验与 Activity 重建命令。
 
-公共 transport 已开放 `/api/v1/auth/sessions` 与 `/api/v1/auth/session` 的 login / resolve / logout 闭环，以及第一个 Deployment Nexus View 业务读取；同一个 Go server 从显式 Web build root 交付 authenticated shell 和已注册页面，其余业务读写仍未暴露为 HTTP API。认证入口要求精确 HTTPS public origin、精确 Host、显式可信代理链、客户端 IP 限流、受控 JSON、Secure Cookie 和 CSRF，不接受可信用户 Header、insecure Cookie 或 credentialed CORS。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret 或原始 webhook body。
+公共 transport 已开放 `/api/v1/auth/sessions` 与 `/api/v1/auth/session` 的 login / resolve / logout 闭环、Deployment Nexus View 读取，以及单 Channel Message 历史、发送和 Message → Thread 短请求；同一个 Go server 从显式 Web build root 交付 authenticated shell 和已注册页面。认证入口要求精确 HTTPS public origin、精确 Host、显式可信代理链、客户端 IP 限流、受控 JSON、Secure Cookie 和 CSRF，不接受可信用户 Header、insecure Cookie 或 credentialed CORS。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret 或原始 webhook body。
 
-Channel / Message command 与 canonical query 当前只存在于 transport-independent application service。migration 006 固化 Channel membership、Message 不可变和幂等唯一范围、同 Channel reply、messaging-origin Thread 的 `origin_channel_id` 与唯一 `started-from` Message 来源；创建 Message 或 Thread 时，业务事实、安全最小化事件与 `realtime-dispatcher` Outbox 在同一事务提交。canonical query 返回最新一页并按 `(created_at, message_id)` 以 exclusive keyset 向更旧内容翻页，先过滤当前不可读 Thread 回复，且不返回 `client_operation_id`。当前没有 Session 作用域消息路由或正式实时连接；application keyset 尚未形成公开 cursor 编码，实验 SSE Header 和进程内 cursor 也不属于公共协议。
+Channel / Message migration 006 固化 Channel membership、Message 不可变和幂等唯一范围、同 Channel reply、messaging-origin Thread 的 `origin_channel_id` 与唯一 `started-from` Message 来源；创建 Message 或 Thread 时，业务事实、安全最小化事件与 `realtime-dispatcher` Outbox 在同一事务提交。canonical query 返回最新一页并按 `(created_at, message_id)` 以 exclusive keyset 向更旧内容翻页，先过滤当前不可读 Thread 回复，且不返回 `client_operation_id`。公共 transport 用版本 1 opaque cursor 封装 keyset，每次请求重新验证 Session、Workspace、Channel 与 Thread 权限；当前仍没有正式实时连接，实验 SSE Header 和进程内 cursor 不属于公共协议。
 
 当前 Activity 白名单包含 `decision.proposed`、`decision.accepted`、`ticket.created`、`ci-run.recorded` 和 `deployment.recorded`。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，不依赖 Outbox 投递状态，也尚未建立常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
 
@@ -113,11 +114,21 @@ RADISHNEXUS_WEB_ROOT=/srv/radishnexus/web
 
 ## Deployment Nexus View 读取
 
-当前唯一公共业务路由为：
+当前 Deployment 公共业务路由为：
 
 - `GET /api/v1/workspaces/{workspace_id}/deployments/{deployment_id}/nexus-view`：用 Session cookie 在路径 Workspace 中重新验证 active membership，转换为 application `Principal` 后读取权限过滤的 Deployment Current、Relations 和 Timeline。
 
 成功响应使用显式 `data` envelope、结构化 `{type, id}` ref、nullable `started_at` 与安全可见实体，不直接序列化内部 `goldenpath.NexusView`。无 membership、跨 Workspace、未知或不可读对象保持不可发现；所有结果使用 `Cache-Control: private, no-store` 和 `Vary: Cookie`。完整公共 DTO、错误、缓存和 Web 消费边界见 [ADR-0014](../docs/adr/0014-session-scoped-deployment-nexus-view-transport.md)。
+
+## Channel Message 短请求
+
+当前公共消息路由为：
+
+- `GET /api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages`：读取 canonical history，`limit` 缺省 `50`、范围 `1..100`，可用版本化 opaque `before` cursor 向更旧消息翻页；
+- `POST /api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages`：用 `client_operation_id`、`body` 和可选 `thread_id` 创建 Message，首次返回 `201`，完全相同重试返回 `200`，变化重放返回 `409`；
+- `POST /api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages/{message_id}/threads`：用 `title` 和 `project / restricted` visibility 从路径 Channel 内的 Source Message 创建 Thread。
+
+三个路由均通过当前 Session 与 Workspace / Channel / Thread 权限；两个 POST 还同时要求精确 `Origin`、CSRF Cookie / Header 一致和数据库 CSRF digest。成功与错误统一使用 `Cache-Control: private, no-store` 和 `Vary: Cookie`；显式 DTO 不返回 `client_operation_id`、membership、事件或内部 keyset。完整 cursor、JSON 上限、状态码、最小化和跨 Channel 来源边界见 [ADR-0018](../docs/adr/0018-session-scoped-channel-message-transport.md)。
 
 ## 最小备份与恢复
 

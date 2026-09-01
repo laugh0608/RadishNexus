@@ -12,7 +12,7 @@
 
 ## 适用范围
 
-初始 M0 冻结 Project、Initiative、Component、Decision、Environment 和 EntityLink 的引用能力，并用 Thread、Ticket、CI Run 和 Deployment 验证接口是否足以承载 [Golden Path](../golden-path.md)。ADR-0004 随首个正式纵向切片继续冻结了 Thread 与 Ticket 的类型前缀、最小字段和授权上下文；ADR-0006 冻结 CI Run 的类型前缀、最小来源字段和完成事实；ADR-0009 冻结显式 staging Deployment、环境级授权和原子关系边界；ADR-0017 冻结 Channel / Message 的最小身份、Message → Thread 来源和单进程实时实验语义。
+初始 M0 冻结 Project、Initiative、Component、Decision、Environment 和 EntityLink 的引用能力，并用 Thread、Ticket、CI Run 和 Deployment 验证接口是否足以承载 [Golden Path](../golden-path.md)。ADR-0004 随首个正式纵向切片继续冻结了 Thread 与 Ticket 的类型前缀、最小字段和授权上下文；ADR-0006 冻结 CI Run 的类型前缀、最小来源字段和完成事实；ADR-0009 冻结显式 staging Deployment、环境级授权和原子关系边界；ADR-0017 冻结 Channel / Message 的最小身份、Message → Thread 来源和单进程实时实验语义；ADR-0018 冻结 Session 作用域的 canonical history、Message 写入与 Message → Thread 公共短请求。
 
 M0 不支持：
 

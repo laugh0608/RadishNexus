@@ -4,8 +4,12 @@ package postgres_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -14,8 +18,11 @@ import (
 
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
+	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/httptransport"
 )
 
 func assertMessagingSlice(
@@ -88,7 +95,7 @@ func assertMessagingSlice(
 		ctx,
 		invocation(contributor, "cor_thread_scope"),
 		goldenpath.StartThreadFromMessageInput{
-			MessageID: first.Message.ID, Title: "Must remain restricted", Visibility: "project",
+			ChannelID: "chn_restricted", MessageID: first.Message.ID, Title: "Must remain restricted", Visibility: "project",
 		},
 	)
 	if !errors.Is(err, authz.ErrConflict) {
@@ -98,7 +105,7 @@ func assertMessagingSlice(
 		ctx,
 		invocation(contributor, "cor_thread_start"),
 		goldenpath.StartThreadFromMessageInput{
-			MessageID: first.Message.ID, Title: "Investigate messaging boundary", Visibility: "restricted",
+			ChannelID: "chn_restricted", MessageID: first.Message.ID, Title: "Investigate messaging boundary", Visibility: "restricted",
 		},
 	)
 	if err != nil {
@@ -114,7 +121,7 @@ func assertMessagingSlice(
 		ctx,
 		invocation(contributor, "cor_thread_duplicate"),
 		goldenpath.StartThreadFromMessageInput{
-			MessageID: first.Message.ID, Title: "Duplicate source", Visibility: "restricted",
+			ChannelID: "chn_restricted", MessageID: first.Message.ID, Title: "Duplicate source", Visibility: "restricted",
 		},
 	)
 	if !errors.Is(err, authz.ErrConflict) {
@@ -199,6 +206,7 @@ func assertMessagingSlice(
 	assertMessagingAtomicRollback(t, ctx, pool, store, service, contributor)
 	assertConcurrentMessageIdempotency(t, ctx, pool, store, contributor)
 	assertMessagingDatabaseConstraints(t, ctx, pool, first.Message.ID, thread.ID)
+	assertMessagingHTTPTransport(t, ctx, pool, service)
 
 	if _, err := store.RebuildActivityProjection(ctx); err != nil {
 		t.Fatalf("RebuildActivityProjection() after messaging error = %v", err)
@@ -215,6 +223,225 @@ func assertMessagingSlice(
 	if messagingActivities != 0 {
 		t.Fatalf("messaging Activity items = %d, want 0", messagingActivities)
 	}
+}
+
+func assertMessagingHTTPTransport(
+	t *testing.T,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	service *goldenpath.Service,
+) {
+	t.Helper()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	sessionToken := deploymentHTTPToken(11)
+	csrfToken := deploymentHTTPToken(12)
+	tokenDigest := sha256.Sum256([]byte(sessionToken))
+	csrfDigest := sha256.Sum256([]byte(csrfToken))
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO radishnexus.local_accounts (
+			user_id, login_name, password_hash, created_at, password_changed_at
+		)
+		SELECT 'usr_contributor', 'http.contributor', password_hash, $1, $1
+		FROM radishnexus.local_accounts
+		WHERE user_id = 'usr_reader'
+	`, now); err != nil {
+		t.Fatalf("seed messaging HTTP local account: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO radishnexus.user_sessions (
+			id, user_id, token_digest, csrf_token_digest, created_at, expires_at
+		) VALUES ('ses_messaging_http', 'usr_contributor', $1, $2, $3, $4)
+	`, tokenDigest[:], csrfDigest[:], now, now.Add(authn.SessionLifetime)); err != nil {
+		t.Fatalf("seed messaging HTTP Session: %v", err)
+	}
+	authService := authn.NewService(authpostgres.New(pool), nil, nil, fixedClock{now: now})
+	sessionPolicy, err := httptransport.NewBrowserSessionPolicy("https://nexus.example.test")
+	if err != nil {
+		t.Fatalf("NewBrowserSessionPolicy() error = %v", err)
+	}
+	proxyPolicy, err := httptransport.NewTrustedProxyPolicy("10.0.0.0/8")
+	if err != nil {
+		t.Fatalf("NewTrustedProxyPolicy() error = %v", err)
+	}
+	handler := httptransport.WithRequestID(httptransport.NewChannelMessagesHandler(
+		authService,
+		service,
+		sessionPolicy,
+		proxyPolicy,
+	))
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodGet,
+		"/api/v1/workspaces/wrk_main/channels/chn_project/messages?limit=2",
+		"",
+		sessionToken,
+		csrfToken,
+	))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"older_cursor":"`) ||
+		strings.Contains(response.Body.String(), "client_operation") {
+		t.Fatalf("HTTP canonical Message page = status %d, body %q", response.Code, response.Body.String())
+	}
+
+	createBody := `{"client_operation_id":"http:message:1","body":"Authoritative HTTP message."}`
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		"/api/v1/workspaces/wrk_main/channels/chn_project/messages",
+		createBody,
+		sessionToken,
+		csrfToken,
+	))
+	if response.Code != http.StatusCreated {
+		t.Fatalf("HTTP create Message = status %d, body %q", response.Code, response.Body.String())
+	}
+	var created struct {
+		Data struct {
+			Ref struct {
+				ID string `json:"id"`
+			} `json:"ref"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil || created.Data.Ref.ID == "" {
+		t.Fatalf("decode HTTP created Message = %#v, error = %v", created, err)
+	}
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		"/api/v1/workspaces/wrk_main/channels/chn_project/messages",
+		createBody,
+		sessionToken,
+		csrfToken,
+	))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), created.Data.Ref.ID) {
+		t.Fatalf("HTTP exact Message retry = status %d, body %q", response.Code, response.Body.String())
+	}
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		"/api/v1/workspaces/wrk_main/channels/chn_project/messages",
+		`{"client_operation_id":"http:message:1","body":"Changed replay."}`,
+		sessionToken,
+		csrfToken,
+	))
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), `"code":"conflict"`) {
+		t.Fatalf("HTTP changed Message retry = status %d, body %q", response.Code, response.Body.String())
+	}
+
+	threadPath := "/api/v1/workspaces/wrk_main/channels/chn_project/messages/" + created.Data.Ref.ID + "/threads"
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		threadPath,
+		`{"title":"HTTP source discussion","visibility":"project"}`,
+		sessionToken,
+		csrfToken,
+	))
+	if response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"source_message":{"type":"message","id":"`+created.Data.Ref.ID+`"}`) {
+		t.Fatalf("HTTP start Thread = status %d, body %q", response.Code, response.Body.String())
+	}
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		"/api/v1/workspaces/wrk_main/channels/chn_restricted/messages/"+created.Data.Ref.ID+"/threads",
+		`{"title":"Wrong Channel","visibility":"restricted"}`,
+		sessionToken,
+		csrfToken,
+	))
+	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"not_found"`) {
+		t.Fatalf("HTTP cross-Channel source = status %d, body %q", response.Code, response.Body.String())
+	}
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodGet,
+		"/api/v1/workspaces/wrk_main/channels/chn_project/messages?before=invalid",
+		"",
+		sessionToken,
+		csrfToken,
+	))
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"invalid"`) {
+		t.Fatalf("HTTP invalid Message cursor = status %d, body %q", response.Code, response.Body.String())
+	}
+
+	wrongCSRFToken := deploymentHTTPToken(13)
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		"/api/v1/workspaces/wrk_main/channels/chn_project/messages",
+		`{"client_operation_id":"http:csrf:failed","body":"Must not write."}`,
+		sessionToken,
+		wrongCSRFToken,
+	))
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"csrf_failed"`) {
+		t.Fatalf("HTTP stored CSRF mismatch = status %d, body %q", response.Code, response.Body.String())
+	}
+
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM radishnexus.channel_memberships
+		WHERE workspace_id = 'wrk_main'
+		  AND channel_id = 'chn_restricted'
+		  AND user_id = 'usr_contributor'
+	`); err != nil {
+		t.Fatalf("revoke Channel membership for HTTP: %v", err)
+	}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodGet,
+		"/api/v1/workspaces/wrk_main/channels/chn_restricted/messages",
+		"",
+		sessionToken,
+		csrfToken,
+	))
+	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"not_found"`) {
+		t.Fatalf("HTTP revoked Channel = status %d, body %q", response.Code, response.Body.String())
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO radishnexus.channel_memberships (workspace_id, channel_id, user_id)
+		VALUES ('wrk_main', 'chn_restricted', 'usr_contributor')
+	`); err != nil {
+		t.Fatalf("restore Channel membership after HTTP: %v", err)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE radishnexus.user_sessions
+		SET revoked_at = $1
+		WHERE id = 'ses_messaging_http'
+	`, now); err != nil {
+		t.Fatalf("revoke messaging HTTP Session: %v", err)
+	}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodGet,
+		"/api/v1/workspaces/wrk_main/channels/chn_project/messages",
+		"",
+		sessionToken,
+		csrfToken,
+	))
+	if response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), `"code":"unauthenticated"`) {
+		t.Fatalf("HTTP revoked Session = status %d, body %q", response.Code, response.Body.String())
+	}
+}
+
+func messagingHTTPRequest(
+	method string,
+	path string,
+	body string,
+	sessionToken string,
+	csrfToken string,
+) *http.Request {
+	request := httptest.NewRequest(method, "https://nexus.example.test"+path, strings.NewReader(body))
+	request.AddCookie(&http.Cookie{Name: httptransport.SessionCookieName, Value: sessionToken})
+	if method != http.MethodGet {
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Origin", "https://nexus.example.test")
+		request.Header.Set(httptransport.CSRFHeaderName, csrfToken)
+		request.AddCookie(&http.Cookie{Name: httptransport.CSRFCookieName, Value: csrfToken})
+	}
+	return request
 }
 
 func assertRestrictedChannelMessageQuery(
@@ -502,7 +729,7 @@ func assertMessagingAtomicRollback(
 		ctx,
 		invocation(contributor, "cor_thread_atomic_failure"),
 		goldenpath.StartThreadFromMessageInput{
-			MessageID: source.Message.ID, Title: "Must roll back", Visibility: "restricted",
+			ChannelID: "chn_restricted", MessageID: source.Message.ID, Title: "Must roll back", Visibility: "restricted",
 		},
 	)
 	if !errors.Is(err, authz.ErrConflict) {

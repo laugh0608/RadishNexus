@@ -56,6 +56,7 @@ func TestCreateMessageRejectsInvalidFactsBeforeStore(t *testing.T) {
 		input CreateMessageInput
 	}{
 		{name: "missing channel", input: CreateMessageInput{ClientOperationID: "op-1", Body: "body"}},
+		{name: "invalid thread", input: CreateMessageInput{ChannelID: "chn_1", ThreadID: "thread_1", ClientOperationID: "op-1", Body: "body"}},
 		{name: "space in operation", input: CreateMessageInput{ChannelID: "chn_1", ClientOperationID: "op 1", Body: "body"}},
 		{name: "blank body", input: CreateMessageInput{ChannelID: "chn_1", ClientOperationID: "op-1", Body: " \n\t"}},
 		{name: "nul body", input: CreateMessageInput{ChannelID: "chn_1", ClientOperationID: "op-1", Body: "a\x00b"}},
@@ -193,6 +194,7 @@ func TestStartThreadFromMessageBuildsAtomicCommand(t *testing.T) {
 		context.Background(),
 		validMessagingInvocation(),
 		StartThreadFromMessageInput{
+			ChannelID:  "chn_1",
 			MessageID:  "msg_1",
 			Title:      "  Investigate latency  ",
 			Visibility: "restricted",
@@ -205,7 +207,7 @@ func TestStartThreadFromMessageBuildsAtomicCommand(t *testing.T) {
 	if thread.ID != "thr_1" || command.LinkID != "lnk_1" || command.EventID != "evt_1" {
 		t.Fatalf("generated Thread command = %#v, result = %#v", command, thread)
 	}
-	if command.MessageID != "msg_1" || command.Title != "Investigate latency" ||
+	if command.ChannelID != "chn_1" || command.MessageID != "msg_1" || command.Title != "Investigate latency" ||
 		command.Visibility != "restricted" {
 		t.Fatalf("StartThread command = %#v", command)
 	}
@@ -217,22 +219,25 @@ func TestStartThreadFromMessageBuildsAtomicCommand(t *testing.T) {
 func TestStartThreadFromMessageRejectsInvalidFactsBeforeStore(t *testing.T) {
 	t.Parallel()
 
-	store := &recordingStore{}
-	service := NewService(
-		store,
-		&sequenceIDs{values: []string{"thr_1", "lnk_1", "evt_1"}},
-		fixedClock{},
-	)
-	_, err := service.StartThreadFromMessage(
-		context.Background(),
-		validMessagingInvocation(),
-		StartThreadFromMessageInput{MessageID: "msg_1", Title: "title", Visibility: "workspace"},
-	)
-	if !errors.Is(err, authz.ErrInvalid) {
-		t.Fatalf("StartThreadFromMessage() error = %v, want invalid", err)
-	}
-	if store.startThreadCommand.ThreadID != "" {
-		t.Fatalf("invalid input reached Store: %#v", store.startThreadCommand)
+	for _, input := range []StartThreadFromMessageInput{
+		{ChannelID: "channel_1", MessageID: "msg_1", Title: "title", Visibility: "restricted"},
+		{ChannelID: "chn_1", MessageID: "message_1", Title: "title", Visibility: "restricted"},
+		{ChannelID: "chn_1", MessageID: "msg_1", Title: "title\x00", Visibility: "restricted"},
+		{ChannelID: "chn_1", MessageID: "msg_1", Title: "title", Visibility: "workspace"},
+	} {
+		store := &recordingStore{}
+		service := NewService(
+			store,
+			&sequenceIDs{values: []string{"thr_1", "lnk_1", "evt_1"}},
+			fixedClock{},
+		)
+		_, err := service.StartThreadFromMessage(context.Background(), validMessagingInvocation(), input)
+		if !errors.Is(err, authz.ErrInvalid) {
+			t.Fatalf("StartThreadFromMessage(%#v) error = %v, want invalid", input, err)
+		}
+		if store.startThreadCommand.ThreadID != "" {
+			t.Fatalf("invalid input reached Store: %#v", store.startThreadCommand)
+		}
 	}
 }
 
