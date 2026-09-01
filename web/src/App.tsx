@@ -13,6 +13,13 @@ import {
   type LoginCredentials,
   type SessionContext,
 } from "./auth/api";
+import { ChannelPage } from "./channel/ChannelPage";
+import {
+  browserChannelMessageClient,
+  channelLocation,
+  channelPagePath,
+  type ChannelMessageClient,
+} from "./channel/api";
 import {
   DeploymentNexusViewLoadError,
   deploymentNexusViewLocation,
@@ -32,6 +39,7 @@ type AppRoute =
   | { kind: "home" }
   | { kind: "prototype" }
   | { kind: "deployment"; workspaceID: string; deploymentID: string }
+  | { kind: "channel"; workspaceID: string; channelID: string }
   | { kind: "not-found" };
 
 type AuthenticationState =
@@ -61,6 +69,7 @@ const prototypeModes: readonly { id: PrototypeMode; label: string }[] = [
 interface AppProps {
   pathname?: string;
   authClient?: AuthClient;
+  channelClient?: ChannelMessageClient;
   loadDeployment?: DeploymentNexusViewLoader;
   navigate?: (path: string) => void;
 }
@@ -68,6 +77,7 @@ interface AppProps {
 export function App({
   pathname = window.location.pathname,
   authClient = browserAuthClient,
+  channelClient = browserChannelMessageClient,
   loadDeployment = loadDeploymentNexusViewData,
   navigate = (path) => window.location.assign(path),
 }: AppProps) {
@@ -79,6 +89,7 @@ export function App({
     <AuthenticatedApp
       route={route}
       authClient={authClient}
+      channelClient={channelClient}
       loadDeployment={loadDeployment}
       navigate={navigate}
     />
@@ -93,19 +104,25 @@ function appRoute(pathname: string): AppRoute {
     return { kind: "prototype" };
   }
   const deployment = deploymentNexusViewLocation(pathname);
-  return deployment === null
+  if (deployment !== null) {
+    return { kind: "deployment", ...deployment };
+  }
+  const channel = channelLocation(pathname);
+  return channel === null
     ? { kind: "not-found" }
-    : { kind: "deployment", ...deployment };
+    : { kind: "channel", ...channel };
 }
 
 function AuthenticatedApp({
   route,
   authClient,
+  channelClient,
   loadDeployment,
   navigate,
 }: {
   route: Exclude<AppRoute, { kind: "prototype" }>;
   authClient: AuthClient;
+  channelClient: ChannelMessageClient;
   loadDeployment: DeploymentNexusViewLoader;
   navigate: (path: string) => void;
 }) {
@@ -179,6 +196,7 @@ function AuthenticatedApp({
       route={route}
       session={authentication.session}
       authClient={authClient}
+      channelClient={channelClient}
       loadDeployment={loadDeployment}
       navigate={navigate}
       onSignedOut={requireLogin}
@@ -270,6 +288,7 @@ function SignedInShell({
   route,
   session,
   authClient,
+  channelClient,
   loadDeployment,
   navigate,
   onSignedOut,
@@ -277,6 +296,7 @@ function SignedInShell({
   route: Exclude<AppRoute, { kind: "prototype" }>;
   session: SessionContext;
   authClient: AuthClient;
+  channelClient: ChannelMessageClient;
   loadDeployment: DeploymentNexusViewLoader;
   navigate: (path: string) => void;
   onSignedOut: () => void;
@@ -284,7 +304,7 @@ function SignedInShell({
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const currentWorkspace =
-    route.kind === "deployment"
+    route.kind === "deployment" || route.kind === "channel"
       ? session.workspaces.find(
           (workspace) => workspace.id === route.workspaceID,
         )
@@ -310,7 +330,7 @@ function SignedInShell({
     <div className="app-shell">
       <AppHeader
         note={
-          route.kind === "deployment"
+          route.kind === "deployment" || route.kind === "channel"
             ? `真实 API · ${currentWorkspace?.name ?? "当前权限过滤"}`
             : "Authenticated Web Shell"
         }
@@ -347,6 +367,14 @@ function SignedInShell({
           loadDeployment={loadDeployment}
           onSessionExpired={onSignedOut}
         />
+      ) : route.kind === "channel" ? (
+        <ChannelPage
+          key={`${route.workspaceID}/${route.channelID}`}
+          workspaceID={route.workspaceID}
+          channelID={route.channelID}
+          client={channelClient}
+          onSessionExpired={onSignedOut}
+        />
       ) : (
         <NotFoundView />
       )}
@@ -367,6 +395,7 @@ function WorkspaceHome({
     session.workspaces[0]?.id ?? "",
   );
   const [deploymentID, setDeploymentID] = useState("");
+  const [channelID, setChannelID] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const openDeployment = (event: FormEvent<HTMLFormElement>) => {
@@ -374,6 +403,17 @@ function WorkspaceHome({
     const path = deploymentNexusViewPagePath(workspaceID, deploymentID.trim());
     if (path === null) {
       setError("请选择 Workspace，并输入以 dpl_ 开头的有效 Deployment ID。");
+      return;
+    }
+    setError(null);
+    navigate(path);
+  };
+
+  const openChannel = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const path = channelPagePath(workspaceID, channelID.trim());
+    if (path === null) {
+      setError("请选择 Workspace，并输入以 chn_ 开头的有效 Channel ID。");
       return;
     }
     setError(null);
@@ -395,52 +435,76 @@ function WorkspaceHome({
         aria-labelledby="deployment-launcher-title"
       >
         <div>
-          <p className="section-kicker">First business route</p>
-          <h2 id="deployment-launcher-title">打开 Deployment Nexus View</h2>
+          <p className="section-kicker">Known object launchers</p>
+          <h2 id="deployment-launcher-title">进入当前工作上下文</h2>
           <p>
-            当前尚未开放 Deployment 列表；请使用已知的稳定 ID 进入安全读取页。
+            当前尚未开放对象列表；请使用已知稳定 ID 进入权限过滤后的正式页面。
           </p>
         </div>
-        <form onSubmit={openDeployment}>
-          <label>
-            <span>Workspace</span>
-            <select
-              disabled={session.workspaces.length === 0}
-              onChange={(event) => setWorkspaceID(event.target.value)}
-              required
-              value={workspaceID}
-            >
-              {session.workspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.name} · {workspace.role}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>Deployment ID</span>
-            <input
-              autoComplete="off"
-              disabled={session.workspaces.length === 0}
-              onChange={(event) => setDeploymentID(event.target.value)}
-              placeholder="dpl_…"
-              required
-              value={deploymentID}
-            />
-          </label>
-          {error === null ? null : (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          )}
-          <button
-            className="primary-button"
+        <label className="workspace-selector">
+          <span>Workspace</span>
+          <select
             disabled={session.workspaces.length === 0}
-            type="submit"
+            onChange={(event) => setWorkspaceID(event.target.value)}
+            required
+            value={workspaceID}
           >
-            打开 Nexus View
-          </button>
-        </form>
+            {session.workspaces.map((workspace) => (
+              <option key={workspace.id} value={workspace.id}>
+                {workspace.name} · {workspace.role}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="resource-launchers">
+          <form onSubmit={openChannel}>
+            <p>Channel</p>
+            <label>
+              <span>Channel ID</span>
+              <input
+                autoComplete="off"
+                disabled={session.workspaces.length === 0}
+                onChange={(event) => setChannelID(event.target.value)}
+                placeholder="chn_…"
+                required
+                value={channelID}
+              />
+            </label>
+            <button
+              className="primary-button"
+              disabled={session.workspaces.length === 0}
+              type="submit"
+            >
+              打开 Channel
+            </button>
+          </form>
+          <form onSubmit={openDeployment}>
+            <p>Deployment</p>
+            <label>
+              <span>Deployment ID</span>
+              <input
+                autoComplete="off"
+                disabled={session.workspaces.length === 0}
+                onChange={(event) => setDeploymentID(event.target.value)}
+                placeholder="dpl_…"
+                required
+                value={deploymentID}
+              />
+            </label>
+            <button
+              className="secondary-button"
+              disabled={session.workspaces.length === 0}
+              type="submit"
+            >
+              打开 Nexus View
+            </button>
+          </form>
+        </div>
+        {error === null ? null : (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        )}
       </section>
     </main>
   );
@@ -612,7 +676,7 @@ function AppFooter({ label }: { label: string }) {
   return (
     <footer className="prototype-footer">
       <span>{label}</span>
-      <span>Deployment · Environment · CI Run · Timeline</span>
+      <span>Channel · Message · Thread · Decision · Delivery</span>
     </footer>
   );
 }

@@ -6,6 +6,7 @@ import {
   type AuthClient,
   type SessionContext,
 } from "./auth/api";
+import type { ChannelMessageClient } from "./channel/api";
 import { DeploymentNexusViewLoadError } from "./nexus-view/api";
 import { succeededDeploymentNexusViewFixture } from "./nexus-view/fixture";
 
@@ -97,6 +98,59 @@ describe("authenticated Web Shell", () => {
 
     expect(screen.getByRole("alert").textContent).toContain("dpl_");
     expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("opens a known Channel from the selected Workspace", async () => {
+    const navigate = vi.fn();
+    render(
+      <App pathname="/" authClient={testAuthClient()} navigate={navigate} />,
+    );
+    await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
+    fireEvent.change(screen.getByLabelText("Workspace"), {
+      target: { value: "wrk_docs" },
+    });
+    fireEvent.change(screen.getByLabelText("Channel ID"), {
+      target: { value: "chn_team" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "打开 Channel" }));
+
+    expect(navigate).toHaveBeenCalledWith(
+      "/workspaces/wrk_docs/channels/chn_team",
+    );
+  });
+
+  it("loads a canonical Channel only after Session bootstrap", async () => {
+    const channelClient = testChannelClient({
+      listMessages: vi.fn().mockResolvedValue({
+        messages: [
+          {
+            id: "msg_1",
+            channelID: "chn_team",
+            threadID: null,
+            authorID: "usr_admin",
+            body: "Canonical Channel body.",
+            createdAt: "2026-09-01T03:00:00Z",
+          },
+        ],
+        olderCursor: null,
+      }),
+    });
+    render(
+      <App
+        pathname="/workspaces/wrk_main/channels/chn_team"
+        authClient={testAuthClient()}
+        channelClient={channelClient}
+      />,
+    );
+
+    expect(await screen.findByText("Canonical Channel body.")).toBeDefined();
+    expect(screen.getByText("真实 API · Main Workspace")).toBeDefined();
+    expect(channelClient.listMessages).toHaveBeenCalledWith(
+      "wrk_main",
+      "chn_team",
+      undefined,
+      expect.any(AbortSignal),
+    );
   });
 
   it("loads a canonical Deployment only after Session bootstrap", async () => {
@@ -208,6 +262,20 @@ function testAuthClient(overrides: Partial<AuthClient> = {}): AuthClient {
     resolveSession: vi.fn().mockResolvedValue(session),
     login: vi.fn().mockResolvedValue(session),
     logout: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+function testChannelClient(
+  overrides: Partial<ChannelMessageClient> = {},
+): ChannelMessageClient {
+  return {
+    listMessages: vi.fn().mockResolvedValue({
+      messages: [],
+      olderCursor: null,
+    }),
+    createMessage: vi.fn(),
+    startThread: vi.fn(),
     ...overrides,
   };
 }

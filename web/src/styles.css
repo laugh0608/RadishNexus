@@ -64,6 +64,7 @@ button {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
+textarea:focus-visible,
 select:focus-visible {
   outline: 3px solid rgba(75, 111, 47, 0.36);
   outline-offset: 3px;
@@ -106,7 +107,9 @@ select:focus-visible {
 }
 
 .account-controls button:disabled,
-.primary-button:disabled {
+.primary-button:disabled,
+.secondary-button:disabled,
+.text-button:disabled {
   cursor: wait;
   opacity: 0.58;
 }
@@ -273,6 +276,41 @@ select:focus-visible {
 
 .workspace-launcher .primary-button {
   justify-self: start;
+}
+
+.workspace-selector {
+  margin-top: 28px;
+}
+
+.resource-launchers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.resource-launchers form {
+  align-content: start;
+  padding: 18px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.resource-launchers form > p {
+  margin: 0;
+  color: var(--accent-dark);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.resource-launchers .primary-button,
+.resource-launchers .secondary-button {
+  justify-self: start;
+  margin-top: 0;
 }
 
 .button-link {
@@ -953,6 +991,339 @@ code {
   font-weight: 700;
 }
 
+.secondary-button {
+  min-height: 40px;
+  padding: 9px 15px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.text-button {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-dark);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.channel-layout {
+  display: grid;
+  gap: 16px;
+}
+
+.channel-hero,
+.message-history,
+.message-composer,
+.channel-state-panel {
+  border: 1px solid rgba(185, 191, 181, 0.76);
+  background: rgba(251, 250, 245, 0.94);
+  box-shadow: var(--shadow);
+}
+
+.channel-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.32fr);
+  align-items: end;
+  gap: 42px;
+  min-height: 290px;
+  padding: 48px;
+  overflow: hidden;
+  border-radius: 25px 25px 12px 12px;
+  background:
+    radial-gradient(
+      circle at 92% 4%,
+      rgba(201, 240, 111, 0.32),
+      transparent 22rem
+    ),
+    rgba(251, 250, 245, 0.94);
+}
+
+.channel-hero h1,
+.channel-state-panel h1 {
+  margin: 12px 0 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(34px, 4.4vw, 58px);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+
+.channel-hero > div:first-child > p:last-child,
+.channel-state-panel > p:not(.section-kicker),
+.message-composer > p {
+  max-width: 760px;
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.channel-identity {
+  display: grid;
+  gap: 8px;
+  padding: 20px;
+  border: 1px dashed #aeb7aa;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.channel-identity span,
+.thread-form label > span,
+.message-composer label > span {
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 740;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.channel-identity code {
+  overflow: hidden;
+  color: #46504b;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+.channel-identity small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.channel-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.38fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.message-history,
+.message-composer {
+  min-width: 0;
+  padding: 34px;
+  border-radius: 12px 12px 25px 25px;
+}
+
+.message-composer {
+  position: sticky;
+  top: 16px;
+  background: rgba(247, 248, 242, 0.97);
+}
+
+.channel-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.channel-section-heading h2,
+.message-composer h2 {
+  margin: 7px 0 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.message-list {
+  display: grid;
+  gap: 12px;
+  padding: 20px 0 0;
+  margin: 0;
+  list-style: none;
+}
+
+.message-card {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper-strong);
+}
+
+.message-card > header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.message-card > header > div {
+  display: grid;
+  gap: 4px;
+}
+
+.message-card > header strong {
+  font-size: 12px;
+}
+
+.message-card time,
+.message-card > header > code {
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.message-card > header > code {
+  overflow: hidden;
+  max-width: 42%;
+  text-overflow: ellipsis;
+}
+
+.message-body {
+  margin: 0;
+  color: #343c38;
+  font-size: 14px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.message-thread-ref {
+  padding: 10px 12px;
+  margin: -4px 0 0;
+  border-left: 3px solid var(--accent);
+  background: #f5f9ea;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.thread-form,
+.message-composer form {
+  display: grid;
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.thread-form {
+  padding: 18px;
+  margin-top: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f7f7f2;
+}
+
+.thread-form label,
+.message-composer label {
+  display: grid;
+  gap: 8px;
+}
+
+.thread-form input,
+.thread-form select,
+.message-composer textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+}
+
+.message-composer textarea {
+  min-height: 150px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.thread-form .secondary-button,
+.message-composer .primary-button {
+  justify-self: start;
+  margin-top: 0;
+}
+
+.thread-result {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid #b8d58a;
+  border-radius: 11px;
+  background: #f2fadf;
+}
+
+.thread-result span {
+  color: var(--accent-dark);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.thread-result strong {
+  font-size: 13px;
+}
+
+.thread-result code {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.channel-empty {
+  display: grid;
+  min-height: 320px;
+  place-content: center;
+  padding: 40px;
+  text-align: center;
+}
+
+.channel-empty strong {
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 24px;
+  font-weight: 500;
+}
+
+.channel-empty p {
+  max-width: 440px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.inline-error,
+.inline-notice {
+  padding: 11px 13px;
+  margin: 14px 0 0;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.inline-error {
+  border: 1px solid #d7a59c;
+  background: var(--error-soft);
+  color: var(--error);
+}
+
+.inline-notice {
+  border: 1px solid #b8d58a;
+  background: #f2fadf;
+  color: var(--accent-dark);
+}
+
+.channel-state-panel {
+  display: grid;
+  min-height: 680px;
+  place-content: center;
+  padding: 60px 24px;
+  border-radius: 25px;
+  text-align: center;
+}
+
+.channel-state-panel .primary-button {
+  justify-self: center;
+}
+
 .current-card--loading {
   display: grid;
   align-content: center;
@@ -1085,6 +1456,20 @@ code {
     min-height: 420px;
     padding: 52px;
   }
+
+  .resource-launchers,
+  .channel-hero,
+  .channel-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .channel-identity {
+    width: min(100%, 420px);
+  }
+
+  .message-composer {
+    position: static;
+  }
 }
 
 @media (max-width: 680px) {
@@ -1131,6 +1516,49 @@ code {
   .workspace-launcher {
     min-height: 360px;
     padding: 38px 24px;
+  }
+
+  .resource-launchers form {
+    padding: 15px;
+  }
+
+  .channel-hero,
+  .message-history,
+  .message-composer,
+  .channel-state-panel {
+    padding: 28px 22px;
+    border-radius: 18px;
+  }
+
+  .channel-hero {
+    min-height: auto;
+  }
+
+  .channel-section-heading,
+  .message-card header {
+    align-items: flex-start;
+  }
+
+  .message-card > header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .message-card {
+    padding: 18px;
+  }
+
+  .message-card > header > code {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .thread-result code {
+    overflow-wrap: anywhere;
+  }
+
+  .channel-state-panel {
+    min-height: 560px;
   }
 
   .state-switcher > div {

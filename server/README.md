@@ -108,6 +108,7 @@ RADISHNEXUS_WEB_ROOT=/srv/radishnexus/web
 
 - `/`：Session bootstrap、login、Workspace 选择、已知 Deployment ID 入口和 logout；
 - `/workspaces/{workspace_id}/deployments/{deployment_id}`：先验证 Session，再消费正式 Deployment Nexus View DTO；
+- `/workspaces/{workspace_id}/channels/{channel_id}`：先验证 Session，再分页读取 Message、幂等发送并从 Message 发起 Thread；
 - `/prototype/nexus-view`：与真实入口隔离的静态代表状态检视器。
 
 只有上述 HTML 路径和 build 的 `/assets/` 文件会由 Web handler 交付；未知路径返回 `404`。HTML 使用 `no-cache`，哈希资源使用长期 immutable cache，认证和业务 API 继续 `no-store`。完整 same-origin、CSP、启动失败、Session bootstrap 和 fixture 边界见 [ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md)。
@@ -129,6 +130,8 @@ RADISHNEXUS_WEB_ROOT=/srv/radishnexus/web
 - `POST /api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages/{message_id}/threads`：用 `title` 和 `project / restricted` visibility 从路径 Channel 内的 Source Message 创建 Thread。
 
 三个路由均通过当前 Session 与 Workspace / Channel / Thread 权限；两个 POST 还同时要求精确 `Origin`、CSRF Cookie / Header 一致和数据库 CSRF digest。成功与错误统一使用 `Cache-Control: private, no-store` 和 `Vary: Cookie`；显式 DTO 不返回 `client_operation_id`、membership、事件或内部 keyset。完整 cursor、JSON 上限、状态码、最小化和跨 Channel 来源边界见 [ADR-0018](../docs/adr/0018-session-scoped-channel-message-transport.md)。
+
+同源 Web Shell 已把这三个短请求接入 canonical Channel 页面。浏览器会在模糊发送失败后为未变化正文保留同一幂等键；Session 失效回到登录态，后续 `404` 清除已显示正文。production Web handler 只额外开放精确 Channel 页面路径，不把未知嵌套路由变成任意 SPA fallback。
 
 ## 最小备份与恢复
 

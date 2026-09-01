@@ -63,7 +63,7 @@ npm ci
 ./scripts/run-authenticated-web-browser-fixture.sh
 ```
 
-该入口先执行 Web production build，再启动任务专属 PostgreSQL 容器和带临时证书的 HTTPS fixture，输出 origin、测试账号、canonical Deployment path 与 stop 文件，并等待人工浏览器复核。它不会隐式拉取缺失镜像，测试账号不属于产品默认 credential；创建输出的 stop 文件后，脚本会退出并清理容器与临时状态。精确浏览器复核步骤和安全边界见 [Web App](../web/README.md) 与 [ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md)。
+该入口先执行 Web production build，再启动任务专属 PostgreSQL 容器和带临时证书的 HTTPS fixture，输出 origin、可写测试账号、canonical Deployment / Channel path 与 stop 文件，并等待人工浏览器复核。它不会隐式拉取缺失镜像，测试账号不属于产品默认 credential；创建输出的 stop 文件后，脚本会退出并清理容器与临时状态。fixture 可复核正式 Channel Message / Thread 写入，但不会自动替代交互式浏览器检查。精确安全边界见 [Web App](../web/README.md)、[ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md) 与 [ADR-0018](../docs/adr/0018-session-scoped-channel-message-transport.md)。
 
 ## M0 核心契约实验
 

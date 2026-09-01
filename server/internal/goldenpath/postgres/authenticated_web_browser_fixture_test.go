@@ -90,6 +90,12 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 		sessionPolicy,
 		proxyPolicy,
 	)
+	channelHandler := httptransport.NewChannelMessagesHandler(
+		authService,
+		viewService,
+		sessionPolicy,
+		proxyPolicy,
+	)
 	webHandler, err := httptransport.NewWebAppHandler(webRoot)
 	if err != nil {
 		t.Fatalf("NewWebAppHandler() error = %v", err)
@@ -98,6 +104,8 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/auth", authHandler)
 	mux.Handle("/api/v1/auth/", authHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages", channelHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages/", channelHandler)
 	mux.Handle("/api/v1/workspaces", deploymentHandler)
 	mux.Handle("/api/v1/workspaces/", deploymentHandler)
 	mux.Handle("/", webHandler)
@@ -108,8 +116,9 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 
 	state, err := json.Marshal(map[string]string{
 		"public_origin":   publicOrigin,
+		"channel_path":    "/workspaces/wrk_main/channels/chn_project",
 		"deployment_path": "/workspaces/wrk_main/deployments/" + deployment.ID,
-		"login_name":      "http.reader",
+		"login_name":      "http.contributor",
 		"password":        authenticatedWebBrowserPassword,
 	})
 	if err != nil {
@@ -176,6 +185,17 @@ func seedAuthenticatedWebBrowserData(
 	if err != nil {
 		t.Fatalf("RecordStagingDeployment() error = %v", err)
 	}
+	if _, err := service.CreateMessage(
+		ctx,
+		invocation(principal("usr_contributor"), "cor_browser_fixture_message"),
+		goldenpath.CreateMessageInput{
+			ChannelID:         "chn_project",
+			ClientOperationID: "browser-fixture:message-1",
+			Body:              "Authenticated browser fixture message.",
+		},
+	); err != nil {
+		t.Fatalf("CreateMessage() error = %v", err)
+	}
 	if _, err := store.RebuildActivityProjection(ctx); err != nil {
 		t.Fatalf("RebuildActivityProjection() error = %v", err)
 	}
@@ -188,7 +208,7 @@ func seedAuthenticatedWebBrowserData(
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO radishnexus.local_accounts (
 			user_id, login_name, password_hash, created_at, password_changed_at
-		) VALUES ('usr_reader', 'http.reader', $1, $2, $2)
+		) VALUES ('usr_contributor', 'http.contributor', $1, $2, $2)
 	`, passwordHash, accountCreatedAt); err != nil {
 		t.Fatalf("seed browser fixture local account: %v", err)
 	}

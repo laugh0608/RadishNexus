@@ -28,9 +28,11 @@ func TestWebAppHandlerServesOnlyKnownShellRoutesAndImmutableAssets(t *testing.T)
 	}{
 		{name: "root shell", method: http.MethodGet, path: "/", wantStatus: http.StatusOK, wantCache: "no-cache", wantBody: "authenticated shell", wantContent: "text/html; charset=utf-8"},
 		{name: "Deployment shell", method: http.MethodGet, path: "/workspaces/wrk_main/deployments/dpl_release", wantStatus: http.StatusOK, wantCache: "no-cache", wantBody: "authenticated shell", wantContent: "text/html; charset=utf-8"},
+		{name: "Channel shell", method: http.MethodGet, path: "/workspaces/wrk_main/channels/chn_project", wantStatus: http.StatusOK, wantCache: "no-cache", wantBody: "authenticated shell", wantContent: "text/html; charset=utf-8"},
 		{name: "prototype shell", method: http.MethodHead, path: "/prototype/nexus-view", wantStatus: http.StatusOK, wantCache: "no-cache", wantContent: "text/html; charset=utf-8"},
 		{name: "immutable asset", method: http.MethodGet, path: "/assets/index-abc123.js", wantStatus: http.StatusOK, wantCache: "public, max-age=31536000, immutable", wantBody: "console.log", wantContent: "text/javascript; charset=utf-8"},
 		{name: "unknown route", method: http.MethodGet, path: "/unknown", wantStatus: http.StatusNotFound, wantCache: "no-store"},
+		{name: "unknown nested Channel route", method: http.MethodGet, path: "/workspaces/wrk_main/channels/chn_project/settings", wantStatus: http.StatusNotFound, wantCache: "no-store"},
 		{name: "missing asset", method: http.MethodGet, path: "/assets/missing.js", wantStatus: http.StatusNotFound, wantCache: "no-store"},
 		{name: "wrong method", method: http.MethodPost, path: "/", wantStatus: http.StatusMethodNotAllowed, wantCache: "no-store"},
 	}

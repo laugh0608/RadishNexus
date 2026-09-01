@@ -12,7 +12,10 @@ import (
 	"strings"
 )
 
-var deploymentWebPathPattern = regexp.MustCompile(`^/workspaces/[^/]+/deployments/[^/]+/?$`)
+var (
+	deploymentWebPathPattern = regexp.MustCompile(`^/workspaces/[^/]+/deployments/[^/]+/?$`)
+	channelWebPathPattern    = regexp.MustCompile(`^/workspaces/[^/]+/channels/[^/]+/?$`)
+)
 
 type WebAppHandler struct {
 	root      string
@@ -58,7 +61,8 @@ func (handler *WebAppHandler) ServeHTTP(response http.ResponseWriter, request *h
 		return
 	}
 	if request.URL.Path == "/" || request.URL.Path == "/prototype/nexus-view" ||
-		deploymentWebPathPattern.MatchString(request.URL.Path) {
+		deploymentWebPathPattern.MatchString(request.URL.Path) ||
+		channelWebPathPattern.MatchString(request.URL.Path) {
 		response.Header().Set("Content-Type", "text/html; charset=utf-8")
 		response.Header().Set("Cache-Control", "no-cache")
 		response.WriteHeader(http.StatusOK)
