@@ -112,6 +112,9 @@ RADISHNEXUS_WEB_ROOT=/srv/radishnexus/web
 - `/`：Session bootstrap、login、Workspace 选择、已知 Deployment ID 入口和 logout；
 - `/workspaces/{workspace_id}/deployments/{deployment_id}`：先验证 Session，再消费正式 Deployment Nexus View DTO；
 - `/workspaces/{workspace_id}/channels/{channel_id}`：先验证 Session，再分页读取 Message、幂等发送并从 Message 发起 Thread；
+- `/workspaces/{workspace_id}/threads/{thread_id}`：读取 Thread Nexus View 并创建 Proposed Decision；
+- `/workspaces/{workspace_id}/decisions/{decision_id}`：读取 Decision Nexus View，执行明确人工 acceptance，并在接受后创建 Ticket；
+- `/workspaces/{workspace_id}/tickets/{ticket_id}`：读取 Ticket Nexus View 与结构化 Source Decision；
 - `/prototype/nexus-view`：与真实入口隔离的静态代表状态检视器。
 
 只有上述 HTML 路径和 build 的 `/assets/` 文件会由 Web handler 交付；未知路径返回 `404`。HTML 使用 `no-cache`，哈希资源使用长期 immutable cache，认证和业务 API 继续 `no-store`。完整 same-origin、CSP、启动失败、Session bootstrap 和 fixture 边界见 [ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md)。
@@ -149,7 +152,7 @@ RADISHNEXUS_WEB_ROOT=/srv/radishnexus/web
 
 三个 GET 每次重新检查当前 Workspace、Project、Channel 与 restricted Thread 权限；三个 POST 还要求精确 Origin、double-submit + 存储态 CSRF。写请求携带 printable ASCII `client_operation_id`；首次 Decision / Ticket 创建返回 `201`，精确重试返回 `200`，变化重放返回 `409`。acceptance 只允许 decider / admin、要求当前可读全部 evidence 和显式 `confirmed=true`，首次与精确重试均返回 `200`。
 
-Thread DTO 只通过结构化 ref 返回 origin Channel 和 `started-from` Message，不返回 Message 正文；Decision restricted evidence 只形成无类型、ID、关系名、标题和时间的占位；Ticket 通过 `implements` 保留 Source Decision。所有响应均为 `private, no-store`，不返回 receipt、digest、operation ID、角色、membership、事件或 Outbox。完整边界见 [ADR-0019](../docs/adr/0019-session-scoped-thread-decision-ticket-transport.md)。对应 canonical Web 页面仍是下一切片，未知 HTML 路径继续 `404`。
+Thread DTO 只通过结构化 ref 返回 origin Channel 和 `started-from` Message，不返回 Message 正文；Decision restricted evidence 只形成无类型、ID、关系名、标题和时间的占位；Ticket 通过 `implements` 保留 Source Decision。所有响应均为 `private, no-store`，不返回 receipt、digest、operation ID、角色、membership、事件或 Outbox。完整边界见 [ADR-0019](../docs/adr/0019-session-scoped-thread-decision-ticket-transport.md)。同源 Web Shell 已接入三个 canonical 页面与对应写动作；production Web handler 只开放精确协作路径，未知或多余嵌套路由继续 `404`。
 
 ## 最小备份与恢复
 

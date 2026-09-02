@@ -20,6 +20,14 @@ import {
   channelPagePath,
   type ChannelMessageClient,
 } from "./channel/api";
+import { CollaborationPage } from "./collaboration/CollaborationPage";
+import {
+  browserCollaborationClient,
+  collaborationLocation,
+  collaborationPagePath,
+  type CollaborationClient,
+  type CollaborationEntityType,
+} from "./collaboration/api";
 import {
   DeploymentNexusViewLoadError,
   deploymentNexusViewLocation,
@@ -40,6 +48,12 @@ type AppRoute =
   | { kind: "prototype" }
   | { kind: "deployment"; workspaceID: string; deploymentID: string }
   | { kind: "channel"; workspaceID: string; channelID: string }
+  | {
+      kind: "collaboration";
+      workspaceID: string;
+      entityType: CollaborationEntityType;
+      entityID: string;
+    }
   | { kind: "not-found" };
 
 type AuthenticationState =
@@ -70,6 +84,7 @@ interface AppProps {
   pathname?: string;
   authClient?: AuthClient;
   channelClient?: ChannelMessageClient;
+  collaborationClient?: CollaborationClient;
   loadDeployment?: DeploymentNexusViewLoader;
   navigate?: (path: string) => void;
 }
@@ -78,6 +93,7 @@ export function App({
   pathname = window.location.pathname,
   authClient = browserAuthClient,
   channelClient = browserChannelMessageClient,
+  collaborationClient = browserCollaborationClient,
   loadDeployment = loadDeploymentNexusViewData,
   navigate = (path) => window.location.assign(path),
 }: AppProps) {
@@ -90,6 +106,7 @@ export function App({
       route={route}
       authClient={authClient}
       channelClient={channelClient}
+      collaborationClient={collaborationClient}
       loadDeployment={loadDeployment}
       navigate={navigate}
     />
@@ -108,21 +125,27 @@ function appRoute(pathname: string): AppRoute {
     return { kind: "deployment", ...deployment };
   }
   const channel = channelLocation(pathname);
-  return channel === null
+  if (channel !== null) {
+    return { kind: "channel", ...channel };
+  }
+  const collaboration = collaborationLocation(pathname);
+  return collaboration === null
     ? { kind: "not-found" }
-    : { kind: "channel", ...channel };
+    : { kind: "collaboration", ...collaboration };
 }
 
 function AuthenticatedApp({
   route,
   authClient,
   channelClient,
+  collaborationClient,
   loadDeployment,
   navigate,
 }: {
   route: Exclude<AppRoute, { kind: "prototype" }>;
   authClient: AuthClient;
   channelClient: ChannelMessageClient;
+  collaborationClient: CollaborationClient;
   loadDeployment: DeploymentNexusViewLoader;
   navigate: (path: string) => void;
 }) {
@@ -197,6 +220,7 @@ function AuthenticatedApp({
       session={authentication.session}
       authClient={authClient}
       channelClient={channelClient}
+      collaborationClient={collaborationClient}
       loadDeployment={loadDeployment}
       navigate={navigate}
       onSignedOut={requireLogin}
@@ -289,6 +313,7 @@ function SignedInShell({
   session,
   authClient,
   channelClient,
+  collaborationClient,
   loadDeployment,
   navigate,
   onSignedOut,
@@ -297,6 +322,7 @@ function SignedInShell({
   session: SessionContext;
   authClient: AuthClient;
   channelClient: ChannelMessageClient;
+  collaborationClient: CollaborationClient;
   loadDeployment: DeploymentNexusViewLoader;
   navigate: (path: string) => void;
   onSignedOut: () => void;
@@ -304,7 +330,9 @@ function SignedInShell({
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const currentWorkspace =
-    route.kind === "deployment" || route.kind === "channel"
+    route.kind === "deployment" ||
+    route.kind === "channel" ||
+    route.kind === "collaboration"
       ? session.workspaces.find(
           (workspace) => workspace.id === route.workspaceID,
         )
@@ -330,7 +358,9 @@ function SignedInShell({
     <div className="app-shell">
       <AppHeader
         note={
-          route.kind === "deployment" || route.kind === "channel"
+          route.kind === "deployment" ||
+          route.kind === "channel" ||
+          route.kind === "collaboration"
             ? `真实 API · ${currentWorkspace?.name ?? "当前权限过滤"}`
             : "Authenticated Web Shell"
         }
@@ -375,6 +405,15 @@ function SignedInShell({
           client={channelClient}
           onSessionExpired={onSignedOut}
         />
+      ) : route.kind === "collaboration" ? (
+        <CollaborationPage
+          key={`${route.workspaceID}/${route.entityType}/${route.entityID}`}
+          workspaceID={route.workspaceID}
+          entityType={route.entityType}
+          entityID={route.entityID}
+          client={collaborationClient}
+          onSessionExpired={onSignedOut}
+        />
       ) : (
         <NotFoundView />
       )}
@@ -396,6 +435,9 @@ function WorkspaceHome({
   );
   const [deploymentID, setDeploymentID] = useState("");
   const [channelID, setChannelID] = useState("");
+  const [collaborationType, setCollaborationType] =
+    useState<CollaborationEntityType>("thread");
+  const [collaborationID, setCollaborationID] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const openDeployment = (event: FormEvent<HTMLFormElement>) => {
@@ -414,6 +456,23 @@ function WorkspaceHome({
     const path = channelPagePath(workspaceID, channelID.trim());
     if (path === null) {
       setError("请选择 Workspace，并输入以 chn_ 开头的有效 Channel ID。");
+      return;
+    }
+    setError(null);
+    navigate(path);
+  };
+
+  const openCollaboration = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const path = collaborationPagePath(
+      workspaceID,
+      collaborationType,
+      collaborationID.trim(),
+    );
+    if (path === null) {
+      setError(
+        "请选择 Workspace、协作对象类型，并输入匹配 thr_ / dec_ / tkt_ 的稳定 ID。",
+      );
       return;
     }
     setError(null);
@@ -497,6 +556,43 @@ function WorkspaceHome({
               type="submit"
             >
               打开 Nexus View
+            </button>
+          </form>
+          <form onSubmit={openCollaboration}>
+            <p>Collaboration</p>
+            <label>
+              <span>协作对象类型</span>
+              <select
+                disabled={session.workspaces.length === 0}
+                onChange={(event) =>
+                  setCollaborationType(
+                    event.target.value as CollaborationEntityType,
+                  )
+                }
+                value={collaborationType}
+              >
+                <option value="thread">Thread</option>
+                <option value="decision">Decision</option>
+                <option value="ticket">Ticket</option>
+              </select>
+            </label>
+            <label>
+              <span>协作对象 ID</span>
+              <input
+                autoComplete="off"
+                disabled={session.workspaces.length === 0}
+                onChange={(event) => setCollaborationID(event.target.value)}
+                placeholder="thr_… / dec_… / tkt_…"
+                required
+                value={collaborationID}
+              />
+            </label>
+            <button
+              className="secondary-button"
+              disabled={session.workspaces.length === 0}
+              type="submit"
+            >
+              打开协作对象
             </button>
           </form>
         </div>

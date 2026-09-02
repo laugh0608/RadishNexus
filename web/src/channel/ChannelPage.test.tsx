@@ -136,6 +136,11 @@ describe("ChannelPage", () => {
 
     expect(await screen.findByText("Thread 已创建")).toBeDefined();
     expect(screen.getByText("thr_created")).toBeDefined();
+    expect(
+      screen
+        .getByRole("link", { name: "打开 canonical Thread" })
+        .getAttribute("href"),
+    ).toBe("/workspaces/wrk_main/threads/thr_created");
     expect(startThread).toHaveBeenCalledWith(
       "wrk_main",
       "chn_main",

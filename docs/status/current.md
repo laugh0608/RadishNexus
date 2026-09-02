@@ -6,7 +6,7 @@
 
 产品定义、架构基线、仓库治理基线与 M0.5 Golden Path / M1 Web 平台基础纵向原型。
 
-当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Thread / Decision / Ticket Nexus View 读取查询和 Session transport 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和安全读取已经建立。正式 Environment、环境级写授权、显式终态 staging Deployment、`deploys` 关系、`deployment.recorded` 投影与 Workspace 作用域安全读取已经通过真实 PostgreSQL 验证。PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验和 Activity 重建已经由 ADR-0010、显式 CLI 与双实例演练建立。上述 M0 正式服务、Web 代表原型与恢复基线已通过 PR #9 的远端 `Candidate Quality`，使用 merge commit 晋级 `master` 并 fast-forward 回流 `dev`。正式 `web/` React + TypeScript 基线现已覆盖 Decision、CI Run 与 Deployment Nexus View 代表交互；本地账号的公共 login / session / logout transport、第一个 Session 作用域的 Deployment Nexus View 业务读取端点，以及同源 authenticated Web Shell 已经建立。真实 PostgreSQL + production Web build + HTTPS 浏览器现已从登录、Workspace 选择进入 canonical Deployment 并完成登出。首个正式 `deploy/` Docker Compose 开发拓扑也已从全新命名 volume 完成固定工件、显式 migration / bootstrap、唯一 Caddy HTTPS origin、文件 Secret、持久化 PostgreSQL 和认证闭环演练。Channel / Message / messaging-origin Thread 的最小字段、幂等、权限、来源与实时恢复语义已由 ADR-0017 冻结并通过零依赖单进程 HTTP + SSE 可丢弃实验；migration 006、正式 command application service、canonical Message application query 与 PostgreSQL / 备份恢复验证已经落地。ADR-0018 已冻结并实现单 Channel 历史、发送和从 Message 发起 Thread 的 Session 作用域短请求；canonical Channel Web 页面也已接入权限过滤分页、幂等发送和结构化 Thread 来源，并通过真实 Session + PostgreSQL + production build + HTTPS 浏览器复核。ADR-0019 与 migration 007 现已进一步冻结并实现 Thread → Proposed Decision → 人工 Accepted Decision → Ticket 的 Session 路由、结构化来源和不可变 command receipt；真实 PostgreSQL 已验证 contributor / decider 分权、精确重试、变化重放和 evidence 撤销。对应 canonical 协作 Web 页面与正式实时连接尚未建立；完整产品导航、插件 runtime、公网生产拓扑和客户端尚未建立。
+当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Thread / Decision / Ticket Nexus View 读取查询和 Session transport 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和安全读取已经建立。正式 Environment、环境级写授权、显式终态 staging Deployment、`deploys` 关系、`deployment.recorded` 投影与 Workspace 作用域安全读取已经通过真实 PostgreSQL 验证。PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验和 Activity 重建已经由 ADR-0010、显式 CLI 与双实例演练建立。上述 M0 正式服务、Web 代表原型与恢复基线已通过 PR #9 的远端 `Candidate Quality`，使用 merge commit 晋级 `master` 并 fast-forward 回流 `dev`。正式 `web/` React + TypeScript 基线现已覆盖 Decision、CI Run 与 Deployment Nexus View 代表交互；本地账号的公共 login / session / logout transport、第一个 Session 作用域的 Deployment Nexus View 业务读取端点，以及同源 authenticated Web Shell 已经建立。真实 PostgreSQL + production Web build + HTTPS 浏览器现已从登录、Workspace 选择进入 canonical Deployment 并完成登出。首个正式 `deploy/` Docker Compose 开发拓扑也已从全新命名 volume 完成固定工件、显式 migration / bootstrap、唯一 Caddy HTTPS origin、文件 Secret、持久化 PostgreSQL 和认证闭环演练。Channel / Message / messaging-origin Thread 的最小字段、幂等、权限、来源与实时恢复语义已由 ADR-0017 冻结并通过零依赖单进程 HTTP + SSE 可丢弃实验；migration 006、正式 command application service、canonical Message application query 与 PostgreSQL / 备份恢复验证已经落地。ADR-0018 已冻结并实现单 Channel 历史、发送和从 Message 发起 Thread 的 Session 作用域短请求；canonical Channel Web 页面也已接入权限过滤分页、幂等发送和结构化 Thread 来源，并通过真实 Session + PostgreSQL + production build + HTTPS 浏览器复核。ADR-0019 与 migration 007 现已进一步冻结并实现 Thread → Proposed Decision → 人工 Accepted Decision → Ticket 的 Session 路由、结构化来源和不可变 command receipt；真实 PostgreSQL 已验证 contributor / decider 分权、精确重试、变化重放和 evidence 撤销。对应 canonical Thread / Decision / Ticket Web 页面、运行时校验 adapter、幂等交互和 HTML allowlist 已经建立；真实 PostgreSQL + production build + HTTPS fixture server 已通过，但本轮内置浏览器因未重新加载临时 CA 信任而在 TLS 握手处失败，因此交互式浏览器复核仍未计为通过。正式实时连接、完整产品导航、插件 runtime、公网生产拓扑和客户端尚未建立。
 
 ## 当前结论
 
@@ -91,10 +91,14 @@
 - canonical `/workspaces/{workspace_id}/deployments/{deployment_id}` 页面先完成 Session bootstrap，再通过同源、no-store 的类型化 adapter 消费真实公共 DTO；业务 `401` 回到登录态，网络和契约错误显式失败。
 - canonical `/workspaces/{workspace_id}/channels/{channel_id}` 页面复用同一 Session bootstrap，通过运行时校验的 adapter 分页读取、发送 Message 并从 Message 创建 Thread；模糊发送失败保留同一幂等键，`200` 精确重试不追加重复项。
 - Channel 后续请求返回 `404` 时，Web 会立即移除已经渲染的 Message 正文和本地草稿；`401` 回到登录态，Thread 创建不复制 Source Message 正文。
-- Go server 只从必需的绝对 `RADISHNEXUS_WEB_ROOT` 交付 production build，HTML 仅开放根路径、代表原型、canonical Deployment 和 canonical Channel；未知页面不使用任意 SPA fallback，哈希资源 immutable cache，HTML `no-cache`。
+- canonical Thread / Decision / Ticket 页面复用同一 Session bootstrap 和 ADR-0019 六个短请求，分别承载 Proposed Decision、显式人工 acceptance 与 Ticket 创建；网络歧义且表单未变化时保留原 `client_operation_id`，成功后提供稳定 canonical 链接。
+- 协作 Web adapter 对 Current、Relation、Timeline、状态、结构化来源和受控时间严格校验；restricted evidence 不携带类型、ID、关系名、标题或时间，Ticket 页面只展示权限过滤后的 Source Decision 与 `implements`。
+- 协作后续请求返回 `404` 时，Web 会清除已渲染对象、草稿和成功结果；`401` 回到登录态，contributor 不能借由客户端状态绕过 acceptance 的服务端分权。
+- Go server 只从必需的绝对 `RADISHNEXUS_WEB_ROOT` 交付 production build，HTML 仅开放根路径、代表原型以及 canonical Deployment、Channel、Thread、Decision 和 Ticket；未知或多余嵌套路由不使用任意 SPA fallback，哈希资源 immutable cache，HTML `no-cache`。
 - Web 不保存密码、Session token、Workspace 权限快照或业务响应到 `localStorage` / `sessionStorage`；Workspace 选择不改变服务端权限，业务路由仍按当前 membership 解析。
 - Web fixture 已统一修正为 `entity://type/id` canonical 引用和正式 `tkt_` 前缀；真实浏览器网络边界验证了 API request、nullable started time、Relations 与 Timeline 渲染且没有 console warning / error。
-- 真实 PostgreSQL + migration + application 写入 + HTTPS + production Web build 的浏览器 fixture 已进一步验证 Channel history `200`、Message `201`、Source Message → Thread `201`、390px 长 ID 无横向溢出、无 Web Storage、登出 `204`、Cookie 清理与 canonical Channel URL 重新登录；除预期匿名 Session `401` resource entry 外没有新增 console warning / error。
+- 真实 PostgreSQL + migration + application 写入 + HTTPS + production Web build 的既有浏览器 fixture 已验证 Channel history `200`、Message `201`、Source Message → Thread `201`、390px 长 ID 无横向溢出、无 Web Storage、登出 `204`、Cookie 清理与 canonical Channel URL 重新登录；除预期匿名 Session `401` resource entry 外没有新增 console warning / error。
+- fixture 现已额外生成 restricted Thread、contributor / decider 两个账号并挂载正式协作 handler，足以交互复核 Thread → Decision → Ticket 分权链；本轮 HTTPS fixture server 正常通过，但内置浏览器在临时 CA 动态加入登录钥匙串后仍返回 `ERR_CERT_AUTHORITY_INVALID`。未绕过告警，临时证书已按指纹删除，因此该交互链和 390px 复核保持待完成。
 - 全新 Compose project 演练已验证 PostgreSQL readiness → 显式 migration → 唯一 bootstrap → app / Caddy 启动 → HTTPS login / Session / logout；第二次 bootstrap 被拒绝，伪造 `X-Forwarded-*` 不改变可信边界，Go server 和 PostgreSQL 均无宿主端口。
 - 所有 database-backed CLI 与 server 现在可以通过 `RADISHNEXUS_DATABASE_PASSWORD_FILE` 读取单行文件 Secret 并在内存中装配 PostgreSQL URL；现有完整 `DATABASE_URL` 方式保持兼容，歧义、相对路径、空值、多行和读取失败均 fail closed。
 - `web/` 已建立 Prettier、Oxlint、Vitest + jsdom、严格 TypeScript、Vite production build 与 lockfile 供应链检查；`Candidate Quality` 已加入独立 `Web App` job，并已在本批次 PR 中实际通过。
@@ -144,7 +148,7 @@
 
 ## 今日进展（2026-09-02）
 
-今日完成了 Thread → Decision → Ticket 的正式服务端公共切片；Web canonical 页面和 HTTPS 浏览器复核仍是下一完成线：
+今日在已经完成的 Thread → Decision → Ticket 正式服务端公共切片上继续交付 canonical Web 协作闭环；代码、自动化与 HTTPS fixture server 已完成，交互式浏览器复核仍有一项环境阻断：
 
 1. 盘点确认既有 application command、Project 角色、restricted Thread、EntityLink、Activity、Session、CSRF、公共错误和不可发现性可以复用；缺口集中在 Thread 权威读取、公共 DTO、人工确认与模糊写入重试；
 2. ADR-0019 已接受，冻结 Thread / Decision / Ticket 三个 Nexus View 和 Proposed Decision、acceptance、Ticket 三个 Session 写路由，继续使用同源短请求而不接入实验 SSE；
@@ -158,19 +162,25 @@
 10. 单元测试已覆盖首次 `201`、精确重试 `200`、人工确认、严格 JSON、method / path / query、Session / CSRF、结构化来源、restricted 占位和 projection drift；
 11. 真实 PostgreSQL + 真实 Session 已贯通 restricted Source Message → Thread → contributor Proposed Decision → decider 人工 Accepted Decision → contributor Ticket，并验证精确重试、变化重放、contributor 不可确认与 evidence membership 撤销后 acceptance retry 被拒绝；
 12. 固定摘要 PostgreSQL 17 镜像已重新拉取，正式 server 全量 PostgreSQL 集成、双实例备份恢复、Go test / vet / module 与仓库基线检查均通过；本批次未新增第三方依赖或改变 lockfile。
+13. 已建立 Thread / Decision / Ticket 严格运行时校验 adapter 与三个 canonical 页面，分别承载提案、显式人工 acceptance、Ticket 创建和权限过滤后的 Current / Relations / Timeline；
+14. Channel 创建 Thread 后已返回稳定 canonical 链接；authenticated shell 也可按正式 `thr_` / `dec_` / `tkt_` ID 进入协作页面，不新增 list API 或客户端权限缓存；
+15. 三个写交互在表单未变化的模糊失败后复用同一 `client_operation_id`，`401` 回到登录态，后续 `404` 清除对象、草稿与成功结果；客户端不会把 contributor 的拒绝或 restricted evidence 解释为成功；
+16. production Web handler 已显式开放 Thread / Decision / Ticket HTML 路径并继续拒绝未知嵌套路由；Vitest 新增 adapter、页面、shell 与 Channel canonical 链接覆盖，Web 现有 55 项测试和 production build 均通过；
+17. authenticated browser fixture 已生成 restricted Thread、contributor / decider 两个账号并挂载正式协作 handler；真实 PostgreSQL、migration、production build 与 HTTPS fixture server 正常通过；
+18. 按建议使用内置浏览器复核时，浏览器进程未重新加载运行中动态加入的临时 CA，TLS 握手返回 `ERR_CERT_AUTHORITY_INVALID`。未绕过证书告警，也未把此项记为浏览器通过；临时证书已按精确 SHA-256 从登录钥匙串删除，导出文件和 fixture 容器均已清理。
 
 ## 下一步
 
-下一优先级是让已经冻结的 Thread → Decision → Ticket 公共合同进入 Web canonical 协作闭环，而不是扩展完整聊天或直接搬运实验 transport：
+下一优先级是完成 Thread → Decision → Ticket Web 闭环的最后一项真实浏览器验收，再决定正式实时边界，而不是扩展完整聊天或直接搬运实验 transport：
 
-1. 建立运行时校验的 Thread / Decision / Ticket Web adapter，把 Channel 创建成功后的 Thread 链接到 `/workspaces/{workspace_id}/threads/{thread_id}`；
-2. 交付最小 canonical Thread、Decision 与 Ticket 页面，分别承载提案、明确 acceptance 与 Ticket 创建；模糊写入失败保留同一 `client_operation_id`，精确 retry 不制造重复事实；
-3. 在 contributor 与 decider 两个真实账号间完成 HTTPS 浏览器复核，覆盖 restricted evidence、人工确认、结构化 `started-from` / `derived-from` / `implements`、390px 窄屏、权限撤销和正文清理；
-4. 完成这段短请求协作链的 production build + Compose 浏览器复核后，再决定是否保留临时 SSE transport；正式实时入口仍须先解决独立 timeout、heartbeat、Caddy flush、连接上限与优雅关闭。
+1. 在浏览器进程启动前准备并显式信任当前 HTTPS fixture 证书，然后用 contributor / decider 两个真实账号完成 Thread 提案、越权 acceptance 被拒、人工确认、Ticket 创建与 canonical 跳转；不通过浏览器告警旁路完成验收；
+2. 同一轮复核覆盖 restricted evidence、结构化 `started-from` / `derived-from` / `implements`、390px 长 ID 无横向溢出、登出 / 重新登录、无 Web Storage 和响应 `404` 后正文与草稿清理；权限撤销的权威语义继续由真实 PostgreSQL 集成测试覆盖；
+3. 浏览器完成线通过后，评估并冻结正式实时入口的独立 timeout、heartbeat、Caddy flush、连接上限、权限变化、resync 和优雅关闭边界，再决定保留、替换或丢弃临时 SSE transport；
+4. 实时合同未接受前不把实验 SSE 接入 authenticated Web Shell，也不扩展附件、表情、未读、通知、多副本 fan-out 或独立消息中间件。
 
-文档协同技术评估、免费书面授权模板和版本化结构化导入导出仍是独立 M0 / M1 缺口，按路线图后续逐项推进，不与第一个沟通切片同时铺开。当前 `dev` 已包含消息边界、正式 PostgreSQL command / query、Session transport 与 Channel Web 闭环；本批次 Thread / Decision / Ticket 服务端合同尚待提交。所有这些变更均未晋级 `master`，创建阶段 PR 或写入远程状态仍需项目所有者另行明确授权。
+文档协同技术评估、免费书面授权模板和版本化结构化导入导出仍是独立 M0 / M1 缺口，按路线图后续逐项推进，不与第一个沟通切片同时铺开。当前 `dev` 已包含消息边界、正式 PostgreSQL command / query、Session transport、Channel Web 闭环以及已提交的 Thread / Decision / Ticket 服务端合同；本批 canonical 协作 Web 变更尚未提交。所有这些变更均未晋级 `master`，创建阶段 PR 或写入远程状态仍需项目所有者另行明确授权。
 
-当前完成线：正式数据库、application service 与 Session transport 已证明 Message 能以稳定身份和幂等 command 进入 Channel、能够不复制正文地发起 Thread，并以不可变 receipt 和结构化关系继续形成 Proposed Decision、人工 Accepted Decision 与 Ticket；Thread / Decision / Ticket Nexus View、受限占位、重复命令、备份恢复和权限撤销复用同一语义。对应 canonical 协作 Web 页面与正式实时连接仍属于下一完成线。
+当前完成线：正式数据库、application service 与 Session transport 已证明 Message 能以稳定身份和幂等 command 进入 Channel、能够不复制正文地发起 Thread，并以不可变 receipt 和结构化关系继续形成 Proposed Decision、人工 Accepted Decision 与 Ticket；Thread / Decision / Ticket Nexus View、受限占位、重复命令、备份恢复和权限撤销复用同一语义。对应 canonical 协作 Web 页面已经实现并通过单元、构建与 HTTPS fixture server 验证；浏览器交互验收和正式实时连接仍属于下一完成线。
 
 当前停止线：实验不是正式 server、公共 API 或产品协议；不建立完整聊天 UI、附件、表情、搜索、未读、通知、多副本 fan-out 或独立消息中间件；不让引用、旧 membership、客户端身份或订阅状态授予权限；不在独立长连接合同落地前把 SSE / WebSocket 挂入现有 15 秒 listener。
 

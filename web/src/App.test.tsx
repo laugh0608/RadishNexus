@@ -7,6 +7,11 @@ import {
   type SessionContext,
 } from "./auth/api";
 import type { ChannelMessageClient } from "./channel/api";
+import type {
+  CollaborationClient,
+  CollaborationView,
+  ThreadCurrent,
+} from "./collaboration/api";
 import { DeploymentNexusViewLoadError } from "./nexus-view/api";
 import { succeededDeploymentNexusViewFixture } from "./nexus-view/fixture";
 
@@ -17,6 +22,21 @@ const session: SessionContext = {
     { id: "wrk_docs", name: "Docs", role: "member" },
   ],
   expiresAt: "2026-08-31T02:24:31Z",
+};
+
+const threadView: CollaborationView<ThreadCurrent> = {
+  current: {
+    ref: { type: "thread", id: "thr_discussion" },
+    project: { type: "project", id: "prj_main" },
+    originChannel: null,
+    title: "Canonical Thread",
+    visibility: "project",
+    createdBy: { kind: "user", id: "usr_admin" },
+    createdAt: "2026-09-02T03:00:00Z",
+    updatedAt: "2026-09-02T03:00:00Z",
+  },
+  relations: [],
+  timeline: [],
 };
 
 describe("App prototype state controls", () => {
@@ -119,6 +139,28 @@ describe("authenticated Web Shell", () => {
     );
   });
 
+  it("opens a known collaboration object from the selected Workspace", async () => {
+    const navigate = vi.fn();
+    render(
+      <App pathname="/" authClient={testAuthClient()} navigate={navigate} />,
+    );
+    await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
+    fireEvent.change(screen.getByLabelText("Workspace"), {
+      target: { value: "wrk_docs" },
+    });
+    fireEvent.change(screen.getByLabelText("协作对象类型"), {
+      target: { value: "thread" },
+    });
+    fireEvent.change(screen.getByLabelText("协作对象 ID"), {
+      target: { value: "thr_discussion" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "打开协作对象" }));
+
+    expect(navigate).toHaveBeenCalledWith(
+      "/workspaces/wrk_docs/threads/thr_discussion",
+    );
+  });
+
   it("loads a canonical Channel only after Session bootstrap", async () => {
     const channelClient = testChannelClient({
       listMessages: vi.fn().mockResolvedValue({
@@ -171,6 +213,28 @@ describe("authenticated Web Shell", () => {
     expect(loader).toHaveBeenCalledWith(
       "wrk_main",
       "dpl_release_42",
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("loads a canonical collaboration object only after Session bootstrap", async () => {
+    const collaborationClient = testCollaborationClient();
+    render(
+      <App
+        pathname="/workspaces/wrk_main/threads/thr_discussion"
+        authClient={testAuthClient()}
+        collaborationClient={collaborationClient}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Canonical Thread" }),
+    ).toBeDefined();
+    expect(screen.getByText("真实 API · Main Workspace")).toBeDefined();
+    expect(collaborationClient.loadView).toHaveBeenCalledWith(
+      "wrk_main",
+      "thread",
+      "thr_discussion",
       expect.any(AbortSignal),
     );
   });
@@ -276,6 +340,18 @@ function testChannelClient(
     }),
     createMessage: vi.fn(),
     startThread: vi.fn(),
+    ...overrides,
+  };
+}
+
+function testCollaborationClient(
+  overrides: Partial<CollaborationClient> = {},
+): CollaborationClient {
+  return {
+    loadView: vi.fn().mockResolvedValue(threadView),
+    proposeDecision: vi.fn(),
+    acceptDecision: vi.fn(),
+    createTicket: vi.fn(),
     ...overrides,
   };
 }

@@ -52,7 +52,7 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	}
 	t.Cleanup(pool.Close)
 
-	deployment := seedAuthenticatedWebBrowserData(t, ctx, pool)
+	fixture := seedAuthenticatedWebBrowserData(t, ctx, pool)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("net.Listen() error = %v", err)
@@ -96,6 +96,12 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 		sessionPolicy,
 		proxyPolicy,
 	)
+	collaborationHandler := httptransport.NewCollaborationHandler(
+		authService,
+		viewService,
+		sessionPolicy,
+		proxyPolicy,
+	)
 	webHandler, err := httptransport.NewWebAppHandler(webRoot)
 	if err != nil {
 		t.Fatalf("NewWebAppHandler() error = %v", err)
@@ -106,6 +112,9 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	mux.Handle("/api/v1/auth/", authHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages", channelHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages/", channelHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/threads/", collaborationHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/decisions/", collaborationHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/tickets/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces", deploymentHandler)
 	mux.Handle("/api/v1/workspaces/", deploymentHandler)
 	mux.Handle("/", webHandler)
@@ -115,11 +124,13 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	state, err := json.Marshal(map[string]string{
-		"public_origin":   publicOrigin,
-		"channel_path":    "/workspaces/wrk_main/channels/chn_project",
-		"deployment_path": "/workspaces/wrk_main/deployments/" + deployment.ID,
-		"login_name":      "http.contributor",
-		"password":        authenticatedWebBrowserPassword,
+		"public_origin":     publicOrigin,
+		"channel_path":      "/workspaces/wrk_main/channels/chn_project",
+		"thread_path":       "/workspaces/wrk_main/threads/" + fixture.thread.ID,
+		"deployment_path":   "/workspaces/wrk_main/deployments/" + fixture.deployment.ID,
+		"contributor_login": "http.contributor",
+		"decider_login":     "http.decider",
+		"password":          authenticatedWebBrowserPassword,
 	})
 	if err != nil {
 		t.Fatalf("json.Marshal() error = %v", err)
@@ -130,11 +141,16 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	waitForBrowserFixtureStop(t, stopPath)
 }
 
+type authenticatedWebFixture struct {
+	deployment goldenpath.Deployment
+	thread     goldenpath.Thread
+}
+
 func seedAuthenticatedWebBrowserData(
 	t *testing.T,
 	ctx context.Context,
 	pool *pgxpool.Pool,
-) goldenpath.Deployment {
+) authenticatedWebFixture {
 	t.Helper()
 	seedGoldenPath(t, ctx, pool)
 	seedDeploymentTargets(t, ctx, pool)
@@ -185,7 +201,7 @@ func seedAuthenticatedWebBrowserData(
 	if err != nil {
 		t.Fatalf("RecordStagingDeployment() error = %v", err)
 	}
-	if _, err := service.CreateMessage(
+	messageResult, err := service.CreateMessage(
 		ctx,
 		invocation(principal("usr_contributor"), "cor_browser_fixture_message"),
 		goldenpath.CreateMessageInput{
@@ -193,8 +209,29 @@ func seedAuthenticatedWebBrowserData(
 			ClientOperationID: "browser-fixture:message-1",
 			Body:              "Authenticated browser fixture message.",
 		},
-	); err != nil {
+	)
+	if err != nil {
 		t.Fatalf("CreateMessage() error = %v", err)
+	}
+	thread, err := service.StartThreadFromMessage(
+		ctx,
+		invocation(principal("usr_contributor"), "cor_browser_fixture_thread"),
+		goldenpath.StartThreadFromMessageInput{
+			ChannelID:  "chn_project",
+			MessageID:  messageResult.Message.ID,
+			Title:      "Authenticated collaboration boundary",
+			Visibility: "restricted",
+		},
+	)
+	if err != nil {
+		t.Fatalf("StartThreadFromMessage() error = %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO radishnexus.thread_memberships (
+			workspace_id, thread_id, user_id
+		) VALUES ('wrk_main', $1, 'usr_decider')
+	`, thread.ID); err != nil {
+		t.Fatalf("seed browser fixture decider Thread membership: %v", err)
 	}
 	if _, err := store.RebuildActivityProjection(ctx); err != nil {
 		t.Fatalf("RebuildActivityProjection() error = %v", err)
@@ -208,11 +245,13 @@ func seedAuthenticatedWebBrowserData(
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO radishnexus.local_accounts (
 			user_id, login_name, password_hash, created_at, password_changed_at
-		) VALUES ('usr_contributor', 'http.contributor', $1, $2, $2)
+		) VALUES
+			('usr_contributor', 'http.contributor', $1, $2, $2),
+			('usr_decider', 'http.decider', $1, $2, $2)
 	`, passwordHash, accountCreatedAt); err != nil {
 		t.Fatalf("seed browser fixture local account: %v", err)
 	}
-	return deployment
+	return authenticatedWebFixture{deployment: deployment, thread: thread}
 }
 
 func waitForBrowserFixtureStop(t *testing.T, stopPath string) {

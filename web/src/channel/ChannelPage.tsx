@@ -350,6 +350,11 @@ export function ChannelPage({
                           <span>Thread 已创建</span>
                           <strong>{createdThread.title}</strong>
                           <code>{createdThread.id}</code>
+                          <a
+                            href={`/workspaces/${encodeURIComponent(workspaceID)}/threads/${encodeURIComponent(createdThread.id)}`}
+                          >
+                            打开 canonical Thread
+                          </a>
                         </div>
                       )}
                       {editingThread && threadDraft !== null ? (
