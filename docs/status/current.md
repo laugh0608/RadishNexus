@@ -178,7 +178,7 @@
 3. 浏览器完成线通过后，评估并冻结正式实时入口的独立 timeout、heartbeat、Caddy flush、连接上限、权限变化、resync 和优雅关闭边界，再决定保留、替换或丢弃临时 SSE transport；
 4. 实时合同未接受前不把实验 SSE 接入 authenticated Web Shell，也不扩展附件、表情、未读、通知、多副本 fan-out 或独立消息中间件。
 
-文档协同技术评估、免费书面授权模板和版本化结构化导入导出仍是独立 M0 / M1 缺口，按路线图后续逐项推进，不与第一个沟通切片同时铺开。当前 `dev` 已包含消息边界、正式 PostgreSQL command / query、Session transport、Channel Web 闭环以及已提交的 Thread / Decision / Ticket 服务端合同；本批 canonical 协作 Web 变更尚未提交。所有这些变更均未晋级 `master`，创建阶段 PR 或写入远程状态仍需项目所有者另行明确授权。
+文档协同技术评估、免费书面授权模板和版本化结构化导入导出仍是独立 M0 / M1 缺口，按路线图后续逐项推进，不与第一个沟通切片同时铺开。当前 `dev` 已包含消息边界、正式 PostgreSQL command / query、Session transport、Channel Web 闭环，以及已经提交的 Thread / Decision / Ticket 服务端合同与 canonical 协作 Web 闭环。所有这些变更均未晋级 `master`，创建阶段 PR 或写入远程状态仍需项目所有者另行明确授权。
 
 当前完成线：正式数据库、application service 与 Session transport 已证明 Message 能以稳定身份和幂等 command 进入 Channel、能够不复制正文地发起 Thread，并以不可变 receipt 和结构化关系继续形成 Proposed Decision、人工 Accepted Decision 与 Ticket；Thread / Decision / Ticket Nexus View、受限占位、重复命令、备份恢复和权限撤销复用同一语义。对应 canonical 协作 Web 页面已经实现并通过单元、构建与 HTTPS fixture server 验证；浏览器交互验收和正式实时连接仍属于下一完成线。
 
