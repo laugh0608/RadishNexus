@@ -66,28 +66,72 @@ func loadCurrentProjection(
 ) (current goldenpath.CurrentProjection, err error) {
 	current.Ref = target
 	switch target.Type {
+	case "thread":
+		var originChannelID *string
+		err = tx.QueryRow(ctx, `
+			SELECT governing_project_id, title, visibility, created_by,
+				created_at, updated_at, origin_channel_id
+			FROM radishnexus.threads
+			WHERE workspace_id = $1 AND id = $2
+		`, principal.WorkspaceID, target.ID).Scan(
+			&current.GoverningProjectID,
+			&current.Title,
+			&current.Visibility,
+			&current.CreatedBy.ID,
+			&current.CreatedAt,
+			&current.UpdatedAt,
+			&originChannelID,
+		)
+		if err == nil {
+			current.CreatedBy.Kind = "user"
+			if originChannelID != nil {
+				current.OriginChannel, err = visibleSubjectProjection(
+					ctx,
+					tx,
+					principal,
+					entityref.Ref{Type: "channel", ID: *originChannelID},
+				)
+				if err != nil {
+					return goldenpath.CurrentProjection{}, err
+				}
+			}
+		}
 	case "decision":
 		err = tx.QueryRow(ctx, `
-			SELECT governing_project_id, question, status, updated_at
+			SELECT governing_project_id, question, status,
+				COALESCE(outcome, ''), COALESCE(rationale, ''), proposer_id,
+				decider_ids, decided_at, created_at, updated_at
 			FROM radishnexus.decisions
 			WHERE workspace_id = $1 AND id = $2
 		`, principal.WorkspaceID, target.ID).Scan(
 			&current.GoverningProjectID,
 			&current.Title,
 			&current.Status,
+			&current.Outcome,
+			&current.Rationale,
+			&current.ProposerID,
+			&current.DeciderIDs,
+			&current.DecidedAt,
+			&current.CreatedAt,
 			&current.UpdatedAt,
 		)
 	case "ticket":
 		err = tx.QueryRow(ctx, `
-			SELECT governing_project_id, title, status, updated_at
+			SELECT governing_project_id, title, status, created_by,
+				created_at, updated_at
 			FROM radishnexus.tickets
 			WHERE workspace_id = $1 AND id = $2
 		`, principal.WorkspaceID, target.ID).Scan(
 			&current.GoverningProjectID,
 			&current.Title,
 			&current.Status,
+			&current.CreatedBy.ID,
+			&current.CreatedAt,
 			&current.UpdatedAt,
 		)
+		if err == nil {
+			current.CreatedBy.Kind = "user"
+		}
 	case "ci-run":
 		var componentID string
 		var recordedAt time.Time

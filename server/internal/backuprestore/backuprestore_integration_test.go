@@ -316,35 +316,40 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	`, thread.ID); err != nil {
 		t.Fatalf("seed backup Thread decider membership: %v", err)
 	}
-	decision, err := service.CreateDecisionFromThread(
+	decisionResult, err := service.CreateDecisionFromThread(
 		ctx,
 		invocation(contributor, "cor_backup_decision"),
 		goldenpath.CreateDecisionInput{
-			ThreadID: thread.ID,
-			Question: "How should the backup contract preserve context?",
+			ThreadID:          thread.ID,
+			ClientOperationID: "test:backup:decision",
+			Question:          "How should the backup contract preserve context?",
 		},
 	)
 	if err != nil {
 		t.Fatalf("create backup Decision: %v", err)
 	}
-	decision, err = service.AcceptDecision(
+	decision := decisionResult.Decision
+	acceptResult, err := service.AcceptDecision(
 		ctx,
 		invocation(decider, "cor_backup_accept"),
 		goldenpath.AcceptDecisionInput{
-			DecisionID: decision.ID,
-			Outcome:    "Preserve authoritative facts and rebuild Activity.",
-			Rationale:  "Derived projections must not become a second source of truth.",
+			DecisionID:        decision.ID,
+			ClientOperationID: "test:backup:accept",
+			Outcome:           "Preserve authoritative facts and rebuild Activity.",
+			Rationale:         "Derived projections must not become a second source of truth.",
 		},
 	)
 	if err != nil {
 		t.Fatalf("accept backup Decision: %v", err)
 	}
+	decision = acceptResult.Decision
 	if _, err := service.CreateTicketFromDecision(
 		ctx,
 		invocation(contributor, "cor_backup_ticket"),
 		goldenpath.CreateTicketInput{
-			DecisionID: decision.ID,
-			Title:      "Implement verified backup restore",
+			DecisionID:        decision.ID,
+			ClientOperationID: "test:backup:ticket",
+			Title:             "Implement verified backup restore",
 		},
 	); err != nil {
 		t.Fatalf("create backup Ticket: %v", err)

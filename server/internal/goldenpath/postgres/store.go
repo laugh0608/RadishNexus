@@ -32,26 +32,59 @@ type projectAccess struct {
 func (store *Store) CreateDecisionFromThread(
 	ctx context.Context,
 	command goldenpath.CreateDecisionCommand,
-) (decision goldenpath.Decision, err error) {
+) (result goldenpath.CreateDecisionResult, err error) {
 	if err := command.Principal.ValidateUser(); err != nil {
-		return decision, err
+		return result, err
 	}
 
 	tx, err := store.pool.Begin(ctx)
 	if err != nil {
-		return decision, fmt.Errorf("begin create Decision transaction: %w", err)
+		return result, fmt.Errorf("begin create Decision transaction: %w", err)
 	}
 	defer rollback(ctx, tx, &err)
 
 	projectID, access, err := readableThread(ctx, tx, command.Principal, command.ThreadID)
 	if err != nil {
-		return decision, err
+		return result, err
 	}
 	if !access.active {
-		return decision, fmt.Errorf("%w: archived Project does not accept new Decisions", authz.ErrConflict)
+		return result, fmt.Errorf("%w: archived Project does not accept new Decisions", authz.ErrConflict)
 	}
 	if err := authz.RequireContribute(access.role); err != nil {
-		return decision, err
+		return result, err
+	}
+
+	receipt, duplicate, err := claimCollaborationCommand(
+		ctx,
+		tx,
+		command.Invocation,
+		commandDecisionPropose,
+		"thread",
+		command.ThreadID,
+		command.ClientOperationID,
+		command.PayloadSHA256,
+		"decision",
+		command.DecisionID,
+		command.EventID,
+		command.OccurredAt,
+	)
+	if err != nil {
+		return result, err
+	}
+	if duplicate {
+		result.Decision, err = loadDecision(
+			ctx,
+			tx,
+			command.Principal.WorkspaceID,
+			receipt.resultID,
+		)
+		if err != nil {
+			return result, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return result, fmt.Errorf("commit duplicate Decision proposal lookup: %w", err)
+		}
+		return result, nil
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -61,7 +94,7 @@ func (store *Store) CreateDecisionFromThread(
 		) VALUES ($1, $2, $3, $4, 'proposed', $5, 'user', $5, $6, $6)
 	`, command.DecisionID, command.Principal.WorkspaceID, projectID, command.Question, command.Principal.ID, command.OccurredAt)
 	if err != nil {
-		return decision, mapDatabaseError("insert proposed Decision", err)
+		return result, mapDatabaseError("insert proposed Decision", err)
 	}
 
 	if err := insertEvent(ctx, tx, eventRecord{
@@ -83,7 +116,7 @@ func (store *Store) CreateDecisionFromThread(
 			"evidence": map[string]string{"type": "thread", "id": command.ThreadID},
 		},
 	}); err != nil {
-		return decision, err
+		return result, err
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -95,17 +128,17 @@ func (store *Store) CreateDecisionFromThread(
 	`, command.LinkID, command.Principal.WorkspaceID, command.DecisionID, command.ThreadID,
 		command.Principal.ID, command.OccurredAt, command.EventID)
 	if err != nil {
-		return decision, mapDatabaseError("insert Decision evidence link", err)
+		return result, mapDatabaseError("insert Decision evidence link", err)
 	}
 	if err := insertOutbox(ctx, tx, command.EventID); err != nil {
-		return decision, err
+		return result, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return decision, mapDatabaseError("commit proposed Decision", err)
+		return result, mapDatabaseError("commit proposed Decision", err)
 	}
 
-	decision = goldenpath.Decision{
+	result.Decision = goldenpath.Decision{
 		ID:                 command.DecisionID,
 		WorkspaceID:        command.Principal.WorkspaceID,
 		GoverningProjectID: projectID,
@@ -116,20 +149,21 @@ func (store *Store) CreateDecisionFromThread(
 		CreatedAt:          command.OccurredAt,
 		UpdatedAt:          command.OccurredAt,
 	}
-	return decision, nil
+	result.Created = true
+	return result, nil
 }
 
 func (store *Store) AcceptDecision(
 	ctx context.Context,
 	command goldenpath.AcceptDecisionCommand,
-) (decision goldenpath.Decision, err error) {
+) (result goldenpath.AcceptDecisionResult, err error) {
 	if err := command.Principal.ValidateUser(); err != nil {
-		return decision, err
+		return result, err
 	}
 
 	tx, err := store.pool.Begin(ctx)
 	if err != nil {
-		return decision, fmt.Errorf("begin accept Decision transaction: %w", err)
+		return result, fmt.Errorf("begin accept Decision transaction: %w", err)
 	}
 	defer rollback(ctx, tx, &err)
 
@@ -142,30 +176,63 @@ func (store *Store) AcceptDecision(
 		FOR UPDATE
 	`, command.Principal.WorkspaceID, command.DecisionID).Scan(&projectID, &status)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return decision, authz.ErrNotFound
+		return result, authz.ErrNotFound
 	}
 	if err != nil {
-		return decision, fmt.Errorf("load Decision for acceptance: %w", err)
+		return result, fmt.Errorf("load Decision for acceptance: %w", err)
 	}
 
 	access, canRead, err := readProjectAccess(ctx, tx, command.Principal, projectID)
 	if err != nil {
-		return decision, err
+		return result, err
 	}
 	if !canRead {
-		return decision, authz.ErrNotFound
+		return result, authz.ErrNotFound
 	}
 	if !access.active {
-		return decision, fmt.Errorf("%w: archived Project does not accept Decision changes", authz.ErrConflict)
+		return result, fmt.Errorf("%w: archived Project does not accept Decision changes", authz.ErrConflict)
 	}
 	if err := authz.RequireDecisionAccept(access.role); err != nil {
-		return decision, err
+		return result, err
 	}
 	if err := requireReadableDecisionEvidence(ctx, tx, command.Principal, command.DecisionID); err != nil {
-		return decision, err
+		return result, err
+	}
+
+	receipt, duplicate, err := claimCollaborationCommand(
+		ctx,
+		tx,
+		command.Invocation,
+		commandDecisionAccept,
+		"decision",
+		command.DecisionID,
+		command.ClientOperationID,
+		command.PayloadSHA256,
+		"decision",
+		command.DecisionID,
+		command.EventID,
+		command.OccurredAt,
+	)
+	if err != nil {
+		return result, err
+	}
+	if duplicate {
+		result.Decision, err = loadDecision(
+			ctx,
+			tx,
+			command.Principal.WorkspaceID,
+			receipt.resultID,
+		)
+		if err != nil {
+			return result, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return result, fmt.Errorf("commit duplicate Decision acceptance lookup: %w", err)
+		}
+		return result, nil
 	}
 	if status != "proposed" {
-		return decision, fmt.Errorf("%w: only a proposed Decision can be accepted", authz.ErrConflict)
+		return result, fmt.Errorf("%w: only a proposed Decision can be accepted", authz.ErrConflict)
 	}
 
 	err = tx.QueryRow(ctx, `
@@ -178,21 +245,21 @@ func (store *Store) AcceptDecision(
 			decided_at, created_at, updated_at
 	`, command.Principal.WorkspaceID, command.DecisionID, command.Outcome, command.Rationale,
 		command.Principal.ID, command.OccurredAt).Scan(
-		&decision.ID,
-		&decision.WorkspaceID,
-		&decision.GoverningProjectID,
-		&decision.Question,
-		&decision.Outcome,
-		&decision.Rationale,
-		&decision.Status,
-		&decision.ProposerID,
-		&decision.DeciderIDs,
-		&decision.DecidedAt,
-		&decision.CreatedAt,
-		&decision.UpdatedAt,
+		&result.Decision.ID,
+		&result.Decision.WorkspaceID,
+		&result.Decision.GoverningProjectID,
+		&result.Decision.Question,
+		&result.Decision.Outcome,
+		&result.Decision.Rationale,
+		&result.Decision.Status,
+		&result.Decision.ProposerID,
+		&result.Decision.DeciderIDs,
+		&result.Decision.DecidedAt,
+		&result.Decision.CreatedAt,
+		&result.Decision.UpdatedAt,
 	)
 	if err != nil {
-		return decision, mapDatabaseError("accept Decision", err)
+		return result, mapDatabaseError("accept Decision", err)
 	}
 
 	if err := insertEvent(ctx, tx, eventRecord{
@@ -211,28 +278,29 @@ func (store *Store) AcceptDecision(
 		OccurredAt:    command.OccurredAt,
 		Payload:       map[string]any{"status": "accepted"},
 	}); err != nil {
-		return decision, err
+		return result, err
 	}
 	if err := insertOutbox(ctx, tx, command.EventID); err != nil {
-		return decision, err
+		return result, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return decision, mapDatabaseError("commit accepted Decision", err)
+		return result, mapDatabaseError("commit accepted Decision", err)
 	}
-	return decision, nil
+	result.Accepted = true
+	return result, nil
 }
 
 func (store *Store) CreateTicketFromDecision(
 	ctx context.Context,
 	command goldenpath.CreateTicketCommand,
-) (ticket goldenpath.Ticket, err error) {
+) (result goldenpath.CreateTicketResult, err error) {
 	if err := command.Principal.ValidateUser(); err != nil {
-		return ticket, err
+		return result, err
 	}
 
 	tx, err := store.pool.Begin(ctx)
 	if err != nil {
-		return ticket, fmt.Errorf("begin create Ticket transaction: %w", err)
+		return result, fmt.Errorf("begin create Ticket transaction: %w", err)
 	}
 	defer rollback(ctx, tx, &err)
 
@@ -245,27 +313,60 @@ func (store *Store) CreateTicketFromDecision(
 		FOR SHARE
 	`, command.Principal.WorkspaceID, command.DecisionID).Scan(&projectID, &decisionStatus)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ticket, authz.ErrNotFound
+		return result, authz.ErrNotFound
 	}
 	if err != nil {
-		return ticket, fmt.Errorf("load Decision for Ticket: %w", err)
+		return result, fmt.Errorf("load Decision for Ticket: %w", err)
 	}
 
 	access, canRead, err := readProjectAccess(ctx, tx, command.Principal, projectID)
 	if err != nil {
-		return ticket, err
+		return result, err
 	}
 	if !canRead {
-		return ticket, authz.ErrNotFound
+		return result, authz.ErrNotFound
 	}
 	if !access.active {
-		return ticket, fmt.Errorf("%w: archived Project does not accept new Tickets", authz.ErrConflict)
+		return result, fmt.Errorf("%w: archived Project does not accept new Tickets", authz.ErrConflict)
 	}
 	if err := authz.RequireContribute(access.role); err != nil {
-		return ticket, err
+		return result, err
 	}
 	if decisionStatus != "accepted" {
-		return ticket, fmt.Errorf("%w: Ticket requires an accepted Decision", authz.ErrConflict)
+		return result, fmt.Errorf("%w: Ticket requires an accepted Decision", authz.ErrConflict)
+	}
+
+	receipt, duplicate, err := claimCollaborationCommand(
+		ctx,
+		tx,
+		command.Invocation,
+		commandTicketCreate,
+		"decision",
+		command.DecisionID,
+		command.ClientOperationID,
+		command.PayloadSHA256,
+		"ticket",
+		command.TicketID,
+		command.EventID,
+		command.OccurredAt,
+	)
+	if err != nil {
+		return result, err
+	}
+	if duplicate {
+		result.Ticket, err = loadTicket(
+			ctx,
+			tx,
+			command.Principal.WorkspaceID,
+			receipt.resultID,
+		)
+		if err != nil {
+			return result, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return result, fmt.Errorf("commit duplicate Ticket creation lookup: %w", err)
+		}
+		return result, nil
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -276,7 +377,7 @@ func (store *Store) CreateTicketFromDecision(
 	`, command.TicketID, command.Principal.WorkspaceID, projectID, command.Title,
 		command.Principal.ID, command.OccurredAt)
 	if err != nil {
-		return ticket, mapDatabaseError("insert Ticket", err)
+		return result, mapDatabaseError("insert Ticket", err)
 	}
 
 	if err := insertEvent(ctx, tx, eventRecord{
@@ -298,7 +399,7 @@ func (store *Store) CreateTicketFromDecision(
 			"decision": map[string]string{"type": "decision", "id": command.DecisionID},
 		},
 	}); err != nil {
-		return ticket, err
+		return result, err
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -310,25 +411,27 @@ func (store *Store) CreateTicketFromDecision(
 	`, command.LinkID, command.Principal.WorkspaceID, command.TicketID, command.DecisionID,
 		command.Principal.ID, command.OccurredAt, command.EventID)
 	if err != nil {
-		return ticket, mapDatabaseError("insert Ticket implementation link", err)
+		return result, mapDatabaseError("insert Ticket implementation link", err)
 	}
 	if err := insertOutbox(ctx, tx, command.EventID); err != nil {
-		return ticket, err
+		return result, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return ticket, mapDatabaseError("commit Ticket", err)
+		return result, mapDatabaseError("commit Ticket", err)
 	}
 
-	ticket = goldenpath.Ticket{
+	result.Ticket = goldenpath.Ticket{
 		ID:                 command.TicketID,
 		WorkspaceID:        command.Principal.WorkspaceID,
 		GoverningProjectID: projectID,
 		Title:              command.Title,
 		Status:             "open",
+		CreatedBy:          command.Principal.ID,
 		CreatedAt:          command.OccurredAt,
 		UpdatedAt:          command.OccurredAt,
 	}
-	return ticket, nil
+	result.Created = true
+	return result, nil
 }
 
 func rollback(ctx context.Context, tx pgx.Tx, returnedError *error) {

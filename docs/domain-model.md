@@ -205,7 +205,7 @@ M0 command 只记录调用方已经确认的外部终态，不执行部署、不
 
 ### M0 协作作用域
 
-M0 纵向切片继续冻结 `thread` / `thr_` 与 `ticket` / `tkt_` 的稳定引用。Thread、Decision 和 Ticket 各自保存不可变的 `governing_project_id` 作为协作与授权上下文；来源、实现和其它业务关系仍由 EntityLink 表达。Thread 首批冻结 `title` 与 `project / restricted` 可见性；由 Message 发起的 Thread 另存不可变 `origin_channel_id`，读取时同时通过当前 Channel 与 Thread 权限，并以 asserted + user 的 `thread --started-from--> message` 关系保留来源，不复制正文。Ticket 首批冻结 `title` 与 `open / in-progress / done / canceled` 状态。完整聊天和工单工作流字段等待 Golden Path 交互验证。Project / Thread 精确权限见 [ADR-0004](adr/0004-project-scoped-collaboration-permissions.md)，Channel / Message、来源与实时收发边界见 [ADR-0017](adr/0017-channel-message-boundary-and-single-process-realtime.md)。
+M0 纵向切片继续冻结 `thread` / `thr_` 与 `ticket` / `tkt_` 的稳定引用。Thread、Decision 和 Ticket 各自保存不可变的 `governing_project_id` 作为协作与授权上下文；来源、实现和其它业务关系仍由 EntityLink 表达。Thread 首批冻结 `title` 与 `project / restricted` 可见性；由 Message 发起的 Thread 另存不可变 `origin_channel_id`，读取时同时通过当前 Channel 与 Thread 权限，并以 asserted + user 的 `thread --started-from--> message` 关系保留来源，不复制正文。Ticket 首批冻结 `title` 与 `open / in-progress / done / canceled` 状态。Session 作用域的 Proposed Decision、人工 acceptance 与 Ticket 创建使用 target-scoped `client_operation_id` + canonical payload digest receipt 实现幂等；receipt 不进入业务对象、EntityRef、事件、Activity 或公共读取，但必须随 PostgreSQL 备份恢复。完整聊天和工单工作流字段等待 Golden Path 交互验证。Project / Thread 精确权限见 [ADR-0004](adr/0004-project-scoped-collaboration-permissions.md)，Channel / Message、来源与实时收发边界见 [ADR-0017](adr/0017-channel-message-boundary-and-single-process-realtime.md)，公共协作与 receipt 精确边界见 [ADR-0019](adr/0019-session-scoped-thread-decision-ticket-transport.md)。
 
 ### Ticket
 

@@ -2,7 +2,7 @@
 
 状态：M0 契约基线，已由 ADR-0002 接受
 
-日期：2026-09-01
+日期：2026-09-02
 
 ## 目的
 
@@ -12,7 +12,7 @@
 
 ## 适用范围
 
-初始 M0 冻结 Project、Initiative、Component、Decision、Environment 和 EntityLink 的引用能力，并用 Thread、Ticket、CI Run 和 Deployment 验证接口是否足以承载 [Golden Path](../golden-path.md)。ADR-0004 随首个正式纵向切片继续冻结了 Thread 与 Ticket 的类型前缀、最小字段和授权上下文；ADR-0006 冻结 CI Run 的类型前缀、最小来源字段和完成事实；ADR-0009 冻结显式 staging Deployment、环境级授权和原子关系边界；ADR-0017 冻结 Channel / Message 的最小身份、Message → Thread 来源和单进程实时实验语义；ADR-0018 冻结 Session 作用域的 canonical history、Message 写入与 Message → Thread 公共短请求。
+初始 M0 冻结 Project、Initiative、Component、Decision、Environment 和 EntityLink 的引用能力，并用 Thread、Ticket、CI Run 和 Deployment 验证接口是否足以承载 [Golden Path](../golden-path.md)。ADR-0004 随首个正式纵向切片继续冻结了 Thread 与 Ticket 的类型前缀、最小字段和授权上下文；ADR-0006 冻结 CI Run 的类型前缀、最小来源字段和完成事实；ADR-0009 冻结显式 staging Deployment、环境级授权和原子关系边界；ADR-0017 冻结 Channel / Message 的最小身份、Message → Thread 来源和单进程实时实验语义；ADR-0018 冻结 Session 作用域的 canonical history、Message 写入与 Message → Thread 公共短请求；ADR-0019 冻结同一 Session 边界下的 Thread / Decision / Ticket Nexus View、人工确认与用户命令幂等 receipt。
 
 M0 不支持：
 
@@ -50,7 +50,7 @@ M0 首批冻结以下类型名与 ID 前缀：
 | `ci-run` | `cir_` | 一次构建或流水线运行 |
 | `deployment` | `dpl_` | 一次显式记录的部署终态事实 |
 
-Document 和 Repository 等其余 Golden Path 类型进入同一注册表时，其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结；CI Run 的来源和幂等边界由 [ADR-0006](../adr/0006-verified-jenkins-delivery-and-ci-run.md) 冻结；Deployment 由 [ADR-0009](../adr/0009-explicit-staging-deployment.md) 冻结；Channel、Message 与 messaging-origin Thread 由 [ADR-0017](../adr/0017-channel-message-boundary-and-single-process-realtime.md) 冻结。
+Document 和 Repository 等其余 Golden Path 类型进入同一注册表时，其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结；CI Run 的来源和幂等边界由 [ADR-0006](../adr/0006-verified-jenkins-delivery-and-ci-run.md) 冻结；Deployment 由 [ADR-0009](../adr/0009-explicit-staging-deployment.md) 冻结；Channel、Message 与 messaging-origin Thread 由 [ADR-0017](../adr/0017-channel-message-boundary-and-single-process-realtime.md) 冻结；Thread → Decision → Ticket 的 Session transport 与命令 receipt 由 [ADR-0019](../adr/0019-session-scoped-thread-decision-ticket-transport.md) 冻结。
 
 ### 结构化表示
 
@@ -292,10 +292,10 @@ safe_facts
 
 1. 用户在 Project Channel 发送不可变 Message；重复 `client_operation_id` 与同正文只返回既有 Message，不同正文冲突。正式 application service 已将 Message、`message.created` 与 Outbox 原子提交，事件和 Activity 不复制正文。
 2. 用户从 Message 发起 Thread；正式 application service 已将 Thread、`started-from` EntityLink、`thread.started` 与 Outbox 原子写入，并同时通过当前 Channel、Project 与 Thread 权限，不让引用扩大可见性。
-3. 用户从私密 Thread 创建 Proposed Decision。Decision 与 `derived-from` EntityLink 在同一事务写入；该关系是 `asserted + user`，因为 `derived-from` 是业务语义，不代表自动推导。
+3. 用户从私密 Thread 创建 Proposed Decision。Decision、用户命令 receipt 与 `derived-from` EntityLink 在同一事务写入；该关系是 `asserted + user`，因为 `derived-from` 是业务语义，不代表自动推导。相同 target 与 operation ID 的相同 canonical payload 返回原 Decision，payload 变化冲突。
 4. `decision.proposed` 和 `entity-link.created` 共享 correlation，分别投影到 Decision 和 Thread；Decision 草案必须保留 evidence 引用。
-5. 有确认权限且能读取全部 evidence 的人接受 Decision，产生 `decision.accepted`。Project 管理角色不自动穿透 restricted Thread；系统生成内容只能保留为草案，不能作为 actor 完成接受。
-6. 从 Decision 创建 Ticket，Ticket 与 `implements` 关系保留来源，不复制 Thread 正文。读取 Ticket 但不能读取 Thread 的用户只在对象页看到不可识别目标的通用受限占位。
+5. 有确认权限且能读取全部 evidence 的人通过显式确认接受 Decision，产生 `decision.accepted`。Project 管理角色不自动穿透 restricted Thread；系统生成内容只能保留为草案，不能作为 actor 完成接受。精确 retry 仍重新检查当前 evidence 权限，receipt 不授予能力。
+6. 从 Decision 创建 Ticket，Ticket、用户命令 receipt 与 `implements` 关系保留来源，不复制 Thread 正文。读取 Ticket 但不能读取 Thread 的用户只在对象页看到不可识别目标的通用受限占位。
 7. Jenkins 重复发送同一 delivery 时只产生一个 CI Run；相同幂等键的 digest 变化直接冲突。正式核心只接收已经完成来源验证与字段映射的 delivery，并把 receipt、CI Run、`ci-run.recorded` 和 Outbox 原子提交；外部失败重试和安全审计由后续 adapter 定义，不阻塞聊天和 Decision 写入。
 8. 构建成功只更新 CI Run。只有 active 用户持有目标 Environment 的显式授权后，才能通过独立 command 原子记录 staging Deployment、`deploys` 关系、`deployment.recorded` 和 Outbox；该 command 不执行外部部署。
 9. 备份恢复保留所有稳定 ID、关系来源、事件 correlation 和审计；Activity 可以重新投影且不产生重复项。
@@ -308,6 +308,7 @@ M0 实验与正式纵向切片累计必须证明：
 - 不同 Workspace 的两端不能创建 EntityLink；
 - 公开 Ticket 关联私密 Thread 时不泄漏 Thread 的类型、ID、标题、摘要和参与者；
 - 重复或并发 Message command 不产生重复 Message；相同幂等键的正文变化必须冲突；
+- 重复 Thread → Decision、Decision acceptance 与 Decision → Ticket 用户命令只产生一组权威结果、事件和关系；相同幂等范围的 payload 变化必须冲突，权限撤销后精确重试也不能依赖 receipt 取回结果；
 - 实时连接断线可在有界窗口内补发；游标过期或进程变化时要求 canonical 重同步；
 - Channel 权限撤销后空闲实时订阅也会关闭，且不再发送 Message 正文；
 - 权限撤销后 Nexus View、Activity、搜索和通知不继续返回缓存内容；

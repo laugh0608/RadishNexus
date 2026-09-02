@@ -101,10 +101,16 @@ func run() error {
 		sessionPolicy,
 		proxyPolicy,
 	)
+	collaborationHandler := httptransport.NewCollaborationHandler(
+		authService,
+		nexusViewService,
+		sessionPolicy,
+		proxyPolicy,
+	)
 
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(pool, authHandler, channelMessagesHandler, deploymentNexusViewHandler, webHandler),
+		Handler:           newHandler(pool, authHandler, channelMessagesHandler, collaborationHandler, deploymentNexusViewHandler, webHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -143,6 +149,7 @@ func newHandler(
 	database databasePinger,
 	authHandler http.Handler,
 	channelMessagesHandler http.Handler,
+	collaborationHandler http.Handler,
 	deploymentNexusViewHandler http.Handler,
 	webHandler http.Handler,
 ) http.Handler {
@@ -165,6 +172,9 @@ func newHandler(
 	mux.Handle("/api/v1/auth/", authHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages", channelMessagesHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages/", channelMessagesHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/threads/", collaborationHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/decisions/", collaborationHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/tickets/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces", deploymentNexusViewHandler)
 	mux.Handle("/api/v1/workspaces/", deploymentNexusViewHandler)
 	mux.Handle("/", webHandler)

@@ -44,6 +44,7 @@ var (
 		"radishnexus.channel_memberships",
 		"radishnexus.channels",
 		"radishnexus.ci_runs",
+		"radishnexus.collaboration_command_receipts",
 		"radishnexus.components",
 		"radishnexus.decisions",
 		"radishnexus.deployments",

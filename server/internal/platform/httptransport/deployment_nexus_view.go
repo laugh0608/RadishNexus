@@ -228,7 +228,11 @@ func deploymentNexusViewFromApplication(
 		current.RecordedAt == nil || current.Environment == nil || current.CIRun == nil {
 		return deploymentNexusViewDTO{}, fmt.Errorf("invalid Deployment Nexus View Current projection")
 	}
-	if current.Title != "" || current.GoverningProjectID != "" || current.Component != nil ||
+	if current.Title != "" || current.GoverningProjectID != "" || current.Visibility != "" ||
+		current.CreatedBy != (goldenpath.ActorRef{}) || !current.CreatedAt.IsZero() ||
+		current.Outcome != "" || current.Rationale != "" || current.ProposerID != "" ||
+		len(current.DeciderIDs) != 0 || current.DecidedAt != nil || current.OriginChannel != nil ||
+		current.Component != nil ||
 		!current.UpdatedAt.Equal(*current.RecordedAt) {
 		return deploymentNexusViewDTO{}, fmt.Errorf("unexpected fields in Deployment Current projection")
 	}

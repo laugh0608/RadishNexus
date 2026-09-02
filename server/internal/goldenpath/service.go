@@ -5,10 +5,13 @@ package goldenpath
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
@@ -37,14 +40,30 @@ type Decision struct {
 	UpdatedAt          time.Time
 }
 
+type CreateDecisionResult struct {
+	Decision Decision
+	Created  bool
+}
+
+type AcceptDecisionResult struct {
+	Decision Decision
+	Accepted bool
+}
+
 type Ticket struct {
 	ID                 string
 	WorkspaceID        string
 	GoverningProjectID string
 	Title              string
 	Status             string
+	CreatedBy          string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
+}
+
+type CreateTicketResult struct {
+	Ticket  Ticket
+	Created bool
 }
 
 type ProjectionState string
@@ -65,48 +84,57 @@ type RelationProjection struct {
 }
 
 type CreateDecisionInput struct {
-	ThreadID string
-	Question string
+	ThreadID          string
+	ClientOperationID string
+	Question          string
 }
 
 type AcceptDecisionInput struct {
-	DecisionID string
-	Outcome    string
-	Rationale  string
+	DecisionID        string
+	ClientOperationID string
+	Outcome           string
+	Rationale         string
 }
 
 type CreateTicketInput struct {
-	DecisionID string
-	Title      string
+	DecisionID        string
+	ClientOperationID string
+	Title             string
 }
 
 type CreateDecisionCommand struct {
 	Invocation
-	DecisionID string
-	LinkID     string
-	EventID    string
-	ThreadID   string
-	Question   string
-	OccurredAt time.Time
+	DecisionID        string
+	LinkID            string
+	EventID           string
+	ThreadID          string
+	ClientOperationID string
+	PayloadSHA256     string
+	Question          string
+	OccurredAt        time.Time
 }
 
 type AcceptDecisionCommand struct {
 	Invocation
-	EventID    string
-	DecisionID string
-	Outcome    string
-	Rationale  string
-	OccurredAt time.Time
+	EventID           string
+	DecisionID        string
+	ClientOperationID string
+	PayloadSHA256     string
+	Outcome           string
+	Rationale         string
+	OccurredAt        time.Time
 }
 
 type CreateTicketCommand struct {
 	Invocation
-	TicketID   string
-	LinkID     string
-	EventID    string
-	DecisionID string
-	Title      string
-	OccurredAt time.Time
+	TicketID          string
+	LinkID            string
+	EventID           string
+	DecisionID        string
+	ClientOperationID string
+	PayloadSHA256     string
+	Title             string
+	OccurredAt        time.Time
 }
 
 // Store owns the database transaction for each command so permission facts,
@@ -115,9 +143,9 @@ type Store interface {
 	CreateMessage(context.Context, CreateMessageCommand) (CreateMessageResult, error)
 	ListChannelMessages(context.Context, authz.Principal, ListChannelMessagesInput) (MessagePage, error)
 	StartThreadFromMessage(context.Context, StartThreadFromMessageCommand) (Thread, error)
-	CreateDecisionFromThread(context.Context, CreateDecisionCommand) (Decision, error)
-	AcceptDecision(context.Context, AcceptDecisionCommand) (Decision, error)
-	CreateTicketFromDecision(context.Context, CreateTicketCommand) (Ticket, error)
+	CreateDecisionFromThread(context.Context, CreateDecisionCommand) (CreateDecisionResult, error)
+	AcceptDecision(context.Context, AcceptDecisionCommand) (AcceptDecisionResult, error)
+	CreateTicketFromDecision(context.Context, CreateTicketCommand) (CreateTicketResult, error)
 	RecordCompletedCIRun(context.Context, RecordCompletedCIRunCommand) (CIRunReceipt, error)
 	RecordStagingDeployment(context.Context, RecordStagingDeploymentCommand) (Deployment, error)
 	ListRelations(context.Context, authz.Principal, entityref.Ref) ([]RelationProjection, error)
@@ -146,36 +174,44 @@ func (service *Service) CreateDecisionFromThread(
 	ctx context.Context,
 	invocation Invocation,
 	input CreateDecisionInput,
-) (Decision, error) {
+) (CreateDecisionResult, error) {
 	if err := validateInvocation(invocation); err != nil {
-		return Decision{}, err
+		return CreateDecisionResult{}, err
 	}
 	question := strings.TrimSpace(input.Question)
-	if input.ThreadID == "" || question == "" {
-		return Decision{}, fmt.Errorf("%w: thread ID and question are required", authz.ErrInvalid)
+	if err := entityref.M0Registry().Validate(entityref.Ref{Type: "thread", ID: input.ThreadID}); err != nil {
+		return CreateDecisionResult{}, fmt.Errorf("%w: Thread reference: %v", authz.ErrInvalid, err)
 	}
+	if !validClientOperationID(input.ClientOperationID) || !validCollaborationText(input.Question, question) {
+		return CreateDecisionResult{}, fmt.Errorf("%w: client operation ID and question are required", authz.ErrInvalid)
+	}
+	payloadSHA256 := collaborationPayloadDigest(struct {
+		Question string `json:"question"`
+	}{Question: question})
 
 	decisionID, err := service.ids.NewID("dec_")
 	if err != nil {
-		return Decision{}, fmt.Errorf("generate decision ID: %w", err)
+		return CreateDecisionResult{}, fmt.Errorf("generate decision ID: %w", err)
 	}
 	linkID, err := service.ids.NewID("lnk_")
 	if err != nil {
-		return Decision{}, fmt.Errorf("generate evidence link ID: %w", err)
+		return CreateDecisionResult{}, fmt.Errorf("generate evidence link ID: %w", err)
 	}
 	eventID, err := service.ids.NewID("evt_")
 	if err != nil {
-		return Decision{}, fmt.Errorf("generate decision event ID: %w", err)
+		return CreateDecisionResult{}, fmt.Errorf("generate decision event ID: %w", err)
 	}
 
 	return service.store.CreateDecisionFromThread(ctx, CreateDecisionCommand{
-		Invocation: invocation,
-		DecisionID: decisionID,
-		LinkID:     linkID,
-		EventID:    eventID,
-		ThreadID:   input.ThreadID,
-		Question:   question,
-		OccurredAt: service.clock.Now().UTC(),
+		Invocation:        invocation,
+		DecisionID:        decisionID,
+		LinkID:            linkID,
+		EventID:           eventID,
+		ThreadID:          input.ThreadID,
+		ClientOperationID: input.ClientOperationID,
+		PayloadSHA256:     payloadSHA256,
+		Question:          question,
+		OccurredAt:        service.clock.Now().UTC(),
 	})
 }
 
@@ -183,28 +219,38 @@ func (service *Service) AcceptDecision(
 	ctx context.Context,
 	invocation Invocation,
 	input AcceptDecisionInput,
-) (Decision, error) {
+) (AcceptDecisionResult, error) {
 	if err := validateInvocation(invocation); err != nil {
-		return Decision{}, err
+		return AcceptDecisionResult{}, err
 	}
 	outcome := strings.TrimSpace(input.Outcome)
 	rationale := strings.TrimSpace(input.Rationale)
-	if input.DecisionID == "" || outcome == "" || rationale == "" {
-		return Decision{}, fmt.Errorf("%w: decision ID, outcome, and rationale are required", authz.ErrInvalid)
+	if err := entityref.M0Registry().Validate(entityref.Ref{Type: "decision", ID: input.DecisionID}); err != nil {
+		return AcceptDecisionResult{}, fmt.Errorf("%w: Decision reference: %v", authz.ErrInvalid, err)
 	}
+	if !validClientOperationID(input.ClientOperationID) ||
+		!validCollaborationText(input.Outcome, outcome) || !validCollaborationText(input.Rationale, rationale) {
+		return AcceptDecisionResult{}, fmt.Errorf("%w: client operation ID, outcome, and rationale are required", authz.ErrInvalid)
+	}
+	payloadSHA256 := collaborationPayloadDigest(struct {
+		Outcome   string `json:"outcome"`
+		Rationale string `json:"rationale"`
+	}{Outcome: outcome, Rationale: rationale})
 
 	eventID, err := service.ids.NewID("evt_")
 	if err != nil {
-		return Decision{}, fmt.Errorf("generate acceptance event ID: %w", err)
+		return AcceptDecisionResult{}, fmt.Errorf("generate acceptance event ID: %w", err)
 	}
 
 	return service.store.AcceptDecision(ctx, AcceptDecisionCommand{
-		Invocation: invocation,
-		EventID:    eventID,
-		DecisionID: input.DecisionID,
-		Outcome:    outcome,
-		Rationale:  rationale,
-		OccurredAt: service.clock.Now().UTC(),
+		Invocation:        invocation,
+		EventID:           eventID,
+		DecisionID:        input.DecisionID,
+		ClientOperationID: input.ClientOperationID,
+		PayloadSHA256:     payloadSHA256,
+		Outcome:           outcome,
+		Rationale:         rationale,
+		OccurredAt:        service.clock.Now().UTC(),
 	})
 }
 
@@ -212,37 +258,58 @@ func (service *Service) CreateTicketFromDecision(
 	ctx context.Context,
 	invocation Invocation,
 	input CreateTicketInput,
-) (Ticket, error) {
+) (CreateTicketResult, error) {
 	if err := validateInvocation(invocation); err != nil {
-		return Ticket{}, err
+		return CreateTicketResult{}, err
 	}
 	title := strings.TrimSpace(input.Title)
-	if input.DecisionID == "" || title == "" {
-		return Ticket{}, fmt.Errorf("%w: decision ID and title are required", authz.ErrInvalid)
+	if err := entityref.M0Registry().Validate(entityref.Ref{Type: "decision", ID: input.DecisionID}); err != nil {
+		return CreateTicketResult{}, fmt.Errorf("%w: Decision reference: %v", authz.ErrInvalid, err)
 	}
+	if !validClientOperationID(input.ClientOperationID) || !validCollaborationText(input.Title, title) {
+		return CreateTicketResult{}, fmt.Errorf("%w: client operation ID and title are required", authz.ErrInvalid)
+	}
+	payloadSHA256 := collaborationPayloadDigest(struct {
+		Title string `json:"title"`
+	}{Title: title})
 
 	ticketID, err := service.ids.NewID("tkt_")
 	if err != nil {
-		return Ticket{}, fmt.Errorf("generate ticket ID: %w", err)
+		return CreateTicketResult{}, fmt.Errorf("generate ticket ID: %w", err)
 	}
 	linkID, err := service.ids.NewID("lnk_")
 	if err != nil {
-		return Ticket{}, fmt.Errorf("generate implementation link ID: %w", err)
+		return CreateTicketResult{}, fmt.Errorf("generate implementation link ID: %w", err)
 	}
 	eventID, err := service.ids.NewID("evt_")
 	if err != nil {
-		return Ticket{}, fmt.Errorf("generate ticket event ID: %w", err)
+		return CreateTicketResult{}, fmt.Errorf("generate ticket event ID: %w", err)
 	}
 
 	return service.store.CreateTicketFromDecision(ctx, CreateTicketCommand{
-		Invocation: invocation,
-		TicketID:   ticketID,
-		LinkID:     linkID,
-		EventID:    eventID,
-		DecisionID: input.DecisionID,
-		Title:      title,
-		OccurredAt: service.clock.Now().UTC(),
+		Invocation:        invocation,
+		TicketID:          ticketID,
+		LinkID:            linkID,
+		EventID:           eventID,
+		DecisionID:        input.DecisionID,
+		ClientOperationID: input.ClientOperationID,
+		PayloadSHA256:     payloadSHA256,
+		Title:             title,
+		OccurredAt:        service.clock.Now().UTC(),
 	})
+}
+
+func validCollaborationText(raw string, normalized string) bool {
+	return utf8.ValidString(raw) && !strings.ContainsRune(raw, '\x00') && normalized != ""
+}
+
+func collaborationPayloadDigest(value any) string {
+	body, err := json.Marshal(value)
+	if err != nil {
+		panic(fmt.Sprintf("encode fixed collaboration command payload: %v", err))
+	}
+	digest := sha256.Sum256(body)
+	return hex.EncodeToString(digest[:])
 }
 
 func (service *Service) ListRelations(

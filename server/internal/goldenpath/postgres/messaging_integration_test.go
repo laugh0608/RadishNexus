@@ -160,13 +160,17 @@ func assertMessagingSlice(
 		t.Fatalf("messaging Thread relations = %#v", relations)
 	}
 
-	decision, err := service.CreateDecisionFromThread(
+	decisionResult, err := service.CreateDecisionFromThread(
 		ctx,
 		invocation(contributor, "cor_message_decision"),
-		goldenpath.CreateDecisionInput{ThreadID: thread.ID, Question: "Adopt the minimal messaging boundary?"},
+		goldenpath.CreateDecisionInput{
+			ThreadID:          thread.ID,
+			ClientOperationID: "test:message:decision",
+			Question:          "Adopt the minimal messaging boundary?",
+		},
 	)
-	if err != nil || decision.GoverningProjectID != "prj_auth" {
-		t.Fatalf("CreateDecisionFromThread(messaging Thread) = %#v, error = %v", decision, err)
+	if err != nil || decisionResult.Decision.GoverningProjectID != "prj_auth" {
+		t.Fatalf("CreateDecisionFromThread(messaging Thread) = %#v, error = %v", decisionResult, err)
 	}
 
 	if _, err := pool.Exec(ctx, `
@@ -191,7 +195,11 @@ func assertMessagingSlice(
 	_, err = service.CreateDecisionFromThread(
 		ctx,
 		invocation(contributor, "cor_decision_after_revoke"),
-		goldenpath.CreateDecisionInput{ThreadID: thread.ID, Question: "Should be hidden after revoke?"},
+		goldenpath.CreateDecisionInput{
+			ThreadID:          thread.ID,
+			ClientOperationID: "test:message:decision:revoked",
+			Question:          "Should be hidden after revoke?",
+		},
 	)
 	if !errors.Is(err, authz.ErrNotFound) {
 		t.Fatalf("messaging Thread after Channel revoke error = %v, want not found", err)
@@ -235,13 +243,21 @@ func assertMessagingHTTPTransport(
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	sessionToken := deploymentHTTPToken(11)
 	csrfToken := deploymentHTTPToken(12)
+	deciderSessionToken := deploymentHTTPToken(21)
+	deciderCSRFToken := deploymentHTTPToken(22)
 	tokenDigest := sha256.Sum256([]byte(sessionToken))
 	csrfDigest := sha256.Sum256([]byte(csrfToken))
+	deciderTokenDigest := sha256.Sum256([]byte(deciderSessionToken))
+	deciderCSRFDigest := sha256.Sum256([]byte(deciderCSRFToken))
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO radishnexus.local_accounts (
 			user_id, login_name, password_hash, created_at, password_changed_at
 		)
-		SELECT 'usr_contributor', 'http.contributor', password_hash, $1, $1
+		SELECT 'usr_contributor', 'http.contributor', password_hash, $1::timestamptz, $1::timestamptz
+		FROM radishnexus.local_accounts
+		WHERE user_id = 'usr_reader'
+		UNION ALL
+		SELECT 'usr_decider', 'http.decider', password_hash, $1::timestamptz, $1::timestamptz
 		FROM radishnexus.local_accounts
 		WHERE user_id = 'usr_reader'
 	`, now); err != nil {
@@ -250,8 +266,11 @@ func assertMessagingHTTPTransport(
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO radishnexus.user_sessions (
 			id, user_id, token_digest, csrf_token_digest, created_at, expires_at
-		) VALUES ('ses_messaging_http', 'usr_contributor', $1, $2, $3, $4)
-	`, tokenDigest[:], csrfDigest[:], now, now.Add(authn.SessionLifetime)); err != nil {
+		) VALUES
+			('ses_messaging_http', 'usr_contributor', $1, $2, $5, $6),
+			('ses_collaboration_decider', 'usr_decider', $3, $4, $5, $6)
+	`, tokenDigest[:], csrfDigest[:], deciderTokenDigest[:], deciderCSRFDigest[:],
+		now, now.Add(authn.SessionLifetime)); err != nil {
 		t.Fatalf("seed messaging HTTP Session: %v", err)
 	}
 	authService := authn.NewService(authpostgres.New(pool), nil, nil, fixedClock{now: now})
@@ -264,6 +283,12 @@ func assertMessagingHTTPTransport(
 		t.Fatalf("NewTrustedProxyPolicy() error = %v", err)
 	}
 	handler := httptransport.WithRequestID(httptransport.NewChannelMessagesHandler(
+		authService,
+		service,
+		sessionPolicy,
+		proxyPolicy,
+	))
+	collaborationHandler := httptransport.WithRequestID(httptransport.NewCollaborationHandler(
 		authService,
 		service,
 		sessionPolicy,
@@ -335,13 +360,41 @@ func assertMessagingHTTPTransport(
 	handler.ServeHTTP(response, messagingHTTPRequest(
 		http.MethodPost,
 		threadPath,
-		`{"title":"HTTP source discussion","visibility":"project"}`,
+		`{"title":"HTTP source discussion","visibility":"restricted"}`,
 		sessionToken,
 		csrfToken,
 	))
 	if response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"source_message":{"type":"message","id":"`+created.Data.Ref.ID+`"}`) {
 		t.Fatalf("HTTP start Thread = status %d, body %q", response.Code, response.Body.String())
 	}
+	var createdThread struct {
+		Data struct {
+			Ref struct {
+				ID string `json:"id"`
+			} `json:"ref"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &createdThread); err != nil || createdThread.Data.Ref.ID == "" {
+		t.Fatalf("decode HTTP created Thread = %#v, error = %v", createdThread, err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO radishnexus.thread_memberships (workspace_id, thread_id, user_id)
+		VALUES ('wrk_main', $1, 'usr_decider')
+	`, createdThread.Data.Ref.ID); err != nil {
+		t.Fatalf("grant HTTP Thread evidence to decider: %v", err)
+	}
+
+	assertCollaborationHTTPTransport(
+		t,
+		ctx,
+		pool,
+		collaborationHandler,
+		createdThread.Data.Ref.ID,
+		sessionToken,
+		csrfToken,
+		deciderSessionToken,
+		deciderCSRFToken,
+	)
 
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, messagingHTTPRequest(
@@ -423,6 +476,192 @@ func assertMessagingHTTPTransport(
 	))
 	if response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), `"code":"unauthenticated"`) {
 		t.Fatalf("HTTP revoked Session = status %d, body %q", response.Code, response.Body.String())
+	}
+}
+
+func assertCollaborationHTTPTransport(
+	t *testing.T,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	handler http.Handler,
+	threadID string,
+	contributorSessionToken string,
+	contributorCSRFToken string,
+	deciderSessionToken string,
+	deciderCSRFToken string,
+) {
+	t.Helper()
+	threadViewPath := "/api/v1/workspaces/wrk_main/threads/" + threadID + "/nexus-view"
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodGet,
+		threadViewPath,
+		"",
+		contributorSessionToken,
+		contributorCSRFToken,
+	))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"relation_type":"started-from"`) ||
+		strings.Contains(response.Body.String(), "Authoritative HTTP message.") {
+		t.Fatalf("HTTP Thread Nexus View = status %d, body %q", response.Code, response.Body.String())
+	}
+
+	decisionPath := "/api/v1/workspaces/wrk_main/threads/" + threadID + "/decisions"
+	decisionBody := `{"client_operation_id":"http:decision:1","question":"Adopt the HTTP collaboration boundary?"}`
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		decisionPath,
+		decisionBody,
+		contributorSessionToken,
+		contributorCSRFToken,
+	))
+	if response.Code != http.StatusCreated || strings.Contains(response.Body.String(), "client_operation") {
+		t.Fatalf("HTTP propose Decision = status %d, body %q", response.Code, response.Body.String())
+	}
+	var createdDecision struct {
+		Data struct {
+			Decision struct {
+				Ref struct {
+					ID string `json:"id"`
+				} `json:"ref"`
+			} `json:"decision"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &createdDecision); err != nil || createdDecision.Data.Decision.Ref.ID == "" {
+		t.Fatalf("decode HTTP proposed Decision = %#v, error = %v", createdDecision, err)
+	}
+	decisionID := createdDecision.Data.Decision.Ref.ID
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		decisionPath,
+		decisionBody,
+		contributorSessionToken,
+		contributorCSRFToken,
+	))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), decisionID) {
+		t.Fatalf("HTTP exact Decision proposal retry = status %d, body %q", response.Code, response.Body.String())
+	}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		decisionPath,
+		`{"client_operation_id":"http:decision:1","question":"Changed replay"}`,
+		contributorSessionToken,
+		contributorCSRFToken,
+	))
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), `"code":"conflict"`) {
+		t.Fatalf("HTTP changed Decision proposal replay = status %d, body %q", response.Code, response.Body.String())
+	}
+
+	acceptPath := "/api/v1/workspaces/wrk_main/decisions/" + decisionID + "/acceptance"
+	acceptBody := `{"client_operation_id":"http:accept:1","outcome":"Use the Session boundary.","rationale":"It preserves current authority.","confirmed":true}`
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		acceptPath,
+		acceptBody,
+		contributorSessionToken,
+		contributorCSRFToken,
+	))
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"forbidden"`) {
+		t.Fatalf("HTTP contributor Decision acceptance = status %d, body %q", response.Code, response.Body.String())
+	}
+
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		acceptPath,
+		acceptBody,
+		deciderSessionToken,
+		deciderCSRFToken,
+	))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"status":"accepted"`) {
+		t.Fatalf("HTTP decider Decision acceptance = status %d, body %q", response.Code, response.Body.String())
+	}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		acceptPath,
+		acceptBody,
+		deciderSessionToken,
+		deciderCSRFToken,
+	))
+	if response.Code != http.StatusOK {
+		t.Fatalf("HTTP exact Decision acceptance retry = status %d, body %q", response.Code, response.Body.String())
+	}
+
+	ticketPath := "/api/v1/workspaces/wrk_main/decisions/" + decisionID + "/tickets"
+	ticketBody := `{"client_operation_id":"http:ticket:1","title":"Implement HTTP collaboration"}`
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		ticketPath,
+		ticketBody,
+		contributorSessionToken,
+		contributorCSRFToken,
+	))
+	if response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"source_decision":{"type":"decision","id":"`+decisionID+`"}`) {
+		t.Fatalf("HTTP create Ticket = status %d, body %q", response.Code, response.Body.String())
+	}
+	var createdTicket struct {
+		Data struct {
+			Ticket struct {
+				Ref struct {
+					ID string `json:"id"`
+				} `json:"ref"`
+			} `json:"ticket"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &createdTicket); err != nil || createdTicket.Data.Ticket.Ref.ID == "" {
+		t.Fatalf("decode HTTP created Ticket = %#v, error = %v", createdTicket, err)
+	}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		ticketPath,
+		ticketBody,
+		contributorSessionToken,
+		contributorCSRFToken,
+	))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), createdTicket.Data.Ticket.Ref.ID) {
+		t.Fatalf("HTTP exact Ticket retry = status %d, body %q", response.Code, response.Body.String())
+	}
+
+	for _, viewPath := range []string{
+		"/api/v1/workspaces/wrk_main/decisions/" + decisionID + "/nexus-view",
+		"/api/v1/workspaces/wrk_main/tickets/" + createdTicket.Data.Ticket.Ref.ID + "/nexus-view",
+	} {
+		response = httptest.NewRecorder()
+		handler.ServeHTTP(response, messagingHTTPRequest(
+			http.MethodGet,
+			viewPath,
+			"",
+			contributorSessionToken,
+			contributorCSRFToken,
+		))
+		if response.Code != http.StatusOK {
+			t.Fatalf("HTTP collaboration Nexus View %s = status %d, body %q", viewPath, response.Code, response.Body.String())
+		}
+	}
+
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM radishnexus.thread_memberships
+		WHERE workspace_id = 'wrk_main' AND thread_id = $1 AND user_id = 'usr_decider'
+	`, threadID); err != nil {
+		t.Fatalf("revoke decider HTTP evidence: %v", err)
+	}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, messagingHTTPRequest(
+		http.MethodPost,
+		acceptPath,
+		acceptBody,
+		deciderSessionToken,
+		deciderCSRFToken,
+	))
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"forbidden"`) {
+		t.Fatalf("HTTP acceptance retry after evidence revoke = status %d, body %q", response.Code, response.Body.String())
 	}
 }
 
