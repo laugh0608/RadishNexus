@@ -26,6 +26,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0018](0018-session-scoped-channel-message-transport.md) | 已接受 | Session 作用域下的 Channel Message 短请求 Transport |
 | [ADR-0019](0019-session-scoped-thread-decision-ticket-transport.md) | 已接受 | Session 作用域下的 Thread、Decision 与 Ticket 协作 Transport |
 | [ADR-0020](0020-session-scoped-single-process-message-realtime.md) | 已接受 | Session 作用域下的单进程 Message 实时增量 |
+| [ADR-0021](0021-document-editor-and-collaboration-foundation.md) | 提议 | Document 正文、编辑器与协同分层 |
 
 ## 新建规则
 

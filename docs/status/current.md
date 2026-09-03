@@ -147,6 +147,7 @@
 - [ADR-0018：Session 作用域下的 Channel Message 短请求 Transport](../adr/0018-session-scoped-channel-message-transport.md)
 - [ADR-0019：Session 作用域下的 Thread、Decision 与 Ticket 协作 Transport](../adr/0019-session-scoped-thread-decision-ticket-transport.md)
 - [ADR-0020：Session 作用域下的单进程 Message 实时增量](../adr/0020-session-scoped-single-process-message-realtime.md)
+- [ADR-0021：Document 正文、编辑器与协同分层（提议）](../adr/0021-document-editor-and-collaboration-foundation.md)
 - [开发指南](../development/README.md)
 - [M0 核心契约实验](../../experiments/m0-core-contracts/README.md)
 - [正式 Go 服务](../../server/README.md)
@@ -176,7 +177,11 @@
 18. Caddy 重启后原生 EventSource 带 `Last-Event-ID` 自动恢复，随后创建的 Message 正常增量到达；contributor 无权读取的 restricted Thread reply 由 decider 写入后未出现在 contributor 页面，decider 重登可见该 reply；
 19. canonical Channel 在 390px 下满足 `documentElement.scrollWidth === body.scrollWidth === innerWidth === 390` 且无可见元素横向溢出；登出 / 重登保持 canonical URL。最终暂停 contributor membership 后，heartbeat 发出 `access-revoked`，页面清空已渲染正文和未提交草稿；浏览器 console 无 warning / error；
 20. Web Storage 只经源码与自动化测试复核，未读取浏览器存储。最终验收 CA SHA-256 为 `6414F94D0D09B628B76FE3178CD131778D85ABC527FDBE6C27DD3A06FAEA0297`，TLS leaf SHA-256 为 `D0B2225B633F90C1B46F6CA7BDCFC69A654C124F8BCE360469B326F711E2609C`；严格 CA 验证返回 `200`，未绕过告警。验收后 fixture 正常 PASS，CA 已按指纹从登录钥匙串删除，相关容器、卷、状态目录、证书与请求临时文件均已清理；
-21. `check-web.sh` 的格式、lint、70 项 Vitest、严格 TypeScript、production build 与依赖基线通过；`check-server.sh`、真实 PostgreSQL integration、browser fixture、脚本语法、`git diff --check` 与 `check-repo.sh` 均通过。本客户端切片未新增依赖、migration 或 lockfile 变化。
+21. `check-web.sh` 的格式、lint、70 项 Vitest、严格 TypeScript、production build 与依赖基线通过；`check-server.sh`、真实 PostgreSQL integration、browser fixture、脚本语法、`git diff --check` 与 `check-repo.sh` 均通过。本客户端切片未新增依赖、migration 或 lockfile 变化；
+22. 已完成 Document 编辑器与协同候选的首轮官方资料和 npm registry 元数据复核，确认 Golden Path 的简单 Markdown、M5 在线协同与 M7 离线同步必须分层，不把后两者提前并入 M0.5；
+23. ADR-0021 已以“提议”状态记录 M0.5 服务端版本化 Markdown、可移植 snapshot、编辑器私有表示、协同内核和 transport 的分层；Tiptap 3 / ProseMirror 是第一实验候选，Lexical 是共享 corpus 对照，Yjs 只在选出编辑器后进入无网络内存收敛实验；
+24. Tiptap Markdown 当前仍为 Beta，Tiptap 的 Comments / Snapshots 等商业能力不会成为自部署核心依赖；Yjs 官方 WebSocket server 也不会直接作为生产 server。Automerge 因当前离线 / 跨端需求尚未成立且 ProseMirror binding 仍为 `0.2.0` 而延后；
+25. 本轮只读取官方资料和 registry 元数据，没有安装依赖、改变 lockfile、创建 migration、启动实时 transport 或读写 Web Storage。下一步是经项目所有者明确授权后，在隔离实验中运行共享 Markdown corpus。
 
 ## 最近完成的浏览器验收（2026-09-02）
 
@@ -208,12 +213,12 @@
 
 ## 下一步
 
-下一优先级是单独完成 Document 编辑器与协同技术评估，不直接开始正式 CRDT、WebSocket 或大面积页面实现：
+下一优先级是执行 ADR-0021 阶段 A 的隔离实验，不直接开始正式 CRDT、WebSocket 或大面积页面实现：
 
-1. 从 Golden Path 的简单 Markdown Document 出发，先冻结文档身份、版本、权限撤销、评论 / 引用、可读导出、备份恢复和冲突失败语义，不把编辑器内部 JSON 直接当公共长期格式；
-2. 对结构化编辑器与协同内核候选做维护性、许可证、可访问性、移动浏览器、Markdown 往返、事务 / undo、schema migration 和自部署体积评估，并用最小可丢弃实验验证关键风险；
-3. 明确单人编辑、多人在线协作和未来离线同步的分层边界；在 Document 协议、授权和恢复合同冻结前，不把新的 SSE / WebSocket transport 接入正式 server 或 Web；
-4. 以“选定或明确拒绝候选、形成可复验决策记录和后续最小纵向切片”为退出条件，不提前铺开完整 M5 文档产品。
+1. 在独立 `experiments/document-editor` package 中锁定 Tiptap 3 / ProseMirror 与 Lexical 的精确 MIT 依赖，不改变正式 `web/package.json`；安装前先获得对 package、版本、lockfile 和清理范围的明确授权；
+2. 让两个候选消费同一 Markdown corpus，记录输入、内部 JSON、规范化输出、第二次往返、结构摘要和丢失诊断，重点覆盖软 / 硬换行、列表、代码、中文 / emoji、危险 HTML、未知节点和 schema upgrade；
+3. 只有阶段 A 选出编辑器后，才用 Yjs 做无 WebSocket、无 IndexedDB 的双文档内存收敛实验；它不证明权限、持久化或生产 transport；
+4. 依据实测结果接受或修订 ADR-0021，再冻结 Document 最小字段、revision、权限、EntityLink、事件、备份和导出合同。
 
 免费书面授权模板和版本化结构化导入导出仍是独立 M0 / M1 缺口，在 Document 技术评估后再按路线图逐项推进。当前 `dev` 已包含消息边界、正式 PostgreSQL command / query、Session transport、Thread → Decision → Ticket 协作闭环和已完成验收的 canonical Channel 实时 Web 闭环。所有这些变更均未晋级 `master`，创建阶段 PR 或写入远程状态仍需项目所有者另行明确授权。
 
