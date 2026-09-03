@@ -9,14 +9,17 @@
     "npm": ">=11.6.0 <12"
   },
   "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
     "test": "node --test",
     "report": "node scripts/report.mjs",
     "check:dependencies": "node scripts/check-dependencies.mjs",
-    "check": "npm run test && npm run check:dependencies"
+    "check": "npm run test && npm run build && npm run check:dependencies"
   },
   "dependencies": {
     "@lexical/code": "0.50.0",
     "@lexical/headless": "0.50.0",
+    "@lexical/history": "0.50.0",
     "@lexical/link": "0.50.0",
     "@lexical/list": "0.50.0",
     "@lexical/markdown": "0.50.0",
@@ -26,5 +29,8 @@
     "@tiptap/pm": "3.31.2",
     "@tiptap/starter-kit": "3.31.2",
     "lexical": "0.50.0"
+  },
+  "devDependencies": {
+    "vite": "8.2.2"
   }
 }

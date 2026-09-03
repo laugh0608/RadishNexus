@@ -115,11 +115,21 @@ Message SSE 是单向、可回到 canonical history 的提示通道，不承担�
 
 #### 阶段 A headless 实测（2026-09-03）
 
-项目所有者已授权上述精确版本和独立 lockfile。`experiments/document-editor` 现已用 Node 24 内建 test runner 对两套候选运行同一 `radishnexus-markdown-v1` corpus；12 个 headless case 均满足重复 parse 内部 JSON 一致、第二次 Markdown 往返稳定、声明支持的文本和结构不丢失。独立 lockfile 共 74 个 transitive package，只来自 npm 官方 registry，全部使用 SHA-512 integrity，transitive license 只有 MIT / BSD-2-Clause，lifecycle install script 为 0，npm high-level audit 为 0 漏洞。
+项目所有者已授权上述精确版本和独立 lockfile。`experiments/document-editor` 现已用 Node 24 内建 test runner 对两套候选运行同一 `radishnexus-markdown-v1` corpus；12 个 headless case 均满足重复 parse 内部 JSON 一致、第二次 Markdown 往返稳定、声明支持的文本和结构不丢失。初次 headless lockfile 共 74 个 transitive package，只来自 npm 官方 registry，全部使用 SHA-512 integrity，transitive license 只有 MIT / BSD-2-Clause，lifecycle install script 为 0，npm high-level audit 为 0 漏洞。
 
 实测同时暴露了不能隐藏的差异：Tiptap 将反斜杠 hard break 规范化为两个空格、转义未知 raw HTML，但原生 MarkdownManager 会把未注册节点静默序列化为空字符串，因此 RadishNexus 适配层必须在 serialize 前按版本化 node / mark schema fail closed；Lexical 原生拒绝未知节点，但会原样保留 raw HTML。两者都会保留 `javascript:` link，证明 editor import / export 不能承担 sanitizer，正式服务端必须独立拒绝危险协议和 unsupported HTML。
 
-完整 case、内部 JSON、SHA-256、规范化结果、第二次往返、结构摘要与诊断由 `npm run report` 可重复输出，汇总结论记录在 [`experiments/document-editor/RESULTS.md`](../../experiments/document-editor/RESULTS.md)。这只完成阶段 A 的 headless 部分；真实浏览器 keyboard / IME / undo / focus / paste / accessibility / 390px / long-document 仍未执行，所以本 ADR 继续保持“提议”，尚未最终选择编辑器，也不进入 Yjs 阶段 B。
+完整 case、内部 JSON、SHA-256、规范化结果、第二次往返、结构摘要与诊断由 `npm run report` 可重复输出，汇总结论记录在 [`experiments/document-editor/RESULTS.md`](../../experiments/document-editor/RESULTS.md)。
+
+#### 阶段 A 浏览器实测（2026-09-03）
+
+项目所有者随后授权 dev-only `vite@8.2.2` 与 `@lexical/history@0.50.0`，实验以原生 DOM 装配两套候选，不引入 React 或正式 Web bundle。扩展后的 lockfile 共 115 个 transitive package，仍全部来自 npm 官方 registry 并使用 SHA-512；license 为 Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、MIT、MPL-2.0。唯一 lifecycle manifest 是精确审阅的 optional `fsevents@2.3.3`，安装固定 `ignore-scripts=true`，high-level audit 为 0 漏洞。
+
+内置浏览器已经证明两套候选的 keyboard formatting、正常编辑 undo / redo、toolbar focus restore、plain-text paste / copy、自定义 `text/markdown` MIME paste、ARIA 基本语义、Unicode 直接输入、390px 和 400-section 长文档交互。390px 下 document / body / viewport width 均为 390，无可见元素横向越界，两套 editor 的 `clientWidth` 与 `scrollWidth` 都为 340；长文档末尾内容存在且只在 editor 内纵向滚动。最终干净标签的 console 无 warning / error。
+
+实测发现并修复了 Lexical harness 的两个集成问题：Markdown MIME 被自定义 handler 消费后，默认 plain fallback 仍继续执行并造成重复内容；Clear 后 selection format 未重置并把 bold 泄漏到新输入。两项都已在真实浏览器复验。对照页 production build 为 758.85 kB JavaScript / 238.81 kB gzip，包含两套候选与共享 corpus，只作为实验成本上限，不是单候选 production bundle。
+
+唯一未完成项是操作系统级中文 IME。内置浏览器控制层明确不支持 `Input.imeSetComposition`；自动化可以直接输入 `你好`，但 composition start / update / end 计数均为 0。不得用直接 Unicode 输入或合成 DOM event 冒充 IME 通过。需要真人在两个 editor 中各完成一次真实 composition，确认无双写、吞字、selection 跳动和错误 undo grouping。完成前本 ADR 继续保持“提议”，尚未最终选择编辑器，也不进入 Yjs 阶段 B。
 
 ### 阶段 B：内存协同收敛
 

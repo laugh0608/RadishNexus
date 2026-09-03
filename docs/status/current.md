@@ -186,7 +186,13 @@
 27. `radishnexus-markdown-v1` 的 12 个共享 headless case 已由两套候选全部通过，重复 parse 的内部 JSON 确定、第二次 Markdown 往返稳定，支持范围内的段落、标题、链接、引用、列表、代码、换行、Unicode、长 URL 和大文档结构未丢失；
 28. Tiptap 原生会把未知节点静默序列化为空，实验适配层已用版本化 node / mark allowlist fail closed；Lexical 原生拒绝未知节点。两者都会保留危险 `javascript:` link，Lexical 还原样保留 raw HTML，因此服务端独立 Markdown 子集校验、协议拒绝和 sanitizer 是正式合同前置条件；
 29. 独立 lockfile 的 74 个 transitive package 已核对为 npm 官方 registry + SHA-512，license 只有 MIT / BSD-2-Clause，lifecycle install script 为 0，npm high-level audit 为 0 漏洞；实验 27 项 Node test 与 dependency gate 通过；
-30. 浏览器专属 keyboard、中文 IME、undo / redo、focus、paste、screen reader、390px 和长文档交互尚未执行，未被 headless 结果冒充通过；ADR-0021 继续保持“提议”，尚未选择编辑器，也未安装 Yjs 或接入实时 transport / Web Storage。
+30. 项目所有者已进一步授权 `@lexical/history@0.50.0` 与 dev-only `vite@8.2.2`；隔离实验以原生 DOM 装配两套候选，没有引入 React、改变正式 Web bundle、安装 Yjs 或接入实时 transport / Web Storage；
+31. 扩展后的独立 lockfile 共 115 个 transitive package，全部来自 npm 官方 registry 并具有 SHA-512；license 为 Apache-2.0、BSD-2-Clause、BSD-3-Clause、ISC、MIT、MPL-2.0，唯一 lifecycle manifest 是精确审阅且在 `ignore-scripts=true` 下安装的 optional `fsevents@2.3.3`，high-level audit 为 0 漏洞；
+32. 内置浏览器已证明两套候选的 keyboard formatting、普通编辑 undo / redo、toolbar focus restore、plain-text paste / copy、`text/markdown` MIME paste、ARIA 基本语义、Unicode 直接输入、390px 和 400-section 长文档交互；最终干净标签 console 无 warning / error；
+33. 浏览器实测发现并修复 Lexical Markdown paste 被自定义与默认 handler 重复处理，以及 Clear 后 bold selection format 泄漏到新输入两个集成问题；两项均已在相同浏览器复验；
+34. 390px 下 viewport、document 与 body width 均为 390，无可见元素横向越界；两套 editor `clientWidth === scrollWidth === 340`，长文档保留 `Section 400` / `item 400.2` 并在 editor 内纵向滚动；
+35. 唯一未完成项是真实 OS 中文 IME composition：内置浏览器控制层明确不支持 `Input.imeSetComposition`，自动化直接输入 `你好` 虽成功，但两套候选 composition start / update / end 均为 0。该证据不冒充 IME 通过，ADR-0021 继续保持“提议”，尚未最终选择编辑器或进入 Yjs 阶段 B；
+36. 实验 28 项 Node test、production build、dependency gate 与 high-level npm audit 已通过；合并两套候选与 corpus 的对照 bundle 为 758.85 kB / 238.81 kB gzip，Vite 的大 chunk warning 被保留为成本证据，没有通过提高阈值隐藏。Web Storage 与实时 transport 只经源码自动化门禁复核，未读取浏览器存储。
 
 ## 最近完成的浏览器验收（2026-09-02）
 
@@ -218,12 +224,11 @@
 
 ## 下一步
 
-下一优先级是完成 ADR-0021 阶段 A 的真实浏览器对照，不直接开始正式 CRDT、WebSocket 或大面积页面实现：
+下一优先级是补齐 ADR-0021 阶段 A 唯一剩余的真人 IME 证据，不直接开始正式 CRDT、WebSocket 或大面积页面实现：
 
-1. 为隔离实验的真实浏览器对照先提出精确 UI / build 依赖清单、版本、license、lockfile 和清理范围，不借用正式 Web bundle，也不把 headless 结果冒充 UI 验收；
-2. 用同一页面与数据完成 Tiptap / Lexical 的 keyboard-only、中文 composition / IME、undo / redo、focus restore、plain-text / Markdown paste、copy、screen reader 基本语义、390px 和长文档交互，并记录 bundle 与 runtime 证据；
-3. 根据 headless 与浏览器证据明确选择 Tiptap、Lexical 或拒绝两者；只有阶段 A 选出编辑器后，才用 Yjs 做无 WebSocket、无 IndexedDB 的双文档内存收敛实验；
-4. 依据实测结果接受或修订 ADR-0021，再冻结 Document 最小字段、revision、权限、EntityLink、事件、备份和导出合同。
+1. 由真人在已打开的隔离页面分别使用操作系统中文输入法向 Tiptap 与 Lexical 输入短语，复核 composition 期间无双写、吞字、selection 跳动，且一次 undo 撤销一次提交；
+2. 根据 headless 与浏览器证据明确选择 Tiptap、Lexical 或拒绝两者；只有阶段 A 选出编辑器后，才用 Yjs 做无 WebSocket、无 IndexedDB 的双文档内存收敛实验；
+3. 依据实测结果接受或修订 ADR-0021，再冻结 Document 最小字段、revision、权限、EntityLink、事件、备份和导出合同。
 
 免费书面授权模板和版本化结构化导入导出仍是独立 M0 / M1 缺口，在 Document 技术评估后再按路线图逐项推进。当前 `dev` 已包含消息边界、正式 PostgreSQL command / query、Session transport、Thread → Decision → Ticket 协作闭环和已完成验收的 canonical Channel 实时 Web 闭环。所有这些变更均未晋级 `master`，创建阶段 PR 或写入远程状态仍需项目所有者另行明确授权。
 
