@@ -113,6 +113,14 @@ Message SSE 是单向、可回到 canonical history 的提示通道，不承担�
 
 浏览器阶段必须复核 keyboard-only、composition / IME、undo / redo、focus restore、copy / paste、screen reader 基本语义、390px 和长文档；jsdom 不能替代这些结果。
 
+#### 阶段 A headless 实测（2026-09-03）
+
+项目所有者已授权上述精确版本和独立 lockfile。`experiments/document-editor` 现已用 Node 24 内建 test runner 对两套候选运行同一 `radishnexus-markdown-v1` corpus；12 个 headless case 均满足重复 parse 内部 JSON 一致、第二次 Markdown 往返稳定、声明支持的文本和结构不丢失。独立 lockfile 共 74 个 transitive package，只来自 npm 官方 registry，全部使用 SHA-512 integrity，transitive license 只有 MIT / BSD-2-Clause，lifecycle install script 为 0，npm high-level audit 为 0 漏洞。
+
+实测同时暴露了不能隐藏的差异：Tiptap 将反斜杠 hard break 规范化为两个空格、转义未知 raw HTML，但原生 MarkdownManager 会把未注册节点静默序列化为空字符串，因此 RadishNexus 适配层必须在 serialize 前按版本化 node / mark schema fail closed；Lexical 原生拒绝未知节点，但会原样保留 raw HTML。两者都会保留 `javascript:` link，证明 editor import / export 不能承担 sanitizer，正式服务端必须独立拒绝危险协议和 unsupported HTML。
+
+完整 case、内部 JSON、SHA-256、规范化结果、第二次往返、结构摘要与诊断由 `npm run report` 可重复输出，汇总结论记录在 [`experiments/document-editor/RESULTS.md`](../../experiments/document-editor/RESULTS.md)。这只完成阶段 A 的 headless 部分；真实浏览器 keyboard / IME / undo / focus / paste / accessibility / 390px / long-document 仍未执行，所以本 ADR 继续保持“提议”，尚未最终选择编辑器，也不进入 Yjs 阶段 B。
+
 ### 阶段 B：内存协同收敛
 
 只有阶段 A 选出编辑器后，才在实验内加入 Yjs，不启动 WebSocket 或浏览器持久化。用两个内存 Y.Doc 和可控 update 传递验证：

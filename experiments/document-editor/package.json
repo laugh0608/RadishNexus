@@ -1,0 +1,30 @@
+{
+  "name": "@radishnexus/document-editor-experiment",
+  "version": "0.0.0",
+  "private": true,
+  "license": "SEE LICENSE IN ../../LICENSE",
+  "type": "module",
+  "engines": {
+    "node": ">=24.11.0 <25",
+    "npm": ">=11.6.0 <12"
+  },
+  "scripts": {
+    "test": "node --test",
+    "report": "node scripts/report.mjs",
+    "check:dependencies": "node scripts/check-dependencies.mjs",
+    "check": "npm run test && npm run check:dependencies"
+  },
+  "dependencies": {
+    "@lexical/code": "0.50.0",
+    "@lexical/headless": "0.50.0",
+    "@lexical/link": "0.50.0",
+    "@lexical/list": "0.50.0",
+    "@lexical/markdown": "0.50.0",
+    "@lexical/rich-text": "0.50.0",
+    "@tiptap/core": "3.31.2",
+    "@tiptap/markdown": "3.31.2",
+    "@tiptap/pm": "3.31.2",
+    "@tiptap/starter-kit": "3.31.2",
+    "lexical": "0.50.0"
+  }
+}

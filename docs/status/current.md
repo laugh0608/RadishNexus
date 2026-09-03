@@ -181,7 +181,12 @@
 22. 已完成 Document 编辑器与协同候选的首轮官方资料和 npm registry 元数据复核，确认 Golden Path 的简单 Markdown、M5 在线协同与 M7 离线同步必须分层，不把后两者提前并入 M0.5；
 23. ADR-0021 已以“提议”状态记录 M0.5 服务端版本化 Markdown、可移植 snapshot、编辑器私有表示、协同内核和 transport 的分层；Tiptap 3 / ProseMirror 是第一实验候选，Lexical 是共享 corpus 对照，Yjs 只在选出编辑器后进入无网络内存收敛实验；
 24. Tiptap Markdown 当前仍为 Beta，Tiptap 的 Comments / Snapshots 等商业能力不会成为自部署核心依赖；Yjs 官方 WebSocket server 也不会直接作为生产 server。Automerge 因当前离线 / 跨端需求尚未成立且 ProseMirror binding 仍为 `0.2.0` 而延后；
-25. 本轮只读取官方资料和 registry 元数据，没有安装依赖、改变 lockfile、创建 migration、启动实时 transport 或读写 Web Storage。下一步是经项目所有者明确授权后，在隔离实验中运行共享 Markdown corpus。
+25. ADR-0021 提案提交前只读取官方资料和 registry 元数据，没有安装依赖、改变 lockfile、创建 migration、启动实时 transport 或读写 Web Storage；
+26. 项目所有者已授权 ADR-0021 阶段 A 的精确 headless 依赖；独立 `experiments/document-editor` package 已锁定 Tiptap `3.31.2` 与 Lexical `0.50.0`，未改变正式 `web/package.json` 或 Web bundle；
+27. `radishnexus-markdown-v1` 的 12 个共享 headless case 已由两套候选全部通过，重复 parse 的内部 JSON 确定、第二次 Markdown 往返稳定，支持范围内的段落、标题、链接、引用、列表、代码、换行、Unicode、长 URL 和大文档结构未丢失；
+28. Tiptap 原生会把未知节点静默序列化为空，实验适配层已用版本化 node / mark allowlist fail closed；Lexical 原生拒绝未知节点。两者都会保留危险 `javascript:` link，Lexical 还原样保留 raw HTML，因此服务端独立 Markdown 子集校验、协议拒绝和 sanitizer 是正式合同前置条件；
+29. 独立 lockfile 的 74 个 transitive package 已核对为 npm 官方 registry + SHA-512，license 只有 MIT / BSD-2-Clause，lifecycle install script 为 0，npm high-level audit 为 0 漏洞；实验 27 项 Node test 与 dependency gate 通过；
+30. 浏览器专属 keyboard、中文 IME、undo / redo、focus、paste、screen reader、390px 和长文档交互尚未执行，未被 headless 结果冒充通过；ADR-0021 继续保持“提议”，尚未选择编辑器，也未安装 Yjs 或接入实时 transport / Web Storage。
 
 ## 最近完成的浏览器验收（2026-09-02）
 
@@ -213,11 +218,11 @@
 
 ## 下一步
 
-下一优先级是执行 ADR-0021 阶段 A 的隔离实验，不直接开始正式 CRDT、WebSocket 或大面积页面实现：
+下一优先级是完成 ADR-0021 阶段 A 的真实浏览器对照，不直接开始正式 CRDT、WebSocket 或大面积页面实现：
 
-1. 在独立 `experiments/document-editor` package 中锁定 Tiptap 3 / ProseMirror 与 Lexical 的精确 MIT 依赖，不改变正式 `web/package.json`；安装前先获得对 package、版本、lockfile 和清理范围的明确授权；
-2. 让两个候选消费同一 Markdown corpus，记录输入、内部 JSON、规范化输出、第二次往返、结构摘要和丢失诊断，重点覆盖软 / 硬换行、列表、代码、中文 / emoji、危险 HTML、未知节点和 schema upgrade；
-3. 只有阶段 A 选出编辑器后，才用 Yjs 做无 WebSocket、无 IndexedDB 的双文档内存收敛实验；它不证明权限、持久化或生产 transport；
+1. 为隔离实验的真实浏览器对照先提出精确 UI / build 依赖清单、版本、license、lockfile 和清理范围，不借用正式 Web bundle，也不把 headless 结果冒充 UI 验收；
+2. 用同一页面与数据完成 Tiptap / Lexical 的 keyboard-only、中文 composition / IME、undo / redo、focus restore、plain-text / Markdown paste、copy、screen reader 基本语义、390px 和长文档交互，并记录 bundle 与 runtime 证据；
+3. 根据 headless 与浏览器证据明确选择 Tiptap、Lexical 或拒绝两者；只有阶段 A 选出编辑器后，才用 Yjs 做无 WebSocket、无 IndexedDB 的双文档内存收敛实验；
 4. 依据实测结果接受或修订 ADR-0021，再冻结 Document 最小字段、revision、权限、EntityLink、事件、备份和导出合同。
 
 免费书面授权模板和版本化结构化导入导出仍是独立 M0 / M1 缺口，在 Document 技术评估后再按路线图逐项推进。当前 `dev` 已包含消息边界、正式 PostgreSQL command / query、Session transport、Thread → Decision → Ticket 协作闭环和已完成验收的 canonical Channel 实时 Web 闭环。所有这些变更均未晋级 `master`，创建阶段 PR 或写入远程状态仍需项目所有者另行明确授权。
