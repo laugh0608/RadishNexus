@@ -207,7 +207,7 @@ async function createMessage(
   const payload = await responseJSON(response, "消息写入");
   try {
     return {
-      message: parseMessageEnvelope(payload, channelID),
+      message: parseChannelMessageEnvelope(payload, channelID),
       created: response.status === 201,
     };
   } catch (error) {
@@ -397,7 +397,7 @@ function parseMessagePageResponse(
   return { messages, olderCursor };
 }
 
-function parseMessageEnvelope(
+export function parseChannelMessageEnvelope(
   payload: unknown,
   expectedChannelID: string,
 ): ChannelMessage {

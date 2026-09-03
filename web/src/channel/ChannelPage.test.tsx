@@ -1,11 +1,23 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { AuthRequestError } from "../auth/api";
 import { ChannelPage } from "./ChannelPage";
 import {
   ChannelRequestError,
   type ChannelMessage,
   type ChannelMessageClient,
 } from "./api";
+import type {
+  ChannelRealtimeClient,
+  ChannelRealtimeConnection,
+  ChannelRealtimeHandlers,
+} from "./realtime";
 
 const olderMessage: ChannelMessage = {
   id: "msg_older",
@@ -191,23 +203,156 @@ describe("ChannelPage", () => {
           ),
         })}
         onSessionExpired={onSessionExpired}
+        realtimeClient={immediateRealtimeClient()}
         workspaceID="wrk_main"
       />,
     );
     await waitFor(() => expect(onSessionExpired).toHaveBeenCalledOnce());
   });
+
+  it("establishes ready before history and buffers an intervening Message", async () => {
+    const history = deferred<{
+      messages: readonly ChannelMessage[];
+      olderCursor: string | null;
+    }>();
+    const client = testClient({
+      listMessages: vi.fn().mockReturnValue(history.promise),
+    });
+    const realtime = new RealtimeHarness();
+    renderChannel(client, { realtimeClient: realtime.client });
+
+    expect(client.listMessages).not.toHaveBeenCalled();
+    act(() => realtime.latest().onReady());
+    expect(client.listMessages).toHaveBeenCalledOnce();
+    act(() => realtime.latest().onMessageCreated(newerMessage));
+    await act(async () =>
+      history.resolve({ messages: [olderMessage], olderCursor: null }),
+    );
+
+    expect(await screen.findByText("Older authoritative body.")).toBeDefined();
+    expect(screen.getByText("Newer authoritative body.")).toBeDefined();
+  });
+
+  it("fails closed when a Message arrives before ready", () => {
+    const client = testClient();
+    const realtime = new RealtimeHarness();
+    renderChannel(client, { realtimeClient: realtime.client });
+
+    act(() => realtime.latest().onMessageCreated(newerMessage));
+
+    expect(
+      screen.getByRole("heading", { name: "无法读取这个 Channel" }),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
+        "服务返回的实时消息不符合当前契约，请重新读取 Channel。",
+      ),
+    ).toBeDefined();
+    expect(client.listMessages).not.toHaveBeenCalled();
+    expect(realtime.connections[0]?.close).toHaveBeenCalledOnce();
+  });
+
+  it("creates a fresh boundary and rereads canonical history after resync", async () => {
+    const client = testClient({
+      listMessages: vi
+        .fn()
+        .mockResolvedValueOnce({ messages: [olderMessage], olderCursor: null })
+        .mockResolvedValueOnce({ messages: [newerMessage], olderCursor: null }),
+    });
+    const realtime = new RealtimeHarness();
+    renderChannel(client, { realtimeClient: realtime.client });
+    act(() => realtime.latest().onReady());
+    expect(await screen.findByText("Older authoritative body.")).toBeDefined();
+
+    act(() => realtime.latest().onResyncRequired());
+    expect(screen.queryByText("Older authoritative body.")).toBeNull();
+    expect(realtime.client.connect).toHaveBeenCalledTimes(2);
+    act(() => realtime.latest().onReady());
+
+    expect(await screen.findByText("Newer authoritative body.")).toBeDefined();
+    expect(client.listMessages).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears bodies and drafts immediately on access-revoked", async () => {
+    const realtime = new RealtimeHarness();
+    renderChannel(
+      testClient({
+        listMessages: vi.fn().mockResolvedValue({
+          messages: [newerMessage],
+          olderCursor: null,
+        }),
+      }),
+      { realtimeClient: realtime.client },
+    );
+    act(() => realtime.latest().onReady());
+    await screen.findByText("Newer authoritative body.");
+    fireEvent.change(screen.getByLabelText("正文"), {
+      target: { value: "Unsubmitted secret draft." },
+    });
+
+    act(() => realtime.latest().onAccessRevoked());
+
+    expect(
+      screen.getByRole("heading", { name: "无法读取这个 Channel" }),
+    ).toBeDefined();
+    expect(screen.queryByText("Newer authoritative body.")).toBeNull();
+    expect(screen.queryByDisplayValue("Unsubmitted secret draft.")).toBeNull();
+  });
+
+  it("keeps native reconnection but returns to login when its Session probe is 401", async () => {
+    const onSessionExpired = vi.fn();
+    const probeSession = vi.fn().mockRejectedValue(
+      new AuthRequestError("当前会话已失效，请重新登录。", {
+        status: 401,
+      }),
+    );
+    const realtime = new RealtimeHarness();
+    render(
+      <ChannelPage
+        channelID="chn_main"
+        client={testClient()}
+        onSessionExpired={onSessionExpired}
+        probeSession={probeSession}
+        realtimeClient={realtime.client}
+        workspaceID="wrk_main"
+      />,
+    );
+    act(() => realtime.latest().onReady());
+    await screen.findByText("这个 Channel 还没有 Message");
+
+    act(() => realtime.latest().onConnectionError());
+
+    await waitFor(() => expect(onSessionExpired).toHaveBeenCalledOnce());
+    expect(probeSession).toHaveBeenCalledOnce();
+    expect(realtime.client.connect).toHaveBeenCalledOnce();
+  });
+
+  it("closes the realtime connection when the component unmounts", () => {
+    const realtime = new RealtimeHarness();
+    const view = renderChannel(testClient(), {
+      realtimeClient: realtime.client,
+    });
+
+    view.unmount();
+
+    expect(realtime.connections[0]?.close).toHaveBeenCalledOnce();
+  });
 });
 
 function renderChannel(
   client: ChannelMessageClient,
-  options: { createOperationID?: () => string } = {},
-): void {
-  render(
+  options: {
+    createOperationID?: () => string;
+    realtimeClient?: ChannelRealtimeClient;
+  } = {},
+) {
+  return render(
     <ChannelPage
       channelID="chn_main"
       client={client}
       createOperationID={options.createOperationID}
       onSessionExpired={vi.fn()}
+      realtimeClient={options.realtimeClient ?? immediateRealtimeClient()}
       workspaceID="wrk_main"
     />,
   );
@@ -225,4 +370,47 @@ function testClient(
     startThread: vi.fn(),
     ...overrides,
   };
+}
+
+function immediateRealtimeClient(): ChannelRealtimeClient {
+  return {
+    connect: vi.fn((_workspaceID, _channelID, handlers) => {
+      handlers.onReady();
+      return { close: vi.fn() };
+    }),
+  };
+}
+
+class RealtimeHarness {
+  readonly handlers: ChannelRealtimeHandlers[] = [];
+  readonly connections: Array<
+    ChannelRealtimeConnection & { close: ReturnType<typeof vi.fn> }
+  > = [];
+  readonly client: ChannelRealtimeClient = {
+    connect: vi.fn((_workspaceID, _channelID, handlers) => {
+      const connection = { close: vi.fn() };
+      this.handlers.push(handlers);
+      this.connections.push(connection);
+      return connection;
+    }),
+  };
+
+  latest(): ChannelRealtimeHandlers {
+    const handlers = this.handlers.at(-1);
+    if (handlers === undefined) {
+      throw new Error("realtime connection was not established");
+    }
+    return handlers;
+  }
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
 }

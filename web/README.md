@@ -26,7 +26,7 @@ npm run dev
 ./scripts/run-authenticated-web-browser-fixture.sh
 ```
 
-该入口会先构建 Web，再启动一次性 PostgreSQL 容器和带临时证书的 HTTPS fixture，并输出 origin、contributor / decider 两个测试账号、canonical Deployment / Channel / Thread path 与 stop 文件。它不会拉取缺失镜像，也不是产品默认账号或常驻开发服务；浏览器必须显式信任本次临时证书，不应绕过证书告警。复核结束后创建输出的 stop 文件，fixture 会退出并清理容器与临时状态。
+该入口会先构建 Web，再启动一次性 PostgreSQL 容器、fixture upstream 与固定 Caddy HTTPS reverse proxy，并输出 origin、当前 Caddy CA、contributor / decider 两个测试账号、canonical Deployment / Channel / Thread path 与 stop 文件。它不会拉取缺失镜像，也不是产品默认账号或常驻开发服务；浏览器必须在连接前精确核对并临时信任本次 CA，不应绕过证书告警。复核结束后创建输出的 stop 文件，fixture 会退出并清理容器、volume 与临时状态；临时导入钥匙串的 CA 仍须由操作者按本次完整指纹删除。
 
 ## 当前边界
 
@@ -37,7 +37,8 @@ npm run dev
 - Workspace 选择来自 Session context，但不写入 Session 或授予权限；canonical 业务请求仍按路径 Workspace 重新验证 current membership。
 - 当前未开放 Deployment、Channel 或协作对象 list API。根路径只校验用户输入的正式 `dpl_` / `chn_` / `thr_` / `dec_` / `tkt_` ID 并导航到 canonical 路径，不从 fixture 猜测对象。
 - canonical Deployment 页面只调用同源 `/api/v1/workspaces/{workspace_id}/deployments/{deployment_id}/nexus-view`，使用 `credentials: same-origin`、`cache: no-store`、显式公开 DTO 和运行时校验；未知形状不会被当成成功页面。
-- canonical Channel 页面只调用 ADR-0018 的三个同源短请求；历史使用 opaque cursor 向旧消息分页，发送失败时为未修改正文保留同一 `client_operation_id`，`200` 精确重试不会追加重复 Message。
+- canonical Channel 页面用原生 EventSource 调用 ADR-0020 的同源 SSE，并继续用 ADR-0018 的三个短请求读写：先等待 `ready`，再读取 canonical history；history 期间的 `message.created` 先缓冲，完成后按 Message ID 去重合并。发送失败时为未修改正文保留同一 `client_operation_id`，`200` 精确重试不会追加重复 Message。
+- 浏览器自动重连沿用原生 `Last-Event-ID`；`resync-required` 关闭旧流、建立新边界并全量重读，断线错误链只允许一次 Session + canonical history 诊断，不做持续轮询。`access-revoked` 或诊断所得 `404` 会清空正文、草稿和 Thread 结果，Session `401` 回到登录态；事件顺序、cursor、空控制数据或 DTO 漂移均 fail closed。
 - Channel 的 `401` 回到登录态；任何后续 `404` 都立即移除已经渲染的 Message 正文和本地草稿。Thread 创建只发送 Source Message ref、标题和可见性，不复制 Message 正文。
 - canonical Thread、Decision 与 Ticket 页面只调用 ADR-0019 的六个同源短请求。Thread 创建 Proposed Decision；Decision 必须由有权主体勾选明确确认后人工 acceptance，接受后才能创建 Ticket；写入发生网络歧义且表单未变化时保留同一 `client_operation_id`。
 - 协作 adapter 对 Current、Relations、Timeline、结构化来源、状态与受控时间执行严格运行时校验；restricted evidence 不携带类型、ID、关系名、标题或时间。协作请求的 `401` 回到登录态，后续 `404` 会清除已渲染内容、草稿和成功结果。

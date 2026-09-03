@@ -21,6 +21,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/httptransport"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/realtime"
 )
 
 const authenticatedWebBrowserPassword = "authenticated browser fixture password"
@@ -30,8 +31,10 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	webRoot := os.Getenv("RADISHNEXUS_WEB_ROOT")
 	statePath := os.Getenv("RADISHNEXUS_BROWSER_FIXTURE_STATE")
 	stopPath := os.Getenv("RADISHNEXUS_BROWSER_FIXTURE_STOP")
-	if databaseURL == "" || webRoot == "" || statePath == "" || stopPath == "" {
-		t.Fatal("DATABASE_URL, RADISHNEXUS_WEB_ROOT, RADISHNEXUS_BROWSER_FIXTURE_STATE and RADISHNEXUS_BROWSER_FIXTURE_STOP are required")
+	listenAddress := os.Getenv("RADISHNEXUS_BROWSER_FIXTURE_LISTEN_ADDRESS")
+	publicOrigin := os.Getenv("RADISHNEXUS_BROWSER_FIXTURE_PUBLIC_ORIGIN")
+	if databaseURL == "" || webRoot == "" || statePath == "" || stopPath == "" || listenAddress == "" || publicOrigin == "" {
+		t.Fatal("DATABASE_URL, RADISHNEXUS_WEB_ROOT, RADISHNEXUS_BROWSER_FIXTURE_STATE, RADISHNEXUS_BROWSER_FIXTURE_STOP, RADISHNEXUS_BROWSER_FIXTURE_LISTEN_ADDRESS and RADISHNEXUS_BROWSER_FIXTURE_PUBLIC_ORIGIN are required")
 	}
 
 	ctx := context.Background()
@@ -53,11 +56,10 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	t.Cleanup(pool.Close)
 
 	fixture := seedAuthenticatedWebBrowserData(t, ctx, pool)
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := net.Listen("tcp", listenAddress)
 	if err != nil {
 		t.Fatalf("net.Listen() error = %v", err)
 	}
-	publicOrigin := "https://" + listener.Addr().String()
 	sessionPolicy, err := httptransport.NewBrowserSessionPolicy(publicOrigin)
 	if err != nil {
 		t.Fatalf("NewBrowserSessionPolicy() error = %v", err)
@@ -79,10 +81,20 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 		proxyPolicy,
 		httptransport.NewLoginGuard(5, time.Minute, 64, 2),
 	)
+	realtimeConfig, err := realtime.DefaultConfig()
+	if err != nil {
+		t.Fatalf("realtime.DefaultConfig() error = %v", err)
+	}
+	realtimeHub, err := realtime.NewHub(realtimeConfig)
+	if err != nil {
+		t.Fatalf("realtime.NewHub() error = %v", err)
+	}
+	t.Cleanup(realtimeHub.Shutdown)
 	viewService := goldenpath.NewService(
 		goldenpostgres.New(pool),
 		goldenpath.CryptoIDGenerator{},
 		goldenpath.SystemClock{},
+		goldenpath.WithMessageCreatedNotifier(authenticatedBrowserNotifier{hub: realtimeHub}),
 	)
 	deploymentHandler := httptransport.NewDeploymentNexusViewHandler(
 		authService,
@@ -93,6 +105,13 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	channelHandler := httptransport.NewChannelMessagesHandler(
 		authService,
 		viewService,
+		sessionPolicy,
+		proxyPolicy,
+	)
+	channelEventsHandler := httptransport.NewChannelEventsHandler(
+		authService,
+		viewService,
+		realtimeHub,
 		sessionPolicy,
 		proxyPolicy,
 	)
@@ -112,6 +131,7 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	mux.Handle("/api/v1/auth/", authHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages", channelHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages/", channelHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/events", channelEventsHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/threads/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/decisions/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/tickets/", collaborationHandler)
@@ -120,17 +140,19 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	mux.Handle("/", webHandler)
 	server := httptest.NewUnstartedServer(httptransport.WithRequestID(mux))
 	server.Listener = listener
-	server.StartTLS()
+	server.Start()
 	t.Cleanup(server.Close)
 
 	state, err := json.Marshal(map[string]string{
-		"public_origin":     publicOrigin,
-		"channel_path":      "/workspaces/wrk_main/channels/chn_project",
-		"thread_path":       "/workspaces/wrk_main/threads/" + fixture.thread.ID,
-		"deployment_path":   "/workspaces/wrk_main/deployments/" + fixture.deployment.ID,
-		"contributor_login": "http.contributor",
-		"decider_login":     "http.decider",
-		"password":          authenticatedWebBrowserPassword,
+		"public_origin":      publicOrigin,
+		"channel_path":       "/workspaces/wrk_main/channels/chn_project",
+		"thread_path":        "/workspaces/wrk_main/threads/" + fixture.thread.ID,
+		"restricted_thread":  fixture.thread.ID,
+		"database_container": os.Getenv("RADISHNEXUS_BROWSER_FIXTURE_DATABASE_CONTAINER"),
+		"deployment_path":    "/workspaces/wrk_main/deployments/" + fixture.deployment.ID,
+		"contributor_login":  "http.contributor",
+		"decider_login":      "http.decider",
+		"password":           authenticatedWebBrowserPassword,
 	})
 	if err != nil {
 		t.Fatalf("json.Marshal() error = %v", err)
@@ -139,6 +161,18 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 		t.Fatalf("write fixture state: %v", err)
 	}
 	waitForBrowserFixtureStop(t, stopPath)
+}
+
+type authenticatedBrowserNotifier struct {
+	hub *realtime.Hub
+}
+
+func (notifier authenticatedBrowserNotifier) NotifyMessageCreated(notification goldenpath.MessageCreatedNotification) {
+	notifier.hub.NotifyMessageCreated(realtime.MessageNotification{
+		WorkspaceID: notification.WorkspaceID,
+		ChannelID:   notification.ChannelID,
+		MessageID:   notification.MessageID,
+	})
 }
 
 type authenticatedWebFixture struct {
@@ -256,7 +290,7 @@ func seedAuthenticatedWebBrowserData(
 
 func waitForBrowserFixtureStop(t *testing.T, stopPath string) {
 	t.Helper()
-	deadline := time.NewTimer(10 * time.Minute)
+	deadline := time.NewTimer(30 * time.Minute)
 	defer deadline.Stop()
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()

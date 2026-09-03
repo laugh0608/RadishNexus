@@ -1097,6 +1097,28 @@ code {
   font-size: 11px;
 }
 
+.channel-identity .realtime-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.channel-identity .realtime-status::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8d958e;
+  content: "";
+}
+
+.channel-identity .realtime-status--live::before {
+  background: #5c8b2d;
+}
+
+.channel-identity .realtime-status--reconnecting::before {
+  background: #a66f1f;
+}
+
 .channel-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.38fr);

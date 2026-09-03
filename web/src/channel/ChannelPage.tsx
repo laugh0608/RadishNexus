@@ -1,30 +1,29 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useReducer, useState, type FormEvent } from "react";
+import { AuthRequestError, browserAuthClient } from "../auth/api";
 import {
   ChannelRequestError,
   browserChannelMessageClient,
   newClientOperationID,
-  type ChannelMessage,
   type ChannelMessageClient,
   type StartedThread,
   type ThreadVisibility,
 } from "./api";
+import {
+  browserChannelRealtimeClient,
+  type ChannelRealtimeClient,
+  type ChannelRealtimeConnection,
+} from "./realtime";
+import { channelPageReducer } from "./state";
 
 interface ChannelPageProps {
   workspaceID: string;
   channelID: string;
   client?: ChannelMessageClient;
+  realtimeClient?: ChannelRealtimeClient;
+  probeSession?: (signal?: AbortSignal) => Promise<void>;
   createOperationID?: () => string;
   onSessionExpired: () => void;
 }
-
-type ChannelPageState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | {
-      status: "ready";
-      messages: readonly ChannelMessage[];
-      olderCursor: string | null;
-    };
 
 interface PendingMessageOperation {
   body: string;
@@ -41,11 +40,18 @@ export function ChannelPage({
   workspaceID,
   channelID,
   client = browserChannelMessageClient,
+  realtimeClient = browserChannelRealtimeClient,
+  probeSession = probeBrowserSession,
   createOperationID = newClientOperationID,
   onSessionExpired,
 }: ChannelPageProps) {
   const [reloadKey, setReloadKey] = useState(0);
-  const [state, setState] = useState<ChannelPageState>({ status: "loading" });
+  const [state, dispatch] = useReducer(channelPageReducer, {
+    status: "connecting",
+  });
+  const [realtimeStatus, setRealtimeStatus] = useState<
+    "connecting" | "live" | "reconnecting"
+  >("connecting");
   const [olderLoading, setOlderLoading] = useState(false);
   const [olderError, setOlderError] = useState<string | null>(null);
   const [messageBody, setMessageBody] = useState("");
@@ -62,28 +68,190 @@ export function ChannelPage({
   >({});
 
   useEffect(() => {
-    const controller = new AbortController();
-    void client
-      .listMessages(workspaceID, channelID, undefined, controller.signal)
-      .then(
-        (page) => {
-          if (!controller.signal.aborted) {
-            setState({ status: "ready", ...page });
-          }
-        },
-        (error: unknown) => {
-          if (controller.signal.aborted) {
-            return;
-          }
-          if (isExpiredSession(error)) {
-            onSessionExpired();
-            return;
-          }
-          setState({ status: "error", message: channelErrorMessage(error) });
-        },
-      );
-    return () => controller.abort();
-  }, [channelID, client, onSessionExpired, reloadKey, workspaceID]);
+    let disposed = false;
+    let epoch = 0;
+    let connection: ChannelRealtimeConnection | null = null;
+    let historyController: AbortController | null = null;
+    let failureProbeController: AbortController | null = null;
+
+    const clearInteractiveState = () => {
+      setMessageBody("");
+      setMessageError(null);
+      setMessageNotice(null);
+      setPendingMessage(null);
+      setThreadDraft(null);
+      setThreadError(null);
+      setStartedThreads({});
+    };
+    const loseAccess = (message: string) => {
+      connection?.close();
+      historyController?.abort();
+      failureProbeController?.abort();
+      clearInteractiveState();
+      dispatch({ type: "failed", message });
+    };
+    const expireSession = () => {
+      connection?.close();
+      historyController?.abort();
+      failureProbeController?.abort();
+      clearInteractiveState();
+      onSessionExpired();
+    };
+
+    const connect = () => {
+      const currentEpoch = ++epoch;
+      let initialReadySeen = false;
+      let failureProbedSinceReady = false;
+      connection?.close();
+      historyController?.abort();
+      failureProbeController?.abort();
+      dispatch({ type: "connect" });
+      setRealtimeStatus("connecting");
+
+      try {
+        connection = realtimeClient.connect(workspaceID, channelID, {
+          onReady: () => {
+            if (disposed || currentEpoch !== epoch) {
+              return;
+            }
+            failureProbedSinceReady = false;
+            setRealtimeStatus("live");
+            if (initialReadySeen) {
+              return;
+            }
+            initialReadySeen = true;
+            dispatch({ type: "ready" });
+            historyController = new AbortController();
+            void client
+              .listMessages(
+                workspaceID,
+                channelID,
+                undefined,
+                historyController.signal,
+              )
+              .then(
+                (page) => {
+                  if (
+                    !disposed &&
+                    currentEpoch === epoch &&
+                    !historyController?.signal.aborted
+                  ) {
+                    dispatch({ type: "history-loaded", page });
+                  }
+                },
+                (error: unknown) => {
+                  if (
+                    disposed ||
+                    currentEpoch !== epoch ||
+                    historyController?.signal.aborted
+                  ) {
+                    return;
+                  }
+                  if (isExpiredSession(error)) {
+                    expireSession();
+                    return;
+                  }
+                  if (isMissingChannel(error)) {
+                    loseAccess(channelErrorMessage(error));
+                    return;
+                  }
+                  dispatch({
+                    type: "failed",
+                    message: channelErrorMessage(error),
+                  });
+                  connection?.close();
+                },
+              );
+          },
+          onMessageCreated: (message) => {
+            if (disposed || currentEpoch !== epoch) {
+              return;
+            }
+            if (!initialReadySeen) {
+              loseAccess(
+                "服务返回的实时消息不符合当前契约，请重新读取 Channel。",
+              );
+              return;
+            }
+            dispatch({ type: "message-created", message });
+          },
+          onResyncRequired: () => {
+            if (!disposed && currentEpoch === epoch) {
+              connect();
+            }
+          },
+          onAccessRevoked: () => {
+            if (!disposed && currentEpoch === epoch) {
+              loseAccess("该 Channel 不存在，或你当前已没有读取权限。");
+            }
+          },
+          onConnectionError: () => {
+            if (disposed || currentEpoch !== epoch || failureProbedSinceReady) {
+              return;
+            }
+            failureProbedSinceReady = true;
+            setRealtimeStatus("reconnecting");
+            failureProbeController = new AbortController();
+            const signal = failureProbeController.signal;
+            void probeSession(signal).then(
+              () =>
+                client
+                  .listMessages(workspaceID, channelID, undefined, signal)
+                  .then(
+                    () => undefined,
+                    (error: unknown) => {
+                      if (
+                        signal.aborted ||
+                        disposed ||
+                        currentEpoch !== epoch
+                      ) {
+                        return;
+                      }
+                      if (isExpiredSession(error)) {
+                        expireSession();
+                      } else if (isMissingChannel(error)) {
+                        loseAccess(channelErrorMessage(error));
+                      }
+                    },
+                  ),
+              (error: unknown) => {
+                if (signal.aborted || disposed || currentEpoch !== epoch) {
+                  return;
+                }
+                if (isExpiredSession(error)) {
+                  expireSession();
+                }
+              },
+            );
+          },
+          onContractError: (error) => {
+            if (!disposed && currentEpoch === epoch) {
+              loseAccess(error.userMessage);
+            }
+          },
+        });
+      } catch (error) {
+        dispatch({ type: "failed", message: channelErrorMessage(error) });
+      }
+    };
+
+    connect();
+    return () => {
+      disposed = true;
+      epoch += 1;
+      connection?.close();
+      historyController?.abort();
+      failureProbeController?.abort();
+    };
+  }, [
+    channelID,
+    client,
+    onSessionExpired,
+    probeSession,
+    realtimeClient,
+    reloadKey,
+    workspaceID,
+  ]);
 
   const revokeVisibleState = (error: unknown): boolean => {
     if (isExpiredSession(error)) {
@@ -92,10 +260,13 @@ export function ChannelPage({
     }
     if (error instanceof ChannelRequestError && error.status === 404) {
       setMessageBody("");
+      setMessageError(null);
+      setMessageNotice(null);
       setPendingMessage(null);
       setThreadDraft(null);
+      setThreadError(null);
       setStartedThreads({});
-      setState({ status: "error", message: error.userMessage });
+      dispatch({ type: "failed", message: error.userMessage });
       return true;
     }
     return false;
@@ -113,19 +284,7 @@ export function ChannelPage({
         channelID,
         state.olderCursor,
       );
-      const combined = [...page.messages, ...state.messages];
-      if (
-        new Set(combined.map((message) => message.id)).size !== combined.length
-      ) {
-        throw new ChannelRequestError(
-          "历史分页返回了重复 Message，请刷新 Channel 后重试。",
-        );
-      }
-      setState({
-        status: "ready",
-        messages: combined,
-        olderCursor: page.olderCursor,
-      });
+      dispatch({ type: "older-loaded", page });
     } catch (error) {
       if (!revokeVisibleState(error)) {
         setOlderError(channelErrorMessage(error));
@@ -159,18 +318,7 @@ export function ChannelPage({
         clientOperationID: operation.id,
         body: operation.body,
       });
-      setState((current) => {
-        if (
-          current.status !== "ready" ||
-          current.messages.some((message) => message.id === outcome.message.id)
-        ) {
-          return current;
-        }
-        return {
-          ...current,
-          messages: [...current.messages, outcome.message],
-        };
-      });
+      dispatch({ type: "message-created", message: outcome.message });
       setMessageBody("");
       setPendingMessage(null);
       setMessageNotice(
@@ -215,13 +363,17 @@ export function ChannelPage({
     }
   };
 
-  if (state.status === "loading") {
+  if (state.status === "connecting" || state.status === "loading-history") {
     return (
       <main className="channel-layout" aria-busy="true">
         <section className="channel-state-panel">
           <p className="section-kicker">Canonical Channel history</p>
           <h1>正在读取 Channel</h1>
-          <p role="status">正在按当前 Session 和 Channel 权限恢复消息。</p>
+          <p role="status">
+            {state.status === "connecting"
+              ? "正在先建立实时边界，避免读取历史时遗漏新消息。"
+              : "实时边界已建立，正在按当前权限读取 canonical history。"}
+          </p>
         </section>
       </main>
     );
@@ -237,7 +389,7 @@ export function ChannelPage({
           <button
             className="primary-button"
             onClick={() => {
-              setState({ status: "loading" });
+              dispatch({ type: "connect" });
               setOlderError(null);
               setReloadKey((key) => key + 1);
             }}
@@ -264,6 +416,15 @@ export function ChannelPage({
           <span>Channel</span>
           <code>entity://channel/{channelID}</code>
           <small>{state.messages.length} 条已载入</small>
+          <small
+            className={`realtime-status realtime-status--${realtimeStatus}`}
+          >
+            {realtimeStatus === "live"
+              ? "实时增量已连接"
+              : realtimeStatus === "reconnecting"
+                ? "实时增量正在自动重连"
+                : "正在建立实时增量"}
+          </small>
         </div>
       </section>
 
@@ -479,7 +640,19 @@ function channelErrorMessage(error: unknown): string {
 }
 
 function isExpiredSession(error: unknown): boolean {
-  return error instanceof ChannelRequestError && error.status === 401;
+  return (
+    (error instanceof ChannelRequestError ||
+      error instanceof AuthRequestError) &&
+    error.status === 401
+  );
+}
+
+function isMissingChannel(error: unknown): boolean {
+  return error instanceof ChannelRequestError && error.status === 404;
+}
+
+async function probeBrowserSession(signal?: AbortSignal): Promise<void> {
+  await browserAuthClient.resolveSession(signal);
 }
 
 function formatTimestamp(value: string): string {

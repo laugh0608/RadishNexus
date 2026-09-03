@@ -148,7 +148,7 @@ RADISHNEXUS_WEB_ROOT=/srv/radishnexus/web
 
 入口复用同一 Session、Host、可信代理和当前 Workspace / Channel 权限，不接受 query 或身份 Header。`Last-Event-ID` 只在当前 process generation 与最近 1024 个 Message ID 窗口内恢复；过期、跨进程、跨 Channel、未来或非规范 cursor 都要求 canonical resync。hub 不缓存正文或权限结果，逐事件加载 canonical Message projection，restricted Thread reply 对无权订阅者保持不可见。
 
-唯一 `http.Server` 的普通请求仍保留 15 秒 `WriteTimeout`；只有已认证且授权的 SSE 响应用 `ResponseController` 清除该全局 deadline，每次 write / flush 另有 5 秒上限并每 15 秒 heartbeat 复权。资源上限为每进程 256、每用户 4、每 Channel 64；shutdown 先唤醒并关闭 hub。固定 Caddy Compose 门禁已证明连接保持打开时 `ready` 与 `message.created` 会及时 flush。完整合同见 [ADR-0020](../docs/adr/0020-session-scoped-single-process-message-realtime.md)。canonical Web 页面本切片仍只使用短请求，尚未接入 SSE 客户端状态机。
+唯一 `http.Server` 的普通请求仍保留 15 秒 `WriteTimeout`；只有已认证且授权的 SSE 响应用 `ResponseController` 清除该全局 deadline，每次 write / flush 另有 5 秒上限并每 15 秒 heartbeat 复权。资源上限为每进程 256、每用户 4、每 Channel 64；shutdown 先唤醒并关闭 hub。固定 Caddy Compose 门禁已证明连接保持打开时 `ready` 与 `message.created` 会及时 flush。完整合同见 [ADR-0020](../docs/adr/0020-session-scoped-single-process-message-realtime.md)。canonical Channel Web 已接入严格客户端状态机：先建立 `ready` 边界，再读取 canonical history，并对期间增量去重合并；写入仍使用既有短请求。
 
 ## Thread、Decision 与 Ticket 协作短请求
 

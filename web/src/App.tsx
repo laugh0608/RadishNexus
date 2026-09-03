@@ -20,6 +20,10 @@ import {
   channelPagePath,
   type ChannelMessageClient,
 } from "./channel/api";
+import {
+  browserChannelRealtimeClient,
+  type ChannelRealtimeClient,
+} from "./channel/realtime";
 import { CollaborationPage } from "./collaboration/CollaborationPage";
 import {
   browserCollaborationClient,
@@ -84,6 +88,7 @@ interface AppProps {
   pathname?: string;
   authClient?: AuthClient;
   channelClient?: ChannelMessageClient;
+  channelRealtimeClient?: ChannelRealtimeClient;
   collaborationClient?: CollaborationClient;
   loadDeployment?: DeploymentNexusViewLoader;
   navigate?: (path: string) => void;
@@ -93,6 +98,7 @@ export function App({
   pathname = window.location.pathname,
   authClient = browserAuthClient,
   channelClient = browserChannelMessageClient,
+  channelRealtimeClient = browserChannelRealtimeClient,
   collaborationClient = browserCollaborationClient,
   loadDeployment = loadDeploymentNexusViewData,
   navigate = (path) => window.location.assign(path),
@@ -106,6 +112,7 @@ export function App({
       route={route}
       authClient={authClient}
       channelClient={channelClient}
+      channelRealtimeClient={channelRealtimeClient}
       collaborationClient={collaborationClient}
       loadDeployment={loadDeployment}
       navigate={navigate}
@@ -138,6 +145,7 @@ function AuthenticatedApp({
   route,
   authClient,
   channelClient,
+  channelRealtimeClient,
   collaborationClient,
   loadDeployment,
   navigate,
@@ -145,6 +153,7 @@ function AuthenticatedApp({
   route: Exclude<AppRoute, { kind: "prototype" }>;
   authClient: AuthClient;
   channelClient: ChannelMessageClient;
+  channelRealtimeClient: ChannelRealtimeClient;
   collaborationClient: CollaborationClient;
   loadDeployment: DeploymentNexusViewLoader;
   navigate: (path: string) => void;
@@ -220,6 +229,7 @@ function AuthenticatedApp({
       session={authentication.session}
       authClient={authClient}
       channelClient={channelClient}
+      channelRealtimeClient={channelRealtimeClient}
       collaborationClient={collaborationClient}
       loadDeployment={loadDeployment}
       navigate={navigate}
@@ -313,6 +323,7 @@ function SignedInShell({
   session,
   authClient,
   channelClient,
+  channelRealtimeClient,
   collaborationClient,
   loadDeployment,
   navigate,
@@ -322,6 +333,7 @@ function SignedInShell({
   session: SessionContext;
   authClient: AuthClient;
   channelClient: ChannelMessageClient;
+  channelRealtimeClient: ChannelRealtimeClient;
   collaborationClient: CollaborationClient;
   loadDeployment: DeploymentNexusViewLoader;
   navigate: (path: string) => void;
@@ -329,6 +341,12 @@ function SignedInShell({
 }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+  const probeSession = useCallback(
+    async (signal?: AbortSignal) => {
+      await authClient.resolveSession(signal);
+    },
+    [authClient],
+  );
   const currentWorkspace =
     route.kind === "deployment" ||
     route.kind === "channel" ||
@@ -404,6 +422,8 @@ function SignedInShell({
           channelID={route.channelID}
           client={channelClient}
           onSessionExpired={onSignedOut}
+          probeSession={probeSession}
+          realtimeClient={channelRealtimeClient}
         />
       ) : route.kind === "collaboration" ? (
         <CollaborationPage

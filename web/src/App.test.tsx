@@ -7,6 +7,7 @@ import {
   type SessionContext,
 } from "./auth/api";
 import type { ChannelMessageClient } from "./channel/api";
+import type { ChannelRealtimeClient } from "./channel/realtime";
 import type {
   CollaborationClient,
   CollaborationView,
@@ -182,6 +183,7 @@ describe("authenticated Web Shell", () => {
         pathname="/workspaces/wrk_main/channels/chn_team"
         authClient={testAuthClient()}
         channelClient={channelClient}
+        channelRealtimeClient={testRealtimeClient()}
       />,
     );
 
@@ -341,6 +343,15 @@ function testChannelClient(
     createMessage: vi.fn(),
     startThread: vi.fn(),
     ...overrides,
+  };
+}
+
+function testRealtimeClient(): ChannelRealtimeClient {
+  return {
+    connect: vi.fn((_workspaceID, _channelID, handlers) => {
+      handlers.onReady();
+      return { close: vi.fn() };
+    }),
   };
 }
 

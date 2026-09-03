@@ -2,7 +2,7 @@
 
 状态：方向基线，M0.5 / M1 首批纵向边界已冻结
 
-日期：2026-08-31
+日期：2026-09-03
 
 ## 架构目标
 
@@ -200,6 +200,8 @@ M0 契约把不可变领域事件事实与可变投递状态作逻辑分离，�
 - OpenTelemetry 兼容日志、指标和追踪边界。
 
 独立搜索集群、Kubernetes 和高可用拓扑都在真实规模需求出现后引入。
+
+canonical Channel Web 对 SSE 使用“先建立连接并收到 `ready`、再读取 canonical history、随后合并缓冲增量”的状态机。原生 EventSource 负责在同一进程 generation 内携带 `Last-Event-ID` 重连；`resync-required` 必须建立新边界并全量重读，`access-revoked` 必须清空已渲染正文和草稿。写 command 继续使用具备 CSRF 与幂等语义的短请求，不通过 SSE 发送，也不建立隐藏 polling fallback。Document 协同在自身协议、权限和恢复合同冻结前不得复用或扩展这条 Message transport。
 
 ## API 原则
 

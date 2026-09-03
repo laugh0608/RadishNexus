@@ -106,7 +106,7 @@ Outbox worker 能缩小提交后进程崩溃造成的通知空窗，broker 能�
 
 ## 迁移与验证
 
-本 ADR 不新增 migration、第三方依赖或 Web 接入。接受证据包括：
+本 ADR 自身不新增 migration、第三方依赖或 Web 接入。接受证据包括：
 
 1. hub 单元与竞态测试：canonical cursor、在线增量、断线回放、generation / future / stale cursor、慢消费者、三层连接上限、access wake 和 shutdown；
 2. application / PostgreSQL 测试：只在首次事务提交后通知，精确 retry 不重复通知，Channel 与 restricted Thread 当前权限过滤；
@@ -114,7 +114,9 @@ Outbox worker 能缩小提交后进程崩溃造成的通知空窗，broker 能�
 4. 真实 Compose + Caddy HTTPS：连接保持打开时及时收到 `ready`，短请求创建 Message 后及时收到 `message.created`，Go server 与 PostgreSQL 仍不发布宿主端口；
 5. `go test -race`、PostgreSQL integration、Compose 和仓库门禁全部通过。
 
-上述证据已于 2026-09-03 全部通过：正式 Go server 的全量 `go test -race`、真实 PostgreSQL + Session integration、固定 Caddy 2.11.4 的全新 Compose HTTPS `ready` / `message.created` 流式验证，以及仓库门禁均成功。可丢弃实时实验及其独立 CI job 已删除，竞态覆盖并入正式 Go Server 门禁。Web Storage 仍只由代码和自动化复核；在另一个明确切片完成客户端状态机和真实浏览器断线验收前，不把 SSE 接入 canonical Web 页面。
+上述证据已于 2026-09-03 全部通过：正式 Go server 的全量 `go test -race`、真实 PostgreSQL + Session integration、固定 Caddy 2.11.4 的全新 Compose HTTPS `ready` / `message.created` 流式验证，以及仓库门禁均成功。可丢弃实时实验及其独立 CI job 已删除，竞态覆盖并入正式 Go Server 门禁。
+
+同日的后续独立切片已把该合同接入 canonical Channel Web：客户端先等待 `ready`，再读取 canonical history 并合并期间缓冲的增量；原生 EventSource 负责携带 `Last-Event-ID` 自动重连，`resync-required` 建立新边界并全量重读，`access-revoked` 清空正文和草稿。真实 PostgreSQL + production build + 固定 Caddy HTTPS + 内置浏览器已经证明跨账号增量、Caddy 重启后恢复、restricted Thread reply 不泄漏、heartbeat 撤权、登出重登和 390px 布局。Web Storage 仍只由代码和自动化复核，未读取浏览器存储；写 command、canonical history 与本 ADR 的服务端事件合同均未改变。
 
 ## 规范依据
 
