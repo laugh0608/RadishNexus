@@ -6,7 +6,7 @@
 
 产品定义、架构基线、仓库治理基线与 M0.5 Golden Path / M1 Web 平台基础纵向原型。
 
-当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Thread / Decision / Ticket Nexus View 读取查询和 Session transport 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和安全读取已经建立。正式 Environment、环境级写授权、显式终态 staging Deployment、`deploys` 关系、`deployment.recorded` 投影与 Workspace 作用域安全读取已经通过真实 PostgreSQL 验证。PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验和 Activity 重建已经由 ADR-0010、显式 CLI 与双实例演练建立。上述 M0 正式服务、Web 代表原型与恢复基线已通过 PR #9 的远端 `Candidate Quality`，使用 merge commit 晋级 `master` 并 fast-forward 回流 `dev`。正式 `web/` React + TypeScript 基线现已覆盖 Decision、CI Run 与 Deployment Nexus View 代表交互；本地账号的公共 login / session / logout transport、第一个 Session 作用域的 Deployment Nexus View 业务读取端点，以及同源 authenticated Web Shell 已经建立。真实 PostgreSQL + production Web build + HTTPS 浏览器现已从登录、Workspace 选择进入 canonical Deployment 并完成登出。首个正式 `deploy/` Docker Compose 开发拓扑也已从全新命名 volume 完成固定工件、显式 migration / bootstrap、唯一 Caddy HTTPS origin、文件 Secret、持久化 PostgreSQL 和认证闭环演练。Channel / Message / messaging-origin Thread 的最小字段、幂等、权限、来源与实时恢复语义已由 ADR-0017 冻结；migration 006、正式 command application service、canonical Message application query 与 PostgreSQL / 备份恢复验证已经落地。ADR-0018 已冻结并实现单 Channel 历史、发送和从 Message 发起 Thread 的 Session 作用域短请求；canonical Channel Web 页面也已接入权限过滤分页、幂等发送和结构化 Thread 来源，并通过真实 Session + PostgreSQL + production build + HTTPS 浏览器复核。ADR-0019 与 migration 007 现已进一步冻结并实现 Thread → Proposed Decision → 人工 Accepted Decision → Ticket 的 Session 路由、结构化来源和不可变 command receipt；对应 canonical Web 页面已通过 contributor / decider 双账号真实浏览器验收。ADR-0020 现已接受并实现唯一正式 Go server 内的 Session 作用域单进程 Message SSE，真实 PostgreSQL、竞态测试与固定 Caddy Compose HTTPS 已证明 `ready`、`message.created`、回放、撤权、资源上限和关闭边界；旧的可丢弃实时实验已删除。canonical Channel Web 现已按“先建立 `ready` 边界、再读取 canonical history、随后合并增量”接入 SSE，并通过真实 PostgreSQL、production build、固定 Caddy HTTPS 与内置浏览器验收；完整产品导航、插件 runtime、公网生产拓扑和 Flutter 客户端仍未建立。
+当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Thread / Decision / Ticket Nexus View 读取查询和 Session transport 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和安全读取已经建立。正式 Environment、环境级写授权、显式终态 staging Deployment、`deploys` 关系、`deployment.recorded` 投影与 Workspace 作用域安全读取已经通过真实 PostgreSQL 验证。PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验和 Activity 重建已经由 ADR-0010、显式 CLI 与双实例演练建立。上述 M0 正式服务、Web 代表原型与恢复基线已通过 PR #9 的远端 `Candidate Quality`，使用 merge commit 晋级 `master` 并 fast-forward 回流 `dev`。正式 `web/` React + TypeScript 基线现已覆盖 Decision、CI Run 与 Deployment Nexus View 代表交互；本地账号的公共 login / session / logout transport、第一个 Session 作用域的 Deployment Nexus View 业务读取端点，以及同源 authenticated Web Shell 已经建立。真实 PostgreSQL + production Web build + HTTPS 浏览器现已从登录、Workspace 选择进入 canonical Deployment 并完成登出。首个正式 `deploy/` Docker Compose 开发拓扑也已从全新命名 volume 完成固定工件、显式 migration / bootstrap、唯一 Caddy HTTPS origin、文件 Secret、持久化 PostgreSQL 和认证闭环演练。Channel / Message / messaging-origin Thread 的最小字段、幂等、权限、来源与实时恢复语义已由 ADR-0017 冻结；migration 006、正式 command application service、canonical Message application query 与 PostgreSQL / 备份恢复验证已经落地。ADR-0018 已冻结并实现单 Channel 历史、发送和从 Message 发起 Thread 的 Session 作用域短请求；canonical Channel Web 页面也已接入权限过滤分页、幂等发送和结构化 Thread 来源，并通过真实 Session + PostgreSQL + production build + HTTPS 浏览器复核。ADR-0019 与 migration 007 现已进一步冻结并实现 Thread → Proposed Decision → 人工 Accepted Decision → Ticket 的 Session 路由、结构化来源和不可变 command receipt；对应 canonical Web 页面已通过 contributor / decider 双账号真实浏览器验收。ADR-0020 现已接受并实现唯一正式 Go server 内的 Session 作用域单进程 Message SSE，真实 PostgreSQL、竞态测试与固定 Caddy Compose HTTPS 已证明 `ready`、`message.created`、回放、撤权、资源上限和关闭边界；旧的可丢弃实时实验已删除。canonical Channel Web 现已按“先建立 `ready` 边界、再读取 canonical history、随后合并增量”接入 SSE，并通过真实 PostgreSQL、production build、固定 Caddy HTTPS 与内置浏览器验收。ADR-0021 阶段 A 已完成共享 Markdown corpus、真实浏览器与 macOS 中文 IME 对照，选择 Tiptap 3 / ProseMirror 进入后续内存协同实验；ADR 仍为“提议”，Yjs 和正式 Document 合同尚未进入实现。完整产品导航、插件 runtime、公网生产拓扑和 Flutter 客户端仍未建立。
 
 ## 当前结论
 
@@ -16,7 +16,7 @@
 - 核心采用 source-available 和单独书面授权模式；书面授权可以免费。
 - SDK、公共协议和插件开放源码，并使用各自独立许可证。
 - Web App 是第一产品形态，采用 React + TypeScript。
-- 首个正式 Web 基线使用 Node 24 LTS、npm 11、React 19、Vite 8 与 TypeScript 6；router、状态库、编辑器和组件库尚未冻结。
+- 首个正式 Web 基线使用 Node 24 LTS、npm 11、React 19、Vite 8 与 TypeScript 6；router、状态库、正式 Document 编辑器依赖和组件库尚未冻结。
 - 前期不开发移动端和 PC 客户端。
 - 后续客户端统一采用 Flutter，不采用 Tauri。
 - 服务端以 Go 为主，Rust 只进入有明确收益的边界。
@@ -193,7 +193,8 @@
 34. 390px 下 viewport、document 与 body width 均为 390，无可见元素横向越界；两套 editor `clientWidth === scrollWidth === 340`，长文档保留 `Section 400` / `item 400.2` 并在 editor 内纵向滚动；
 35. 内置浏览器控制层不支持 `Input.imeSetComposition`，因此自动化 Unicode 直接输入没有被冒充为 IME 证据；项目所有者随后在同一隔离页面用 macOS 中文输入法分别向两套候选输入 `萝卜输入测试`，确认无双写、吞字或 selection 跳动，并在分别聚焦后用一次 `⌘Z` 完整撤销各自 composition；
 36. 实验 28 项 Node test、production build、dependency gate 与 high-level npm audit 已通过；合并两套候选与 corpus 的对照 bundle 为 758.85 kB / 238.81 kB gzip，Vite 的大 chunk warning 被保留为成本证据，没有通过提高阈值隐藏。Web Storage 与实时 transport 只经源码自动化门禁复核，未读取浏览器存储；
-37. ADR-0021 阶段 A 已完成并选择 Tiptap 3 / ProseMirror 进入阶段 B：Lexical 没有证明能显著降低 React、IME 或可访问性装配成本，Tiptap / ProseMirror 的 schema、transaction 与官方 Yjs binding 更贴合既定第一候选判据。Tiptap Markdown Beta、未知节点静默丢失和 sanitizer 风险继续显式保留；阶段 B 依赖尚未授权或安装，ADR 仍为“提议”。
+37. ADR-0021 阶段 A 已完成并选择 Tiptap 3 / ProseMirror 进入阶段 B：Lexical 没有证明能显著降低 React、IME 或可访问性装配成本，Tiptap / ProseMirror 的 schema、transaction 与官方 Yjs binding 更贴合既定第一候选判据。Tiptap Markdown Beta、未知节点静默丢失和 sanitizer 风险继续显式保留；阶段 B 依赖尚未授权或安装，ADR 仍为“提议”；
+38. 阶段 B 只读依赖预检确认拟使用 `yjs@13.6.32`、`@tiptap/extension-collaboration@3.31.2`、`@tiptap/y-tiptap@3.0.9` 与 `y-protocols@1.0.7`；npm dry-run 还会新增 `lib0@0.2.117` 和 `isomorphic.js@0.2.5`，六项均为 MIT 且没有 `preinstall / install / postinstall`。预检未改变 package、lockfile 或正式 Web 依赖，临时 cache 已清理。
 
 ## 最近完成的浏览器验收（2026-09-02）
 
@@ -223,17 +224,17 @@
 22. 临时撤销 contributor 的 restricted Thread membership 后，Thread 的后续创建命令真实返回 `404`，已渲染标题、未提交草稿与已有成功结果全部清除；Decision 仍可读，但来源只显示不泄漏类型、ID、关系名、标题或时间的 restricted evidence 占位；
 23. Web Storage 仅通过源码搜索与现有自动化测试复核，未读取浏览器存储；验收结束后恢复浏览器视口、正常停止 fixture，并按完整 SHA-256 指纹删除临时证书、复核登录钥匙串无匹配，再删除导出文件。
 
-## 下一步
+## 明日事项（2026-09-04）
 
 下一优先级是 ADR-0021 阶段 B 的可丢弃 Yjs 内存收敛实验，不直接开始正式 CRDT、WebSocket 或大面积页面实现：
 
-1. 先核对 Yjs 当前精确版本、直接 / 间接依赖、许可证、registry integrity、lifecycle script 和清理范围，并取得项目所有者对独立实验 lockfile 变化的明确授权；
+1. 先由项目所有者确认是否授权把已预检的四个精确直接依赖加入独立 `experiments/document-editor` package；若授权，固定 `ignore-scripts=true`，复核 lockfile registry、SHA-512、完整 transitive license、lifecycle manifest 与 high-level audit，未授权前不安装；
 2. 只用选定的 Tiptap / ProseMirror、两个内存 `Y.Doc` 和可控 update 传递验证并发编辑、重复 / 乱序 / 延迟 update、断开恢复、单次初始化、局部 undo、schema / 损坏 / 超限拒绝和 snapshot + updates 恢复；不安装网络或持久化 provider；
 3. 依据阶段 B 实测冻结 Document 最小字段、revision、权限、EntityLink、事件、备份和导出合同；这些审查完成前 ADR-0021 仍保持“提议”。
 
 免费书面授权模板和版本化结构化导入导出仍是独立 M0 / M1 缺口，在 Document 技术评估后再按路线图逐项推进。当前 `dev` 已包含消息边界、正式 PostgreSQL command / query、Session transport、Thread → Decision → Ticket 协作闭环和已完成验收的 canonical Channel 实时 Web 闭环。所有这些变更均未晋级 `master`，创建阶段 PR 或写入远程状态仍需项目所有者另行明确授权。
 
-当前完成线：正式数据库、application service 与 Session transport 已证明 Message 能以稳定身份和幂等 command 进入 Channel、能够不复制正文地发起 Thread，并以不可变 receipt 和结构化关系继续形成 Proposed Decision、人工 Accepted Decision 与 Ticket；对应 canonical 协作 Web 页面已经通过 contributor / decider 双账号真实浏览器验收。正式单进程 SSE 已在唯一 Go server 与 Caddy HTTPS 下证明最小化增量、当前权限、有界回放、撤权、慢消费者、连接上限和关闭语义；canonical Channel Web 已按先边界、后历史、再增量的状态机消费该入口，并完成跨账号增量、重连、restricted reply、撤权、登出重登与窄屏真实浏览器验收。
+当前完成线：正式数据库、application service 与 Session transport 已证明 Message 能以稳定身份和幂等 command 进入 Channel、能够不复制正文地发起 Thread，并以不可变 receipt 和结构化关系继续形成 Proposed Decision、人工 Accepted Decision 与 Ticket；对应 canonical 协作 Web 页面已经通过 contributor / decider 双账号真实浏览器验收。正式单进程 SSE 已在唯一 Go server 与 Caddy HTTPS 下证明最小化增量、当前权限、有界回放、撤权、慢消费者、连接上限和关闭语义；canonical Channel Web 已按先边界、后历史、再增量的状态机消费该入口，并完成跨账号增量、重连、restricted reply、撤权、登出重登与窄屏真实浏览器验收。Document 编辑器阶段 A 已用同一 corpus、真实浏览器与系统中文 IME 完成 Tiptap / Lexical 对照，并选出 Tiptap 3 / ProseMirror 进入下一轮隔离实验，但尚未形成正式产品依赖或公共合同。
 
 当前停止线：不把 SSE replay 当作权威存储，不把引用、旧 membership、客户端身份或订阅状态当作授权；不把写 command 迁移到 SSE，不建立隐藏 polling fallback；不建立完整聊天 UI、附件、表情、搜索、未读、通知、多副本 fan-out、独立消息中间件或 WebSocket。Document 合同冻结前也不接入新的实时 transport。
 
@@ -241,7 +242,7 @@
 
 - PostgreSQL 正式支持版本矩阵，以及生产升级的 forward repair 与恢复流程；
 - EntityID 生成算法，Document、Repository 等尚未切片类型的前缀和后续 PostgreSQL schema；
-- 文档编辑器和 CRDT；
+- Document 正式依赖、业务合同和 CRDT 阶段 B；
 - 首版插件运行方式；
 - Initiative、Component 与 Project 的首版导航表现；
 - Decision 的复核周期和替代交互；
