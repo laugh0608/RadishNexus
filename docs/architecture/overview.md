@@ -20,7 +20,7 @@ RadishNexus 首期架构必须同时服务于四个目标：
 ```text
 React + TypeScript Web App
             │
-      HTTP API + WebSocket
+      HTTP API + SSE / future WebSocket
             │
 ┌────────── Go Server ──────────┐
 │ Identity / Workspace / RBAC   │
@@ -44,7 +44,7 @@ React + TypeScript Web App
 
 Go 承担首期主要业务能力：
 
-- HTTP API 和 WebSocket；
+- HTTP API、M0.5 单进程 SSE 和后续版本化 WebSocket；
 - 身份、Workspace、Project 和 RBAC；
 - 私聊、频道、消息和 Thread；
 - Decision、工单及其状态流；
@@ -194,7 +194,8 @@ M0 契约把不可变领域事件事实与可变投递状态作逻辑分离，�
 - PostgreSQL：核心业务、插件命名空间、Outbox 和初始全文搜索；
 - Redis：在线状态、短期缓存、限流和可丢失的实时协调状态；
 - S3 兼容对象存储：附件、图片、文档资源和可选构建制品；
-- WebSocket：消息、通知、在线状态和协作事件；
+- SSE：M0.5 单进程、Session 作用域的 Message 单向增量；
+- WebSocket：M2 出现双向 presence、typing 或协作控制需求后的版本化目标；
 - Docker Compose：首个正式自部署方式；
 - OpenTelemetry 兼容日志、指标和追踪边界。
 
@@ -203,7 +204,7 @@ M0 契约把不可变领域事件事实与可变投递状态作逻辑分离，�
 ## API 原则
 
 - 对 Web、Flutter 和外部开发者提供稳定的 HTTP API；
-- 实时增量通过版本化 WebSocket 协议传输；
+- M0.5 Message 单向实时增量使用可回到 canonical history 的版本化 SSE 事件；M2 双向实时能力另行冻结 WebSocket 协议；
 - 公共 API 生成机器可读契约；
 - 插件不能直接访问核心数据库表；
 - 外部写操作必须支持幂等键、权限检查和审计；

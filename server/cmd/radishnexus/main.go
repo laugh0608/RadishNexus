@@ -18,6 +18,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/httptransport"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/realtime"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/runtimeconfig"
 )
 
@@ -84,10 +85,20 @@ func run() error {
 			loginPasswordConcurrencyLimit,
 		),
 	)
+	realtimeConfig, err := realtime.DefaultConfig()
+	if err != nil {
+		return err
+	}
+	realtimeHub, err := realtime.NewHub(realtimeConfig)
+	if err != nil {
+		return fmt.Errorf("configure Message realtime hub: %w", err)
+	}
+	defer realtimeHub.Shutdown()
 	nexusViewService := goldenpath.NewService(
 		goldenpostgres.New(pool),
 		goldenpath.CryptoIDGenerator{},
 		goldenpath.SystemClock{},
+		goldenpath.WithMessageCreatedNotifier(messageRealtimeNotifier{hub: realtimeHub}),
 	)
 	deploymentNexusViewHandler := httptransport.NewDeploymentNexusViewHandler(
 		authService,
@@ -101,6 +112,13 @@ func run() error {
 		sessionPolicy,
 		proxyPolicy,
 	)
+	channelEventsHandler := httptransport.NewChannelEventsHandler(
+		authService,
+		nexusViewService,
+		realtimeHub,
+		sessionPolicy,
+		proxyPolicy,
+	)
 	collaborationHandler := httptransport.NewCollaborationHandler(
 		authService,
 		nexusViewService,
@@ -110,7 +128,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(pool, authHandler, channelMessagesHandler, collaborationHandler, deploymentNexusViewHandler, webHandler),
+		Handler:           newHandler(pool, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, webHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -132,6 +150,7 @@ func run() error {
 		}
 		return nil
 	case <-signals.Done():
+		realtimeHub.Shutdown()
 		shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := server.Shutdown(shutdownContext); err != nil {
@@ -139,6 +158,18 @@ func run() error {
 		}
 		return nil
 	}
+}
+
+type messageRealtimeNotifier struct {
+	hub *realtime.Hub
+}
+
+func (notifier messageRealtimeNotifier) NotifyMessageCreated(notification goldenpath.MessageCreatedNotification) {
+	notifier.hub.NotifyMessageCreated(realtime.MessageNotification{
+		WorkspaceID: notification.WorkspaceID,
+		ChannelID:   notification.ChannelID,
+		MessageID:   notification.MessageID,
+	})
 }
 
 type databasePinger interface {
@@ -149,6 +180,7 @@ func newHandler(
 	database databasePinger,
 	authHandler http.Handler,
 	channelMessagesHandler http.Handler,
+	channelEventsHandler http.Handler,
 	collaborationHandler http.Handler,
 	deploymentNexusViewHandler http.Handler,
 	webHandler http.Handler,
@@ -172,6 +204,8 @@ func newHandler(
 	mux.Handle("/api/v1/auth/", authHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages", channelMessagesHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages/", channelMessagesHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/events", channelEventsHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/events/", channelEventsHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/threads/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/decisions/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/tickets/", collaborationHandler)

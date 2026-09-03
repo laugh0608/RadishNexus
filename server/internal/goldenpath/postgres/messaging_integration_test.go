@@ -3,6 +3,7 @@
 package postgres_test
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -23,6 +24,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/httptransport"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/realtime"
 )
 
 func assertMessagingSlice(
@@ -31,6 +33,7 @@ func assertMessagingSlice(
 	pool *pgxpool.Pool,
 	store *goldenpostgres.Store,
 	service *goldenpath.Service,
+	notifier *committedMessageRecorder,
 ) {
 	t.Helper()
 	contributor := principal("usr_contributor")
@@ -76,12 +79,20 @@ func assertMessagingSlice(
 		first.Message.ThreadID != nil {
 		t.Fatalf("created Message = %#v", first)
 	}
+	if notifications := notifier.snapshot(); len(notifications) != 1 || notifications[0] != (goldenpath.MessageCreatedNotification{
+		WorkspaceID: "wrk_main", ChannelID: "chn_restricted", MessageID: first.Message.ID,
+	}) {
+		t.Fatalf("committed Message notifications = %#v", notifications)
+	}
 	duplicate, err := service.CreateMessage(ctx, invocation(contributor, "cor_message_retry"), input)
 	if err != nil {
 		t.Fatalf("duplicate CreateMessage() error = %v", err)
 	}
 	if duplicate.Created || duplicate.Message.ID != first.Message.ID || duplicate.Message.Body != body {
 		t.Fatalf("duplicate Message = %#v, first = %#v", duplicate, first)
+	}
+	if notifications := notifier.snapshot(); len(notifications) != 1 {
+		t.Fatalf("duplicate Message notifications = %#v", notifications)
 	}
 	changed := input
 	changed.Body = "changed retry body"
@@ -214,7 +225,7 @@ func assertMessagingSlice(
 	assertMessagingAtomicRollback(t, ctx, pool, store, service, contributor)
 	assertConcurrentMessageIdempotency(t, ctx, pool, store, contributor)
 	assertMessagingDatabaseConstraints(t, ctx, pool, first.Message.ID, thread.ID)
-	assertMessagingHTTPTransport(t, ctx, pool, service)
+	assertMessagingHTTPTransport(t, ctx, pool, store, service)
 
 	if _, err := store.RebuildActivityProjection(ctx); err != nil {
 		t.Fatalf("RebuildActivityProjection() after messaging error = %v", err)
@@ -233,10 +244,28 @@ func assertMessagingSlice(
 	}
 }
 
+type committedMessageRecorder struct {
+	mu            sync.Mutex
+	notifications []goldenpath.MessageCreatedNotification
+}
+
+func (recorder *committedMessageRecorder) NotifyMessageCreated(notification goldenpath.MessageCreatedNotification) {
+	recorder.mu.Lock()
+	defer recorder.mu.Unlock()
+	recorder.notifications = append(recorder.notifications, notification)
+}
+
+func (recorder *committedMessageRecorder) snapshot() []goldenpath.MessageCreatedNotification {
+	recorder.mu.Lock()
+	defer recorder.mu.Unlock()
+	return append([]goldenpath.MessageCreatedNotification(nil), recorder.notifications...)
+}
+
 func assertMessagingHTTPTransport(
 	t *testing.T,
 	ctx context.Context,
 	pool *pgxpool.Pool,
+	store *goldenpostgres.Store,
 	service *goldenpath.Service,
 ) {
 	t.Helper()
@@ -459,13 +488,7 @@ func assertMessagingHTTPTransport(
 		t.Fatalf("restore Channel membership after HTTP: %v", err)
 	}
 
-	if _, err := pool.Exec(ctx, `
-		UPDATE radishnexus.user_sessions
-		SET revoked_at = $1
-		WHERE id = 'ses_messaging_http'
-	`, now); err != nil {
-		t.Fatalf("revoke messaging HTTP Session: %v", err)
-	}
+	assertMessagingRealtimeHTTPTransport(t, ctx, pool, store, authService, sessionToken, csrfToken, now)
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, messagingHTTPRequest(
 		http.MethodGet,
@@ -476,6 +499,163 @@ func assertMessagingHTTPTransport(
 	))
 	if response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), `"code":"unauthenticated"`) {
 		t.Fatalf("HTTP revoked Session = status %d, body %q", response.Code, response.Body.String())
+	}
+}
+
+type integrationRealtimeNotifier struct {
+	hub *realtime.Hub
+}
+
+func (notifier integrationRealtimeNotifier) NotifyMessageCreated(notification goldenpath.MessageCreatedNotification) {
+	notifier.hub.NotifyMessageCreated(realtime.MessageNotification{
+		WorkspaceID: notification.WorkspaceID,
+		ChannelID:   notification.ChannelID,
+		MessageID:   notification.MessageID,
+	})
+}
+
+func assertMessagingRealtimeHTTPTransport(
+	t *testing.T,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	store *goldenpostgres.Store,
+	authService *authn.Service,
+	sessionToken string,
+	csrfToken string,
+	now time.Time,
+) {
+	t.Helper()
+	hub, err := realtime.NewHub(realtime.Config{
+		Generation: "postgres-integration", ReplayLimit: 16,
+		ConnectionLimit: 8, UserConnectionLimit: 4, ChannelConnectionLimit: 4,
+	})
+	if err != nil {
+		t.Fatalf("NewHub() error = %v", err)
+	}
+	defer hub.Shutdown()
+	service := goldenpath.NewService(
+		store,
+		goldenpath.CryptoIDGenerator{},
+		fixedClock{now: now},
+		goldenpath.WithMessageCreatedNotifier(integrationRealtimeNotifier{hub: hub}),
+	)
+	server := httptest.NewUnstartedServer(nil)
+	origin := "https://" + server.Listener.Addr().String()
+	sessionPolicy, err := httptransport.NewBrowserSessionPolicy(origin)
+	if err != nil {
+		t.Fatalf("NewBrowserSessionPolicy() error = %v", err)
+	}
+	proxyPolicy, err := httptransport.NewTrustedProxyPolicy("127.0.0.1/32")
+	if err != nil {
+		t.Fatalf("NewTrustedProxyPolicy() error = %v", err)
+	}
+	events := httptransport.NewChannelEventsHandler(authService, service, hub, sessionPolicy, proxyPolicy)
+	messages := httptransport.NewChannelMessagesHandler(authService, service, sessionPolicy, proxyPolicy)
+	mux := http.NewServeMux()
+	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/events", events)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages", messages)
+	server.Config.Handler = httptransport.WithRequestID(mux)
+	server.StartTLS()
+	defer server.Close()
+
+	eventRequest, err := http.NewRequest(
+		http.MethodGet,
+		server.URL+"/api/v1/workspaces/wrk_main/channels/chn_project/events",
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eventRequest.AddCookie(&http.Cookie{Name: httptransport.SessionCookieName, Value: sessionToken})
+	eventResponse, err := server.Client().Do(eventRequest)
+	if err != nil {
+		t.Fatalf("open PostgreSQL Message events: %v", err)
+	}
+	defer eventResponse.Body.Close()
+	reader := bufio.NewReader(eventResponse.Body)
+	if ready := readIntegrationSSEEvent(t, reader); !strings.Contains(ready, "event: ready\n") ||
+		!strings.Contains(ready, "id: ") || strings.Contains(ready, "message") {
+		t.Fatalf("PostgreSQL realtime ready = %q", ready)
+	}
+
+	createBody := `{"client_operation_id":"http:realtime:1","body":"Committed realtime message."}`
+	createRequest, err := http.NewRequest(
+		http.MethodPost,
+		server.URL+"/api/v1/workspaces/wrk_main/channels/chn_project/messages",
+		strings.NewReader(createBody),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	createRequest.Header.Set("Content-Type", "application/json")
+	createRequest.Header.Set("Origin", origin)
+	createRequest.Header.Set(httptransport.CSRFHeaderName, csrfToken)
+	createRequest.AddCookie(&http.Cookie{Name: httptransport.SessionCookieName, Value: sessionToken})
+	createRequest.AddCookie(&http.Cookie{Name: httptransport.CSRFCookieName, Value: csrfToken})
+	createResponse, err := server.Client().Do(createRequest)
+	if err != nil {
+		t.Fatalf("create PostgreSQL realtime Message: %v", err)
+	}
+	createResponse.Body.Close()
+	if createResponse.StatusCode != http.StatusCreated {
+		t.Fatalf("create PostgreSQL realtime Message status = %d", createResponse.StatusCode)
+	}
+	messageEvent := readIntegrationSSEEvent(t, reader)
+	if !strings.Contains(messageEvent, "event: message.created\n") ||
+		!strings.Contains(messageEvent, `"body":"Committed realtime message."`) ||
+		strings.Contains(messageEvent, "client_operation") {
+		t.Fatalf("PostgreSQL Message event = %q", messageEvent)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE radishnexus.user_sessions
+		SET revoked_at = $1
+		WHERE id = 'ses_messaging_http'
+	`, now); err != nil {
+		t.Fatalf("revoke messaging HTTP Session: %v", err)
+	}
+	hub.NotifyChannelAccessChanged("wrk_main", "chn_project")
+	if revoked := readIntegrationSSEEvent(t, reader); revoked != "event: access-revoked\ndata: {}\n\n" {
+		t.Fatalf("PostgreSQL realtime access revoke = %q", revoked)
+	}
+}
+
+func readIntegrationSSEEvent(t *testing.T, reader *bufio.Reader) string {
+	t.Helper()
+	result := make(chan struct {
+		value string
+		err   error
+	}, 1)
+	go func() {
+		var event strings.Builder
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				result <- struct {
+					value string
+					err   error
+				}{err: err}
+				return
+			}
+			event.WriteString(line)
+			if line == "\n" {
+				result <- struct {
+					value string
+					err   error
+				}{value: event.String()}
+				return
+			}
+		}
+	}()
+	select {
+	case outcome := <-result:
+		if outcome.err != nil {
+			t.Fatalf("read PostgreSQL SSE event: %v", outcome.err)
+		}
+		return outcome.value
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out reading PostgreSQL SSE event")
+		return ""
 	}
 }
 
@@ -709,6 +889,20 @@ func assertRestrictedChannelMessageQuery(
 		*contributorPage.Messages[1].ThreadID != *reply.ThreadID {
 		t.Fatalf("contributor Message page = %#v", contributorPage)
 	}
+	if err := service.AuthorizeChannelRead(ctx, contributor, "chn_restricted"); err != nil {
+		t.Fatalf("AuthorizeChannelRead() error = %v", err)
+	}
+	rootProjection, err := service.GetChannelMessage(ctx, contributor, "chn_restricted", root.ID)
+	if err != nil || rootProjection.ID != root.ID || rootProjection.Body != root.Body {
+		t.Fatalf("GetChannelMessage(root) = %#v, %v", rootProjection, err)
+	}
+	replyProjection, err := service.GetChannelMessage(ctx, contributor, "chn_restricted", reply.ID)
+	if err != nil || replyProjection.ID != reply.ID || replyProjection.ThreadID == nil {
+		t.Fatalf("GetChannelMessage(reply) = %#v, %v", replyProjection, err)
+	}
+	if _, err := service.GetChannelMessage(ctx, contributor, "chn_project", root.ID); !errors.Is(err, authz.ErrNotFound) {
+		t.Fatalf("cross-Channel GetChannelMessage() error = %v, want not found", err)
+	}
 
 	deciderPage, err := service.ListChannelMessages(
 		ctx,
@@ -722,6 +916,9 @@ func assertRestrictedChannelMessageQuery(
 	if deciderPage.Messages[0].ThreadID != nil {
 		t.Fatalf("Channel member page leaked restricted Thread reply: %#v", deciderPage)
 	}
+	if _, err := service.GetChannelMessage(ctx, decider, "chn_restricted", reply.ID); !errors.Is(err, authz.ErrNotFound) {
+		t.Fatalf("restricted reply GetChannelMessage() error = %v, want not found", err)
+	}
 
 	_, err = service.ListChannelMessages(
 		ctx,
@@ -730,6 +927,9 @@ func assertRestrictedChannelMessageQuery(
 	)
 	if !errors.Is(err, authz.ErrNotFound) {
 		t.Fatalf("non-member ListChannelMessages() error = %v, want not found", err)
+	}
+	if err := service.AuthorizeChannelRead(ctx, reader, "chn_restricted"); !errors.Is(err, authz.ErrNotFound) {
+		t.Fatalf("non-member AuthorizeChannelRead() error = %v, want not found", err)
 	}
 	archivedPage, err := service.ListChannelMessages(
 		ctx,

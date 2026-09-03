@@ -21,6 +21,7 @@ var (
 	ErrPayloadTooLarge         = errors.New("request payload too large")
 	ErrUnsupportedMediaType    = errors.New("unsupported media type")
 	ErrMethodNotAllowed        = errors.New("method not allowed")
+	ErrRealtimeCapacity        = errors.New("realtime connection capacity reached")
 )
 
 type ErrorMapping struct {
@@ -67,6 +68,12 @@ func MapApplicationError(err error) ErrorMapping {
 			StatusCode: http.StatusTooManyRequests,
 			Code:       "rate_limited",
 			Message:    "too many login attempts",
+		}
+	case errors.Is(err, ErrRealtimeCapacity):
+		return ErrorMapping{
+			StatusCode: http.StatusTooManyRequests,
+			Code:       "rate_limited",
+			Message:    "too many active streams",
 		}
 	case errors.Is(err, ErrPayloadTooLarge):
 		return ErrorMapping{

@@ -32,7 +32,7 @@ func TestHealthRoutesUseMethodPatterns(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			request := httptest.NewRequest(test.method, test.path, nil)
 			response := httptest.NewRecorder()
-			newHandler(test.pinger, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler()).ServeHTTP(response, request)
+			newHandler(test.pinger, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler()).ServeHTTP(response, request)
 			if response.Code != test.wantStatus {
 				t.Fatalf("status = %d, want %d", response.Code, test.wantStatus)
 			}
@@ -50,7 +50,7 @@ func TestHandlerReplacesCallerRequestID(t *testing.T) {
 	request.Header.Set("X-Request-ID", "caller-controlled")
 	response := httptest.NewRecorder()
 
-	newHandler(fakePinger{}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler()).ServeHTTP(response, request)
+	newHandler(fakePinger{}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler()).ServeHTTP(response, request)
 
 	if requestID := response.Header().Get("X-Request-ID"); requestID == "caller-controlled" || len(requestID) != 36 {
 		t.Fatalf("X-Request-ID = %q", requestID)
@@ -73,6 +73,7 @@ func TestHandlerRoutesChannelMessagesBeforeWorkspaceFallback(t *testing.T) {
 		http.NotFoundHandler(),
 		channelMessages,
 		http.NotFoundHandler(),
+		http.NotFoundHandler(),
 		deploymentFallback,
 		http.NotFoundHandler(),
 	)
@@ -90,6 +91,31 @@ func TestHandlerRoutesChannelMessagesBeforeWorkspaceFallback(t *testing.T) {
 	}
 }
 
+func TestHandlerRoutesChannelEventsBeforeWorkspaceFallback(t *testing.T) {
+	t.Parallel()
+	channelEvents := http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusAccepted)
+	})
+	deploymentFallback := http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusTeapot)
+	})
+	handler := newHandler(
+		fakePinger{},
+		http.NotFoundHandler(),
+		http.NotFoundHandler(),
+		channelEvents,
+		http.NotFoundHandler(),
+		deploymentFallback,
+		http.NotFoundHandler(),
+	)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/wrk_main/channels/chn_main/events", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("Channel events status = %d, want %d", response.Code, http.StatusAccepted)
+	}
+}
+
 func TestHandlerRoutesCollaborationBeforeWorkspaceFallback(t *testing.T) {
 	t.Parallel()
 	collaboration := http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
@@ -100,6 +126,7 @@ func TestHandlerRoutesCollaborationBeforeWorkspaceFallback(t *testing.T) {
 	})
 	handler := newHandler(
 		fakePinger{},
+		http.NotFoundHandler(),
 		http.NotFoundHandler(),
 		http.NotFoundHandler(),
 		collaboration,

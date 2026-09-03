@@ -74,7 +74,13 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 
 	store := goldenpostgres.New(pool)
 	clock := fixedClock{now: time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)}
-	service := goldenpath.NewService(store, &prefixedSequenceIDs{}, clock)
+	messageNotifier := &committedMessageRecorder{}
+	service := goldenpath.NewService(
+		store,
+		&prefixedSequenceIDs{},
+		clock,
+		goldenpath.WithMessageCreatedNotifier(messageNotifier),
+	)
 	contributor := principal("usr_contributor")
 	decider := principal("usr_decider")
 	reader := principal("usr_reader")
@@ -291,7 +297,7 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 	assertDatabaseConstraints(t, ctx, pool, decision.ID, duplicateEventID)
 	assertNexusViewReadSlice(t, ctx, pool, store, service, decider, reader, admin, decision, ticket)
 	assertJenkinsCIRunSlice(t, ctx, pool, store, service)
-	assertMessagingSlice(t, ctx, pool, store, service)
+	assertMessagingSlice(t, ctx, pool, store, service, messageNotifier)
 }
 
 func assertNexusViewReadSlice(

@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1]
@@ -82,6 +83,20 @@ class TextClassificationTests(unittest.TestCase):
         self.assertTrue(check_repo.is_text_file(Path("LICENSE")))
         self.assertTrue(check_repo.is_text_file(Path(".gitignore")))
         self.assertFalse(check_repo.is_text_file(Path("assets/logo.png")))
+
+
+class RepositoryFilesTests(unittest.TestCase):
+    def test_ignores_tracked_files_deleted_from_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_directory:
+            root = Path(temp_directory)
+            (root / "present.md").write_text("present\n", encoding="utf-8")
+            completed = mock.Mock(returncode=0, stdout=b"present.md\0deleted.md\0")
+            with (
+                mock.patch.object(check_repo, "REPO_ROOT", root),
+                mock.patch.object(check_repo, "is_git_repository", return_value=True),
+                mock.patch.object(check_repo.subprocess, "run", return_value=completed),
+            ):
+                self.assertEqual([Path("present.md")], check_repo.repository_files())
 
 
 if __name__ == "__main__":

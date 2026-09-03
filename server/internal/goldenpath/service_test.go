@@ -12,10 +12,14 @@ import (
 
 type recordingStore struct {
 	createMessageCommand    CreateMessageCommand
+	createMessageResult     CreateMessageResult
 	listMessagesPrincipal   authz.Principal
 	listMessagesInput       ListChannelMessagesInput
 	messagePage             MessagePage
 	listMessagesCalled      bool
+	authorizeChannelID      string
+	channelMessageID        string
+	channelMessage          MessageProjection
 	startThreadCommand      StartThreadFromMessageCommand
 	createDecisionCommand   CreateDecisionCommand
 	recordCIRunCommand      RecordCompletedCIRunCommand
@@ -41,10 +45,33 @@ func (store *recordingStore) CreateMessage(
 	command CreateMessageCommand,
 ) (CreateMessageResult, error) {
 	store.createMessageCommand = command
+	if store.createMessageResult.Message.ID != "" {
+		return store.createMessageResult, nil
+	}
 	return CreateMessageResult{
 		Message: Message{ID: command.MessageID, Body: command.Body},
 		Created: true,
 	}, nil
+}
+
+func (store *recordingStore) AuthorizeChannelRead(
+	_ context.Context,
+	_ authz.Principal,
+	channelID string,
+) error {
+	store.authorizeChannelID = channelID
+	return nil
+}
+
+func (store *recordingStore) GetChannelMessage(
+	_ context.Context,
+	_ authz.Principal,
+	channelID string,
+	messageID string,
+) (MessageProjection, error) {
+	store.authorizeChannelID = channelID
+	store.channelMessageID = messageID
+	return store.channelMessage, nil
 }
 
 func (store *recordingStore) StartThreadFromMessage(

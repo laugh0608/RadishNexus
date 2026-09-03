@@ -20,14 +20,15 @@
 - Secure `__Host-` Cookie、精确 HTTPS Origin / Host、可信代理、客户端 IP 登录限流、request ID 与版本化安全错误对象；
 - Session 作用域的 Deployment Nexus View 公共只读 handler 与显式安全 DTO；
 - Session 作用域的 Channel Message 历史、幂等发送和 Message → Thread 公共 handler；
+- Session 作用域的单进程 Message SSE、当前权限回放和有界资源控制；
 - Session 作用域的 Thread / Decision / Ticket Nexus View、人工 acceptance 与幂等写入 handler；
 - 同源 authenticated Web Shell、显式 production build root、页面 allowlist 与安全静态资源缓存；
 - 可选文件 Secret 覆盖数据库 URL 密码的公共 runtime config；
 - PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验与 Activity 重建命令。
 
-公共 transport 已开放 `/api/v1/auth/sessions` 与 `/api/v1/auth/session` 的 login / resolve / logout 闭环、Deployment Nexus View 读取、单 Channel Message 历史 / 发送 / Message → Thread，以及 Thread → Decision → Ticket 协作短请求；同一个 Go server 从显式 Web build root 交付 authenticated shell 和已注册页面。认证入口要求精确 HTTPS public origin、精确 Host、显式可信代理链、客户端 IP 限流、受控 JSON、Secure Cookie 和 CSRF，不接受可信用户 Header、insecure Cookie 或 credentialed CORS。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。inbound 与 collaboration command receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret、原始 webhook body 或业务正文。
+公共 transport 已开放 `/api/v1/auth/sessions` 与 `/api/v1/auth/session` 的 login / resolve / logout 闭环、Deployment Nexus View 读取、单 Channel Message 历史 / 发送 / Message → Thread、单进程 Message SSE，以及 Thread → Decision → Ticket 协作短请求；同一个 Go server 从显式 Web build root 交付 authenticated shell 和已注册页面。认证入口要求精确 HTTPS public origin、精确 Host、显式可信代理链、客户端 IP 限流、受控 JSON、Secure Cookie 和 CSRF，不接受可信用户 Header、insecure Cookie 或 credentialed CORS。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。inbound 与 collaboration command receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret、原始 webhook body 或业务正文。
 
-Channel / Message migration 006 固化 Channel membership、Message 不可变和幂等唯一范围、同 Channel reply、messaging-origin Thread 的 `origin_channel_id` 与唯一 `started-from` Message 来源；创建 Message 或 Thread 时，业务事实、安全最小化事件与 `realtime-dispatcher` Outbox 在同一事务提交。canonical query 返回最新一页并按 `(created_at, message_id)` 以 exclusive keyset 向更旧内容翻页，先过滤当前不可读 Thread 回复，且不返回 `client_operation_id`。公共 transport 用版本 1 opaque cursor 封装 keyset，每次请求重新验证 Session、Workspace、Channel 与 Thread 权限；当前仍没有正式实时连接，实验 SSE Header 和进程内 cursor 不属于公共协议。
+Channel / Message migration 006 固化 Channel membership、Message 不可变和幂等唯一范围、同 Channel reply、messaging-origin Thread 的 `origin_channel_id` 与唯一 `started-from` Message 来源；创建 Message 或 Thread 时，业务事实、安全最小化事件与 `realtime-dispatcher` Outbox 在同一事务提交。canonical query 返回最新一页并按 `(created_at, message_id)` 以 exclusive keyset 向更旧内容翻页，先过滤当前不可读 Thread 回复，且不返回 `client_operation_id`。短请求用版本 1 opaque cursor 封装 keyset；正式 SSE 另用绑定当前进程 generation 与 Channel scope 的有界 opaque cursor，只缓存 Message ID，并在每次发送和 heartbeat 重新验证 Session、Workspace、Channel 与 Thread 权限。两种 cursor 都不是授权能力，SSE 丢失或重启必须回到 canonical history。
 
 collaboration migration 007 以 `(workspace, actor, command, target, client_operation_id)` 固化 Proposed Decision、Decision acceptance 与 Ticket 创建的幂等范围。首次命令在同一事务写入 immutable receipt、业务状态、关系、事件和 Outbox；相同 canonical payload 返回原结果，变化重放冲突。每次 retry 仍重新授权，receipt 不进入领域事件、Activity、普通 DTO 或客户端可见状态，但属于必须备份恢复的权威事实。
 
@@ -138,6 +139,16 @@ RADISHNEXUS_WEB_ROOT=/srv/radishnexus/web
 三个路由均通过当前 Session 与 Workspace / Channel / Thread 权限；两个 POST 还同时要求精确 `Origin`、CSRF Cookie / Header 一致和数据库 CSRF digest。成功与错误统一使用 `Cache-Control: private, no-store` 和 `Vary: Cookie`；显式 DTO 不返回 `client_operation_id`、membership、事件或内部 keyset。完整 cursor、JSON 上限、状态码、最小化和跨 Channel 来源边界见 [ADR-0018](../docs/adr/0018-session-scoped-channel-message-transport.md)。
 
 同源 Web Shell 已把这三个短请求接入 canonical Channel 页面。浏览器会在模糊发送失败后为未变化正文保留同一幂等键；Session 失效回到登录态，后续 `404` 清除已显示正文。production Web handler 只额外开放精确 Channel 页面路径，不把未知嵌套路由变成任意 SPA fallback。
+
+## Channel Message 实时增量
+
+正式单进程实时路由为：
+
+- `GET /api/v1/workspaces/{workspace_id}/channels/{channel_id}/events`：通过 `text/event-stream` 返回 `ready`、权限过滤后的 `message.created`，以及无业务数据的 `resync-required` / `access-revoked`。
+
+入口复用同一 Session、Host、可信代理和当前 Workspace / Channel 权限，不接受 query 或身份 Header。`Last-Event-ID` 只在当前 process generation 与最近 1024 个 Message ID 窗口内恢复；过期、跨进程、跨 Channel、未来或非规范 cursor 都要求 canonical resync。hub 不缓存正文或权限结果，逐事件加载 canonical Message projection，restricted Thread reply 对无权订阅者保持不可见。
+
+唯一 `http.Server` 的普通请求仍保留 15 秒 `WriteTimeout`；只有已认证且授权的 SSE 响应用 `ResponseController` 清除该全局 deadline，每次 write / flush 另有 5 秒上限并每 15 秒 heartbeat 复权。资源上限为每进程 256、每用户 4、每 Channel 64；shutdown 先唤醒并关闭 hub。固定 Caddy Compose 门禁已证明连接保持打开时 `ready` 与 `message.created` 会及时 flush。完整合同见 [ADR-0020](../docs/adr/0020-session-scoped-single-process-message-realtime.md)。canonical Web 页面本切片仍只使用短请求，尚未接入 SSE 客户端状态机。
 
 ## Thread、Decision 与 Ticket 协作短请求
 

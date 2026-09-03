@@ -33,6 +33,16 @@ type CreateMessageResult struct {
 	Created bool
 }
 
+type MessageCreatedNotification struct {
+	WorkspaceID string
+	ChannelID   string
+	MessageID   string
+}
+
+type MessageCreatedNotifier interface {
+	NotifyMessageCreated(MessageCreatedNotification)
+}
+
 // MessageProjection is the canonical readable Message shape. It deliberately
 // excludes client_operation_id because idempotency state is private to the
 // authoring command boundary.
@@ -159,7 +169,7 @@ func (service *Service) CreateMessage(
 		return CreateMessageResult{}, fmt.Errorf("generate Message event ID: %w", err)
 	}
 
-	return service.store.CreateMessage(ctx, CreateMessageCommand{
+	result, err := service.store.CreateMessage(ctx, CreateMessageCommand{
 		Invocation:        invocation,
 		MessageID:         messageID,
 		EventID:           eventID,
@@ -169,6 +179,17 @@ func (service *Service) CreateMessage(
 		Body:              input.Body,
 		OccurredAt:        service.clock.Now().UTC(),
 	})
+	if err != nil {
+		return CreateMessageResult{}, err
+	}
+	if result.Created && service.messageCreatedNotifier != nil {
+		service.messageCreatedNotifier.NotifyMessageCreated(MessageCreatedNotification{
+			WorkspaceID: result.Message.WorkspaceID,
+			ChannelID:   result.Message.ChannelID,
+			MessageID:   result.Message.ID,
+		})
+	}
+	return result, nil
 }
 
 func (service *Service) ListChannelMessages(
@@ -207,6 +228,42 @@ func (service *Service) ListChannelMessages(
 		input.Before = &cursor
 	}
 	return service.store.ListChannelMessages(ctx, principal, input)
+}
+
+func (service *Service) AuthorizeChannelRead(
+	ctx context.Context,
+	principal authz.Principal,
+	channelID string,
+) error {
+	if err := validateChannelReadInput(principal, channelID); err != nil {
+		return err
+	}
+	return service.store.AuthorizeChannelRead(ctx, principal, channelID)
+}
+
+func (service *Service) GetChannelMessage(
+	ctx context.Context,
+	principal authz.Principal,
+	channelID string,
+	messageID string,
+) (MessageProjection, error) {
+	if err := validateChannelReadInput(principal, channelID); err != nil {
+		return MessageProjection{}, err
+	}
+	if err := entityref.M0Registry().Validate(entityref.Ref{Type: "message", ID: messageID}); err != nil {
+		return MessageProjection{}, fmt.Errorf("%w: Message reference: %v", authz.ErrInvalid, err)
+	}
+	return service.store.GetChannelMessage(ctx, principal, channelID, messageID)
+}
+
+func validateChannelReadInput(principal authz.Principal, channelID string) error {
+	if err := principal.ValidateUser(); err != nil {
+		return err
+	}
+	if err := entityref.M0Registry().Validate(entityref.Ref{Type: "channel", ID: channelID}); err != nil {
+		return fmt.Errorf("%w: Channel reference: %v", authz.ErrInvalid, err)
+	}
+	return nil
 }
 
 func (service *Service) StartThreadFromMessage(

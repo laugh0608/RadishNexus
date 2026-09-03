@@ -137,4 +137,4 @@ docker compose -f deploy/compose.yaml down
 ./scripts/check-self-hosted-compose.sh
 ```
 
-脚本只使用本次生成的随机 Compose project、临时 Secret、随机 HTTPS 端口和全新命名 volumes。它验证静态配置、镜像构建、显式 migration、一次 bootstrap、重复 bootstrap 拒绝、Caddy CA、伪造转发 Header 清洗、login / Session / logout 以及应用和数据库无宿主端口；退出时删除本次 project、临时网络、volumes 和 Secret，不删除用户实例或备份。
+脚本只使用本次生成的随机 Compose project、临时 Secret、随机 HTTPS 端口和全新命名 volumes。它验证静态配置、镜像构建、显式 migration、一次 bootstrap、重复 bootstrap 拒绝、Caddy CA、伪造转发 Header 清洗、login / Session / logout、正式 Message SSE 在连接保持打开时及时 flush `ready` / `message.created`，以及应用和数据库无宿主端口；退出时删除本次 project、临时网络、volumes 和 Secret，不删除用户实例或备份。SSE 仍由唯一 Caddy origin 转发，Caddy 2.11.4 对 `text/event-stream` 的流式识别已由该门禁固定验证；更换代理或版本必须重跑。

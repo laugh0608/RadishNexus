@@ -142,6 +142,8 @@ type CreateTicketCommand struct {
 type Store interface {
 	CreateMessage(context.Context, CreateMessageCommand) (CreateMessageResult, error)
 	ListChannelMessages(context.Context, authz.Principal, ListChannelMessagesInput) (MessagePage, error)
+	AuthorizeChannelRead(context.Context, authz.Principal, string) error
+	GetChannelMessage(context.Context, authz.Principal, string, string) (MessageProjection, error)
 	StartThreadFromMessage(context.Context, StartThreadFromMessageCommand) (Thread, error)
 	CreateDecisionFromThread(context.Context, CreateDecisionCommand) (CreateDecisionResult, error)
 	AcceptDecision(context.Context, AcceptDecisionCommand) (AcceptDecisionResult, error)
@@ -161,13 +163,28 @@ type Clock interface {
 }
 
 type Service struct {
-	store Store
-	ids   IDGenerator
-	clock Clock
+	store                  Store
+	ids                    IDGenerator
+	clock                  Clock
+	messageCreatedNotifier MessageCreatedNotifier
 }
 
-func NewService(store Store, ids IDGenerator, clock Clock) *Service {
-	return &Service{store: store, ids: ids, clock: clock}
+type ServiceOption func(*Service)
+
+func WithMessageCreatedNotifier(notifier MessageCreatedNotifier) ServiceOption {
+	return func(service *Service) {
+		service.messageCreatedNotifier = notifier
+	}
+}
+
+func NewService(store Store, ids IDGenerator, clock Clock, options ...ServiceOption) *Service {
+	service := &Service{store: store, ids: ids, clock: clock}
+	for _, option := range options {
+		if option != nil {
+			option(service)
+		}
+	}
+	return service
 }
 
 func (service *Service) CreateDecisionFromThread(

@@ -48,6 +48,72 @@ func TestCreateMessageBuildsAtomicCommandWithoutNormalizingBody(t *testing.T) {
 	}
 }
 
+type recordingMessageNotifier struct {
+	notifications []MessageCreatedNotification
+}
+
+func (notifier *recordingMessageNotifier) NotifyMessageCreated(notification MessageCreatedNotification) {
+	notifier.notifications = append(notifier.notifications, notification)
+}
+
+func TestCreateMessageNotifiesOnlyNewCommittedResult(t *testing.T) {
+	t.Parallel()
+	notifier := &recordingMessageNotifier{}
+	store := &recordingStore{}
+	service := NewService(
+		store,
+		&sequenceIDs{values: []string{"msg_new", "evt_new"}},
+		fixedClock{},
+		WithMessageCreatedNotifier(notifier),
+	)
+	storeMessage := Message{
+		ID: "msg_new", WorkspaceID: "wrk_1", ChannelID: "chn_1", AuthorID: "usr_1",
+		Body: "body", ClientOperationID: "op-1", CreatedAt: time.Now(),
+	}
+	store.createMessageResult = CreateMessageResult{Message: storeMessage, Created: true}
+	result, err := service.CreateMessage(context.Background(), validMessagingInvocation(), CreateMessageInput{
+		ChannelID: "chn_1", ClientOperationID: "op-1", Body: "body",
+	})
+	if err != nil || !result.Created || len(notifier.notifications) != 1 ||
+		notifier.notifications[0] != (MessageCreatedNotification{
+			WorkspaceID: "wrk_1", ChannelID: "chn_1", MessageID: "msg_new",
+		}) {
+		t.Fatalf("CreateMessage() = %#v, %v; notifications = %#v", result, err, notifier.notifications)
+	}
+
+	store.createMessageResult = CreateMessageResult{Message: storeMessage}
+	service.ids = &sequenceIDs{values: []string{"msg_unused", "evt_unused"}}
+	if _, err := service.CreateMessage(context.Background(), validMessagingInvocation(), CreateMessageInput{
+		ChannelID: "chn_1", ClientOperationID: "op-1", Body: "body",
+	}); err != nil {
+		t.Fatalf("retry CreateMessage() error = %v", err)
+	}
+	if len(notifier.notifications) != 1 {
+		t.Fatalf("retry notifications = %#v", notifier.notifications)
+	}
+}
+
+func TestChannelRealtimeReadsValidateAndDelegate(t *testing.T) {
+	t.Parallel()
+	principal := validMessagingInvocation().Principal
+	store := &recordingStore{channelMessage: MessageProjection{ID: "msg_1", ChannelID: "chn_1"}}
+	service := NewService(store, &sequenceIDs{}, fixedClock{})
+	if err := service.AuthorizeChannelRead(context.Background(), principal, "chn_1"); err != nil ||
+		store.authorizeChannelID != "chn_1" {
+		t.Fatalf("AuthorizeChannelRead() error = %v, channel = %q", err, store.authorizeChannelID)
+	}
+	message, err := service.GetChannelMessage(context.Background(), principal, "chn_1", "msg_1")
+	if err != nil || message.ID != "msg_1" || store.channelMessageID != "msg_1" {
+		t.Fatalf("GetChannelMessage() = %#v, %v", message, err)
+	}
+	if err := service.AuthorizeChannelRead(context.Background(), principal, "channel_1"); !errors.Is(err, authz.ErrInvalid) {
+		t.Fatalf("invalid AuthorizeChannelRead() error = %v", err)
+	}
+	if _, err := service.GetChannelMessage(context.Background(), principal, "chn_1", "message_1"); !errors.Is(err, authz.ErrInvalid) {
+		t.Fatalf("invalid GetChannelMessage() error = %v", err)
+	}
+}
+
 func TestCreateMessageRejectsInvalidFactsBeforeStore(t *testing.T) {
 	t.Parallel()
 

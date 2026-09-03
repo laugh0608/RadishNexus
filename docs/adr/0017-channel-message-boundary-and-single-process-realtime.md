@@ -81,7 +81,7 @@ Source Message 本身仍按 Channel 可读；`started-from` 引用不会授予 T
 
 ### 单进程实时实验合同
 
-[可丢弃实验](../../experiments/messaging-realtime/README.md)采用：
+本 ADR 当时建立的可丢弃实验采用以下合同；该实现已在 [ADR-0020](0020-session-scoped-single-process-message-realtime.md) 的正式切片覆盖相同失败路径后删除：
 
 - `POST /channels/{channel_id}/messages` 验证 command 幂等；
 - `GET /channels/{channel_id}/events` 以 SSE 发送 `message.created` 增量；
@@ -149,7 +149,7 @@ M0.5 只有单个 Go 进程，现有 Outbox 已承担可靠异步投递意图。
 4. Web 只实现单 Channel 的列表、发送和从 Message 发起 Thread，贯通既有 Decision / Ticket，不扩展完整聊天功能；
 5. 用真实 PostgreSQL、HTTPS、Caddy 和浏览器复验重试、重连、权限撤销、restricted 占位、CSRF、缓存与失败语义。
 
-正式切片覆盖这些失败路径后删除实验。若未来采用 WebSocket、持久 cursor 或多副本 broker，只替换传输和 fan-out，不得放宽本 ADR 的幂等、来源、权限、正文最小化或 canonical resync 语义。
+正式切片覆盖这些失败路径后删除实验；该删除条件已于 2026-09-03 由 ADR-0020、正式 server 竞态 / PostgreSQL integration 与 Compose + Caddy HTTPS 验证满足。若未来采用 WebSocket、持久 cursor 或多副本 broker，只替换传输和 fan-out，不得放宽本 ADR 的幂等、来源、权限、正文最小化或 canonical resync 语义。
 
 ## 规范依据
 

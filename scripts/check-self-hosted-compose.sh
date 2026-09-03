@@ -14,6 +14,10 @@ cookie_jar="${run_dir}/cookies.txt"
 login_headers="${run_dir}/login.headers"
 login_body="${run_dir}/login.json"
 session_body="${run_dir}/session.json"
+events_headers="${run_dir}/events.headers"
+events_body="${run_dir}/events.stream"
+message_body="${run_dir}/message.json"
+events_pid=""
 
 https_port="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
 proxy_octet="$((https_port % 200 + 20))"
@@ -32,6 +36,10 @@ finished=false
 
 cleanup() {
   exit_code=$?
+  if [[ -n "${events_pid}" ]] && kill -0 "${events_pid}" >/dev/null 2>&1; then
+    kill "${events_pid}" >/dev/null 2>&1 || true
+    wait "${events_pid}" >/dev/null 2>&1 || true
+  fi
   if [[ "${exit_code}" -ne 0 ]]; then
     "${compose[@]}" ps >&2 || true
     "${compose[@]}" logs --no-color postgres app caddy >&2 || true
@@ -136,11 +144,114 @@ if [[ "${session_status}" != 200 ]]; then
   exit 1
 fi
 
+IFS=$'\t' read -r admin_user_id workspace_id < <(python3 -c '
+import json
+import sys
+with open(sys.argv[1], encoding="utf-8") as source:
+    payload = json.load(source)
+print(payload["user"]["id"], payload["workspaces"][0]["id"], sep="\t")
+' "${session_body}")
+if [[ "${admin_user_id}" != usr_* || "${workspace_id}" != wrk_* ]]; then
+  echo "Session fixture returned invalid user or Workspace IDs." >&2
+  exit 1
+fi
+
+postgres_container="$("${compose[@]}" ps --quiet postgres)"
+docker exec --interactive "${postgres_container}" sh -ec '
+  PGPASSWORD="$(cat /run/secrets/postgres_password)" exec psql \
+    --username radishnexus \
+    --dbname radishnexus \
+    --set ON_ERROR_STOP=1 \
+    --set "fixture_user=$1" \
+    --set "fixture_workspace=$2"
+' fixture-seed "${admin_user_id}" "${workspace_id}" <<'SQL' >/dev/null
+INSERT INTO radishnexus.teams (id, workspace_id, name)
+VALUES ('tem_compose', :'fixture_workspace', 'Compose Team');
+INSERT INTO radishnexus.projects (
+  id, workspace_id, key, name, owner_team_id, visibility, status,
+  created_by_kind, created_by_id
+) VALUES (
+  'prj_compose', :'fixture_workspace', 'COMPOSE', 'Compose Project',
+  'tem_compose', 'workspace', 'active', 'user', :'fixture_user'
+);
+INSERT INTO radishnexus.project_memberships (workspace_id, project_id, user_id, role)
+VALUES (:'fixture_workspace', 'prj_compose', :'fixture_user', 'admin');
+INSERT INTO radishnexus.channels (
+  id, workspace_id, governing_project_id, name, visibility, status,
+  created_by_kind, created_by_id
+) VALUES (
+  'chn_compose', :'fixture_workspace', 'prj_compose', 'Compose Channel',
+  'project', 'active', 'user', :'fixture_user'
+);
+SQL
+
+curl --fail --silent --show-error --no-buffer --max-time 10 \
+  --cacert "${ca_path}" \
+  --cookie "${cookie_jar}" \
+  --dump-header "${events_headers}" \
+  --output "${events_body}" \
+  "${RADISHNEXUS_PUBLIC_ORIGIN}/api/v1/workspaces/${workspace_id}/channels/chn_compose/events" &
+events_pid=$!
+for _ in {1..100}; do
+  if grep -Fq 'event: ready' "${events_body}" 2>/dev/null; then
+    break
+  fi
+  if ! kill -0 "${events_pid}" >/dev/null 2>&1; then
+    echo "Caddy Message event stream closed before ready." >&2
+    wait "${events_pid}" || true
+    exit 1
+  fi
+  sleep 0.05
+done
+if ! grep -Fq 'event: ready' "${events_body}" ||
+  ! grep -Eiq 'content-type: text/event-stream; charset=utf-8' "${events_headers}" ||
+  ! kill -0 "${events_pid}" >/dev/null 2>&1; then
+  echo "Caddy did not flush a live Message event stream ready event." >&2
+  exit 1
+fi
+
 csrf_token="$(awk '$6 == "__Host-radishnexus-csrf" { print $7 }' "${cookie_jar}")"
 if [[ -z "${csrf_token}" ]]; then
   echo "CSRF cookie was not stored." >&2
   exit 1
 fi
+message_status="$({
+  printf '%s' '{"client_operation_id":"compose:realtime:1","body":"Compose realtime proof."}'
+} | curl --silent --show-error \
+  --cacert "${ca_path}" \
+  --cookie "${cookie_jar}" \
+  --header 'Content-Type: application/json' \
+  --header "Origin: ${RADISHNEXUS_PUBLIC_ORIGIN}" \
+  --header "X-CSRF-Token: ${csrf_token}" \
+  --data-binary @- \
+  --output "${message_body}" \
+  --write-out '%{http_code}' \
+  "${RADISHNEXUS_PUBLIC_ORIGIN}/api/v1/workspaces/${workspace_id}/channels/chn_compose/messages")"
+if [[ "${message_status}" != 201 ]]; then
+  echo "Create Message status = ${message_status}, want 201." >&2
+  exit 1
+fi
+for _ in {1..100}; do
+  if grep -Fq 'event: message.created' "${events_body}"; then
+    break
+  fi
+  if ! kill -0 "${events_pid}" >/dev/null 2>&1; then
+    echo "Caddy Message event stream closed before message.created." >&2
+    wait "${events_pid}" || true
+    exit 1
+  fi
+  sleep 0.05
+done
+if ! grep -Fq 'event: message.created' "${events_body}" ||
+  ! grep -Fq 'Compose realtime proof.' "${events_body}" ||
+  grep -Fq 'client_operation_id' "${events_body}"; then
+  echo "Caddy did not deliver the minimized Message event." >&2
+  exit 1
+fi
+kill "${events_pid}" >/dev/null 2>&1 || true
+wait "${events_pid}" >/dev/null 2>&1 || true
+events_pid=""
+
 logout_status="$(curl --silent --show-error \
   --cacert "${ca_path}" \
   --cookie "${cookie_jar}" \

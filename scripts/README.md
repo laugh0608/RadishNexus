@@ -81,19 +81,9 @@ npm ci
 
 后者只操作任务专属容器和其中的 `m0_core` schema，结束后自动删除容器；默认不会隐式拉取缺失镜像。实验范围和手工数据库入口见 [M0 核心契约实验](../experiments/m0-core-contracts/README.md)。
 
-## 消息实时收发实验
-
-使用 Go 标准库和本机 `httptest` 验证单进程 Message command 幂等、SSE 增量与断线回放、权限撤销、游标过期和慢消费者隔离：
-
-```bash
-./scripts/check-messaging-realtime.sh
-```
-
-入口运行竞态测试、`go vet` 与 module 整洁检查，不需要数据库或外网。实验使用测试专用 `X-Experiment-User` 注入 principal，不属于正式认证或公共协议；完整边界和删除条件见[消息实时收发实验](../experiments/messaging-realtime/README.md)与 [ADR-0017](../docs/adr/0017-channel-message-boundary-and-single-process-realtime.md)。
-
 ## 正式 Go 服务
 
-不需要数据库的单元测试、`go vet`、`go mod tidy -diff` 与 module checksum 验证：
+不需要数据库的全量竞态测试、`go vet`、`go mod tidy -diff` 与 module checksum 验证：
 
 ```bash
 ./scripts/check-server.sh
@@ -123,4 +113,4 @@ npm ci
 ./scripts/check-self-hosted-compose.sh
 ```
 
-该入口不会拉取缺失镜像。它创建任务专属 Compose project、临时数据库 Secret、PostgreSQL volume、Caddy CA 和随机本机 HTTPS 端口，验证 Compose/Caddy 配置、固定 image build、PostgreSQL readiness、显式 migration、唯一一次 bootstrap、HTTPS login / Session / logout、Secure Cookie 以及 Go server / PostgreSQL 无宿主端口。退出时只删除自己的临时 project、volume、network 与临时目录，保留本地构建出的 application / operation image cache。运行边界和人工入口见 [部署说明](../deploy/README.md)与 [ADR-0016](../docs/adr/0016-minimal-docker-compose-self-hosting.md)。
+该入口不会拉取缺失镜像。它创建任务专属 Compose project、临时数据库 Secret、PostgreSQL volume、Caddy CA 和随机本机 HTTPS 端口，验证 Compose/Caddy 配置、固定 image build、PostgreSQL readiness、显式 migration、唯一一次 bootstrap、HTTPS login / Session / logout、Secure Cookie、Caddy 及时 flush 正式 Message SSE 的 `ready` / `message.created`，以及 Go server / PostgreSQL 无宿主端口。退出时只删除自己的临时 project、volume、network 与临时目录，保留本地构建出的 application / operation image cache。运行边界和人工入口见 [部署说明](../deploy/README.md)、[ADR-0016](../docs/adr/0016-minimal-docker-compose-self-hosting.md)与 [ADR-0020](../docs/adr/0020-session-scoped-single-process-message-realtime.md)。

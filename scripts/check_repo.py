@@ -39,6 +39,7 @@ REQUIRED_FILES = (
     "docs/adr/0001-branch-and-pr-governance.md",
     "docs/adr/0016-minimal-docker-compose-self-hosting.md",
     "docs/adr/0017-channel-message-boundary-and-single-process-realtime.md",
+    "docs/adr/0020-session-scoped-single-process-message-realtime.md",
     "docs/adr/README.md",
     "docs/development/README.md",
     "docs/development/engineering-standards.md",
@@ -55,12 +56,9 @@ REQUIRED_FILES = (
     "experiments/m0-core-contracts/go.mod",
     "experiments/m0-core-contracts/go.sum",
     "experiments/m0-core-contracts/migrations/001_core_contracts.sql",
-    "experiments/messaging-realtime/README.md",
-    "experiments/messaging-realtime/go.mod",
     "scripts/README.md",
     "scripts/check-m0-core-contracts-postgres.sh",
     "scripts/check-m0-core-contracts.sh",
-    "scripts/check-messaging-realtime.sh",
     "scripts/check-repo.ps1",
     "scripts/check-repo.sh",
     "scripts/check-self-hosted-compose.sh",
@@ -176,7 +174,11 @@ def repository_files() -> list[Path]:
         )
         if result.returncode == 0:
             paths = [Path(raw.decode("utf-8")) for raw in result.stdout.split(b"\0") if raw]
-            return sorted(path for path in paths if not is_excluded(path))
+            return sorted(
+                path
+                for path in paths
+                if not is_excluded(path) and (REPO_ROOT / path).is_file()
+            )
 
     paths: list[Path] = []
     for candidate in REPO_ROOT.rglob("*"):
@@ -371,16 +373,14 @@ def check_workflow_contract(errors: list[str]) -> None:
         "name: Repo Hygiene",
         "name: Repository Checker Tests",
         "name: M0 Core Contracts",
-        "name: Messaging Realtime Experiment",
         "name: Web App",
         "name: Candidate Quality",
         "./scripts/check-repo.sh",
         "./scripts/check-m0-core-contracts.sh",
-        "./scripts/check-messaging-realtime.sh",
         "./scripts/check-web.sh",
         "python3 -m unittest discover -s scripts/tests",
         "go test -tags=integration ./...",
-        "needs:\n      - repo-hygiene\n      - checker-tests\n      - m0-core-contracts\n      - messaging-realtime",
+        "needs:\n      - repo-hygiene\n      - checker-tests\n      - m0-core-contracts\n      - go-server",
         "- web-app",
     )
     for fragment in required_fragments:
