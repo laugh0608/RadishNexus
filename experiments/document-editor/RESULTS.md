@@ -4,9 +4,9 @@
 
 ## 结论
 
-Tiptap 3 / ProseMirror 与 Lexical 都通过 `radishnexus-markdown-v1` 的 12 个 headless case：重复 parse 产生相同内部 JSON，规范化 Markdown 的第二次往返稳定，声明支持的文本与结构没有丢失。内置浏览器进一步验证了两者的 keyboard-only formatting、undo / redo、focus restore、plain-text 与 `text/markdown` paste、copy、ARIA 基本语义、390px 和 400-section 长文档交互。
+Tiptap 3 / ProseMirror 与 Lexical 都通过 `radishnexus-markdown-v1` 的 12 个 headless case：重复 parse 产生相同内部 JSON，规范化 Markdown 的第二次往返稳定，声明支持的文本与结构没有丢失。内置浏览器进一步验证了两者的 keyboard-only formatting、undo / redo、focus restore、plain-text 与 `text/markdown` paste、copy、ARIA 基本语义、390px 和 400-section 长文档交互；项目所有者随后用 macOS 中文输入法完成两套候选的真实 composition 复验。
 
-自动化能够直接输入中文，但内置浏览器明确不支持驱动 CDP `Input.imeSetComposition`，两套候选的真实 composition 计数均保持 0。因此 OS 级中文 IME 尚未通过，不能用 Unicode 直接输入或合成 DOM event 冒充。当前只保留 Tiptap 为第一候选、Lexical 为有效对照，不做最终选择，也不进入 Yjs 阶段 B。
+阶段 A 选择 Tiptap 3 / ProseMirror 进入后续阶段 B 对照实验。两套候选都通过往返、IME 和浏览器门槛，但 Lexical 没有证明能显著降低 React、IME 或可访问性装配成本；Tiptap / ProseMirror 的 schema、transaction 与官方 Yjs binding 更贴合既定第一候选判据。这个选择不掩盖 Tiptap Markdown Beta、未知节点静默丢失和服务端 sanitizer 风险，也不等于已经批准正式 Web 依赖或协同协议；Lexical 保留为可退出的对照证据。
 
 ## 固定输入
 
@@ -51,7 +51,7 @@ Tiptap 3 / ProseMirror 与 Lexical 都通过 `radishnexus-markdown-v1` 的 12 �
 | plain-text paste / copy | 通过   | 通过    | 浏览器 clipboard 写入、`ControlOrMeta+V`、全选复制和 clipboard 读回均为 `plain paste 中文 🥕`                                                         |
 | `text/markdown` paste   | 通过   | 通过    | 同一 clipboard item 同时携带 plain fallback 与 Markdown MIME，均规范化为 heading + 两项列表                                                           |
 | Unicode direct input    | 通过   | 通过    | 自动化直接输入 `你好`，输出文本正确                                                                                                                   |
-| OS IME composition      | 阻断   | 阻断    | 浏览器控制层拒绝 `Input.imeSetComposition`；composition start / update / end 均为 0，不能声明通过                                                     |
+| OS IME composition      | 通过   | 通过    | 项目所有者在 macOS 中文输入法下分别输入 `萝卜输入测试`，确认无双写、吞字或 selection 跳动；聚焦各自 editor 后一次 `⌘Z` 分别完整撤销本次输入          |
 | 390px                   | 通过   | 通过    | `innerWidth`、document 和 body scroll width 均为 390；所有可见元素无横向越界，editor `clientWidth === scrollWidth === 340`                            |
 | 400-section document    | 通过   | 通过    | 输出包含 `Section 400` 与 `item 400.2`；Tiptap / Lexical normalized length 分别为 35,186 / 35,184，editor 在固定高度内纵向滚动                        |
 | console                 | 通过   | 通过    | 修正后在全新标签完成最终复验，warning / error 为 0                                                                                                    |
@@ -64,9 +64,11 @@ Tiptap MarkdownManager 对未注册的 `futureCallout` 节点原生返回空字�
 
 raw HTML 与危险链接结果进一步确认 editor import / export 不是 sanitizer。正式 Document route 必须在服务端独立验证 Markdown 子集、链接协议和渲染输出；客户端转义或节点属性不得成为安全边界。
 
-## 尚未完成
+## 阶段 A 判定与停止线
 
-唯一剩余的阶段 A 浏览器门槛是由真人使用操作系统中文输入法，在两个 editor 中各完成一次 composition 并确认候选没有双写、吞字、selection 跳动或错误 undo grouping。完成前 ADR-0021 保持“提议”，不安装 Yjs，不新增 Document WebSocket / SSE，也不使用 Web Storage。
+阶段 A 已完成。Browser 自动化本身不支持 `Input.imeSetComposition`，因此自动化 Unicode 直接输入没有被当作 IME 证据；最终通过项来自项目所有者对同一隔离页面的真实 macOS 中文输入法复验。先在两个 editor 依次输入后，第一次 `⌘Z` 只撤销仍持有焦点的第二个 editor；重新聚焦第一个 editor 后一次 `⌘Z` 也完整撤销对应 composition，证明两套 history 均按当前 editor 焦点隔离，没有错误跨 editor 撤销。
+
+下一步只能在获得精确依赖授权后，用选定的 Tiptap / ProseMirror 与 Yjs 做无网络、无 WebSocket、无 IndexedDB 的双文档内存收敛实验。ADR-0021 在阶段 B 和 Document 业务合同审查完成前继续保持“提议”，正式 Web 依赖、migration、Document route、协同 transport 与 Web Storage 均不进入本轮。
 
 ## 复验
 

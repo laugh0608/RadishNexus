@@ -47,8 +47,8 @@ Markdown 不承诺对所有排版做 byte-for-byte 往返。实验必须区分�
 
 | 候选 | 保留理由 | 当前风险与限制 | 结论 |
 | --- | --- | --- | --- |
-| Tiptap 3 / ProseMirror | MIT；React 19 peer range；ProseMirror 提供 schema、transaction、step 与成熟的结构化编辑基础；Tiptap 提供较薄的 React/headless 扩展层，并有官方 Yjs binding | `@tiptap/markdown` 官方仍标记 Beta；headless UI 的 toolbar、焦点和 ARIA 仍由本项目负责；Comments、Snapshots 等能力不能默认依赖付费 Tiptap 产品 | 第一实验候选，不等于已选定生产依赖 |
-| Lexical | MIT；React-first；EditorState 为不可变、可序列化 snapshot；提供 Markdown、Yjs 与 React 包 | 节点注册、导入导出、协同初始化和 schema 演进需要自行装配；当前协同实现同时存在 legacy 与 experimental v2 路径，迁移风险需实测 | 对照候选；若显著降低 React、IME 或可访问性成本才替代首选 |
+| Tiptap 3 / ProseMirror | MIT；React 19 peer range；ProseMirror 提供 schema、transaction、step 与成熟的结构化编辑基础；Tiptap 提供较薄的 React/headless 扩展层，并有官方 Yjs binding | `@tiptap/markdown` 官方仍标记 Beta；headless UI 的 toolbar、焦点和 ARIA 仍由本项目负责；Comments、Snapshots 等能力不能默认依赖付费 Tiptap 产品 | 阶段 A 已选定进入阶段 B；不等于已批准生产依赖 |
+| Lexical | MIT；React-first；EditorState 为不可变、可序列化 snapshot；提供 Markdown、Yjs 与 React 包 | 节点注册、导入导出、协同初始化和 schema 演进需要自行装配；当前协同实现同时存在 legacy 与 experimental v2 路径，迁移风险需实测 | 阶段 A 对照已完成；保留退出证据，不进入阶段 B |
 | 直接 ProseMirror | schema、transaction 和 `prosemirror-markdown` 边界最直接，MIT | 需要自行承担 React 生命周期、命令、toolbar、可访问性和扩展装配；与 Tiptap 比较前没有证据证明额外控制能抵消维护成本 | 作为 Tiptap 底层与故障定位参照，不单独建立第三套 UI |
 
 截至 2026-09-03，npm 官方 registry 显示 Tiptap core / React / starter-kit / Markdown 为 `3.31.2`，Lexical core / React / Markdown / Yjs 为 `0.50.0`，均声明 MIT。版本只用于可复验实验输入，不是仓库依赖决定；正式引入仍需精确锁定、许可证与 lifecycle script 检查。
@@ -129,7 +129,9 @@ Message SSE 是单向、可回到 canonical history 的提示通道，不承担�
 
 实测发现并修复了 Lexical harness 的两个集成问题：Markdown MIME 被自定义 handler 消费后，默认 plain fallback 仍继续执行并造成重复内容；Clear 后 selection format 未重置并把 bold 泄漏到新输入。两项都已在真实浏览器复验。对照页 production build 为 758.85 kB JavaScript / 238.81 kB gzip，包含两套候选与共享 corpus，只作为实验成本上限，不是单候选 production bundle。
 
-唯一未完成项是操作系统级中文 IME。内置浏览器控制层明确不支持 `Input.imeSetComposition`；自动化可以直接输入 `你好`，但 composition start / update / end 计数均为 0。不得用直接 Unicode 输入或合成 DOM event 冒充 IME 通过。需要真人在两个 editor 中各完成一次真实 composition，确认无双写、吞字、selection 跳动和错误 undo grouping。完成前本 ADR 继续保持“提议”，尚未最终选择编辑器，也不进入 Yjs 阶段 B。
+内置浏览器控制层明确不支持 `Input.imeSetComposition`；自动化可以直接输入 `你好`，但 composition start / update / end 计数均为 0，因此该结果没有被冒充为 IME 证据。项目所有者随后在同一隔离页面用 macOS 中文输入法分别向两个 editor 输入 `萝卜输入测试`，确认无双写、吞字或 selection 跳动；输入完第二个 editor 后，第一次 `⌘Z` 按当前焦点只撤销第二个 editor，重新聚焦第一个 editor 后一次 `⌘Z` 也完整撤销对应 composition。两套候选的 OS IME 与焦点隔离 history 因此均通过。
+
+阶段 A 据此选择 Tiptap 3 / ProseMirror 进入阶段 B。Lexical 没有在 React、IME 或可访问性装配上表现出足以替代第一候选的优势，而 ProseMirror 的 schema / transaction 基础和 Tiptap 官方 Yjs binding 与后续实验边界更直接。选择仍保留全部已知风险：Tiptap Markdown Beta、未知节点原生静默丢失、危险链接保留和 headless UI 责任必须由版本化适配层、服务端校验和正式 UI 门禁控制。阶段 B 依赖尚未授权或安装，本 ADR 继续保持“提议”。
 
 ### 阶段 B：内存协同收敛
 
