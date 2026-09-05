@@ -2,7 +2,7 @@
 
 状态：方向基线，M0.5 / M1 首批纵向边界已冻结
 
-日期：2026-09-03
+日期：2026-09-05
 
 ## 架构目标
 
@@ -16,6 +16,8 @@ RadishNexus 首期架构必须同时服务于四个目标：
 ## 初始形态
 
 采用模块化单体，而不是从微服务起步。
+
+下图表达目标职责，不是当前模块或插件运行时的实现清单；正式切片成熟度见[当前状态](../status/current.md)。
 
 ```text
 React + TypeScript Web App
@@ -183,17 +185,19 @@ entity://environment/env_002
 
 Activity 不是 Outbox 的副本。Outbox 用于可靠投递，Activity 是可重建、可权限过滤的产品时间线投影；审计日志则保存安全与合规所需的操作证据。三者可以来自同一领域事件，但保留不同职责和生命周期。
 
+可重建不等于运行时会自动更新。当前正式实现只有显式 Activity 全量重建，正常业务写入到 Timeline 的更新路径仍待补齐；后续切片需明确可见时效、失败恢复和重建并发，再选择同事务投影或可靠异步消费，不在本次文档审阅中预定实现方案。
+
 M0 契约把不可变领域事件事实与可变投递状态作逻辑分离，避免已投递 Outbox 清理后无法重建 Activity 或验证备份；具体一表或分表由 PostgreSQL 原型决定。详见[核心实体、授权与事件契约](core-contracts.md)和 [ADR-0002](../adr/0002-stable-entity-reference-and-event-projection.md)。
 
 早期不强制引入独立消息中间件。只有插件吞吐、跨进程可靠消费或服务拆分形成真实需求后，再评估 NATS JetStream 等方案。
 
 ## 数据和基础设施
 
-首期建议：
+基础设施按实际需求引入；以下区分已用基础与候选，不要求自部署实例预装所有组件：
 
-- PostgreSQL：核心业务、插件命名空间、Outbox 和初始全文搜索；
-- Redis：在线状态、短期缓存、限流和可丢失的实时协调状态；
-- S3 兼容对象存储：附件、图片、文档资源和可选构建制品；
+- PostgreSQL：当前核心业务与 Outbox；插件命名空间和初始全文搜索按后续切片落地；
+- Redis（候选）：出现进程外协调需求后再评估；当前 Message SSE 与登录限流使用单进程边界，不要求 Redis；
+- S3 兼容对象存储（候选）：附件、图片、文档资源和可选构建制品进入实现时再评估；
 - SSE：M0.5 单进程、Session 作用域的 Message 单向增量；
 - WebSocket：M2 出现双向 presence、typing 或协作控制需求后的版本化目标；
 - Docker Compose：首个正式自部署方式；
@@ -252,6 +256,8 @@ M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 
 - 第一阶段优先 TLS、静态加密、RBAC、审计和备份安全，不默认承诺全局端到端加密。
 
 ## 当前仓库布局
+
+模块化单体的职责边界应在真实变更中逐步形成：复用稳定身份与权限基础，把业务用例和事务归于对应领域。当前 `internal/goldenpath` 是正式纵向切片的集中实现，不是已经完成所有领域模块拆分；目录调整、API adapter 去重和页面拆分按[工程标准](../development/engineering-standards.md)随相关变更开展，不作为独立大重构前置任务。
 
 当前已经建立根级 `web/` React App、唯一正式 `server/` Go module、受控 `deploy/` Compose 工件、可丢弃的 `experiments/` 和共享 `scripts/`；SDK、插件与公共契约目录只在对应产物真正进入实现时创建：
 

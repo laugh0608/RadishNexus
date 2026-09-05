@@ -4,6 +4,8 @@
 
 日期：2026-09-03
 
+提议更新：2026-09-05；收窄 M0.5 / M1 接受路径，状态仍为“提议”。
+
 ## 背景
 
 Golden Path 只要求一个简单 Markdown Document，并明确排除多人协作文档、CRDT 和离线编辑；M5 才要求结构化编辑、多人协作、评论、版本历史和协同故障恢复，M7 才进入浏览器离线缓存与跨端同步。若现在直接选择完整协同栈，容易把编辑器内部 JSON、某个 CRDT binary、商业服务或未经授权的 WebSocket 行为变成长期公共合同。
@@ -20,6 +22,14 @@ Document 同时受以下既有边界约束：
 本 ADR 先固定评估和分层边界，不冻结 Document ID、PostgreSQL schema、HTTP route、实时 transport 或最终依赖。只有下述实验门槛全部通过后，才将状态改为“已接受”并开始正式纵向切片。
 
 ## 评估结论
+
+### 2026-09-05 推进澄清
+
+本轮文档审阅选择 M0.5 / M1 不引入 CRDT，使用原接受门槛第 4 项的非 CRDT 路径。先审查最小 Markdown Document 的业务、revision、权限、渲染安全、关系与恢复 / 导出合同，不再把阶段 B 内存收敛实验作为该切片的前置条件。
+
+阶段 A 的 Tiptap / ProseMirror 选型与实验结果保留，用于后续结构化编辑；不据此引入正式编辑器依赖。阶段 B 延后，在有明确影响当前设计的问题、结束条件和投入上限时再启动，依赖须重新预检并获得对应授权。阶段 C 仍需多人协作需求与独立协议 ADR，不因本次顺序调整而提前进入实现。
+
+本次仅调整仍在提议中的评估路径，没有冻结 Document schema、公共协议、依赖或权限，也没有把 ADR 标记为已接受。具体近期任务只维护在[当前状态](../status/current.md)。
 
 ### M0.5 正文基线
 
@@ -47,7 +57,7 @@ Markdown 不承诺对所有排版做 byte-for-byte 往返。实验必须区分�
 
 | 候选 | 保留理由 | 当前风险与限制 | 结论 |
 | --- | --- | --- | --- |
-| Tiptap 3 / ProseMirror | MIT；React 19 peer range；ProseMirror 提供 schema、transaction、step 与成熟的结构化编辑基础；Tiptap 提供较薄的 React/headless 扩展层，并有官方 Yjs binding | `@tiptap/markdown` 官方仍标记 Beta；headless UI 的 toolbar、焦点和 ARIA 仍由本项目负责；Comments、Snapshots 等能力不能默认依赖付费 Tiptap 产品 | 阶段 A 已选定进入阶段 B；不等于已批准生产依赖 |
+| Tiptap 3 / ProseMirror | MIT；React 19 peer range；ProseMirror 提供 schema、transaction、step 与成熟的结构化编辑基础；Tiptap 提供较薄的 React/headless 扩展层，并有官方 Yjs binding | `@tiptap/markdown` 官方仍标记 Beta；headless UI 的 toolbar、焦点和 ARIA 仍由本项目负责；Comments、Snapshots 等能力不能默认依赖付费 Tiptap 产品 | 阶段 A 已选定后续候选，阶段 B 延后；不等于已批准生产依赖 |
 | Lexical | MIT；React-first；EditorState 为不可变、可序列化 snapshot；提供 Markdown、Yjs 与 React 包 | 节点注册、导入导出、协同初始化和 schema 演进需要自行装配；当前协同实现同时存在 legacy 与 experimental v2 路径，迁移风险需实测 | 阶段 A 对照已完成；保留退出证据，不进入阶段 B |
 | 直接 ProseMirror | schema、transaction 和 `prosemirror-markdown` 边界最直接，MIT | 需要自行承担 React 生命周期、命令、toolbar、可访问性和扩展装配；与 Tiptap 比较前没有证据证明额外控制能抵消维护成本 | 作为 Tiptap 底层与故障定位参照，不单独建立第三套 UI |
 
@@ -135,6 +145,8 @@ Message SSE 是单向、可回到 canonical history 的提示通道，不承担�
 
 ### 阶段 B：内存协同收敛
 
+本阶段是延后的独立实验，不是 M0.5 / M1 最小 Markdown Document 的前置门禁。以下范围在再次启动时适用，旧依赖预检与历史实验授权不能自动沿用。
+
 只有阶段 A 选出编辑器后，才在实验内加入 Yjs，不启动 WebSocket 或浏览器持久化。用两个内存 Y.Doc 和可控 update 传递验证：
 
 - 并发不相交与重叠编辑最终收敛；
@@ -193,7 +205,7 @@ opaque update 适合合并，不自动提供业务 revision、审计、可读导
 1. 项目所有者明确授权实验依赖与独立 lockfile，仓库未改变正式 Web 依赖；
 2. 阶段 A 的共享 corpus、round-trip 报告、bundle / dependency 清单和浏览器证据完成；
 3. 明确选择 Tiptap、Lexical 或拒绝两者，并记录具体失败样例，而不是凭偏好选型；
-4. 阶段 B 的确定性内存协同测试完成，或明确决定 M0.5 / M1 不引入 CRDT；
+4. 明确本阶段是否引入 CRDT；2026-09-05 已选择 M0.5 / M1 不引入，因而不要求先完成阶段 B。若未来改变该选择，须完成阶段 B 并审查相应协议，不能沿用此非 CRDT 结论；
 5. Document 最小字段、revision、权限、EntityLink、事件、备份和导出边界另行审查；
 6. `./scripts/check-repo.sh` 与实验自己的无网络门禁通过；
 7. `docs/status/current.md` 记录真实通过项和剩余停止线。

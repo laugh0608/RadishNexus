@@ -2,7 +2,7 @@
 
 本目录已完成 [ADR-0021](../../docs/adr/0021-document-editor-and-collaboration-foundation.md) 阶段 A：用同一版本化 Markdown corpus 和真实浏览器对照 Tiptap 3 / ProseMirror 与 Lexical 的解析、内部表示、确定性往返与交互边界。
 
-阶段 A 已选择 Tiptap 3 / ProseMirror 进入后续内存协同实验；完整实测证据、选择理由与停止线见 [RESULTS.md](RESULTS.md)。阶段 B 尚未安装 Yjs 或开始实现。
+阶段 A 已选择 Tiptap 3 / ProseMirror 作为后续结构化编辑与内存协同实验候选；完整实测证据见 [RESULTS.md](RESULTS.md)。阶段 B 尚未安装 Yjs 或开始实现。2026-09-05 已将其延后，最小 Markdown Document 不以该实验为前置；接受路径与停止线见 [ADR-0021](../../docs/adr/0021-document-editor-and-collaboration-foundation.md)，近期顺序只看[当前状态](../../docs/status/current.md)。
 
 边界：
 

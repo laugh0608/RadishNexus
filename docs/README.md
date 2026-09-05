@@ -30,17 +30,14 @@
 - 分支、PR、Ruleset、Agent 和文档维护规则写在 `governance/`。
 - 跨语言工程基线写在 `development/`；模块实现说明应随未来代码就近维护。
 - 当前推进焦点只写在 `status/current.md`，其他文档不重复维护易过期进度。
+- 已结束批次与状态快照归入 `status/history/`，结构性审阅证据归入 `status/reviews/`；标明日期、代码基线、验证范围和历史性质，不作为当前推进或授权依据。
 - 根 `LICENSE` 是当前核心内容许可条款的优先真相源；许可策略文档不能替代正式许可证或单独书面授权。
 - 根 [AGENTS.md](../AGENTS.md) 与 [CLAUDE.md](../CLAUDE.md) 是逐字一致的执行入口；详细理由仍以治理专题和 ADR 为准。
 
-## 当前边界
+## 状态与验证入口
 
-当前已经建立仓库治理、正式 Go 服务基础、Thread → Decision → Ticket application service、已验证 Jenkins delivery → CI Run、显式 staging Deployment、可重建 Activity、Decision / Ticket / CI Run / Deployment Nexus View application query、本地账号与公共 Session transport、首个 Deployment Nexus View 业务读取端点，以及可登录、选择 Workspace 并进入 canonical Deployment 页面的最小 authenticated Web Shell，但不代表以下产品能力已经实现：
+- [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
+- [2026-09-05 项目审阅](status/reviews/2026-09-05-project-review.md)：源码发现、建议与实际验证范围。
+- [2026-09-03 状态快照](status/history/2026-09-03-status.md)：此前阶段事实及浏览器、数据库、部署和编辑器验收流水；旧计划不再生效。
 
-- 可供真实团队日常使用的完整 Web App、对象发现、产品导航或管理入口；
-- 完整业务 HTTP API、OIDC / MFA 等完整身份能力；
-- 可安装插件或 Plugin SDK；
-- Flutter 移动端或 PC 客户端；
-- Jenkins Webhook 接入、签名验证、Secret 管理、插件 runtime，或 GitLab 等其他外部系统集成；
-- 部署执行引擎、production Deployment、跨版本升级、生产级备份策略和高可用能力；
-- 已完成专业法律审查的许可证文本。
+正式产品完成线只看当前状态与对应验收证据；专题中的目标模型、候选技术与历史测试通过不自动表示公共入口、团队使用或生产能力已经完成。

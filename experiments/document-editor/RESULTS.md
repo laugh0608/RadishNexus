@@ -2,6 +2,8 @@
 
 日期：2026-09-03
 
+2026-09-05 追踪说明：以下保留阶段 A 的实测与当时选型。后续推进已按 [ADR-0021](../../docs/adr/0021-document-editor-and-collaboration-foundation.md)选择 M0.5 / M1 非 CRDT 路径，阶段 B 延后；这不改变本轮实验结果或批准生产依赖。
+
 ## 结论
 
 Tiptap 3 / ProseMirror 与 Lexical 都通过 `radishnexus-markdown-v1` 的 12 个 headless case：重复 parse 产生相同内部 JSON，规范化 Markdown 的第二次往返稳定，声明支持的文本与结构没有丢失。内置浏览器进一步验证了两者的 keyboard-only formatting、undo / redo、focus restore、plain-text 与 `text/markdown` paste、copy、ARIA 基本语义、390px 和 400-section 长文档交互；项目所有者随后用 macOS 中文输入法完成两套候选的真实 composition 复验。
@@ -68,7 +70,7 @@ raw HTML 与危险链接结果进一步确认 editor import / export 不是 sani
 
 阶段 A 已完成。Browser 自动化本身不支持 `Input.imeSetComposition`，因此自动化 Unicode 直接输入没有被当作 IME 证据；最终通过项来自项目所有者对同一隔离页面的真实 macOS 中文输入法复验。先在两个 editor 依次输入后，第一次 `⌘Z` 只撤销仍持有焦点的第二个 editor；重新聚焦第一个 editor 后一次 `⌘Z` 也完整撤销对应 composition，证明两套 history 均按当前 editor 焦点隔离，没有错误跨 editor 撤销。
 
-下一步只能在获得精确依赖授权后，用选定的 Tiptap / ProseMirror 与 Yjs 做无网络、无 WebSocket、无 IndexedDB 的双文档内存收敛实验。ADR-0021 在阶段 B 和 Document 业务合同审查完成前继续保持“提议”，正式 Web 依赖、migration、Document route、协同 transport 与 Web Storage 均不进入本轮。
+2026-09-03 当时计划是在获得精确依赖授权后，用选定的 Tiptap / ProseMirror 与 Yjs 做无网络、无 WebSocket、无 IndexedDB 的双文档内存收敛实验。该实验已于 2026-09-05 延后，不再作为最小 Document 的前置；ADR-0021 仍待 Document 业务合同审查，不因已有阶段 A 证据自动接受。具体下一步以[当前状态](../../docs/status/current.md)为准。
 
 ## 复验
 
