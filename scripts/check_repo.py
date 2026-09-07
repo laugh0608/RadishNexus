@@ -18,6 +18,7 @@ MAX_FILE_BYTES = 10 * 1024 * 1024
 
 REQUIRED_FILES = (
     ".editorconfig",
+    ".dockerignore",
     ".gitattributes",
     ".gitignore",
     "AGENTS.md",
@@ -36,6 +37,9 @@ REQUIRED_FILES = (
     ".github/workflows/pr-check.yml",
     "docs/README.md",
     "docs/adr/0001-branch-and-pr-governance.md",
+    "docs/adr/0016-minimal-docker-compose-self-hosting.md",
+    "docs/adr/0017-channel-message-boundary-and-single-process-realtime.md",
+    "docs/adr/0020-session-scoped-single-process-message-realtime.md",
     "docs/adr/README.md",
     "docs/development/README.md",
     "docs/development/engineering-standards.md",
@@ -43,6 +47,11 @@ REQUIRED_FILES = (
     "docs/governance/agent-collaboration.md",
     "docs/governance/documentation-governance.md",
     "docs/governance/repository-governance.md",
+    "deploy/.env.example",
+    "deploy/Caddyfile",
+    "deploy/Dockerfile",
+    "deploy/README.md",
+    "deploy/compose.yaml",
     "experiments/m0-core-contracts/README.md",
     "experiments/m0-core-contracts/go.mod",
     "experiments/m0-core-contracts/go.sum",
@@ -52,6 +61,7 @@ REQUIRED_FILES = (
     "scripts/check-m0-core-contracts.sh",
     "scripts/check-repo.ps1",
     "scripts/check-repo.sh",
+    "scripts/check-self-hosted-compose.sh",
     "scripts/check_repo.py",
     "scripts/tests/test_check_repo.py",
 )
@@ -164,7 +174,11 @@ def repository_files() -> list[Path]:
         )
         if result.returncode == 0:
             paths = [Path(raw.decode("utf-8")) for raw in result.stdout.split(b"\0") if raw]
-            return sorted(path for path in paths if not is_excluded(path))
+            return sorted(
+                path
+                for path in paths
+                if not is_excluded(path) and (REPO_ROOT / path).is_file()
+            )
 
     paths: list[Path] = []
     for candidate in REPO_ROOT.rglob("*"):
@@ -366,7 +380,7 @@ def check_workflow_contract(errors: list[str]) -> None:
         "./scripts/check-web.sh",
         "python3 -m unittest discover -s scripts/tests",
         "go test -tags=integration ./...",
-        "needs:\n      - repo-hygiene\n      - checker-tests\n      - m0-core-contracts",
+        "needs:\n      - repo-hygiene\n      - checker-tests\n      - m0-core-contracts\n      - go-server",
         "- web-app",
     )
     for fragment in required_fragments:

@@ -1,8 +1,8 @@
 # RadishNexus 总体架构
 
-状态：方向基线，Go 服务基础已冻结
+状态：方向基线，M0.5 / M1 首批纵向边界已冻结
 
-日期：2026-08-28
+日期：2026-09-05
 
 ## 架构目标
 
@@ -17,10 +17,12 @@ RadishNexus 首期架构必须同时服务于四个目标：
 
 采用模块化单体，而不是从微服务起步。
 
+下图表达目标职责，不是当前模块或插件运行时的实现清单；正式切片成熟度见[当前状态](../status/current.md)。
+
 ```text
 React + TypeScript Web App
             │
-      HTTP API + WebSocket
+      HTTP API + SSE / future WebSocket
             │
 ┌────────── Go Server ──────────┐
 │ Identity / Workspace / RBAC   │
@@ -44,7 +46,7 @@ React + TypeScript Web App
 
 Go 承担首期主要业务能力：
 
-- HTTP API 和 WebSocket；
+- HTTP API、M0.5 单进程 SSE 和后续版本化 WebSocket；
 - 身份、Workspace、Project 和 RBAC；
 - 私聊、频道、消息和 Thread；
 - Decision、工单及其状态流；
@@ -109,6 +111,8 @@ Flutter 与 React 不强求共享 UI 代码。
 - Plugin Manager、Secrets 和配置；
 - 数据迁移、健康检查和系统诊断。
 
+M1 Identity 首段使用一次性显式 bootstrap 建立本地账号、首个 Workspace owner 和服务端 opaque Session；OIDC 延后并复用同一 user、membership 与 Session 边界。Session 不携带固定 Workspace 授权，路由选择稳定 Workspace ID 后必须重新验证 active membership。浏览器 Cookie、CSRF、request ID、版本化错误对象和恢复时 Session 失效语义见 [ADR-0012](../adr/0012-local-identity-and-session-foundation.md)；精确 public origin、可信代理、客户端 IP、登录限流和三个公共认证路由见 [ADR-0013](../adr/0013-public-authentication-transport.md)；首个 Workspace 路径业务读取、公共 DTO 和 no-store Web 消费见 [ADR-0014](../adr/0014-session-scoped-deployment-nexus-view-transport.md)；同源 authenticated Web Shell、显式 production build root、页面 allowlist 与静态缓存边界见 [ADR-0015](../adr/0015-same-origin-authenticated-web-shell.md)。
+
 ### 内建业务模块
 
 - Chat；
@@ -144,7 +148,7 @@ entity://environment/env_002
 
 引用必须经过原对象权限检查。能够看到工单不表示自动获得关联私密频道或文档的读取权。
 
-类型注册、结构化表示、Workspace 解析和受限占位的 M0 基线见[核心实体、授权与事件契约](core-contracts.md)。Thread、Decision、Ticket 的首段 Project 作用域与物理 schema 已由 ADR-0004、ADR-0005 和正式 migration 落地；Component、CI Run 的来源与读取边界已由 ADR-0006、ADR-0007 和 migration 003 落地；Environment、显式 staging Deployment 与环境级授权已由 ADR-0009 和 migration 004 落地。具体 ID 生成算法及 Document、Repository 等其余对象 schema 仍未冻结。
+类型注册、结构化表示、Workspace 解析和受限占位的 M0 基线见[核心实体、授权与事件契约](core-contracts.md)。Thread、Decision、Ticket 的首段 Project 作用域与物理 schema 已由 ADR-0004、ADR-0005 和正式 migration 落地；Component、CI Run 的来源与读取边界已由 ADR-0006、ADR-0007 和 migration 003 落地；Environment、显式 staging Deployment、环境级写授权与安全读取已由 ADR-0009、ADR-0011 和 migration 004 落地；Channel、Message 与 messaging-origin Thread 的最小身份、来源、权限和幂等边界已由 ADR-0017 与 migration 006 落地；Thread → Decision → Ticket 的 Session transport、人工确认和命令 receipt 已由 ADR-0019 与 migration 007 落地。具体 ID 生成算法及 Document、Repository 等其余对象 schema 仍未冻结。
 
 ## EntityLink 与 Nexus View
 
@@ -181,27 +185,32 @@ entity://environment/env_002
 
 Activity 不是 Outbox 的副本。Outbox 用于可靠投递，Activity 是可重建、可权限过滤的产品时间线投影；审计日志则保存安全与合规所需的操作证据。三者可以来自同一领域事件，但保留不同职责和生命周期。
 
+可重建不等于运行时会自动更新。当前正式实现只有显式 Activity 全量重建，正常业务写入到 Timeline 的更新路径仍待补齐；后续切片需明确可见时效、失败恢复和重建并发，再选择同事务投影或可靠异步消费，不在本次文档审阅中预定实现方案。
+
 M0 契约把不可变领域事件事实与可变投递状态作逻辑分离，避免已投递 Outbox 清理后无法重建 Activity 或验证备份；具体一表或分表由 PostgreSQL 原型决定。详见[核心实体、授权与事件契约](core-contracts.md)和 [ADR-0002](../adr/0002-stable-entity-reference-and-event-projection.md)。
 
 早期不强制引入独立消息中间件。只有插件吞吐、跨进程可靠消费或服务拆分形成真实需求后，再评估 NATS JetStream 等方案。
 
 ## 数据和基础设施
 
-首期建议：
+基础设施按实际需求引入；以下区分已用基础与候选，不要求自部署实例预装所有组件：
 
-- PostgreSQL：核心业务、插件命名空间、Outbox 和初始全文搜索；
-- Redis：在线状态、短期缓存、限流和可丢失的实时协调状态；
-- S3 兼容对象存储：附件、图片、文档资源和可选构建制品；
-- WebSocket：消息、通知、在线状态和协作事件；
+- PostgreSQL：当前核心业务与 Outbox；插件命名空间和初始全文搜索按后续切片落地；
+- Redis（候选）：出现进程外协调需求后再评估；当前 Message SSE 与登录限流使用单进程边界，不要求 Redis；
+- S3 兼容对象存储（候选）：附件、图片、文档资源和可选构建制品进入实现时再评估；
+- SSE：M0.5 单进程、Session 作用域的 Message 单向增量；
+- WebSocket：M2 出现双向 presence、typing 或协作控制需求后的版本化目标；
 - Docker Compose：首个正式自部署方式；
 - OpenTelemetry 兼容日志、指标和追踪边界。
 
 独立搜索集群、Kubernetes 和高可用拓扑都在真实规模需求出现后引入。
 
+canonical Channel Web 对 SSE 使用“先建立连接并收到 `ready`、再读取 canonical history、随后合并缓冲增量”的状态机。原生 EventSource 负责在同一进程 generation 内携带 `Last-Event-ID` 重连；`resync-required` 必须建立新边界并全量重读，`access-revoked` 必须清空已渲染正文和草稿。写 command 继续使用具备 CSRF 与幂等语义的短请求，不通过 SSE 发送，也不建立隐藏 polling fallback。Document 协同在自身协议、权限和恢复合同冻结前不得复用或扩展这条 Message transport。
+
 ## API 原则
 
 - 对 Web、Flutter 和外部开发者提供稳定的 HTTP API；
-- 实时增量通过版本化 WebSocket 协议传输；
+- M0.5 Message 单向实时增量使用可回到 canonical history 的版本化 SSE 事件；M2 双向实时能力另行冻结 WebSocket 协议；
 - 公共 API 生成机器可读契约；
 - 插件不能直接访问核心数据库表；
 - 外部写操作必须支持幂等键、权限检查和审计；
@@ -221,6 +230,8 @@ M0 契约把不可变领域事件事实与可变投递状态作逻辑分离，�
 - 不依赖 RadishNexus 官方云才能完成的核心运行路径。
 
 M0.5 已建立第一条可验证恢复路径：显式命令生成版本化 manifest 与 PostgreSQL custom archive，只在本地或受控私有连接的全新空 PostgreSQL 17 目标上以单事务恢复，随后执行正式 forward-only migration 校验并从不可变领域事件重建 Activity。当前工件是同 major 整库运维备份，不是 `.nexus` 开放导出，也不包含自动覆盖、TLS 工具桥接、跨大版本承诺、远程存储、加密或 Secret 备份。精确边界见 [ADR-0010](../adr/0010-verified-postgresql-backup-and-restore.md)。
+
+M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 Caddy 是唯一宿主 HTTPS 入口，Go server 同源交付 production Web build 与 API，PostgreSQL 只位于内部数据网络；migration、一次性 bootstrap、backup 和 restore 继续使用现有显式 CLI，数据库密码通过按 service 挂载的文件 Secret 输入。该拓扑已经从全新命名 volume 验证 PostgreSQL readiness、migration、一次 bootstrap、重复 bootstrap 拒绝、HTTPS login / Session / logout、转发 Header 清洗和非公开应用/数据库端口；它仍不是公网证书、高可用或跨 major 升级方案。精确边界见 [ADR-0016](../adr/0016-minimal-docker-compose-self-hosting.md) 和 [`deploy/README.md`](../../deploy/README.md)。
 
 ### 可移植上下文包
 
@@ -244,27 +255,23 @@ M0.5 已建立第一条可验证恢复路径：显式命令生成版本化 manif
 - Attention Item、Activity、导出包和 AI 插件必须复用同一对象权限语义；
 - 第一阶段优先 TLS、静态加密、RBAC、审计和备份安全，不默认承诺全局端到端加密。
 
-## 预期仓库布局
+## 当前仓库布局
 
-当前已经从单一 `server/` Go module 起步；其余目录只在对应应用、SDK、插件或部署产物真正进入实现时创建：
+模块化单体的职责边界应在真实变更中逐步形成：复用稳定身份与权限基础，把业务用例和事务归于对应领域。当前 `internal/goldenpath` 是正式纵向切片的集中实现，不是已经完成所有领域模块拆分；目录调整、API adapter 去重和页面拆分按[工程标准](../development/engineering-standards.md)随相关变更开展，不作为独立大重构前置任务。
+
+当前已经建立根级 `web/` React App、唯一正式 `server/` Go module、受控 `deploy/` Compose 工件、可丢弃的 `experiments/` 和共享 `scripts/`；SDK、插件与公共契约目录只在对应产物真正进入实现时创建：
 
 ```text
 RadishNexus/
-├── apps/
-│   └── web/
+├── web/
 ├── server/
 │   ├── cmd/
 │   └── internal/
-├── sdk/
-│   ├── plugin-go/
-│   ├── plugin-rust/
-│   └── plugin-ts/
-├── plugins/
-│   └── jenkins/
-├── contracts/
 ├── deploy/
+├── experiments/
+├── scripts/
 ├── docs/
 └── LICENSE
 ```
 
-SDK 和插件目录必须拥有独立许可证，不能因位于同一仓库而模糊授权边界。
+未来 SDK 和插件目录必须拥有独立许可证，不能因位于同一仓库而模糊授权边界；`deploy/` 只承载已经冻结且可复验的部署工件，不提前放置高可用、Kubernetes 或公网生产占位结构。

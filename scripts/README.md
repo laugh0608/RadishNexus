@@ -57,6 +57,14 @@ npm ci
 
 该入口默认不访问网络，覆盖 Prettier、Oxlint、Vitest + jsdom、严格 TypeScript、Vite production build，以及 lockfile 来源、integrity、许可证和 lifecycle script 基线。CI 在 `npm ci` 后额外运行 `npm audit --audit-level=high`；本地需要刷新漏洞数据时可在获得网络与依赖操作授权后运行同一命令。
 
+需要人工复核 production Web build、正式 Session transport 与真实 PostgreSQL 的完整 HTTPS 浏览器链路时运行：
+
+```bash
+./scripts/run-authenticated-web-browser-fixture.sh
+```
+
+该入口先执行 Web production build，再启动任务专属 PostgreSQL、fixture upstream 与固定 Caddy HTTPS reverse proxy，输出 origin、本次 Caddy CA、contributor / decider 两个测试账号、canonical Deployment / Channel / Thread path、数据库容器标识与 stop 文件，并等待人工浏览器复核。它不会隐式拉取缺失镜像，测试账号不属于产品默认 credential；浏览器必须在连接前核对并临时信任本次 CA，不应绕过证书告警。创建输出的 stop 文件后，脚本会退出并清理容器、volume 与临时状态；操作者仍须按完整指纹删除导入登录钥匙串的 CA。fixture 可复核正式 Channel SSE 增量 / 重连 / 撤权、Message / Thread 写入以及 Thread → Decision → Ticket 的分权协作链，但不会自动替代交互式浏览器检查。精确安全边界见 [Web App](../web/README.md)、[ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md)、[ADR-0018](../docs/adr/0018-session-scoped-channel-message-transport.md)、[ADR-0019](../docs/adr/0019-session-scoped-thread-decision-ticket-transport.md) 与 [ADR-0020](../docs/adr/0020-session-scoped-single-process-message-realtime.md)。
+
 ## M0 核心契约实验
 
 不需要数据库的 Go 测试与静态检查：
@@ -75,7 +83,7 @@ npm ci
 
 ## 正式 Go 服务
 
-不需要数据库的单元测试、`go vet`、`go mod tidy -diff` 与 module checksum 验证：
+不需要数据库的全量竞态测试、`go vet`、`go mod tidy -diff` 与 module checksum 验证：
 
 ```bash
 ./scripts/check-server.sh
@@ -87,7 +95,7 @@ npm ci
 ./scripts/check-server-postgres.sh
 ```
 
-两个 PostgreSQL 入口复用 `run-postgres-go-integration.sh`，只操作各自任务专属容器并在退出时自动清理；默认不会隐式拉取缺失镜像。
+两个 PostgreSQL 入口复用 `run-postgres-go-integration.sh`，只操作各自任务专属容器并在退出时自动清理；默认不会隐式拉取缺失镜像。共享 runner 只有在容器内连续两次真实 `psql SELECT 1` 成功后才通过 readiness，避免 PostgreSQL 初始化重启窗口让宿主端测试遇到瞬时 EOF。
 
 使用两个独立的固定 PostgreSQL 17 容器，验证版本化 backup manifest、custom archive、全新空目标恢复、正式 migration、Activity 重建和关键失败路径：
 
@@ -96,3 +104,13 @@ npm ci
 ```
 
 该入口在源实例通过 application service 生成 Thread → Decision → Ticket → CI Run → staging Deployment fixture，比较恢复前后所有纳入表和 Activity 全量快照，并证明 migration manifest 漂移、dump 损坏和非空目标均 fail closed。脚本只删除自己创建的临时目录、网络和容器，也不会隐式拉取缺失镜像。
+
+## Docker Compose 自部署开发拓扑
+
+在五个 `tag@sha256` 官方基础镜像已经显式准备、本机允许 Docker build 读取现有 Go / npm 锁定依赖后，运行：
+
+```bash
+./scripts/check-self-hosted-compose.sh
+```
+
+该入口不会拉取缺失镜像。它创建任务专属 Compose project、临时数据库 Secret、PostgreSQL volume、Caddy CA 和随机本机 HTTPS 端口，验证 Compose/Caddy 配置、固定 image build、PostgreSQL readiness、显式 migration、唯一一次 bootstrap、HTTPS login / Session / logout、Secure Cookie、Caddy 及时 flush 正式 Message SSE 的 `ready` / `message.created`，以及 Go server / PostgreSQL 无宿主端口。退出时只删除自己的临时 project、volume、network 与临时目录，保留本地构建出的 application / operation image cache。运行边界和人工入口见 [部署说明](../deploy/README.md)、[ADR-0016](../docs/adr/0016-minimal-docker-compose-self-hosting.md)与 [ADR-0020](../docs/adr/0020-session-scoped-single-process-message-realtime.md)。

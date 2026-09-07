@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>RadishNexus Document Editor Experiment</title>
+    <link rel="stylesheet" href="/browser/styles.css" />
+  </head>
+  <body>
+    <main>
+      <header class="page-header">
+        <p class="eyebrow">ADR-0021 · disposable browser harness</p>
+        <h1>Document editor comparison</h1>
+        <p>
+          两个候选消费同一 Markdown。页面不发出网络请求、不使用 Web
+          Storage，也不代表正式产品 UI。
+        </p>
+      </header>
+
+      <section class="clipboard-fixture" aria-labelledby="clipboard-title">
+        <h2 id="clipboard-title">Clipboard fixture</h2>
+        <label for="clipboard-source">Source text</label>
+        <textarea id="clipboard-source" rows="3">plain paste 中文 🥕</textarea>
+        <label for="clipboard-sink">Copy result</label>
+        <textarea id="clipboard-sink" rows="3"></textarea>
+      </section>
+
+      <div class="candidate-grid">
+        <section
+          class="candidate"
+          data-candidate="tiptap"
+          aria-labelledby="tiptap-title"
+        >
+          <div class="candidate-heading">
+            <div>
+              <p class="candidate-label">Primary candidate</p>
+              <h2 id="tiptap-title">Tiptap 3 / ProseMirror</h2>
+            </div>
+            <span class="version">3.31.2</span>
+          </div>
+          <div
+            class="toolbar"
+            role="toolbar"
+            aria-label="Tiptap formatting controls"
+          >
+            <button type="button" data-action="bold" aria-label="Tiptap bold">
+              Bold
+            </button>
+            <button
+              type="button"
+              data-action="bullet"
+              aria-label="Tiptap bullet list"
+            >
+              List
+            </button>
+            <button type="button" data-action="undo" aria-label="Tiptap undo">
+              Undo
+            </button>
+            <button type="button" data-action="redo" aria-label="Tiptap redo">
+              Redo
+            </button>
+            <button type="button" data-action="load-sample">Sample</button>
+            <button type="button" data-action="load-large">Long</button>
+            <button type="button" data-action="clear">Clear</button>
+          </div>
+          <div class="editor-frame">
+            <div data-editor="tiptap"></div>
+          </div>
+          <output data-status="tiptap" aria-live="polite"></output>
+          <details>
+            <summary>Normalized Markdown</summary>
+            <pre data-markdown="tiptap"></pre>
+          </details>
+        </section>
+
+        <section
+          class="candidate"
+          data-candidate="lexical"
+          aria-labelledby="lexical-title"
+        >
+          <div class="candidate-heading">
+            <div>
+              <p class="candidate-label">Comparator</p>
+              <h2 id="lexical-title">Lexical</h2>
+            </div>
+            <span class="version">0.50.0</span>
+          </div>
+          <div
+            class="toolbar"
+            role="toolbar"
+            aria-label="Lexical formatting controls"
+          >
+            <button type="button" data-action="bold" aria-label="Lexical bold">
+              Bold
+            </button>
+            <button
+              type="button"
+              data-action="bullet"
+              aria-label="Lexical bullet list"
+            >
+              List
+            </button>
+            <button type="button" data-action="undo" aria-label="Lexical undo">
+              Undo
+            </button>
+            <button type="button" data-action="redo" aria-label="Lexical redo">
+              Redo
+            </button>
+            <button type="button" data-action="load-sample">Sample</button>
+            <button type="button" data-action="load-large">Long</button>
+            <button type="button" data-action="clear">Clear</button>
+          </div>
+          <div class="editor-frame">
+            <div data-editor="lexical"></div>
+          </div>
+          <output data-status="lexical" aria-live="polite"></output>
+          <details>
+            <summary>Normalized Markdown</summary>
+            <pre data-markdown="lexical"></pre>
+          </details>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="/browser/main.mjs"></script>
+  </body>
+</html>

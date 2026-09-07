@@ -1,0 +1,255 @@
+:root {
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: #17221b;
+  background: #f5f7f2;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+button {
+  min-height: 2.75rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #aebbac;
+  border-radius: 0.55rem;
+  color: #17221b;
+  background: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #edf4e9;
+}
+
+button:focus-visible,
+textarea:focus-visible,
+[contenteditable="true"]:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #4c7e42;
+  outline-offset: 2px;
+}
+
+main {
+  width: min(100%, 90rem);
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.page-header,
+.clipboard-fixture,
+.candidate {
+  border: 1px solid #d2dbcf;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 0.35rem 1.4rem rgb(31 52 34 / 8%);
+}
+
+.page-header {
+  padding: 1.5rem;
+}
+
+.page-header h1,
+.candidate h2,
+.clipboard-fixture h2 {
+  margin-block: 0.25rem 0.7rem;
+  overflow-wrap: anywhere;
+}
+
+.page-header p:last-child {
+  margin-bottom: 0;
+}
+
+.eyebrow,
+.candidate-label {
+  margin: 0;
+  color: #4c6e4a;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.clipboard-fixture {
+  display: grid;
+  grid-template-columns: auto minmax(12rem, 1fr) auto minmax(12rem, 1fr);
+  gap: 0.65rem;
+  align-items: center;
+  margin-block: 1rem;
+  padding: 1rem;
+}
+
+.clipboard-fixture h2 {
+  grid-column: 1 / -1;
+}
+
+.clipboard-fixture textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #aebbac;
+  border-radius: 0.55rem;
+  padding: 0.65rem;
+}
+
+.candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.candidate {
+  min-width: 0;
+  padding: 1rem;
+}
+
+.candidate-heading {
+  display: flex;
+  gap: 1rem;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.version {
+  flex: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  color: #365435;
+  background: #e7f0e2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-block: 0.75rem;
+}
+
+.editor-frame {
+  min-width: 0;
+  overflow: clip;
+  border: 1px solid #91a58e;
+  border-radius: 0.7rem;
+  background: #fbfdf9;
+}
+
+[data-editor] > .ProseMirror,
+[data-editor="lexical"] {
+  min-height: 19rem;
+  max-height: 34rem;
+  overflow: auto;
+  padding: 1rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+[data-editor] p,
+[data-editor] h1,
+[data-editor] h2,
+[data-editor] blockquote,
+[data-editor] pre {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+[data-editor] pre {
+  overflow-x: auto;
+  white-space: pre;
+}
+
+[data-editor] blockquote {
+  margin-inline: 0;
+  padding-left: 0.8rem;
+  border-left: 0.25rem solid #91a58e;
+}
+
+output {
+  display: block;
+  min-height: 1.4rem;
+  margin-block: 0.65rem;
+  color: #4c5d4d;
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+details {
+  min-width: 0;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+details pre {
+  max-height: 18rem;
+  overflow: auto;
+  padding: 0.75rem;
+  border-radius: 0.55rem;
+  background: #eff3ed;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 52rem) {
+  main {
+    padding: 1rem;
+  }
+
+  .candidate-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .clipboard-fixture {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .clipboard-fixture h2 {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 26rem) {
+  main {
+    padding: 0.65rem;
+  }
+
+  .page-header,
+  .candidate,
+  .clipboard-fixture {
+    padding: 0.8rem;
+    border-radius: 0.75rem;
+  }
+
+  .candidate-heading {
+    display: block;
+  }
+
+  .version {
+    display: inline-block;
+    margin-bottom: 0.35rem;
+  }
+
+  .toolbar button {
+    flex: 1 1 5rem;
+  }
+}

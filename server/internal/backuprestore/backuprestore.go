@@ -41,7 +41,10 @@ const (
 var (
 	includedDataTables = []string{
 		"public.radishnexus_schema_migrations",
+		"radishnexus.channel_memberships",
+		"radishnexus.channels",
 		"radishnexus.ci_runs",
+		"radishnexus.collaboration_command_receipts",
 		"radishnexus.components",
 		"radishnexus.decisions",
 		"radishnexus.deployments",
@@ -51,6 +54,8 @@ var (
 		"radishnexus.environment_deployment_authorizations",
 		"radishnexus.environments",
 		"radishnexus.inbound_deliveries",
+		"radishnexus.local_accounts",
+		"radishnexus.messages",
 		"radishnexus.outbox_deliveries",
 		"radishnexus.project_memberships",
 		"radishnexus.projects",
@@ -65,6 +70,7 @@ var (
 	}
 	excludedDataTables = []string{
 		"radishnexus.activity_items",
+		"radishnexus.user_sessions",
 	}
 	toolVersionPattern = regexp.MustCompile(`\b([0-9]+)(?:\.[0-9]+)+\b`)
 )

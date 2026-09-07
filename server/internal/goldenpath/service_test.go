@@ -11,6 +11,16 @@ import (
 )
 
 type recordingStore struct {
+	createMessageCommand    CreateMessageCommand
+	createMessageResult     CreateMessageResult
+	listMessagesPrincipal   authz.Principal
+	listMessagesInput       ListChannelMessagesInput
+	messagePage             MessagePage
+	listMessagesCalled      bool
+	authorizeChannelID      string
+	channelMessageID        string
+	channelMessage          MessageProjection
+	startThreadCommand      StartThreadFromMessageCommand
 	createDecisionCommand   CreateDecisionCommand
 	recordCIRunCommand      RecordCompletedCIRunCommand
 	recordDeploymentCommand RecordStagingDeploymentCommand
@@ -19,17 +29,73 @@ type recordingStore struct {
 	nexusView               NexusView
 }
 
-func (store *recordingStore) CreateDecisionFromThread(_ context.Context, command CreateDecisionCommand) (Decision, error) {
+func (store *recordingStore) ListChannelMessages(
+	_ context.Context,
+	principal authz.Principal,
+	input ListChannelMessagesInput,
+) (MessagePage, error) {
+	store.listMessagesCalled = true
+	store.listMessagesPrincipal = principal
+	store.listMessagesInput = input
+	return store.messagePage, nil
+}
+
+func (store *recordingStore) CreateMessage(
+	_ context.Context,
+	command CreateMessageCommand,
+) (CreateMessageResult, error) {
+	store.createMessageCommand = command
+	if store.createMessageResult.Message.ID != "" {
+		return store.createMessageResult, nil
+	}
+	return CreateMessageResult{
+		Message: Message{ID: command.MessageID, Body: command.Body},
+		Created: true,
+	}, nil
+}
+
+func (store *recordingStore) AuthorizeChannelRead(
+	_ context.Context,
+	_ authz.Principal,
+	channelID string,
+) error {
+	store.authorizeChannelID = channelID
+	return nil
+}
+
+func (store *recordingStore) GetChannelMessage(
+	_ context.Context,
+	_ authz.Principal,
+	channelID string,
+	messageID string,
+) (MessageProjection, error) {
+	store.authorizeChannelID = channelID
+	store.channelMessageID = messageID
+	return store.channelMessage, nil
+}
+
+func (store *recordingStore) StartThreadFromMessage(
+	_ context.Context,
+	command StartThreadFromMessageCommand,
+) (Thread, error) {
+	store.startThreadCommand = command
+	return Thread{ID: command.ThreadID, Title: command.Title}, nil
+}
+
+func (store *recordingStore) CreateDecisionFromThread(_ context.Context, command CreateDecisionCommand) (CreateDecisionResult, error) {
 	store.createDecisionCommand = command
-	return Decision{ID: command.DecisionID, Question: command.Question}, nil
+	return CreateDecisionResult{
+		Decision: Decision{ID: command.DecisionID, Question: command.Question},
+		Created:  true,
+	}, nil
 }
 
-func (*recordingStore) AcceptDecision(context.Context, AcceptDecisionCommand) (Decision, error) {
-	return Decision{}, nil
+func (*recordingStore) AcceptDecision(context.Context, AcceptDecisionCommand) (AcceptDecisionResult, error) {
+	return AcceptDecisionResult{}, nil
 }
 
-func (*recordingStore) CreateTicketFromDecision(context.Context, CreateTicketCommand) (Ticket, error) {
-	return Ticket{}, nil
+func (*recordingStore) CreateTicketFromDecision(context.Context, CreateTicketCommand) (CreateTicketResult, error) {
+	return CreateTicketResult{}, nil
 }
 
 func (store *recordingStore) RecordCompletedCIRun(
@@ -94,12 +160,16 @@ func TestCreateDecisionBuildsExplicitAtomicCommand(t *testing.T) {
 	decision, err := service.CreateDecisionFromThread(
 		context.Background(),
 		invocation,
-		CreateDecisionInput{ThreadID: "thr_1", Question: "  Use rate limiting?  "},
+		CreateDecisionInput{
+			ThreadID:          "thr_1",
+			ClientOperationID: "test:decision:1",
+			Question:          "  Use rate limiting?  ",
+		},
 	)
 	if err != nil {
 		t.Fatalf("CreateDecisionFromThread() error = %v", err)
 	}
-	if decision.ID != "dec_1" || store.createDecisionCommand.LinkID != "lnk_1" || store.createDecisionCommand.EventID != "evt_1" {
+	if decision.Decision.ID != "dec_1" || store.createDecisionCommand.LinkID != "lnk_1" || store.createDecisionCommand.EventID != "evt_1" {
 		t.Fatalf("generated identifiers were not kept in one command: %#v", store.createDecisionCommand)
 	}
 	if store.createDecisionCommand.Question != "Use rate limiting?" {
@@ -118,7 +188,12 @@ func TestAcceptDecisionRejectsSystemPrincipalBeforeStore(t *testing.T) {
 		Principal:     authz.Principal{Kind: authz.PrincipalSystem, ID: "system", WorkspaceID: "wrk_1"},
 		SourceKind:    "api",
 		CorrelationID: "cor_1",
-	}, AcceptDecisionInput{DecisionID: "dec_1", Outcome: "yes", Rationale: "because"})
+	}, AcceptDecisionInput{
+		DecisionID:        "dec_1",
+		ClientOperationID: "test:accept:1",
+		Outcome:           "yes",
+		Rationale:         "because",
+	})
 	if !errors.Is(err, authz.ErrUnauthenticated) {
 		t.Fatalf("AcceptDecision() error = %v, want unauthenticated", err)
 	}
@@ -352,12 +427,19 @@ func TestGetNexusViewValidatesTargetAndForwardsPrincipal(t *testing.T) {
 		t.Fatalf("CI Run GetNexusView() error = %v, target = %#v", err, store.nexusTarget)
 	}
 
+	deploymentTarget := entityref.Ref{Type: "deployment", ID: "dpl_1"}
+	_, err = service.GetNexusView(context.Background(), principal, deploymentTarget)
+	if err != nil || store.nexusTarget != deploymentTarget {
+		t.Fatalf("Deployment GetNexusView() error = %v, target = %#v", err, store.nexusTarget)
+	}
+
+	threadTarget := entityref.Ref{Type: "thread", ID: "thr_1"}
 	_, err = service.GetNexusView(
 		context.Background(),
 		principal,
-		entityref.Ref{Type: "thread", ID: "thr_1"},
+		threadTarget,
 	)
-	if !errors.Is(err, authz.ErrInvalid) {
-		t.Fatalf("Thread GetNexusView() error = %v, want invalid", err)
+	if err != nil || store.nexusTarget != threadTarget {
+		t.Fatalf("Thread GetNexusView() error = %v, target = %#v", err, store.nexusTarget)
 	}
 }

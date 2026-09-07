@@ -5,7 +5,9 @@ import {
   decisionNexusViewFixture,
   emptyDecisionNexusViewFixture,
   failedCIRunNexusViewFixture,
+  failedDeploymentNexusViewFixture,
   succeededCIRunNexusViewFixture,
+  succeededDeploymentNexusViewFixture,
 } from "./fixture";
 
 describe("NexusView", () => {
@@ -57,8 +59,10 @@ describe("NexusView", () => {
     ).toBeDefined();
     expect(screen.getByRole("heading", { name: "Relations" })).toBeDefined();
     expect(screen.getByRole("heading", { name: "Timeline" })).toBeDefined();
-    expect(screen.getByText("thread:thr_01JZ7CONTEXT")).toBeDefined();
-    expect(screen.getByText("ticket:tic_01JZ7IMPLEMENT")).toBeDefined();
+    expect(screen.getByText("entity://thread/thr_01JZ7CONTEXT")).toBeDefined();
+    expect(
+      screen.getByText("entity://ticket/tkt_01JZ7IMPLEMENT"),
+    ).toBeDefined();
     expect(screen.getAllByText("受限对象")).toHaveLength(1);
     expect(screen.getAllByText("受限动态")).toHaveLength(1);
     expect(screen.queryByText(/restricted:|secret:/iu)).toBeNull();
@@ -74,8 +78,10 @@ describe("NexusView", () => {
     expect(screen.getByRole("heading", { name: "CI Run" })).toBeDefined();
     expect(screen.getByText("构建成功")).toBeDefined();
     expect(screen.getByText("Identity Service")).toBeDefined();
-    expect(screen.getByText("component:cmp_identity")).toBeDefined();
-    expect(screen.getByText("ci-run:cir_01K3RADISHNEXUS")).toBeDefined();
+    expect(screen.getByText("entity://component/cmp_identity")).toBeDefined();
+    expect(
+      screen.getByText("entity://ci-run/cir_01K3RADISHNEXUS"),
+    ).toBeDefined();
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
     expect(screen.getByText("受控自动化 · ci-run.recorded")).toBeDefined();
 
@@ -106,6 +112,54 @@ describe("NexusView", () => {
 
     expect(fixtures).not.toMatch(
       /jenkins|sourceId|externalRunKey|deliveryId|receipt|digest|secret|url/iu,
+    );
+  });
+
+  it("renders an explicit staging Deployment without implying execution", () => {
+    const { container } = render(
+      <NexusView
+        state={{ status: "ready", data: succeededDeploymentNexusViewFixture }}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Deployment" })).toBeDefined();
+    expect(screen.getByText("部署成功")).toBeDefined();
+    expect(screen.getByText("Staging")).toBeDefined();
+    expect(screen.getByText("entity://environment/env_staging")).toBeDefined();
+    expect(
+      screen.getAllByText("entity://ci-run/cir_01K3RADISHNEXUS"),
+    ).toHaveLength(2);
+    expect(
+      screen.getByText("entity://deployment/dpl_01K3RADISHNEXUS"),
+    ).toBeDefined();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.getByText("萝卜 · deployment.recorded")).toBeDefined();
+    expect(container.textContent).toContain(
+      "不表示 RadishNexus 执行了外部部署",
+    );
+  });
+
+  it("keeps a failed Deployment distinct from its succeeded source build", () => {
+    const { container } = render(
+      <NexusView
+        state={{ status: "ready", data: failedDeploymentNexusViewFixture }}
+      />,
+    );
+
+    expect(screen.getByText("部署失败")).toBeDefined();
+    expect(screen.getByText("staging Deployment 已记录为失败")).toBeDefined();
+    expect(container.textContent).toContain("来源构建已经成功");
+    expect(container.textContent).toContain("CI Run 仍保持自己的成功构建事实");
+  });
+
+  it("keeps authorization and CI source fields out of Deployment fixtures", () => {
+    const fixtures = JSON.stringify([
+      succeededDeploymentNexusViewFixture,
+      failedDeploymentNexusViewFixture,
+    ]);
+
+    expect(fixtures).not.toMatch(
+      /authorization|jenkins|sourceId|externalRunKey|deliveryId|receipt|digest|secret|url/iu,
     );
   });
 });

@@ -74,36 +74,71 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 
 	store := goldenpostgres.New(pool)
 	clock := fixedClock{now: time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)}
-	service := goldenpath.NewService(store, &prefixedSequenceIDs{}, clock)
+	messageNotifier := &committedMessageRecorder{}
+	service := goldenpath.NewService(
+		store,
+		&prefixedSequenceIDs{},
+		clock,
+		goldenpath.WithMessageCreatedNotifier(messageNotifier),
+	)
 	contributor := principal("usr_contributor")
 	decider := principal("usr_decider")
 	reader := principal("usr_reader")
 	admin := principal("usr_admin")
 
 	_, err = service.CreateDecisionFromThread(ctx, invocation(reader, "cor_reader_denied"), goldenpath.CreateDecisionInput{
-		ThreadID: "thr_private",
-		Question: "Should not discover this thread?",
+		ThreadID:          "thr_private",
+		ClientOperationID: "test:reader:decision",
+		Question:          "Should not discover this thread?",
 	})
 	if !errors.Is(err, authz.ErrNotFound) {
 		t.Fatalf("reader CreateDecisionFromThread() error = %v, want not found", err)
 	}
 
-	decision, err := service.CreateDecisionFromThread(ctx, invocation(contributor, "cor_propose"), goldenpath.CreateDecisionInput{
-		ThreadID: "thr_private",
-		Question: "Should the login API add rate limiting?",
+	decisionResult, err := service.CreateDecisionFromThread(ctx, invocation(contributor, "cor_propose"), goldenpath.CreateDecisionInput{
+		ThreadID:          "thr_private",
+		ClientOperationID: "test:decision:propose",
+		Question:          "Should the login API add rate limiting?",
 	})
 	if err != nil {
 		t.Fatalf("CreateDecisionFromThread() error = %v", err)
 	}
-	if decision.Status != "proposed" || decision.GoverningProjectID != "prj_auth" {
-		t.Fatalf("created Decision = %#v", decision)
+	decision := decisionResult.Decision
+	if !decisionResult.Created || decision.Status != "proposed" || decision.GoverningProjectID != "prj_auth" {
+		t.Fatalf("created Decision = %#v", decisionResult)
+	}
+	assertCounts(t, ctx, pool, 1, 1, 1, 1)
+	duplicateDecision, err := service.CreateDecisionFromThread(
+		ctx,
+		invocation(contributor, "cor_propose_retry"),
+		goldenpath.CreateDecisionInput{
+			ThreadID:          "thr_private",
+			ClientOperationID: "test:decision:propose",
+			Question:          "Should the login API add rate limiting?",
+		},
+	)
+	if err != nil || duplicateDecision.Created || duplicateDecision.Decision.ID != decision.ID {
+		t.Fatalf("duplicate Decision proposal = %#v, error = %v", duplicateDecision, err)
+	}
+	_, err = service.CreateDecisionFromThread(
+		ctx,
+		invocation(contributor, "cor_propose_changed_retry"),
+		goldenpath.CreateDecisionInput{
+			ThreadID:          "thr_private",
+			ClientOperationID: "test:decision:propose",
+			Question:          "Changed replay must conflict.",
+		},
+	)
+	if !errors.Is(err, authz.ErrConflict) {
+		t.Fatalf("changed Decision proposal replay error = %v, want conflict", err)
 	}
 	assertCounts(t, ctx, pool, 1, 1, 1, 1)
 
 	_, err = service.AcceptDecision(ctx, invocation(contributor, "cor_contributor_accept"), goldenpath.AcceptDecisionInput{
-		DecisionID: decision.ID,
-		Outcome:    "Use a token bucket.",
-		Rationale:  "Bound abuse while keeping bursts usable.",
+		DecisionID:        decision.ID,
+		ClientOperationID: "test:contributor:accept",
+		Outcome:           "Use a token bucket.",
+		Rationale:         "Bound abuse while keeping bursts usable.",
 	})
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Fatalf("contributor AcceptDecision() error = %v, want forbidden", err)
@@ -112,9 +147,10 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 	assertCounts(t, ctx, pool, 1, 1, 1, 1)
 
 	_, err = service.AcceptDecision(ctx, invocation(admin, "cor_admin_accept"), goldenpath.AcceptDecisionInput{
-		DecisionID: decision.ID,
-		Outcome:    "Use a token bucket.",
-		Rationale:  "An admin without evidence access must not confirm this.",
+		DecisionID:        decision.ID,
+		ClientOperationID: "test:admin:accept",
+		Outcome:           "Use a token bucket.",
+		Rationale:         "An admin without evidence access must not confirm this.",
 	})
 	if !errors.Is(err, authz.ErrForbidden) {
 		t.Fatalf("admin without evidence AcceptDecision() error = %v, want forbidden", err)
@@ -122,27 +158,82 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 	assertDecisionStatus(t, ctx, pool, decision.ID, "proposed")
 	assertCounts(t, ctx, pool, 1, 1, 1, 1)
 
-	decision, err = service.AcceptDecision(ctx, invocation(decider, "cor_accept"), goldenpath.AcceptDecisionInput{
-		DecisionID: decision.ID,
-		Outcome:    "Use a token bucket.",
-		Rationale:  "Bound abuse while keeping bursts usable.",
+	acceptResult, err := service.AcceptDecision(ctx, invocation(decider, "cor_accept"), goldenpath.AcceptDecisionInput{
+		DecisionID:        decision.ID,
+		ClientOperationID: "test:decision:accept",
+		Outcome:           "Use a token bucket.",
+		Rationale:         "Bound abuse while keeping bursts usable.",
 	})
 	if err != nil {
 		t.Fatalf("decider AcceptDecision() error = %v", err)
 	}
-	if decision.Status != "accepted" || len(decision.DeciderIDs) != 1 || decision.DeciderIDs[0] != decider.ID {
-		t.Fatalf("accepted Decision = %#v", decision)
+	decision = acceptResult.Decision
+	if !acceptResult.Accepted || decision.Status != "accepted" || len(decision.DeciderIDs) != 1 || decision.DeciderIDs[0] != decider.ID {
+		t.Fatalf("accepted Decision = %#v", acceptResult)
+	}
+	duplicateAcceptance, err := service.AcceptDecision(
+		ctx,
+		invocation(decider, "cor_accept_retry"),
+		goldenpath.AcceptDecisionInput{
+			DecisionID:        decision.ID,
+			ClientOperationID: "test:decision:accept",
+			Outcome:           "Use a token bucket.",
+			Rationale:         "Bound abuse while keeping bursts usable.",
+		},
+	)
+	if err != nil || duplicateAcceptance.Accepted || duplicateAcceptance.Decision.ID != decision.ID {
+		t.Fatalf("duplicate Decision acceptance = %#v, error = %v", duplicateAcceptance, err)
+	}
+	_, err = service.AcceptDecision(
+		ctx,
+		invocation(decider, "cor_accept_changed_retry"),
+		goldenpath.AcceptDecisionInput{
+			DecisionID:        decision.ID,
+			ClientOperationID: "test:decision:accept",
+			Outcome:           "Use a token bucket.",
+			Rationale:         "Changed replay must conflict.",
+		},
+	)
+	if !errors.Is(err, authz.ErrConflict) {
+		t.Fatalf("changed Decision acceptance replay error = %v, want conflict", err)
 	}
 
-	ticket, err := service.CreateTicketFromDecision(ctx, invocation(contributor, "cor_ticket"), goldenpath.CreateTicketInput{
-		DecisionID: decision.ID,
-		Title:      "Implement login token bucket",
+	ticketResult, err := service.CreateTicketFromDecision(ctx, invocation(contributor, "cor_ticket"), goldenpath.CreateTicketInput{
+		DecisionID:        decision.ID,
+		ClientOperationID: "test:ticket:create",
+		Title:             "Implement login token bucket",
 	})
 	if err != nil {
 		t.Fatalf("CreateTicketFromDecision() error = %v", err)
 	}
-	if ticket.Status != "open" || ticket.GoverningProjectID != "prj_auth" {
-		t.Fatalf("created Ticket = %#v", ticket)
+	ticket := ticketResult.Ticket
+	if !ticketResult.Created || ticket.Status != "open" || ticket.GoverningProjectID != "prj_auth" {
+		t.Fatalf("created Ticket = %#v", ticketResult)
+	}
+	assertCounts(t, ctx, pool, 1, 2, 3, 3)
+	duplicateTicket, err := service.CreateTicketFromDecision(
+		ctx,
+		invocation(contributor, "cor_ticket_retry"),
+		goldenpath.CreateTicketInput{
+			DecisionID:        decision.ID,
+			ClientOperationID: "test:ticket:create",
+			Title:             "Implement login token bucket",
+		},
+	)
+	if err != nil || duplicateTicket.Created || duplicateTicket.Ticket.ID != ticket.ID {
+		t.Fatalf("duplicate Ticket creation = %#v, error = %v", duplicateTicket, err)
+	}
+	_, err = service.CreateTicketFromDecision(
+		ctx,
+		invocation(contributor, "cor_ticket_changed_retry"),
+		goldenpath.CreateTicketInput{
+			DecisionID:        decision.ID,
+			ClientOperationID: "test:ticket:create",
+			Title:             "Changed replay must conflict",
+		},
+	)
+	if !errors.Is(err, authz.ErrConflict) {
+		t.Fatalf("changed Ticket creation replay error = %v, want conflict", err)
 	}
 	assertCounts(t, ctx, pool, 1, 2, 3, 3)
 
@@ -192,8 +283,9 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 		duplicateEventID,
 	}}, clock)
 	_, err = atomicFailureService.CreateDecisionFromThread(ctx, invocation(contributor, "cor_atomic_failure"), goldenpath.CreateDecisionInput{
-		ThreadID: "thr_private",
-		Question: "This transaction must roll back.",
+		ThreadID:          "thr_private",
+		ClientOperationID: "test:decision:atomic-failure",
+		Question:          "This transaction must roll back.",
 	})
 	if !errors.Is(err, authz.ErrConflict) {
 		t.Fatalf("duplicate event CreateDecisionFromThread() error = %v, want conflict", err)
@@ -205,6 +297,7 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 	assertDatabaseConstraints(t, ctx, pool, decision.ID, duplicateEventID)
 	assertNexusViewReadSlice(t, ctx, pool, store, service, decider, reader, admin, decision, ticket)
 	assertJenkinsCIRunSlice(t, ctx, pool, store, service)
+	assertMessagingSlice(t, ctx, pool, store, service, messageNotifier)
 }
 
 func assertNexusViewReadSlice(
@@ -399,6 +492,17 @@ func seedGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 			('wrk_main', 'prj_auth', 'usr_decider', 'decider'),
 			('wrk_main', 'prj_auth', 'usr_reader', 'viewer'),
 			('wrk_main', 'prj_auth', 'usr_admin', 'admin');
+		INSERT INTO radishnexus.channels (
+			id, workspace_id, governing_project_id, name, visibility, status,
+			created_by_kind, created_by_id
+		) VALUES
+			('chn_project', 'wrk_main', 'prj_auth', 'Project Channel', 'project', 'active', 'user', 'usr_contributor'),
+			('chn_restricted', 'wrk_main', 'prj_auth', 'Restricted Channel', 'restricted', 'active', 'user', 'usr_contributor'),
+			('chn_archived', 'wrk_main', 'prj_auth', 'Archived Channel', 'project', 'archived', 'user', 'usr_contributor'),
+			('chn_other', 'wrk_other', 'prj_other', 'Other Channel', 'project', 'active', 'user', 'usr_contributor');
+		INSERT INTO radishnexus.channel_memberships (workspace_id, channel_id, user_id) VALUES
+			('wrk_main', 'chn_restricted', 'usr_contributor'),
+			('wrk_main', 'chn_restricted', 'usr_decider');
 		INSERT INTO radishnexus.threads (
 			id, workspace_id, governing_project_id, title, visibility, created_by
 		) VALUES
@@ -523,6 +627,18 @@ func assertDatabaseConstraints(
 		WHERE event_id = $1
 	`, eventID)
 	assertPGCode(t, err, "23514", "immutable domain event constraint")
+
+	_, err = pool.Exec(ctx, `
+		UPDATE radishnexus.collaboration_command_receipts
+		SET payload_sha256 = repeat('0', 64)
+		WHERE workspace_id = 'wrk_main'
+		  AND actor_id = 'usr_contributor'
+		  AND command_kind = 'decision.propose'
+		  AND target_type = 'thread'
+		  AND target_id = 'thr_private'
+		  AND client_operation_id = 'test:decision:propose'
+	`)
+	assertPGCode(t, err, "23514", "immutable collaboration command receipt constraint")
 }
 
 func assertPGCode(t *testing.T, err error, wantCode, operation string) {

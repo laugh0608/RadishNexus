@@ -1,149 +1,82 @@
 # RadishNexus 当前状态
 
-状态日期：2026-08-30
+状态日期：2026-09-05
 
 ## 当前阶段
 
-产品定义、架构基线、仓库治理基线与 M0 正式服务纵向切片。
+M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 React Web 已建立若干真实业务切片，尚未完成可由普通成员独立操作、持续使用的完整 Golden Path。
 
-当前已经建立本地和 GitHub 远端仓库、`master` / `dev` 分支、协作规则、GitHub 模板、仓库检查器与 `Candidate Quality` 质量门；`master` Ruleset 已在远端启用。Project、Initiative、Component、Decision、Environment 和 EntityLink 的首批最小业务字段已经冻结，稳定引用、授权解析、事件 envelope 与 Activity 投影已由 ADR-0002 接受为 M0 契约基线。可丢弃的 Go + PostgreSQL 核心契约实验已经通过。正式 `server/` Go module、显式 forward-only migration runner、Thread → Decision → Ticket 权限纵向切片、版本化 Activity 重建、Decision / Ticket Nexus View 读取查询和最小 transport adapter 已经建立；正式 Component、已验证 Jenkins delivery → CI Run 原子记录和 `ci-run.recorded` 投影已通过 PR #7 合入 `dev`，CI Run 的 Component 作用域授权与安全 Nexus View 读取已通过 PR #8 合入 `dev`。正式 Environment、环境级授权、显式终态 staging Deployment、`deploys` 关系和 `deployment.recorded` 投影已经在本地 `dev` 建立并通过真实 PostgreSQL 验证。PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验和 Activity 重建已经由 ADR-0010、显式 CLI 与双实例演练建立。正式 `web/` React + TypeScript 基线、Decision Nexus View 代表原型与 CI Run Nexus View 代表交互已经通过本地检查和浏览器复核；尚未建立插件 runtime 或客户端，也尚未开放业务 HTTP API。
+当前重点是把已有权限、事务、来源和恢复能力接成用户可感知的上下文闭环。长期范围与阶段退出条件见[路线图](../roadmap.md)，产品验收见 [Golden Path](../golden-path.md)。本页只维护当前判断和顺序，不重复完整 ADR 与历史测试流水。
 
-## 当前结论
+## 完成线与成熟度
 
-- 项目名确定为 `RadishNexus`。
-- 产品定位为自部署优先的研发团队沟通、协作与交付枢纽。
-- 自部署使用不按席位计费或限额。
-- 核心采用 source-available 和单独书面授权模式；书面授权可以免费。
-- SDK、公共协议和插件开放源码，并使用各自独立许可证。
-- Web App 是第一产品形态，采用 React + TypeScript。
-- 首个正式 Web 基线使用 Node 24 LTS、npm 11、React 19、Vite 8 与 TypeScript 6；router、状态库、编辑器和组件库尚未冻结。
-- 前期不开发移动端和 PC 客户端。
-- 后续客户端统一采用 Flutter，不采用 Tauri。
-- 服务端以 Go 为主，Rust 只进入有明确收益的边界。
-- 初期采用模块化单体。
-- 插件系统按真实收益渐进建设，Jenkins 是第一个验证场景。
-- 聊天、工单和文档作为内建模块，不为了插件化而插件化。
-- Decision 是一等业务对象，保留问题、结论、理由、证据和替代关系。
-- Project、Initiative、Component、Repository 和 Environment 已明确分工。
-- CI Run 与 Deployment 是不同交付事实。
-- EntityLink 和 Activity 是上下文关联与 Nexus View 的基础。
-- 六类 M0 核心对象已经冻结共同身份字段、最小业务字段和首批不变量。
-- ADR-0002 使用类型加不透明 ID 作为稳定 EntityRef，并把 Workspace 作为独立解析上下文；M0 不支持跨 Workspace 关系。
-- ADR-0002 把 asserted / derived 与 user / system / plugin / import 分开记录，并规定引用不授予目标权限。
-- ADR-0002 保持领域事件事实、Outbox 投递状态、Activity 和 Audit 的不同职责。
-- M0 核心契约实验已经验证 Decision evidence、领域事件和 Outbox 的单事务写入。
-- 跨 Workspace EntityLink、缺少 evidence 的 Decision 和重复 Jenkins delivery 已有真实 PostgreSQL 失败路径或幂等测试。
-- 正式服务的 Activity projection version 1 已覆盖 `decision.proposed`、`decision.accepted`、`ticket.created`、`ci-run.recorded` 和 `deployment.recorded`，只保留引用与状态等最小安全事实。
-- Activity 可以从不可变领域事件原子、幂等重建；清空 projection 或清理已投递 Outbox 状态后，重建结果、顺序和权限边界保持不变。
-- ADR-0003 已接受 Go 标准库 HTTP 路由、原生 `pgx/v5` 和手写版本化 SQL，不引入 Web 框架或 ORM。
-- ADR-0004 已冻结 Thread、Decision、Ticket 的 governing Project、首批角色与 restricted Thread 投影边界。
-- ADR-0005 已冻结连续编号、checksum、advisory lock、单 migration 事务和显式 forward-only 执行。
-- ADR-0006 已冻结 `ci-run` / `cir_`、Jenkins source 映射、完成态 CI Run、不可变 delivery receipt，以及 verified boundary 外的签名与 Secret 责任。
-- ADR-0007 已冻结活跃 Workspace 成员 → Component → CI Run 的 M0 读取链；owner Team、Project、EntityLink 和 Jenkins source 都不授予该读取权。
-- ADR-0009 已冻结 `deployment` / `dpl_`、正式 Environment、环境级显式部署授权、终态 staging Deployment 和 `deploys` 原子关系；Project 角色、owner Team、CI source 和成功构建都不授予或触发部署能力。
-- ADR-0010 已冻结本地受控连接上 PostgreSQL 17 同 major 的版本化 backup manifest、custom archive、全新空目标恢复、migration 校验和 Activity 重建；它不是 `.nexus` 开放导出格式，当前工具桥接不近似转译 TLS 配置。
-- 正式 application service 已完成 Thread → Proposed Decision → Accepted Decision → Ticket，并把 EntityLink、领域事件和 Outbox 与业务状态放在同一事务。
-- Jenkins application service 只接收已完成来源认证和字段映射的 `VerifiedJenkinsDelivery`；receipt、CI Run、`ci-run.recorded` 和 Outbox 在同一事务提交，不保存 Secret 或原始 webhook body。
-- 相同 Jenkins delivery 和 digest 只返回既有 CI Run；digest 改变或不同 delivery 映射到同一 external run 时 fail closed，事件冲突会连同 receipt 与 CI Run 一起回滚。
-- 当前只接收 `succeeded / failed / canceled` 完成事实；尚未冻结 Jenkins HTTP route、HMAC/签名协议、失败审计、运行中更新或多 provider 抽象。
-- `RecordStagingDeployment` 只接受明确用户的 `web / api` invocation；目标必须是 active staging Environment，来源必须是 succeeded CI Run，调用者必须是 active Workspace 成员并持有该 Environment 的 active 显式授权。
-- Deployment、所使用的 authorization、操作者、来源和受控时间进入不可变权威记录；Deployment、asserted user `deploys` 关系、`deployment.recorded` 与 Outbox 同事务提交，任一步失败全部回滚。
-- CI Run application service 不调用 Deployment service；真实 PostgreSQL 用例已证明 CI Run 成功后、显式命令前不存在 Deployment 或 `deployment.*` 事件。当前 command 只记录外部已完成终态，不执行部署、不读取 Secret，也不支持 production、审批、回滚或运行中状态。
-- `nexus-backup` 只备份与当前 migration artifact identity 完全一致且 relation 已完整分类的数据库；未知 relation、migration 漂移和非 PostgreSQL 17 来源均 fail closed。
-- 备份工件固定包含 manifest 与 custom-format dump，保留稳定 ID、业务表、授权 provenance、EntityLink、领域事件、inbound receipt、必要 Outbox 与 migration history；`activity_items` 数据默认排除。
-- `nexus-restore` 只接受 checksum 完整的受信工件和全新空目标，不使用 `--clean` 或自动覆盖；恢复通过显式 TOC 先装载 EntityType 注册表，再以单事务恢复其余事实、运行正式 migration 并重建 Activity。
-- 双实例 PostgreSQL 17 演练已经证明恢复前后所有纳入表与 Activity 全量快照一致；manifest migration 漂移、dump 损坏和非空目标重复恢复均失败且不改变受保护目标。
-- contributor 不能确认 Decision；decider 必须能读取全部 evidence 后才能人工确认；Project admin 也不会自动穿透 restricted Thread。
-- Nexus View application query 已能为 Decision、Ticket 和 CI Run 返回 Current、Relations 和 Timeline，并在同一 repeatable-read 事务中按当前权限解析。
-- Deployment 尚未进入 Nexus View、Web、搜索、通知或 Attention Item；`deployment.recorded` 已具备可重建事实，但本切片不为展示制造临时读取入口。
-- CI Run Current 只返回 status、开始/完成/记录/更新时间和当前 Component；`ci-run.recorded` Timeline 保留通用 `plugin` kind 但隐藏 source ID，不返回 external run key、receipt、digest、Secret、原始 payload 或 Jenkins URL。
-- 非成员、暂停成员和跨 Workspace 主体读取 CI Run 均得到 not-found；Component retired 不删除或隐藏既有 CI Run 历史。
-- Relations 和 Timeline 对不可读目标只返回不含 EntityRef、类型、关系类型和标题的通用占位；hidden 目标不进入结果。
-- 最小认证 adapter 只把上游已验证的 UserID 与 WorkspaceID 转换为 application `Principal`，不读取或验证 Header、Cookie、Token 和 OIDC claims。
-- 内部 HTTP error mapping 已覆盖 `unauthenticated / forbidden / not found / conflict / invalid` 与未知失败；它不暴露原始错误，也尚未形成公共响应对象。
-- Decision Nexus View 代表原型已经表达 Current、Relations 和 Timeline，并覆盖 loading、empty、error、restricted placeholder 与窄屏布局。
-- CI Run Nexus View 代表交互已经表达 succeeded / failed、四个受控时间、当前 Component、唯一 `ci-run.recorded` Timeline、loading、error 与窄屏布局；构建结果没有被表现为 Deployment。
-- CI Run Web fixture 与后端安全投影同形，不携带 source ID、external run key、delivery receipt、digest、Secret、原始 payload 或未经治理的外部 URL；浏览器验证未发现必须新增 transport 的需求。
-- Web 原型只消费权限过滤后的 discriminated union；`restricted` 形状不携带 EntityRef、对象类型、关系类型、标题、来源或时间，`hidden` 目标不进入客户端数据。
-- 原型使用明确标注的静态 fixture；本轮浏览器复核没有暴露必须新增内部 handler 的需求，因此没有为了联调制造临时业务 API。
-- `web/` 已建立 Prettier、Oxlint、Vitest + jsdom、严格 TypeScript、Vite production build 与 lockfile 供应链检查；`Candidate Quality` 已加入独立 `Web App` job，并已在本批次 PR 中实际通过。
-- 在横向补全各模块前，先完成 Golden Path 纵向原型。
-- 仓库采用 `master` 稳定分支和 `dev` 日常开发/集成分支；单维护者串行任务默认直接在 `dev` 推进，主题分支只用于明确要求、外部贡献、并行写入或风险隔离。
-- `master` 允许 merge commit 和 rebase merge，禁用 squash merge，并要求变化回流 `dev`。
-- `Candidate Quality` 作为稳定聚合质量门；仓库定义已加入 M0 实验、正式 Go 服务、双实例备份恢复和 Web App 的单元/状态测试、静态检查、构建与真实 PostgreSQL 集成测试。Web 基线与 Jenkins CI Run 核心 PR 已在 GitHub 实际通过，新增备份恢复步骤仍待后续 PR 远端复验。
-- GitHub 远端默认分支为 `master`，`master` Ruleset 已启用并要求 PR、严格状态检查和已解决对话。
-- GitHub Private vulnerability reporting 已启用；未修复漏洞优先通过仓库 Security Advisory 私下报告，入口和备用联系方式以 [SECURITY.md](../../SECURITY.md) 为准。
+下表依据仓库实现及已有验收记录区分四类证据；公共入口或浏览器演示通过不等于真实团队日常使用通过。
 
-## 当前文档基线
+| 能力 | 内部契约与实现 | 公共入口与交互 | 普通用户独立操作 / 持续使用 |
+| --- | --- | --- | --- |
+| 本地身份与 Session | bootstrap、密码 verifier、Session、CSRF、当前 membership | 同源 HTTPS login / session / logout、Workspace 选择 | 邀请、账号恢复、成员与角色管理入口尚缺；未完成团队使用验收 |
+| Message → Thread → Decision → Ticket | migration 006 / 007、权限、来源、原子事件与幂等 receipt | canonical 页面和短请求；contributor / decider 浏览器验收已有记录 | 仍依赖已知 ID；反向发现、自动 Timeline 和基础执行管理未闭环 |
+| 单 Channel Message 实时 | 单进程 SSE、当前权限、有界回放、撤权与关闭 | canonical Channel 已接入 ready → history → 增量 | 有技术验收；没有目标团队规模与持续使用的容量证据 |
+| CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment | Deployment 只读入口；CI Run 仍有内部 query 与静态代表页 | Jenkins 来源验证入口、正式 CI Run 页面和 Deployment 写入口尚缺 |
+| EntityLink / Activity | 带来源关系、权限过滤 query、版本化全量重建 | Nexus View 可读 Current / 出向 Relations / 已投影 Timeline | 普通写入后的自动投影、反向关系读取尚缺 |
+| 自部署与恢复 | 显式 migration、PostgreSQL 17 同 major 空目标恢复 | 固定工件 Compose 开发拓扑与 HTTPS 演练已有记录 | schema readiness、升级失败恢复、运维与生产容量尚未完成 |
+| Document | 编辑器阶段 A 已选 Tiptap / ProseMirror 作为后续结构化编辑候选 | 仅隔离实验，无正式 Document 页面 | 最小业务合同、revision、正式存储与保存流程尚缺 |
 
-- [产品定义](../product-definition.md)
-- [领域模型](../domain-model.md)
-- [Golden Path](../golden-path.md)
-- [决策基线](../decision-baseline.md)
-- [总体架构](../architecture/overview.md)
-- [核心实体、授权与事件契约](../architecture/core-contracts.md)
-- [插件系统](../architecture/plugin-system.md)
-- [许可与分发策略](../licensing-strategy.md)
-- [产品路线图](../roadmap.md)
-- [仓库治理](../governance/README.md)
-- [ADR-0001：分支与 PR 治理](../adr/0001-branch-and-pr-governance.md)
-- [ADR-0002：稳定实体引用与事件投影边界](../adr/0002-stable-entity-reference-and-event-projection.md)
-- [ADR-0003：Go 服务端基础栈与数据访问](../adr/0003-go-service-foundation.md)
-- [ADR-0004：Project 作用域下的协作对象与权限](../adr/0004-project-scoped-collaboration-permissions.md)
-- [ADR-0005：Forward-only PostgreSQL migration runner](../adr/0005-forward-only-postgresql-migrations.md)
-- [ADR-0006：已验证 Jenkins delivery 与 CI Run 原子记录](../adr/0006-verified-jenkins-delivery-and-ci-run.md)
-- [ADR-0007：Component 作用域下的 CI Run 读取](../adr/0007-component-scoped-ci-run-read.md)
-- [ADR-0008：`dev` 优先的单维护者开发拓扑](../adr/0008-dev-first-development-governance.md)
-- [ADR-0009：显式 staging Deployment 与环境级授权](../adr/0009-explicit-staging-deployment.md)
-- [ADR-0010：可验证 PostgreSQL 备份与全新实例恢复](../adr/0010-verified-postgresql-backup-and-restore.md)
-- [开发指南](../development/README.md)
-- [M0 核心契约实验](../../experiments/m0-core-contracts/README.md)
-- [正式 Go 服务](../../server/README.md)
+## 已确认缺口
 
-## 今日进展（2026-08-30）
+以下是 2026-09-05 对代码和验证路径的审阅结论，并非本次已经修复；具体证据与后续工程建议见[审阅记录](reviews/2026-09-05-project-review.md)。
 
-今日已经完成最小备份恢复纵向切片：
+1. **Activity 自动更新**：正式读取使用 `activity_items`，目前只有显式全量重建路径；测试预先调用重建，不能证明正常命令之后 Timeline 自动出现。
+2. **反向关系发现**：当前查询只按 EntityLink 起点读取。Ticket 可追溯 Decision、Decision 可追溯 Thread，但原 Thread 尚不能通过该查询发现后续 Decision，Decision 也不能发现生成的 Ticket。
+3. **业务就绪检查**：`/health/ready` 只检查数据库连通性，未检查当前二进制与 migration history 的兼容性。
+4. **使用入口**：首页仍要求已知稳定 ID；对象发现、最小成员管理、Document 和真实外部交付链尚未齐备。
+5. **证据边界**：已有浏览器与数据库验收证明局部技术行为；没有完整 Golden Path 或真实团队持续使用的完成记录。
 
-1. ADR-0010 冻结 PostgreSQL 17 同 major、format version 1 manifest、custom archive、完整 relation 分类、Secret 排除、空目标与单事务恢复边界；
-2. `nexus-backup` 与 `nexus-restore` 已建立显式命令，备份输出使用同级临时目录和完成后原子改名，恢复拒绝 `--clean`、自动覆盖和 migration 漂移；
-3. 恢复命令检查 archive TOC 并显式提前装载 `entity_types`，解决 `valid_entity_id` 函数无法被 `pg_dump` 自动推断的数据依赖，同时保持原数据库 check constraint 不变；
-4. 双独立 PostgreSQL 17 容器已经完成 source fixture → backup → fresh target restore → formal migration → Activity rebuild 的真实往返；所有纳入表与 Activity 全量快照一致；
-5. manifest migration checksum 漂移、dump 损坏和非空目标重复恢复均已有失败验证；前两种 preflight 失败后目标保持空，重复恢复不会改变既有目标数据。
+## 近期执行顺序
 
-## 下一步
+以下顺序替代原“明日事项（2026-09-04）”。每个切片先核对既有合同和失败边界；本次文档调整不新增数据模型、权限、公共 DTO、依赖或远程操作授权。
 
-最小备份恢复已经达到本地完成线。下一步先完成人工差异复核；获得单独授权后，再按 ADR-0008 在 `dev` 精确提交和 push，并创建阶段性 `dev -> master` PR，确认远端 `Candidate Quality` 后使用 merge commit 晋级，随后把最新 `master` 回流 `dev`。
+| 顺序 | 下一切片 | 交付与退出判据 |
+| --- | --- | --- |
+| 1 | Activity 自动更新与双向关系 | 正式写入口创建 / 接受 Decision、创建 Ticket 后，刷新可看到对应 Timeline，并能从来源发现结果、从结果追溯来源；不在验收中手工重建。反向查询复用同一权威关系和当前权限，不复制镜像事实。实现前决定投影时效、事务 / worker 方案和方向 DTO |
+| 2 | schema readiness 与最小使用入口 | 缺失、漂移或不兼容 migration 时不报告业务 ready，检查本身不执行迁移；成员能通过受控入口进入可访问 Project / Channel 和基础对象，完成必要成员配置，无需已知 ID 或直接改库。账号与列表协议独立审查 |
+| 3 | 最小 Markdown Document | 先审查并冻结最小字段、revision、权限、EntityLink、事件、渲染安全、备份和导出边界，再完成读取、显式保存、冲突与恢复切片；不引入 CRDT |
+| 4 | 真实 Jenkins 与 staging 记录链 | 来源验证、幂等和失败隔离连接到已有 CI Run service，用户可读取真实构建并显式记录外部已完成的 staging Deployment；贯通 Ticket / Component / Repository 与交付关系，不依赖预置交付事实 |
+| 5 | 小团队场景试用 | 满足评估授权与必要运维条件后，以真实需求连续使用并记录追溯、重复录入和人工干预；按 Golden Path 验收决定下一批功能，不把一次演示当作持续使用完成 |
 
-阶段晋级前不并行启动新的产品切片。晋级完成后，再根据 Golden Path 剩余缺口和 M1 入口独立评估公共 transport、Deployment 读取/UI、文档协同技术方案与免费书面授权模板，不默认同时开展。
+免费书面授权与评估说明应在邀请外部团队前准备，不能等到完整聊天或 CRDT 完成；版本化结构化导出与全新实例导入仍是 M1 的独立退出条件。账号恢复、安全审计、数据生命周期、数据库最小权限与升级演练按[路线图](../roadmap.md)的试用和生产边界推进，不因本表只列五项而取消。
 
-当前完成线：受控 fixture 生成不含 Activity 派生数据或 Secrets 的版本化备份，在第二个全新 PostgreSQL 17 实例恢复并通过正式 migration；恢复前后稳定 ID、业务表、授权与 receipt、EntityLink、领域事件、Outbox 和 Activity 重建结果一致，失败或冲突目标不会被报告为成功。
+## Document 预研边界
 
-当前停止线：不自动覆盖或清空现有数据库，不把一次 dump 当作已经验证的恢复，不把 Secret、Token、Jenkins 凭据或原始 payload 纳入默认备份，不承诺跨 PostgreSQL major、加密、远程保留或 PITR，不补 Jenkins HTTP route 或签名协议，不启动 Flutter、CRDT、通用 RBAC、Repository 占位、插件市场、多 provider、production Deployment、审批或回滚，也不为 Deployment 展示制造临时公共 API。
+本轮选择 M0.5 / M1 不引入 CRDT，先完成服务端权威 Markdown、显式保存和 revision 冲突控制。ADR-0021 已保留该接受路径；现按此收束提议，Document 业务合同尚未冻结，ADR 继续保持“提议”。
 
-## 开放问题
-
-- PostgreSQL 正式支持版本矩阵，以及生产升级的 forward repair 与恢复流程；
-- EntityID 生成算法，Document、Repository 等尚未切片类型的前缀和后续 PostgreSQL schema；
-- 文档编辑器和 CRDT；
-- 首版插件运行方式；
-- Initiative、Component 与 Project 的首版导航表现；
-- Decision 的复核周期和替代交互；
-- `.nexus` 上下文包的开放格式与脱敏规则；
-- SDK 和插件的具体开放源码许可证；
-- 认证第一阶段只做本地账号，还是同时加入 OIDC；
-- 消息和文档搜索边界；
-- 免费书面授权的签发与撤销规则；
-- 免费评估是否公开授予，或使用离线自助签发；
+阶段 A 的 corpus、浏览器和 macOS 中文 IME 证据保留；Tiptap / ProseMirror 只是后续结构化编辑候选，未进入正式 Web 依赖。Yjs 阶段 B 延后，不阻塞最小 Document。再次启动时须说明它要解决的具体设计问题、结束条件、投入上限和依赖授权；旧预检结果不能代替届时的版本与供应链复核。详见 [ADR-0021](../adr/0021-document-editor-and-collaboration-foundation.md)。
 
 ## 停止线
 
-在对象、权限、事件和插件最小实验完成前：
+- 不把内部 service、静态 fixture、手工投影重建或一次浏览器验收描述成完整产品闭环。
+- 引用、反向关系、旧 membership、客户端角色和订阅状态都不授予权限；新入口继续复用既有当前权限与不可发现性。
+- SSE replay 不作权威存储，写 command 继续使用短请求；不引入隐藏 polling fallback、多副本 fan-out、独立消息中间件或新的实时 transport。
+- 近期不横向补齐完整聊天 UI、附件、表情、复杂搜索、未读与通知；对象发现只服务最小场景。Document 合同冻结前不接入正式存储、依赖或实时协同。
+- 不启动 Flutter、微服务拆分、插件市场、通用多语言 SDK、完整软件目录或完整离线文档。
+- CI Run 成功不触发 Deployment；本阶段只记录外部已完成 staging 终态，不执行 production、审批或回滚，不自动确认 AI 草案。
+- 文档顺序调整不授权安装依赖、运行长期服务、改系统配置、提交、push、PR、发布、部署或发送外部消息；具体授权仍按根协作约定。
 
-- 不创建大量微服务；
-- 不同时开发 Flutter；
-- 不建设插件市场；
-- 不承诺完整离线文档；
-- 不接入大量 CI/CD 平台；
-- 不建设完整软件目录、图数据库或战略项目组合模块；
-- 不把 AI 生成内容直接确认为 Decision、状态更新或外部操作；
-- 不为了展示功能数量扩张到音视频、代码托管或复杂项目组合管理。
+## 开放问题
+
+- Activity 更新时效、可靠消费与重建并发策略；反向关系的方向展示、分页和公共合同；
+- 首版对象发现与成员管理范围，账号恢复与管理员应急入口；
+- Document 最小合同、Markdown 子集 / sanitizer、revision 冲突及恢复 / 导出；
+- Jenkins 来源验证、Secret 使用、失败审计、Repository 映射与交付关系；
+- PostgreSQL 支持矩阵、schema 兼容窗口、forward repair、数据库权限拆分和容量基线；
+- Decision 拒绝、替代、复核与 Ticket 基础执行状态的交互；
+- 安全 Audit、消息 / 事件 / receipt 的保留和受控脱敏边界；
+- `.nexus` 版本化格式、脱敏与导入映射；免费评估路径及授权签发 / 撤销规则；
+- 后续插件运行方式、SDK / 插件许可证、OIDC 关联及搜索边界。
+
+## 证据与历史
+
+- [2026-09-05 项目审阅](reviews/2026-09-05-project-review.md)：源码缺口、工程建议、本轮已执行与未执行验证。
+- [2026-09-03 状态快照](history/2026-09-03-status.md)：完整保留此前阶段事实及 9 月 2～3 日浏览器、PostgreSQL、Compose、编辑器验收；其中旧推进顺序已失效。
+- [编辑器实验结果](../../experiments/document-editor/RESULTS.md)、[正式服务说明](../../server/README.md)、[部署操作说明](../../deploy/README.md)承载对应证据和运行方式。
+- 分支基线仍按[仓库治理](../governance/repository-governance.md)执行。此前晋级与远端质量门结果按历史记录理解；2026-09-05 仅检查本地分支与工作区，未重新核验远端设置或晋级状态。

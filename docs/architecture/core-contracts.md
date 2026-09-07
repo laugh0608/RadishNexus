@@ -2,7 +2,7 @@
 
 状态：M0 契约基线，已由 ADR-0002 接受
 
-日期：2026-08-28
+日期：2026-09-05
 
 ## 目的
 
@@ -12,7 +12,7 @@
 
 ## 适用范围
 
-初始 M0 冻结 Project、Initiative、Component、Decision、Environment 和 EntityLink 的引用能力，并用 Thread、Ticket、CI Run 和 Deployment 验证接口是否足以承载 [Golden Path](../golden-path.md)。ADR-0004 随首个正式纵向切片继续冻结了 Thread 与 Ticket 的类型前缀、最小字段和授权上下文；ADR-0006 冻结 CI Run 的类型前缀、最小来源字段和完成事实；ADR-0009 冻结显式 staging Deployment、环境级授权和原子关系边界。
+初始 M0 冻结 Project、Initiative、Component、Decision、Environment 和 EntityLink 的引用能力，并用 Thread、Ticket、CI Run 和 Deployment 验证接口是否足以承载 [Golden Path](../golden-path.md)。ADR-0004 随首个正式纵向切片继续冻结了 Thread 与 Ticket 的类型前缀、最小字段和授权上下文；ADR-0006 冻结 CI Run 的类型前缀、最小来源字段和完成事实；ADR-0009 冻结显式 staging Deployment、环境级授权和原子关系边界；ADR-0017 冻结 Channel / Message 的最小身份、Message → Thread 来源和单进程实时实验语义；ADR-0018 冻结 Session 作用域的 canonical history、Message 写入与 Message → Thread 公共短请求；ADR-0019 冻结同一 Session 边界下的 Thread / Decision / Ticket Nexus View、人工确认与用户命令幂等 receipt。
 
 M0 不支持：
 
@@ -43,12 +43,14 @@ M0 首批冻结以下类型名与 ID 前缀：
 | `decision` | `dec_` | 可确认、拒绝和替代的决策 |
 | `environment` | `env_` | 稳定部署目标 |
 | `entity-link` | `lnk_` | 带来源的跨对象关系 |
+| `channel` | `chn_` | Project 内的持续协作空间 |
+| `message` | `msg_` | 不可变原始讨论记录 |
 | `thread` | `thr_` | 作为讨论证据的 Thread |
 | `ticket` | `tkt_` | 可执行工作对象 |
 | `ci-run` | `cir_` | 一次构建或流水线运行 |
 | `deployment` | `dpl_` | 一次显式记录的部署终态事实 |
 
-Document 和 Repository 等其余 Golden Path 类型进入同一注册表时，其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结；CI Run 的来源和幂等边界由 [ADR-0006](../adr/0006-verified-jenkins-delivery-and-ci-run.md) 冻结；Deployment 由 [ADR-0009](../adr/0009-explicit-staging-deployment.md) 冻结。
+Document 和 Repository 等其余 Golden Path 类型进入同一注册表时，其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结；CI Run 的来源和幂等边界由 [ADR-0006](../adr/0006-verified-jenkins-delivery-and-ci-run.md) 冻结；Deployment 由 [ADR-0009](../adr/0009-explicit-staging-deployment.md) 冻结；Channel、Message 与 messaging-origin Thread 由 [ADR-0017](../adr/0017-channel-message-boundary-and-single-process-realtime.md) 冻结；Thread → Decision → Ticket 的 Session transport 与命令 receipt 由 [ADR-0019](../adr/0019-session-scoped-thread-decision-ticket-transport.md) 冻结。
 
 ### 结构化表示
 
@@ -142,6 +144,13 @@ request_context
 - 目标必须是 active staging Environment，来源必须是 succeeded CI Run。CI Run 写入路径不调用 Deployment，production 也不能通过改名或普通参数进入该 command。
 - Deployment 是不可变终态事实，同一 Environment 与 CI Run 组合唯一；它保留 authorization、actor、source 和时间，但不冒充外部执行日志或通用 Audit。
 - 成功命令原子写入 Deployment、asserted user `deploys` 关系、`deployment.recorded` 和 Outbox。事件只保留 status、Environment 与 CI Run 引用。精确边界见 [ADR-0009](../adr/0009-explicit-staging-deployment.md)。
+
+### Environment 与 Deployment 的 M0 读取
+
+- Environment 当前没有 restricted 可见性或对象成员字段；同一 Workspace 的 active 成员可以读取，非成员、暂停成员和跨 Workspace 主体不可发现。归档不会隐藏已有 Deployment 历史。
+- Deployment 只有在当前主体同时能读取目标 Environment 与来源 CI Run 时才可读取；环境级部署授权只控制写命令，不控制历史发现。
+- Deployment Current 只返回终态、started / completed / recorded 时间、Environment 和来源 CI Run；Relations 与 Timeline 再次复用当前权限，不返回 authorization、调用 source、Jenkins receipt、digest、Secret、原始 payload 或外部 URL。
+- 不可读 Deployment 统一返回 not-found；未来 Environment 或 CI Run 权限收紧后，不能返回残缺 Current 暗示其存在。精确边界见 [ADR-0011](../adr/0011-workspace-scoped-deployment-read.md)。
 
 ### EntityLink 写入
 
@@ -268,15 +277,30 @@ safe_facts
 
 一项操作可以同时产生领域事件、Activity 和 Audit，但它们的 payload、保留周期和读取权限分别定义，不能通过复制同一 JSON 假装职责相同。
 
+## Canonical Message query
+
+正式 application query 以 Channel 和当前用户 `Principal` 为作用域，直接读取权威 Message 表。它不是 Activity、实时 replay 或搜索投影：
+
+- 每页先按当前 Workspace、Project 与 Channel 权限判定；归档 Channel 保留历史读取，权限撤销或跨 Workspace 查询保持不可发现；
+- root Message 在 Channel 可读时返回；带 `thread_id` 的回复还必须通过该 Thread 的当前读取权限，不可读回复在应用分页前直接隐藏，不形成占位或数量侧信道；
+- 稳定总序为 `(created_at, message_id)`；首次读取选择最新一页，页内按时间正序返回，向前翻页使用最旧一项的 exclusive `before` keyset，Message ID 负责同一时间戳的确定性决胜；
+- application page size 必须在 `1..100`，只有确实存在更旧的可读 Message 时才返回 older boundary；客户端在实时恢复或重新进入 Channel 时重新读取最新页；
+- 可读 Message DTO 只包含稳定 ID、Channel、可选 Thread、作者、原始正文与服务端创建时间，不返回 `client_operation_id`、事件、Outbox 或内部实时 cursor；
+- application boundary 的时间与 Message ID 只是内部查询结构。正式 HTTP transport 已按 ADR-0018 将其编码为不透明、版本化的 cursor，并继续重新授权；cursor 本身不授予读取权，也不是数据库 offset、快照令牌或实时 replay cursor。
+
 ## Golden Path 契约走查
 
-1. 用户从私密 Thread 创建 Proposed Decision。Decision 与 `derived-from` EntityLink 在同一事务写入；该关系是 `asserted + user`，因为 `derived-from` 是业务语义，不代表自动推导。
-2. `decision.proposed` 和 `entity-link.created` 共享 correlation，分别投影到 Decision 和 Thread；Decision 草案必须保留 evidence 引用。
-3. 有确认权限且能读取全部 evidence 的人接受 Decision，产生 `decision.accepted`。Project 管理角色不自动穿透 restricted Thread；系统生成内容只能保留为草案，不能作为 actor 完成接受。
-4. 从 Decision 创建 Ticket，Ticket 与 `implements` 关系保留来源，不复制 Thread 正文。读取 Ticket 但不能读取 Thread 的用户只在对象页看到不可识别目标的通用受限占位。
-5. Jenkins 重复发送同一 delivery 时只产生一个 CI Run；相同幂等键的 digest 变化直接冲突。正式核心只接收已经完成来源验证与字段映射的 delivery，并把 receipt、CI Run、`ci-run.recorded` 和 Outbox 原子提交；外部失败重试和安全审计由后续 adapter 定义，不阻塞聊天和 Decision 写入。
-6. 构建成功只更新 CI Run。只有 active 用户持有目标 Environment 的显式授权后，才能通过独立 command 原子记录 staging Deployment、`deploys` 关系、`deployment.recorded` 和 Outbox；该 command 不执行外部部署。
-7. 备份恢复保留所有稳定 ID、关系来源、事件 correlation 和审计；Activity 可以重新投影且不产生重复项。
+本节描述目标契约与已落地切片的衔接，不表示全部消费者和用户入口已经完成。当前实现与缺口以[当前状态](../status/current.md)为准；尤其要区分 Activity 显式重建与正常运行时更新、出向关系与反向发现。
+
+1. 用户在 Project Channel 发送不可变 Message；重复 `client_operation_id` 与同正文只返回既有 Message，不同正文冲突。正式 application service 已将 Message、`message.created` 与 Outbox 原子提交，事件和 Activity 不复制正文。
+2. 用户从 Message 发起 Thread；正式 application service 已将 Thread、`started-from` EntityLink、`thread.started` 与 Outbox 原子写入，并同时通过当前 Channel、Project 与 Thread 权限，不让引用扩大可见性。
+3. 用户从私密 Thread 创建 Proposed Decision。Decision、用户命令 receipt 与 `derived-from` EntityLink 在同一事务写入；该关系是 `asserted + user`，因为 `derived-from` 是业务语义，不代表自动推导。相同 target 与 operation ID 的相同 canonical payload 返回原 Decision，payload 变化冲突。
+4. Decision 草案必须保留 evidence 引用。当前正式写入产生 `decision.proposed`，全量 Activity 重建投影到 Decision；`entity-link.created` 与向 Thread 展示后续结果属于尚未落地的目标扩展，不能描述为既有事件或投影。扩展时再冻结事件、correlation 与目标投影合同，不为反向读取复制关系事实。
+5. 有确认权限且能读取全部 evidence 的人通过显式确认接受 Decision，产生 `decision.accepted`。Project 管理角色不自动穿透 restricted Thread；系统生成内容只能保留为草案，不能作为 actor 完成接受。精确 retry 仍重新检查当前 evidence 权限，receipt 不授予能力。
+6. 从 Decision 创建 Ticket，Ticket、用户命令 receipt 与 `implements` 关系保留来源，不复制 Thread 正文。读取 Ticket 但不能读取 Thread 的用户只在对象页看到不可识别目标的通用受限占位。
+7. Jenkins 重复发送同一 delivery 时只产生一个 CI Run；相同幂等键的 digest 变化直接冲突。正式核心只接收已经完成来源验证与字段映射的 delivery，并把 receipt、CI Run、`ci-run.recorded` 和 Outbox 原子提交；外部失败重试和安全审计由后续 adapter 定义，不阻塞聊天和 Decision 写入。
+8. 构建成功只更新 CI Run。只有 active 用户持有目标 Environment 的显式授权后，才能通过独立 command 原子记录 staging Deployment、`deploys` 关系、`deployment.recorded` 和 Outbox；该 command 不执行外部部署。
+9. 备份恢复保留所有稳定 ID、关系来源、事件 correlation 和审计；Activity 可以重新投影且不产生重复项。
 
 ## M0 验证清单
 
@@ -285,11 +309,15 @@ M0 实验与正式纵向切片累计必须证明：
 - 重命名 Project 或 Component 后旧 EntityRef 仍可解析；
 - 不同 Workspace 的两端不能创建 EntityLink；
 - 公开 Ticket 关联私密 Thread 时不泄漏 Thread 的类型、ID、标题、摘要和参与者；
+- 重复或并发 Message command 不产生重复 Message；相同幂等键的正文变化必须冲突；
+- 重复 Thread → Decision、Decision acceptance 与 Decision → Ticket 用户命令只产生一组权威结果、事件和关系；相同幂等范围的 payload 变化必须冲突，权限撤销后精确重试也不能依赖 receipt 取回结果；
+- 实时连接断线可在有界窗口内补发；游标过期或进程变化时要求 canonical 重同步；
+- Channel 权限撤销后空闲实时订阅也会关闭，且不再发送 Message 正文；
 - 权限撤销后 Nexus View、Activity、搜索和通知不继续返回缓存内容；
 - 重复事件和重复 Jenkins delivery 不产生重复 EntityLink、CI Run 或 Activity；
 - Activity 清空并重建后，顺序、来源和目标关系与重建前等价；
 - 清理已完成的投递状态不会破坏事件事实、备份或 Activity 重建；
-- CI Run 成功不会自动产生 Deployment。
+- CI Run 成功不会自动产生 Deployment；
 - 无授权用户、非 staging Environment 和非成功 CI Run 不能产生 Deployment；事件或关系失败时整单回滚。
 
 ## 后续仍需决定
@@ -299,6 +327,8 @@ M0 实验与正式纵向切片累计必须证明：
 - 关系类型注册表的完整方向、基数和 metadata schema；
 - Team 角色继承、对象分享、跨 Project 转换和管理员 break-glass 策略；
 - 领域事件保留、压缩和 projection version 迁移策略；
-- HTTP/OpenAPI 的错误对象、游标和并发控制字段。
+- Activity 正常更新的时效、事务 / worker 方案、失败恢复及与全量重建的并发；反向关系方向、分页与公共 DTO；
+- 其余公共 HTTP / OpenAPI 契约和并发控制字段；canonical Message 列表 opaque cursor 已由 ADR-0018 冻结，ADR-0020 的进程内实时 cursor 不是公共列表游标，不能互换；
+- 消息、事件、receipt、Audit 与导出分别需要的保留、归档、受控脱敏和删除标记；在独立合同冻结前不修改现有不可变约束或清理权威数据。
 
 这些事项必须通过后续纵向切片验证，不能由 Web 框架或 ORM 默认行为替项目作出决定。

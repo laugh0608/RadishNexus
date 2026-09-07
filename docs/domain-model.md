@@ -1,8 +1,8 @@
 # RadishNexus 领域模型
 
-状态：M0 领域基线，首批核心字段已冻结
+状态：M0 领域基线，首批核心与沟通入口字段已冻结
 
-日期：2026-08-28
+日期：2026-09-01
 
 ## 目标
 
@@ -58,6 +58,10 @@ Project、Initiative、Component、Decision、Environment 和 EntityLink 共享�
 ### Workspace
 
 一个独立组织的最高数据、成员、配置和授权边界。任何实体、事件、搜索索引和插件数据都必须能够明确归属到一个 Workspace。
+
+首期 Workspace membership 独立保存 `status: active / suspended` 与 `role: owner / member`。`owner` 表示 Workspace 级管理责任，不自动授予 restricted Project、私密协作对象或 Environment Deployment 权限；这些能力仍由对应对象的显式授权决定。用户 Session 不固定 Workspace，业务请求选择 Workspace 后必须以当前 active membership 重新解析权限。
+
+M1 本地身份基线以不可变小写 ASCII `login_name` 关联 `users`，密码只保存 Argon2id verifier；服务端 Session 只保存 opaque token 与 CSRF token 的 digest。`local_accounts` 纳入受控 PostgreSQL 运维备份，`user_sessions` 只保留 schema，恢复后旧登录态全部失效。精确边界见 [ADR-0012](adr/0012-local-identity-and-session-foundation.md)。
 
 ### Team
 
@@ -190,14 +194,18 @@ M0 command 只记录调用方已经确认的外部终态，不执行部署、不
 
 ### Channel、Conversation 与 Message
 
-- Channel 是公开或私密的持续协作空间；
-- Conversation 表示私聊和群聊；
-- Message 与 Thread 保存原始讨论；
-- 讨论可以产生 Ticket、Document 或 Decision，但转换后仍保留双向引用。
+- Channel 是 Project 内公开或 restricted 的持续协作空间；Conversation 表示后续私聊和群聊，本轮不冻结；
+- M0.5 Channel 使用 `channel` / `chn_` 稳定引用，最小字段为 `governing_project_id`、`name`、`visibility: project / restricted` 与 `status: active / archived`；
+- `project` Channel 复用 governing Project 读取，`restricted` Channel 还要求显式 Channel membership；Project `admin` 不自动穿透；
+- Message 使用 `message` / `msg_` 稳定引用，保存不可变 `channel_id`、可选 `thread_id`、服务端 `author_id`、原始 UTF-8 `body`、`client_operation_id` 与 `created_at`；
+- Message 正文 M0.5 上限 16 KiB，不支持编辑、删除、附件或富文本变换；幂等范围为 `(workspace_id, channel_id, author_id, client_operation_id)`，相同键不同正文必须冲突；
+- `client_operation_id` 只用于写入幂等，不是 EntityID，也不进入其它读者可见的实时投影、领域事件或 Activity；
+- canonical Channel 历史按 `(created_at, message_id)` 稳定排序并使用 exclusive keyset 向更旧消息翻页；带 `thread_id` 的回复只有在当前 Thread 也可读时才进入结果，幂等键不进入可读 DTO；
+- Message 与 Thread 保存原始讨论；讨论可以产生 Ticket、Document 或 Decision，但转换后仍保留结构化双向引用。
 
 ### M0 协作作用域
 
-M0 纵向切片继续冻结 `thread` / `thr_` 与 `ticket` / `tkt_` 的稳定引用。Thread、Decision 和 Ticket 各自保存不可变的 `governing_project_id` 作为协作与授权上下文；来源、实现和其它业务关系仍由 EntityLink 表达。Thread 首批冻结 `title` 与 `project / restricted` 可见性；Ticket 首批冻结 `title` 与 `open / in-progress / done / canceled` 状态。完整聊天和工单工作流字段等待 Golden Path 交互验证。精确权限边界见 [ADR-0004](adr/0004-project-scoped-collaboration-permissions.md)。
+M0 纵向切片继续冻结 `thread` / `thr_` 与 `ticket` / `tkt_` 的稳定引用。Thread、Decision 和 Ticket 各自保存不可变的 `governing_project_id` 作为协作与授权上下文；来源、实现和其它业务关系仍由 EntityLink 表达。Thread 首批冻结 `title` 与 `project / restricted` 可见性；由 Message 发起的 Thread 另存不可变 `origin_channel_id`，读取时同时通过当前 Channel 与 Thread 权限，并以 asserted + user 的 `thread --started-from--> message` 关系保留来源，不复制正文。Ticket 首批冻结 `title` 与 `open / in-progress / done / canceled` 状态。Session 作用域的 Proposed Decision、人工 acceptance 与 Ticket 创建使用 target-scoped `client_operation_id` + canonical payload digest receipt 实现幂等；receipt 不进入业务对象、EntityRef、事件、Activity 或公共读取，但必须随 PostgreSQL 备份恢复。完整聊天和工单工作流字段等待 Golden Path 交互验证。Project / Thread 精确权限见 [ADR-0004](adr/0004-project-scoped-collaboration-permissions.md)，Channel / Message、来源与实时收发边界见 [ADR-0017](adr/0017-channel-message-boundary-and-single-process-realtime.md)，公共协作与 receipt 精确边界见 [ADR-0019](adr/0019-session-scoped-thread-decision-ticket-transport.md)。
 
 ### Ticket
 

@@ -2,7 +2,7 @@
 
 状态：已确认的初始产品决策
 
-日期：2026-08-29
+日期：2026-09-05
 
 本文件用于防止后续讨论静默改变当前方向。修改“已确认”事项时，必须同时记录修改日期、原因、影响和迁移方式。
 
@@ -87,6 +87,7 @@
 - Golden Path 必须覆盖“讨论 → Decision → Ticket → CI Run → Deployment → 时间线”。
 - 原型可以使用极简聊天、工单和 Markdown 文档，不以单点模块完备度作为成功标准。
 - Golden Path 的目标是验证产品差异化和领域边界，不提前承诺其原型代码直接进入生产。
+- 完成标准区分技术契约、公共入口、成员独立操作与持续使用证据；来源 / 结果双向发现和正常业务写入后的时间线须通过正式入口验证，精确判据以 [Golden Path](golden-path.md) 为准。
 
 ### D-012 关系与时间线是一等基础能力
 
@@ -119,7 +120,7 @@
 - Thread 与 Ticket 的首批类型前缀分别为 `thr_` 和 `tkt_`，具体 ID 生成算法仍未冻结。
 - Project 首批角色为 `viewer / contributor / decider / admin`；只有 `decider` 和 `admin` 可以 Accepted Decision。
 - restricted Thread 需要显式 Thread 成员权限，Project 角色不会自动穿透；无权限关系目标只显示不含标识和展示字段的通用占位。
-- 认证协议仍未冻结，application service 只接收认证 adapter 提供的显式 Principal。
+- 协作 application service 只接收认证 adapter 提供的显式 Principal；本地身份与 Session 协议由 D-019 单独冻结。
 
 ### D-016 PostgreSQL migration 基线
 
@@ -135,7 +136,8 @@
 - CI Run 的 M0 用户读取沿 active Workspace 成员 → Component → CI Run 解析；owner Team、Project、EntityLink 和 Jenkins source 都不授予读取权，不可读对象返回 not-found。
 - M0 staging Deployment 只由明确用户通过受控 `web / api` 调用记录；调用者必须是 active Workspace 成员，并持有目标 active staging Environment 的 active 显式授权。
 - Project 角色、owner Team、CI source 和成功构建都不隐式授予部署能力。记录必须保留实际操作者、所用授权、来源 CI Run 与 Environment，并与 `deploys` 关系、领域事件和 Outbox 原子提交。
-- 当前 Deployment command 只记录调用方已经确认的外部终态事实，不执行部署、不读取 Secret，也不支持 production、审批、回滚或运行中状态。精确技术契约以 [ADR-0006](adr/0006-verified-jenkins-delivery-and-ci-run.md)、[ADR-0007](adr/0007-component-scoped-ci-run-read.md) 与 [ADR-0009](adr/0009-explicit-staging-deployment.md) 为准。
+- M0 Deployment 读取要求同 Workspace 的 active 成员同时能读取目标 Environment 与来源 CI Run；写授权不授予读取、也不是读取历史的必要条件。不可读对象统一返回 not-found，Environment 归档不隐藏既有事实。
+- 当前 Deployment command 只记录调用方已经确认的外部终态事实，不执行部署、不读取 Secret，也不支持 production、审批、回滚或运行中状态。精确技术契约以 [ADR-0006](adr/0006-verified-jenkins-delivery-and-ci-run.md)、[ADR-0007](adr/0007-component-scoped-ci-run-read.md)、[ADR-0009](adr/0009-explicit-staging-deployment.md) 与 [ADR-0011](adr/0011-workspace-scoped-deployment-read.md) 为准。
 
 ### D-018 可验证 PostgreSQL 备份恢复
 
@@ -145,6 +147,30 @@
 - 当前 PostgreSQL 工具桥接只支持显式 `sslmode=disable` 的本地或受控私有连接；TLS config 不能近似降级为较弱校验，远程 TLS 备份需要独立连接契约。
 - `activity_items` 数据不进入备份；恢复权威事实后显式执行 forward-only migration 校验，并从不可变领域事件原子重建 Activity。
 - manifest / dump 校验失败、migration 漂移、工具 major 不匹配和非空目标必须 fail closed。精确工件、恢复顺序与验证边界以 [ADR-0010](adr/0010-verified-postgresql-backup-and-restore.md) 为准。
+
+### D-019 本地身份与服务端 Session
+
+- M1 首段先建立自部署可用的本地账号，OIDC 延后并复用相同 user、membership 与服务端 Session 边界，不建立第二套权限主体。
+- 新实例通过显式、一次性的 `nexus-bootstrap --password-stdin` 创建首个 user、Workspace 与 `owner` membership；不随服务启动初始化，不生成默认密码，也不接受命令参数密码。
+- 本地密码使用版本化 Argon2id verifier；不存在、禁用、锁定和错误密码统一失败，连续 5 次错误锁定 15 分钟。账号锁定不替代公共 transport 的客户端 IP 限流。
+- Session 是 24 小时绝对有效的服务端 opaque token，数据库只保存 Session / CSRF token digest。Session 不固定 Workspace，业务请求必须以当前 active membership 解析 `VerifiedUser`。
+- 浏览器合同固定 Secure `__Host-` Cookie、SameSite Strict、精确 HTTPS Origin、CSRF cookie + Header + digest、服务端 request ID 与 `/api/v1` 版本化安全错误对象；不提供 insecure HTTP fallback，也不信任用户身份或转发 Header。
+- `local_accounts` 纳入受控 PostgreSQL 运维备份，`user_sessions` 只恢复 schema，恢复后旧登录态全部失效。精确身份与公共认证边界以 [ADR-0012](adr/0012-local-identity-and-session-foundation.md) 和 [ADR-0013](adr/0013-public-authentication-transport.md) 为准。
+
+### D-020 首个业务读取 Transport
+
+- 第一个公共业务端点是 Workspace 路径下的 Deployment Nexus View 安全 `GET`；Workspace 不写入 Session，每次请求都通过当前 active membership 把 verified user 转换为正式 application `Principal`。
+- 合法 Session 但 membership、Workspace、Deployment 或依赖对象不可读时保持 not-found 不可发现性；读取复用 ADR-0011 的 Environment + CI Run 组合权限，不建立客户端角色判断或第二套授权。
+- 公共 DTO 与内部 application struct 解耦，只返回结构化引用、终态、受控时间、权限过滤后的 Environment / CI Run、`deploys` 和 `deployment.recorded`；响应使用 `private, no-store` 和 `Vary: Cookie`。
+- Web 只在 canonical Deployment 页面通过同源 typed adapter 读取并运行时校验该 DTO；显式静态 prototype 不得成为真实读取失败时的 fallback。精确业务路由、响应与验证边界以 [ADR-0014](adr/0014-session-scoped-deployment-nexus-view-transport.md) 为准。
+
+### D-021 同源 Authenticated Web Shell
+
+- 浏览器页面、静态资源和 `/api/v1` 共享 ADR-0013 的唯一 HTTPS public origin；TLS reverse proxy 保持唯一公共入口，不开放 credentialed CORS 或第二个静态站点 origin。
+- Go server 只从必需的绝对 `RADISHNEXUS_WEB_ROOT` 交付 production build；HTML 路径显式 allowlist，未知路径不使用任意 SPA fallback。HTML `no-cache`、哈希资源 immutable cache，认证和业务 API 继续 `no-store`。
+- 根路径先 bootstrap 正式 Session，再使用现有 login / logout transport；密码和 Session token 不进入浏览器 storage。Workspace 选择不固定到 Session，业务请求仍按路径与 current membership 授权。
+- 在没有对象列表前，只允许用户用已知稳定 Deployment ID 进入 canonical 页面；原代表检视器移动到显式 `/prototype/nexus-view`，不参与真实失败 fallback。
+- 真实 PostgreSQL、正式 migration / application service、production Web build 和临时 HTTPS browser fixture 共同验证登录到 Deployment 再登出的完整链路。精确装配、页面、安全 Header 与验证边界以 [ADR-0015](adr/0015-same-origin-authenticated-web-shell.md) 为准。
 
 ## 尚未冻结
 
@@ -163,6 +189,7 @@
 
 ## 变更记录
 
+- 2026-09-05：澄清 D-011 的完成证据，原因是内部契约与预置投影验收不足以证明用户链路。影响是后续验收增加正常写入、双向发现和独立操作；无需数据迁移，不改变对象、授权、技术栈或已接受 ADR，近期顺序由当前状态承载。
 - 2026-08-27：建立初始决策基线。
 - 2026-08-27：确认 Decision、研发资产分层、Golden Path 以及 EntityLink/Activity 基线。
 - 2026-08-28：冻结首批 M0 核心对象字段与不变量，并接受 ADR-0002 的稳定引用、授权与事件投影边界。
@@ -171,3 +198,7 @@
 - 2026-08-28：接受 ADR-0005，冻结显式、可校验、事务化的 forward-only PostgreSQL migration 基线。
 - 2026-08-29：冻结完成态 CI Run 的 verified delivery、Component 作用域读取，以及显式 staging Deployment 与环境级授权边界。
 - 2026-08-30：接受 ADR-0010，冻结 PostgreSQL 17 同 major 的显式备份、空目标恢复、migration 校验与 Activity 重建边界。
+- 2026-08-30：接受 ADR-0011，冻结 Workspace 作用域下组合 Environment 与 CI Run 权限的 Deployment 安全读取边界。
+- 2026-08-30：接受 ADR-0012 与 ADR-0013，冻结本地账号、首次管理员、服务端 Session、CSRF、Workspace 选择、可信代理与公共认证 transport 安全合同。
+- 2026-08-30：接受 ADR-0014，冻结首个 Session 作用域 Deployment Nexus View 业务读取路由、公共 DTO、缓存和 Web 消费边界。
+- 2026-08-30：接受 ADR-0015，冻结同源 authenticated Web Shell、显式 production build root、页面 allowlist、静态缓存与真实 HTTPS browser → PostgreSQL 验证边界。

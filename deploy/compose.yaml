@@ -1,0 +1,185 @@
+name: radishnexus
+
+x-database-environment: &database-environment
+  DATABASE_URL: postgres://radishnexus@postgres:5432/radishnexus?sslmode=disable
+  RADISHNEXUS_DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
+
+x-operation: &operation
+  image: radishnexus/operations:local
+  pull_policy: never
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile
+    target: operations
+  profiles:
+    - operations
+  depends_on:
+    postgres:
+      condition: service_healthy
+  environment: *database-environment
+  secrets:
+    - postgres_password
+  networks:
+    - data
+  read_only: true
+  tmpfs:
+    - /tmp:size=16m,mode=1777
+  user: "${RADISHNEXUS_OPERATION_UID:-1000}:${RADISHNEXUS_OPERATION_GID:-1000}"
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  restart: "no"
+
+services:
+  postgres:
+    image: postgres:17.10-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+    pull_policy: never
+    environment:
+      POSTGRES_DB: radishnexus
+      POSTGRES_USER: radishnexus
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready --username "$${POSTGRES_USER}" --dbname "$${POSTGRES_DB}"
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    restart: unless-stopped
+    stop_grace_period: 30s
+
+  app:
+    image: radishnexus/server:local
+    pull_policy: never
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: server
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *database-environment
+      RADISHNEXUS_PUBLIC_ORIGIN: "${RADISHNEXUS_PUBLIC_ORIGIN:?RADISHNEXUS_PUBLIC_ORIGIN is required}"
+      RADISHNEXUS_TRUSTED_PROXY_CIDRS: "${RADISHNEXUS_TRUSTED_PROXY_CIDR:-172.30.73.10/32}"
+      RADISHNEXUS_HTTP_ADDR: 0.0.0.0:8080
+    secrets:
+      - postgres_password
+    networks:
+      - proxy
+      - data
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --quiet
+        - --output-document=/dev/null
+        - http://127.0.0.1:8080/health/ready
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 15s
+
+  caddy:
+    image: caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+    pull_policy: never
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      RADISHNEXUS_PUBLIC_ORIGIN: "${RADISHNEXUS_PUBLIC_ORIGIN:?RADISHNEXUS_PUBLIC_ORIGIN is required}"
+    ports:
+      - "${RADISHNEXUS_HTTPS_PORT:-8443}:${RADISHNEXUS_HTTPS_PORT:-8443}/tcp"
+    volumes:
+      - type: bind
+        source: ./Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      proxy:
+        ipv4_address: "${RADISHNEXUS_PROXY_IPV4:-172.30.73.10}"
+    healthcheck:
+      test:
+        - CMD
+        - caddy
+        - validate
+        - --config
+        - /etc/caddy/Caddyfile
+        - --adapter
+        - caddyfile
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    read_only: true
+    cap_drop:
+      - ALL
+    # The official Caddy binary carries cap_net_bind_service=ep. Keep only that
+    # capability in the bounding set so exec succeeds; this topology still
+    # publishes and listens on the configured unprivileged HTTPS port.
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    stop_grace_period: 15s
+
+  migrate:
+    <<: *operation
+    entrypoint:
+      - /usr/local/bin/nexus-migrate
+
+  bootstrap:
+    <<: *operation
+    entrypoint:
+      - /usr/local/bin/nexus-bootstrap
+
+  backup:
+    <<: *operation
+    entrypoint:
+      - /usr/local/bin/nexus-backup
+    volumes:
+      - ./local-data/backups:/backups
+
+  restore:
+    <<: *operation
+    entrypoint:
+      - /usr/local/bin/nexus-restore
+    volumes:
+      - ./local-data/backups:/backups:ro
+
+secrets:
+  postgres_password:
+    file: "${RADISHNEXUS_POSTGRES_PASSWORD_FILE:-./secrets/postgres_password}"
+
+networks:
+  proxy:
+    ipam:
+      config:
+        - subnet: "${RADISHNEXUS_PROXY_SUBNET:-172.30.73.0/24}"
+  data:
+    internal: true
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

@@ -20,6 +20,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/db"
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 )
 
@@ -41,6 +42,9 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	sourcePool := connectIntegrationPool(t, ctx, sourceURL)
 	defer sourcePool.Close()
 	seedBackupGoldenPath(t, ctx, sourcePool)
+	if got := snapshotTable(t, ctx, sourcePool, "radishnexus.user_sessions"); got == "[]" {
+		t.Fatal("source user session fixture is empty")
+	}
 	sourceStore := goldenpostgres.New(sourcePool)
 	projected, err := sourceStore.RebuildActivityProjection(ctx)
 	if err != nil {
@@ -59,7 +63,10 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Backup() error = %v", err)
 	}
-	if !reflect.DeepEqual(manifest.ExcludedDataTables, []string{"radishnexus.activity_items"}) {
+	if !reflect.DeepEqual(manifest.ExcludedDataTables, []string{
+		"radishnexus.activity_items",
+		"radishnexus.user_sessions",
+	}) {
 		t.Fatalf("backup exclusions = %#v", manifest.ExcludedDataTables)
 	}
 	if _, err := sourceConnection.Exec(ctx, `CREATE TABLE public.unclassified_backup_data (value text)`); err != nil {
@@ -114,9 +121,24 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if got := snapshotTable(t, ctx, targetPool, "radishnexus.activity_items"); got != "[]" {
 		t.Fatalf("restored Activity before rebuild = %s, want []", got)
 	}
+	if got := snapshotTable(t, ctx, targetPool, "radishnexus.user_sessions"); got != "[]" {
+		t.Fatalf("restored user sessions = %s, want []", got)
+	}
 	targetSnapshot := snapshotIncludedTables(t, ctx, targetPool)
 	if !reflect.DeepEqual(targetSnapshot, sourceSnapshot) {
 		t.Fatalf("restored authoritative data differs\nsource: %#v\ntarget: %#v", sourceSnapshot, targetSnapshot)
+	}
+	var restoredPasswordHash string
+	if err := targetPool.QueryRow(ctx, `
+		SELECT password_hash
+		FROM radishnexus.local_accounts
+		WHERE login_name = 'admin'
+	`).Scan(&restoredPasswordHash); err != nil {
+		t.Fatalf("read restored local account: %v", err)
+	}
+	passwordMatches, err := authn.NewArgon2idHasher().Verify(restoredPasswordHash, "backup fixture password")
+	if err != nil || !passwordMatches {
+		t.Fatalf("restored local account verifier = %v, %v", passwordMatches, err)
 	}
 	targetStore := goldenpostgres.New(targetPool)
 	projected, err = targetStore.RebuildActivityProjection(ctx)
@@ -161,7 +183,11 @@ func (clock integrationClock) Now() time.Time { return clock.now }
 
 func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
-	_, err := pool.Exec(ctx, `
+	passwordHash, err := authn.NewArgon2idHasher().Hash("backup fixture password")
+	if err != nil {
+		t.Fatalf("hash backup local account password: %v", err)
+	}
+	_, err = pool.Exec(ctx, `
 		INSERT INTO radishnexus.users (id, display_name, created_at) VALUES
 			('usr_admin', 'Admin', '2026-08-30T01:00:00Z'),
 			('usr_contributor', 'Contributor', '2026-08-30T01:00:00Z'),
@@ -169,11 +195,11 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 		INSERT INTO radishnexus.workspaces (id, name, created_at)
 		VALUES ('wrk_backup', 'Backup Workspace', '2026-08-30T01:00:00Z');
 		INSERT INTO radishnexus.workspace_memberships (
-			workspace_id, user_id, status, created_at
+			workspace_id, user_id, status, role, created_at
 		) VALUES
-			('wrk_backup', 'usr_admin', 'active', '2026-08-30T01:00:00Z'),
-			('wrk_backup', 'usr_contributor', 'active', '2026-08-30T01:00:00Z'),
-			('wrk_backup', 'usr_decider', 'active', '2026-08-30T01:00:00Z');
+			('wrk_backup', 'usr_admin', 'active', 'owner', '2026-08-30T01:00:00Z'),
+			('wrk_backup', 'usr_contributor', 'active', 'member', '2026-08-30T01:00:00Z'),
+			('wrk_backup', 'usr_decider', 'active', 'member', '2026-08-30T01:00:00Z');
 		INSERT INTO radishnexus.teams (id, workspace_id, name, created_at)
 		VALUES ('tem_backup', 'wrk_backup', 'Backup Team', '2026-08-30T01:00:00Z');
 		INSERT INTO radishnexus.projects (
@@ -189,19 +215,19 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 		) VALUES
 			('wrk_backup', 'prj_backup', 'usr_contributor', 'contributor', '2026-08-30T01:00:00Z'),
 			('wrk_backup', 'prj_backup', 'usr_decider', 'decider', '2026-08-30T01:00:00Z');
-		INSERT INTO radishnexus.threads (
-			id, workspace_id, governing_project_id, title, visibility, created_by,
-			created_at, updated_at
+		INSERT INTO radishnexus.channels (
+			id, workspace_id, governing_project_id, name, visibility, status,
+			created_by_kind, created_by_id, created_at, updated_at
 		) VALUES (
-			'thr_backup', 'wrk_backup', 'prj_backup', 'Backup contract discussion',
-			'restricted', 'usr_contributor',
+			'chn_backup', 'wrk_backup', 'prj_backup', 'Backup Channel',
+			'restricted', 'active', 'user', 'usr_contributor',
 			'2026-08-30T01:00:00Z', '2026-08-30T01:00:00Z'
 		);
-		INSERT INTO radishnexus.thread_memberships (
-			workspace_id, thread_id, user_id, created_at
+		INSERT INTO radishnexus.channel_memberships (
+			workspace_id, channel_id, user_id, created_at
 		) VALUES
-			('wrk_backup', 'thr_backup', 'usr_contributor', '2026-08-30T01:00:00Z'),
-			('wrk_backup', 'thr_backup', 'usr_decider', '2026-08-30T01:00:00Z');
+			('wrk_backup', 'chn_backup', 'usr_contributor', '2026-08-30T01:00:00Z'),
+			('wrk_backup', 'chn_backup', 'usr_decider', '2026-08-30T01:00:00Z');
 		INSERT INTO radishnexus.components (
 			id, workspace_id, key, name, type, owner_team_id, lifecycle,
 			created_by_kind, created_by_id, created_at, updated_at
@@ -228,6 +254,27 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	if err != nil {
 		t.Fatalf("seed backup base data: %v", err)
 	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO radishnexus.local_accounts (
+			user_id, login_name, password_hash, status, created_at, password_changed_at
+		) VALUES (
+			'usr_admin', 'admin', $1,
+			'active', '2026-08-30T01:00:00Z', '2026-08-30T01:00:00Z'
+		)
+	`, passwordHash); err != nil {
+		t.Fatalf("seed backup local account: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO radishnexus.user_sessions (
+			id, user_id, token_digest, csrf_token_digest, created_at, expires_at
+		) VALUES (
+			'ses_backup', 'usr_admin', decode(repeat('a1', 32), 'hex'),
+			decode(repeat('b2', 32), 'hex'),
+			'2026-08-30T01:10:00Z', '2026-08-31T01:10:00Z'
+		)
+	`); err != nil {
+		t.Fatalf("seed backup user session: %v", err)
+	}
 
 	clock := integrationClock{now: time.Date(2026, 8, 30, 1, 30, 0, 0, time.UTC)}
 	service := goldenpath.NewService(goldenpostgres.New(pool), &deterministicIDs{}, clock)
@@ -240,35 +287,69 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 			CorrelationID: correlationID,
 		}
 	}
-	decision, err := service.CreateDecisionFromThread(
+	message, err := service.CreateMessage(
+		ctx,
+		invocation(contributor, "cor_backup_message"),
+		goldenpath.CreateMessageInput{
+			ChannelID:         "chn_backup",
+			ClientOperationID: "backup-fixture:message-1",
+			Body:              "Preserve this authoritative message body exactly.",
+		},
+	)
+	if err != nil {
+		t.Fatalf("create backup Message: %v", err)
+	}
+	thread, err := service.StartThreadFromMessage(
+		ctx,
+		invocation(contributor, "cor_backup_thread"),
+		goldenpath.StartThreadFromMessageInput{
+			ChannelID: "chn_backup", MessageID: message.Message.ID, Title: "Backup contract discussion", Visibility: "restricted",
+		},
+	)
+	if err != nil {
+		t.Fatalf("create backup Thread from Message: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO radishnexus.thread_memberships (
+			workspace_id, thread_id, user_id, created_at
+		) VALUES ('wrk_backup', $1, 'usr_decider', '2026-08-30T01:30:00Z')
+	`, thread.ID); err != nil {
+		t.Fatalf("seed backup Thread decider membership: %v", err)
+	}
+	decisionResult, err := service.CreateDecisionFromThread(
 		ctx,
 		invocation(contributor, "cor_backup_decision"),
 		goldenpath.CreateDecisionInput{
-			ThreadID: "thr_backup",
-			Question: "How should the backup contract preserve context?",
+			ThreadID:          thread.ID,
+			ClientOperationID: "test:backup:decision",
+			Question:          "How should the backup contract preserve context?",
 		},
 	)
 	if err != nil {
 		t.Fatalf("create backup Decision: %v", err)
 	}
-	decision, err = service.AcceptDecision(
+	decision := decisionResult.Decision
+	acceptResult, err := service.AcceptDecision(
 		ctx,
 		invocation(decider, "cor_backup_accept"),
 		goldenpath.AcceptDecisionInput{
-			DecisionID: decision.ID,
-			Outcome:    "Preserve authoritative facts and rebuild Activity.",
-			Rationale:  "Derived projections must not become a second source of truth.",
+			DecisionID:        decision.ID,
+			ClientOperationID: "test:backup:accept",
+			Outcome:           "Preserve authoritative facts and rebuild Activity.",
+			Rationale:         "Derived projections must not become a second source of truth.",
 		},
 	)
 	if err != nil {
 		t.Fatalf("accept backup Decision: %v", err)
 	}
+	decision = acceptResult.Decision
 	if _, err := service.CreateTicketFromDecision(
 		ctx,
 		invocation(contributor, "cor_backup_ticket"),
 		goldenpath.CreateTicketInput{
-			DecisionID: decision.ID,
-			Title:      "Implement verified backup restore",
+			DecisionID:        decision.ID,
+			ClientOperationID: "test:backup:ticket",
+			Title:             "Implement verified backup restore",
 		},
 	); err != nil {
 		t.Fatalf("create backup Ticket: %v", err)

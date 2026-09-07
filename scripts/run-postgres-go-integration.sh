@@ -45,12 +45,25 @@ docker run \
     "${postgres_image}" >/dev/null
 
 ready=false
+consecutive_connections=0
 for _ in $(seq 1 30); do
-    if docker exec "${container_name}" pg_isready \
+    if docker exec \
+        --env "PGPASSWORD=${database_password}" \
+        "${container_name}" \
+        psql \
+        --host 127.0.0.1 \
         --username "${database_user}" \
-        --dbname "${database_name}" >/dev/null 2>&1; then
-        ready=true
-        break
+        --dbname "${database_name}" \
+        --no-psqlrc \
+        --set ON_ERROR_STOP=on \
+        --command 'SELECT 1' >/dev/null 2>&1; then
+        consecutive_connections=$((consecutive_connections + 1))
+        if [[ "${consecutive_connections}" -ge 2 ]]; then
+            ready=true
+            break
+        fi
+    else
+        consecutive_connections=0
     fi
     sleep 1
 done
