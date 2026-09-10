@@ -6,25 +6,56 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
-type fakePinger struct{ err error }
+type fakeReadinessChecker struct{ err error }
 
-func (pinger fakePinger) Ping(context.Context) error { return pinger.err }
+func (pinger fakeReadinessChecker) CheckReady(context.Context) error { return pinger.err }
+
+type readinessFunc func(context.Context) error
+
+func (check readinessFunc) CheckReady(ctx context.Context) error { return check(ctx) }
+
+func TestReadinessIsBoundedUncachedAndDoesNotExposeDatabaseDetails(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	check := readinessFunc(func(ctx context.Context) error {
+		calls++
+		deadline, ok := ctx.Deadline()
+		if !ok || time.Until(deadline) > 2*time.Second {
+			t.Fatal("readiness has no bounded deadline")
+		}
+		return errors.New("private database detail / migration checksum")
+	})
+	handler := newHandler(check, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler())
+	for range 2 {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/health/ready", nil))
+		if response.Code != http.StatusServiceUnavailable || response.Body.String() != "not ready\n" || response.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("unexpected readiness response: %d %q %v", response.Code, response.Body.String(), response.Header())
+		}
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/health/live", nil))
+	if response.Code != http.StatusNoContent || calls != 2 {
+		t.Fatal("liveness depended on schema or readiness reused stale state")
+	}
+}
 
 func TestHealthRoutesUseMethodPatterns(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name       string
-		pinger     fakePinger
+		pinger     fakeReadinessChecker
 		method     string
 		path       string
 		wantStatus int
 	}{
 		{name: "live", method: http.MethodGet, path: "/health/live", wantStatus: http.StatusNoContent},
 		{name: "ready", method: http.MethodGet, path: "/health/ready", wantStatus: http.StatusNoContent},
-		{name: "database unavailable", pinger: fakePinger{err: errors.New("offline")}, method: http.MethodGet, path: "/health/ready", wantStatus: http.StatusServiceUnavailable},
+		{name: "database unavailable", pinger: fakeReadinessChecker{err: errors.New("offline")}, method: http.MethodGet, path: "/health/ready", wantStatus: http.StatusServiceUnavailable},
 		{name: "wrong method", method: http.MethodPost, path: "/health/live", wantStatus: http.StatusMethodNotAllowed},
 	}
 
@@ -50,7 +81,7 @@ func TestHandlerReplacesCallerRequestID(t *testing.T) {
 	request.Header.Set("X-Request-ID", "caller-controlled")
 	response := httptest.NewRecorder()
 
-	newHandler(fakePinger{}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler()).ServeHTTP(response, request)
+	newHandler(fakeReadinessChecker{}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler()).ServeHTTP(response, request)
 
 	if requestID := response.Header().Get("X-Request-ID"); requestID == "caller-controlled" || len(requestID) != 36 {
 		t.Fatalf("X-Request-ID = %q", requestID)
@@ -69,7 +100,7 @@ func TestHandlerRoutesChannelMessagesBeforeWorkspaceFallback(t *testing.T) {
 		response.WriteHeader(http.StatusTeapot)
 	})
 	handler := newHandler(
-		fakePinger{},
+		fakeReadinessChecker{},
 		http.NotFoundHandler(),
 		channelMessages,
 		http.NotFoundHandler(),
@@ -100,7 +131,7 @@ func TestHandlerRoutesChannelEventsBeforeWorkspaceFallback(t *testing.T) {
 		response.WriteHeader(http.StatusTeapot)
 	})
 	handler := newHandler(
-		fakePinger{},
+		fakeReadinessChecker{},
 		http.NotFoundHandler(),
 		http.NotFoundHandler(),
 		channelEvents,
@@ -125,7 +156,7 @@ func TestHandlerRoutesCollaborationBeforeWorkspaceFallback(t *testing.T) {
 		response.WriteHeader(http.StatusTeapot)
 	})
 	handler := newHandler(
-		fakePinger{},
+		fakeReadinessChecker{},
 		http.NotFoundHandler(),
 		http.NotFoundHandler(),
 		http.NotFoundHandler(),

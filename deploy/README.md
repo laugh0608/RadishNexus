@@ -135,7 +135,9 @@ docker compose -f deploy/compose.yaml down
 | origin / Host / proxy 配置错误 | app 启动错误、认证 transport 的稳定安全错误或 Caddy health 失败 |
 | 浏览器不信任证书 | 导出并信任当前 `caddy_data` 中的公开 root CA，不关闭 HTTPS 校验 |
 
-`/health/ready` 只证明 Go server 当前能够 ping PostgreSQL，不声称 migration 或 bootstrap 已完成；这两个状态始终以显式 operation 结果为准。
+`/health/ready` 现在检查数据库 migration history 与当前应用工件的序号、名称和 checksum 完全匹配。匹配返回 `204`；缺失、未迁移完成、漂移、数据库更新于二进制、连接或查询失败返回 `503`，预算为 2 秒，响应不缓存。应用不自动迁移或修复；先检查显式 `migrate` operation 的结果及工件版本，不以修改历史表绕过失败。`/health/live` 仍只检查进程存活。
+
+就绪成功不代表 bootstrap 或旧账户邮箱映射已完成，也不验证 migration 之外的手工 DDL；初始化与升级操作仍分别确认结果。当前不支持跨 schema 版本滚动兼容，探针只是即时判断，不代替升级窗口协调。详见[服务端健康检查](../server/README.md#存活与业务就绪)。
 
 ## 仓库演练
 

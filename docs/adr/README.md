@@ -28,8 +28,8 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0020](0020-session-scoped-single-process-message-realtime.md) | 已接受 | Session 作用域下的单进程 Message 实时增量 |
 | [ADR-0021](0021-document-editor-and-collaboration-foundation.md) | 提议 | Document 正文、编辑器与协同分层 |
 | [ADR-0022](0022-transactional-activity-and-incoming-relations.md) | 已接受 | 事务内 Activity 更新与协作对象反向关系 |
-
 | [ADR-0023](0023-local-account-and-radish-oidc-login.md) | 已接受 | 本地账户、邮箱迁移与 Radish OIDC 联合登录 |
+| [ADR-0024](0024-read-only-schema-readiness.md) | 已接受 | 只读 schema readiness 与精确 migration 兼容性 |
 
 ## 新建规则
 

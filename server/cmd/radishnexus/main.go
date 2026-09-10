@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/laugh0608/RadishNexus/server/db"
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
@@ -68,6 +69,10 @@ func run() error {
 		return err
 	}
 	defer pool.Close()
+	readiness, err := db.NewReadinessChecker(pool)
+	if err != nil {
+		return fmt.Errorf("configure schema readiness: %w", err)
+	}
 	authStore := authpostgres.New(pool)
 	authService := authn.NewService(
 		authStore,
@@ -122,7 +127,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(pool, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, webHandler, identityHandler),
+		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, webHandler, identityHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -166,12 +171,12 @@ func (notifier messageRealtimeNotifier) NotifyMessageCreated(notification golden
 	})
 }
 
-type databasePinger interface {
-	Ping(context.Context) error
+type readinessChecker interface {
+	CheckReady(context.Context) error
 }
 
 func newHandler(
-	database databasePinger,
+	database readinessChecker,
 	authHandler http.Handler,
 	channelMessagesHandler http.Handler,
 	channelEventsHandler http.Handler,
@@ -185,9 +190,10 @@ func newHandler(
 		response.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /health/ready", func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Cache-Control", "no-store")
 		ctx, cancel := context.WithTimeout(request.Context(), 2*time.Second)
 		defer cancel()
-		if err := database.Ping(ctx); err != nil {
+		if err := database.CheckReady(ctx); err != nil {
 			http.Error(response, "not ready", http.StatusServiceUnavailable)
 			return
 		}

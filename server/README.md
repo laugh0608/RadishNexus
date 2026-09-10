@@ -2,7 +2,7 @@
 
 这是 RadishNexus 唯一的正式 Go 服务 module。当前纵向切片包含：
 
-- 标准库 HTTP 存活与就绪检查；
+- 标准库 HTTP 存活检查与只读 migration history 就绪检查；
 - 基于原生 `pgx/v5`、连续编号与 SHA-256 漂移检测的显式 PostgreSQL migration；
 - Channel / Message / messaging-origin Thread 的正式 schema、权限和幂等 application service；
 - 权限过滤、稳定 keyset 分页的 canonical Channel Message application query；
@@ -43,6 +43,12 @@ staging Deployment 只记录外部已经完成的终态事实，不执行部署�
 Deployment 的 M0 读取与写授权分离：同一 Workspace 的 active 成员只有同时能读取目标 Environment 与来源 CI Run 时才可读取；非成员、暂停成员和跨 Workspace 主体得到 not-found，Environment 归档不隐藏既有历史。Current 只返回终态、受控时间、Environment 与来源 CI Run；Relations 和 Timeline 复用当前权限，不返回 authorization ID、调用 source、Jenkins receipt、digest、Secret、原始 payload 或外部 URL。该 query 已通过独立公共 DTO 开放为第一个只读业务端点；授权管理入口、production、审批、回滚和执行引擎均未建立。
 
 本地认证以规范化私有邮箱、Argon2id verifier、5 次失败后 15 分钟账号锁定和 24 小时绝对有效的服务端 Session 为基线。数据库只保存 Session / CSRF token 的 SHA-256 digest；Session 不固定 Workspace，业务调用必须以当前 active membership 解析 `VerifiedUser`。登录 transport 另按客户端 IP 每分钟限制 5 次尝试、每进程最多并发 4 个密码校验并有界跟踪 4096 个客户端；多副本或公网部署仍必须在 reverse proxy / gateway 增加全局限流。成员准入使用一次性邀请；OIDC 状态与外部绑定事务已实现，真实 provider adapter 按当前计划延后，Radish 登录保持关闭。密码重置与 MFA 尚未建立。不可读资源由 application service 返回 `not found`，Deployment handler 还会把不可用 membership 收敛为同形 `not_found`。
+
+## 存活与业务就绪
+
+`GET /health/live` 返回 `204`，不访问数据库。`GET /health/ready` 在 2 秒请求预算内读取 `public.radishnexus_schema_migrations`，要求序号连续且数量、名称、SHA-256 checksum 与当前二进制内嵌 migration 完全一致；匹配返回 `204`，数据库不可达、查询超时、历史表缺失、待迁移、漂移或更新版本均返回 `503` 和通用 `not ready`，不公开数据库错误或 migration 明细。响应使用 `Cache-Control: no-store`，每次请求重新读取数据库。
+
+检查只查询历史，不创建表、不 bootstrap、不执行 migration 或修复。当前没有跨 schema 版本兼容窗口；升级仍须显式运行匹配的 `nexus-migrate`，完成后探针自然恢复。成功仅证明检查时的历史匹配，不证明账户已初始化、手工 DDL 未改变 schema、业务全流程可用或并发升级已受锁保护；升级窗口和生产编排仍独立治理。完整边界见 [ADR-0024](../docs/adr/0024-read-only-schema-readiness.md)。
 
 ## 本地检查
 
