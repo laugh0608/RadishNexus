@@ -1,6 +1,6 @@
 # RadishNexus Web
 
-`web/` 是 RadishNexus 第一正式产品形态的 React + TypeScript 入口。当前根路径已经建立最小 authenticated Web Shell，消费正式 login / session / logout transport，允许从当前 Session context 选择 Workspace，并用已知稳定 ID 进入 canonical Deployment、Channel、Thread、Decision 或 Ticket 页面。Deployment 页面安全读取 Nexus View；Channel 页面通过类型化 adapter 分页读取 Message、幂等发送并从 Message 发起 Thread；Thread → Proposed Decision → 人工 Accepted Decision → Ticket 继续使用权限过滤后的 canonical Nexus View 和幂等短请求。原 Decision、CI Run 与 Deployment 代表原型移动到显式 `/prototype/nexus-view`，不参与真实失败 fallback。
+`web/` 是 RadishNexus 第一正式产品形态的 React + TypeScript 入口。当前根路径已经建立最小 authenticated Web Shell，消费正式 login / session / logout transport，允许从当前 Session context 选择 Workspace、分页浏览可读 Project 并打开可读 Channel；Deployment、Thread、Decision 与 Ticket 的已知 ID 工具保留在次级入口。Deployment 页面安全读取 Nexus View；Channel 页面通过类型化 adapter 分页读取 Message、幂等发送并从 Message 发起 Thread；Thread → Proposed Decision → 人工 Accepted Decision → Ticket 继续使用权限过滤后的 canonical Nexus View 和幂等短请求。原 Decision、CI Run 与 Deployment 代表原型移动到显式 `/prototype/nexus-view`，不参与真实失败 fallback。
 
 ## 本地运行
 
@@ -53,3 +53,9 @@ npm run dev
 ## 依赖与许可证
 
 生产依赖只有 React 与 React DOM。构建、测试和格式工具使用 Vite、TypeScript、Oxlint、Vitest、Testing Library、jsdom 与 Prettier；直接依赖采用 MIT，TypeScript 采用 Apache-2.0。完整锁定依赖只允许来自官方 npm registry，必须携带 SHA-512 integrity，并限定在 `scripts/check-dependencies.mjs` 已审阅的 SPDX 许可证集合内；许可证或 lifecycle script 漂移会让检查失败。
+
+## Project / Channel 浏览
+
+首页消费 [ADR-0025](../docs/adr/0025-project-and-channel-discovery.md) 的两个只读 GET 合同。列表每次显示一个查询页，翻页与返回均重新读取，不拼接权限可能过期的旧页。切换 Workspace / Project、主动刷新和窗口重新获得焦点会清理旧内容；请求取消与迟到结果保护避免旧作用域覆盖新页面。归档对象标明可浏览，访问失效清空内容，Session 失效回到登录。没有权限变化实时推送，最终打开频道仍由服务端复权。
+
+`workspace/WorkspaceHome.tsx` 承载首页和次级 ID 工具，`ProjectBrowser.tsx` 承载列表状态，`api.ts` 集中校验安全响应。没有新增浏览器存储、前端权限推断或依赖。项目与成员配置仍未开放；空列表不表示可以自行创建或提升角色。

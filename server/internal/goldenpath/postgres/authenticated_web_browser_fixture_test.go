@@ -75,11 +75,14 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 		authn.CryptoSecretGenerator{},
 		authn.SystemClock{},
 	)
+	authenticationGuard := httptransport.NewLoginGuard(5, time.Minute, 64, 2)
+	identityHandler := httptransport.NewIdentityHandler(authn.NewIdentityService(authpostgres.New(pool), authService, ""), authService, nil, sessionPolicy, proxyPolicy, authenticationGuard)
 	authHandler := httptransport.NewAuthHandler(
 		authService,
 		sessionPolicy,
 		proxyPolicy,
-		httptransport.NewLoginGuard(5, time.Minute, 64, 2),
+		authenticationGuard,
+		identityHandler,
 	)
 	realtimeConfig, err := realtime.DefaultConfig()
 	if err != nil {
@@ -129,6 +132,11 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.Handle("/api/v1/auth", authHandler)
 	mux.Handle("/api/v1/auth/", authHandler)
+	discoveryHandler := httptransport.NewDiscoveryHandler(authService, goldenpath.NewDiscoveryService(goldenpostgres.New(pool)), sessionPolicy, proxyPolicy)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/projects", discoveryHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/projects/", discoveryHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/invitations", identityHandler)
+	mux.Handle("/auth/complete", identityHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages", channelHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages/", channelHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/events", channelEventsHandler)

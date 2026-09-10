@@ -125,9 +125,11 @@ func run() error {
 		proxyPolicy,
 	)
 
+	discoveryHandler := httptransport.NewDiscoveryHandler(authService, goldenpath.NewDiscoveryService(goldenpostgres.New(pool)), sessionPolicy, proxyPolicy)
+
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, webHandler, identityHandler),
+		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -182,6 +184,7 @@ func newHandler(
 	channelEventsHandler http.Handler,
 	collaborationHandler http.Handler,
 	deploymentNexusViewHandler http.Handler,
+	discoveryHandler http.Handler,
 	webHandler http.Handler,
 	identityHandler ...http.Handler,
 ) http.Handler {
@@ -214,6 +217,8 @@ func newHandler(
 	mux.Handle("/api/v1/workspaces/{workspace_id}/threads/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/decisions/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/tickets/", collaborationHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/projects", discoveryHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/projects/", discoveryHandler)
 	mux.Handle("/api/v1/workspaces", deploymentNexusViewHandler)
 	mux.Handle("/api/v1/workspaces/", deploymentNexusViewHandler)
 	mux.Handle("/", webHandler)

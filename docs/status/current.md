@@ -6,7 +6,7 @@
 
 M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 React Web 已建立若干真实业务切片，尚未完成可由普通成员独立操作、持续使用的完整 Golden Path。
 
-本地邮箱账户与邀请已按 [ADR-0023](../adr/0023-local-account-and-radish-oidc-login.md) 建立。项目所有者已明确将 Radish OIDC 接入延后，schema readiness 已完成，当前继续推进最小使用入口，把已有权限、事务、来源和恢复能力接成用户可感知的上下文闭环。长期范围与阶段退出条件见[路线图](../roadmap.md)，产品验收见 [Golden Path](../golden-path.md)。本页只维护当前判断和顺序，不重复完整 ADR 与历史测试流水。
+本地邮箱账户与邀请已按 [ADR-0023](../adr/0023-local-account-and-radish-oidc-login.md) 建立。项目所有者已明确将 Radish OIDC 接入延后，schema readiness 和 Project / Channel 首批发现入口已完成，当前继续补齐基础对象与成员配置，把已有权限、事务、来源和恢复能力接成用户可感知的上下文闭环。长期范围与阶段退出条件见[路线图](../roadmap.md)，产品验收见 [Golden Path](../golden-path.md)。本页只维护当前判断和顺序，不重复完整 ADR 与历史测试流水。
 
 ## 完成线与成熟度
 
@@ -14,8 +14,9 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 | 能力 | 内部契约与实现 | 公共入口与交互 | 普通用户独立操作 / 持续使用 |
 | --- | --- | --- | --- |
-| 本地身份与 Session | 账户 / 密码拆分、邮箱 bootstrap、旧账户显式映射、Session、CSRF、邀请和外部身份事务 | 同源 HTTPS 邮箱登录、Workspace 选择、账户页和一次性邀请；真实 OIDC provider 尚未装配 | 本地与迁移自动化已有证据；新页面真实浏览器、Radish 联调、恢复入口、完整成员治理与团队使用仍待验收 |
-| Message → Thread → Decision → Ticket | migration 006 / 007、权限、来源、原子事件与幂等 receipt | canonical 页面和短请求；contributor / decider 浏览器验收已有记录 | 自动 Timeline 与首批双向关系已通过浏览器闭环；仍依赖已知 ID，基础执行管理未闭环 |
+| 本地身份与 Session | 账户 / 密码拆分、邮箱 bootstrap、旧账户显式映射、Session、CSRF、邀请和外部身份事务 | 同源 HTTPS 邮箱登录、Workspace 选择、账户页和一次性邀请；真实 OIDC provider 尚未装配 | 本地与迁移自动化、邮箱登录与退出浏览器已有证据；邀请全流程浏览器、Radish 联调、恢复入口、完整成员治理与团队使用仍待验收 |
+| Message → Thread → Decision → Ticket | migration 006 / 007、权限、来源、原子事件与幂等 receipt | canonical 页面和短请求；contributor / decider 浏览器验收已有记录 | 自动 Timeline 与首批双向关系已通过浏览器闭环；独立协作对象列表与基础执行管理未闭环 |
+| Project / Channel 发现 | 当前权限过滤、归档可读、稳定 ID 分页、当前成员复核 | 首页 Workspace → Project → Channel 导航；ID 工具保留为次级入口 | 服务端、真实数据库、Web 交互与隔离浏览器验收通过，含分页、撤权刷新、Workspace 切换及桌面 / 手机布局；基础对象和成员配置仍缺 |
 | 单 Channel Message 实时 | 单进程 SSE、当前权限、有界回放、撤权与关闭 | canonical Channel 已接入 ready → history → 增量 | 有技术验收；没有目标团队规模与持续使用的容量证据 |
 | CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment | Deployment 只读入口；CI Run 仍有内部 query 与静态代表页 | Jenkins 来源验证入口、正式 CI Run 页面和 Deployment 写入口尚缺 |
 | EntityLink / Activity | 带来源关系、权限过滤 query、同事务 Activity 更新与版本化全量重建 | Nexus View 可读 Current / 出向与首批入向 Relations / 正常更新的 Timeline | 正常写入与双向发现已通过真实 PostgreSQL / HTTP 和浏览器；未完成持续使用观察 |
@@ -29,7 +30,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 当前剩余缺口：
 
 1. **升级运维**：只读 schema readiness 已按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 完成；跨 schema 兼容窗口、升级失败恢复与生产编排仍待建立。
-2. **使用入口**：首页仍要求已知稳定 ID；对象发现、最小成员管理、Document 和真实外部交付链尚未齐备。
+2. **使用入口**：首页已可直接浏览可读 Project / Channel；空实例的 Project / Channel 创建、Project 角色与受限 Channel 成员配置、其他对象列表仍缺。Document 和真实外部交付链仍独立推进。
 3. **关系与时间线范围**：当前关系全量读取，没有分页或反向索引；Timeline 保留事件主要对象语义，Thread 不展示后续对象 Activity，交付反向关系尚未开放。
 4. **证据边界**：自动化、真实数据库与本轮浏览器验收证明讨论到执行的局部闭环；Document、真实交付链、完整 Golden Path 和真实团队持续使用仍分别验收。
 
@@ -39,7 +40,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 | 顺序 | 下一切片 | 交付与退出判据 |
 | --- | --- | --- |
-| 1 | 最小使用入口 | 在已完成 schema readiness 的基础上，成员能通过受控入口进入可访问 Project / Channel 和基础对象，完成必要成员配置，无需已知 ID 或直接改库。账号与列表协议独立审查 |
+| 1 | 基础对象与成员配置 | 在已完成 Project / Channel 只读入口的基础上，先冻结 owner Team、Project 创建与角色配置、Channel 创建与窄权限成员配置的写入 / 审计 / 幂等合同，再完成空实例到可协作频道的受控路径；不能直接改库或自动提升角色。其他协作对象列表独立补齐 |
 | 2 | 最小 Markdown Document | 先审查并冻结最小字段、revision、权限、EntityLink、事件、渲染安全、备份和导出边界，再完成读取、显式保存、冲突与恢复切片；不引入 CRDT |
 | 3 | 真实 Jenkins 与 staging 记录链 | 来源验证、幂等和失败隔离连接到已有 CI Run service，用户可读取真实构建并显式记录外部已完成的 staging Deployment；贯通 Ticket / Component / Repository 与交付关系，不依赖预置交付事实 |
 | 4 | 小团队场景试用 | 满足评估授权与必要运维条件后，以真实需求连续使用并记录追溯、重复录入和人工干预；按 Golden Path 验收决定下一批功能，不把一次演示当作持续使用完成 |
@@ -65,7 +66,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 ## 开放问题
 
 - 关系分页、反向索引、查询容量与跨对象 Timeline；事务内 Activity 更新、重建并发及首批 direction 合同已由 ADR-0022 冻结；
-- 首版对象发现与成员管理范围，账号恢复与管理员应急入口；
+- 基础对象创建与成员管理范围，其他协作对象发现，账号恢复与管理员应急入口；Project / Channel 只读列表已由 ADR-0025 冻结；
 - Document 最小合同、Markdown 子集 / sanitizer、revision 冲突及恢复 / 导出；
 - Jenkins 来源验证、Secret 使用、失败审计、Repository 映射与交付关系；
 - PostgreSQL 支持矩阵、schema 兼容窗口、forward repair、数据库权限拆分和容量基线；
@@ -75,6 +76,8 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 - 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
 
 ## 证据与历史
+
+- [2026-09-10 Project / Channel 发现](reviews/2026-09-10-project-channel-discovery.md)：只读列表、分页与权限、首页交互和浏览器验收边界。
 
 - [2026-09-10 schema readiness](reviews/2026-09-10-schema-readiness.md)：只读检查、真实数据库失败矩阵、超时与恢复证据。
 

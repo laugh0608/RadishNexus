@@ -255,6 +255,10 @@ M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 
 - Attention Item、Activity、导出包和 AI 插件必须复用同一对象权限语义；
 - 第一阶段优先 TLS、静态加密、RBAC、审计和备份安全，不默认承诺全局端到端加密。
 
+### Project / Channel 发现入口
+
+首页按 [ADR-0025](../adr/0025-project-and-channel-discovery.md) 提供 Workspace 内的 Project 与 Channel 只读发现。服务端在一致的当前权限快照中先过滤后分页，客户端只渲染安全条目并进入既有 canonical 页面；列表不增加角色能力，也不取代最终对象读取时的复权。基础对象创建与成员配置继续独立设计。
+
 ## 当前仓库布局
 
 模块化单体的职责边界应在真实变更中逐步形成：复用稳定身份与权限基础，把业务用例和事务归于对应领域。当前 `internal/goldenpath` 是正式纵向切片的集中实现，不是已经完成所有领域模块拆分；目录调整、API adapter 去重和页面拆分按[工程标准](../development/engineering-standards.md)随相关变更开展，不作为独立大重构前置任务。

@@ -1,3 +1,5 @@
+import { WorkspaceHome } from "./workspace/WorkspaceHome";
+import { browserDiscoveryClient, type DiscoveryClient } from "./workspace/api";
 import {
   useCallback,
   useEffect,
@@ -23,7 +25,6 @@ import { ChannelPage } from "./channel/ChannelPage";
 import {
   browserChannelMessageClient,
   channelLocation,
-  channelPagePath,
   type ChannelMessageClient,
 } from "./channel/api";
 import {
@@ -34,14 +35,12 @@ import { CollaborationPage } from "./collaboration/CollaborationPage";
 import {
   browserCollaborationClient,
   collaborationLocation,
-  collaborationPagePath,
   type CollaborationClient,
   type CollaborationEntityType,
 } from "./collaboration/api";
 import {
   DeploymentNexusViewLoadError,
   deploymentNexusViewLocation,
-  deploymentNexusViewPagePath,
   loadDeploymentNexusViewData,
   type DeploymentNexusViewLoader,
 } from "./nexus-view/api";
@@ -95,6 +94,7 @@ interface AppProps {
   pathname?: string;
   authClient?: AuthClient;
   identityClient?: IdentityClient;
+  discoveryClient?: DiscoveryClient;
   channelClient?: ChannelMessageClient;
   channelRealtimeClient?: ChannelRealtimeClient;
   collaborationClient?: CollaborationClient;
@@ -106,6 +106,7 @@ export function App({
   pathname = window.location.pathname,
   authClient = browserAuthClient,
   identityClient = browserIdentityClient,
+  discoveryClient = browserDiscoveryClient,
   channelClient = browserChannelMessageClient,
   channelRealtimeClient = browserChannelRealtimeClient,
   collaborationClient = browserCollaborationClient,
@@ -120,6 +121,7 @@ export function App({
     <AuthenticatedApp
       route={route}
       authClient={authClient}
+      discoveryClient={discoveryClient}
       identityClient={identityClient}
       channelClient={channelClient}
       channelRealtimeClient={channelRealtimeClient}
@@ -156,6 +158,7 @@ function AuthenticatedApp({
   route,
   authClient,
   identityClient,
+  discoveryClient,
   channelClient,
   channelRealtimeClient,
   collaborationClient,
@@ -165,6 +168,7 @@ function AuthenticatedApp({
   route: Exclude<AppRoute, { kind: "prototype" }>;
   authClient: AuthClient;
   identityClient: IdentityClient;
+  discoveryClient: DiscoveryClient;
   channelClient: ChannelMessageClient;
   channelRealtimeClient: ChannelRealtimeClient;
   collaborationClient: CollaborationClient;
@@ -246,6 +250,7 @@ function AuthenticatedApp({
       route={route}
       session={authentication.session}
       authClient={authClient}
+      discoveryClient={discoveryClient}
       identityClient={identityClient}
       channelClient={channelClient}
       channelRealtimeClient={channelRealtimeClient}
@@ -356,6 +361,7 @@ function SignedInShell({
   session,
   authClient,
   identityClient,
+  discoveryClient,
   channelClient,
   channelRealtimeClient,
   collaborationClient,
@@ -368,6 +374,7 @@ function SignedInShell({
   session: SessionContext;
   authClient: AuthClient;
   identityClient: IdentityClient;
+  discoveryClient: DiscoveryClient;
   channelClient: ChannelMessageClient;
   channelRealtimeClient: ChannelRealtimeClient;
   collaborationClient: CollaborationClient;
@@ -452,7 +459,12 @@ function SignedInShell({
           onSession={onSession}
         />
       ) : route.kind === "home" ? (
-        <WorkspaceHome session={session} navigate={navigate} />
+        <WorkspaceHome
+          session={session}
+          navigate={navigate}
+          client={discoveryClient}
+          onSessionExpired={onSignedOut}
+        />
       ) : route.kind === "deployment" ? (
         <LiveDeploymentApp
           key={`${route.workspaceID}/${route.deploymentID}`}
@@ -486,189 +498,6 @@ function SignedInShell({
 
       <AppFooter label="欢迎回来 / M1" />
     </div>
-  );
-}
-
-function WorkspaceHome({
-  session,
-  navigate,
-}: {
-  session: SessionContext;
-  navigate: (path: string) => void;
-}) {
-  const [workspaceID, setWorkspaceID] = useState(
-    session.workspaces[0]?.id ?? "",
-  );
-  const [deploymentID, setDeploymentID] = useState("");
-  const [channelID, setChannelID] = useState("");
-  const [collaborationType, setCollaborationType] =
-    useState<CollaborationEntityType>("thread");
-  const [collaborationID, setCollaborationID] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const openDeployment = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const path = deploymentNexusViewPagePath(workspaceID, deploymentID.trim());
-    if (path === null) {
-      setError("请选择 Workspace，并输入以 dpl_ 开头的有效 Deployment ID。");
-      return;
-    }
-    setError(null);
-    navigate(path);
-  };
-
-  const openChannel = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const path = channelPagePath(workspaceID, channelID.trim());
-    if (path === null) {
-      setError("请选择 Workspace，并输入以 chn_ 开头的有效 Channel ID。");
-      return;
-    }
-    setError(null);
-    navigate(path);
-  };
-
-  const openCollaboration = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const path = collaborationPagePath(
-      workspaceID,
-      collaborationType,
-      collaborationID.trim(),
-    );
-    if (path === null) {
-      setError(
-        "请选择 Workspace、协作对象类型，并输入匹配 thr_ / dec_ / tkt_ 的稳定 ID。",
-      );
-      return;
-    }
-    setError(null);
-    navigate(path);
-  };
-
-  return (
-    <main className="shell-home">
-      <section className="shell-welcome" aria-labelledby="shell-home-title">
-        <p className="section-kicker">Current workspace context</p>
-        <h1 id="shell-home-title">欢迎回来，{session.user.displayName}</h1>
-        <p>
-          Session 不固定 Workspace。每次打开业务对象时，服务端都会按当前
-          membership 重新验证权限。
-        </p>
-      </section>
-      <section
-        className="workspace-launcher"
-        aria-labelledby="deployment-launcher-title"
-      >
-        <div>
-          <p className="section-kicker">Known object launchers</p>
-          <h2 id="deployment-launcher-title">进入当前工作上下文</h2>
-          <p>
-            当前尚未开放对象列表；请使用已知稳定 ID 进入权限过滤后的正式页面。
-          </p>
-        </div>
-        <label className="workspace-selector">
-          <span>Workspace</span>
-          <select
-            disabled={session.workspaces.length === 0}
-            onChange={(event) => setWorkspaceID(event.target.value)}
-            required
-            value={workspaceID}
-          >
-            {session.workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name} · {workspace.role}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="resource-launchers">
-          <form onSubmit={openChannel}>
-            <p>Channel</p>
-            <label>
-              <span>Channel ID</span>
-              <input
-                autoComplete="off"
-                disabled={session.workspaces.length === 0}
-                onChange={(event) => setChannelID(event.target.value)}
-                placeholder="chn_…"
-                required
-                value={channelID}
-              />
-            </label>
-            <button
-              className="primary-button"
-              disabled={session.workspaces.length === 0}
-              type="submit"
-            >
-              打开 Channel
-            </button>
-          </form>
-          <form onSubmit={openDeployment}>
-            <p>Deployment</p>
-            <label>
-              <span>Deployment ID</span>
-              <input
-                autoComplete="off"
-                disabled={session.workspaces.length === 0}
-                onChange={(event) => setDeploymentID(event.target.value)}
-                placeholder="dpl_…"
-                required
-                value={deploymentID}
-              />
-            </label>
-            <button
-              className="secondary-button"
-              disabled={session.workspaces.length === 0}
-              type="submit"
-            >
-              打开 Nexus View
-            </button>
-          </form>
-          <form onSubmit={openCollaboration}>
-            <p>Collaboration</p>
-            <label>
-              <span>协作对象类型</span>
-              <select
-                disabled={session.workspaces.length === 0}
-                onChange={(event) =>
-                  setCollaborationType(
-                    event.target.value as CollaborationEntityType,
-                  )
-                }
-                value={collaborationType}
-              >
-                <option value="thread">Thread</option>
-                <option value="decision">Decision</option>
-                <option value="ticket">Ticket</option>
-              </select>
-            </label>
-            <label>
-              <span>协作对象 ID</span>
-              <input
-                autoComplete="off"
-                disabled={session.workspaces.length === 0}
-                onChange={(event) => setCollaborationID(event.target.value)}
-                placeholder="thr_… / dec_… / tkt_…"
-                required
-                value={collaborationID}
-              />
-            </label>
-            <button
-              className="secondary-button"
-              disabled={session.workspaces.length === 0}
-              type="submit"
-            >
-              打开协作对象
-            </button>
-          </form>
-        </div>
-        {error === null ? null : (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
-      </section>
-    </main>
   );
 }
 

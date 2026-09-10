@@ -17,6 +17,19 @@ type readinessFunc func(context.Context) error
 
 func (check readinessFunc) CheckReady(ctx context.Context) error { return check(ctx) }
 
+func TestHandlerRoutesDiscoveryBeforeWorkspaceFallback(t *testing.T) {
+	t.Parallel()
+	discovery := http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusAccepted) })
+	handler := newHandler(fakeReadinessChecker{}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), discovery, http.NotFoundHandler())
+	for _, path := range []string{"/api/v1/workspaces/wrk_main/projects", "/api/v1/workspaces/wrk_main/projects/prj_main/channels"} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != http.StatusAccepted {
+			t.Fatal(path, response.Code)
+		}
+	}
+}
+
 func TestReadinessIsBoundedUncachedAndDoesNotExposeDatabaseDetails(t *testing.T) {
 	t.Parallel()
 	calls := 0
@@ -28,7 +41,7 @@ func TestReadinessIsBoundedUncachedAndDoesNotExposeDatabaseDetails(t *testing.T)
 		}
 		return errors.New("private database detail / migration checksum")
 	})
-	handler := newHandler(check, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler())
+	handler := newHandler(check, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler())
 	for range 2 {
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/health/ready", nil))
@@ -63,7 +76,7 @@ func TestHealthRoutesUseMethodPatterns(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			request := httptest.NewRequest(test.method, test.path, nil)
 			response := httptest.NewRecorder()
-			newHandler(test.pinger, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler()).ServeHTTP(response, request)
+			newHandler(test.pinger, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler()).ServeHTTP(response, request)
 			if response.Code != test.wantStatus {
 				t.Fatalf("status = %d, want %d", response.Code, test.wantStatus)
 			}
@@ -81,7 +94,7 @@ func TestHandlerReplacesCallerRequestID(t *testing.T) {
 	request.Header.Set("X-Request-ID", "caller-controlled")
 	response := httptest.NewRecorder()
 
-	newHandler(fakeReadinessChecker{}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler()).ServeHTTP(response, request)
+	newHandler(fakeReadinessChecker{}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler()).ServeHTTP(response, request)
 
 	if requestID := response.Header().Get("X-Request-ID"); requestID == "caller-controlled" || len(requestID) != 36 {
 		t.Fatalf("X-Request-ID = %q", requestID)
@@ -106,6 +119,7 @@ func TestHandlerRoutesChannelMessagesBeforeWorkspaceFallback(t *testing.T) {
 		http.NotFoundHandler(),
 		http.NotFoundHandler(),
 		deploymentFallback,
+		http.NotFoundHandler(),
 		http.NotFoundHandler(),
 	)
 
@@ -138,6 +152,7 @@ func TestHandlerRoutesChannelEventsBeforeWorkspaceFallback(t *testing.T) {
 		http.NotFoundHandler(),
 		deploymentFallback,
 		http.NotFoundHandler(),
+		http.NotFoundHandler(),
 	)
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/wrk_main/channels/chn_main/events", nil)
 	response := httptest.NewRecorder()
@@ -162,6 +177,7 @@ func TestHandlerRoutesCollaborationBeforeWorkspaceFallback(t *testing.T) {
 		http.NotFoundHandler(),
 		collaboration,
 		deploymentFallback,
+		http.NotFoundHandler(),
 		http.NotFoundHandler(),
 	)
 

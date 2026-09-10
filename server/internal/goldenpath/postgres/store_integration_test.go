@@ -302,6 +302,7 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 	assertActivityRebuildConcurrency(t, ctx, pool, store, service)
 	assertIncomingPermissionBoundary(t, ctx, pool, service, decision.ID)
 	assertIncomingRelationsScale(t, ctx, pool)
+	assertDiscoverySlice(t, ctx, pool)
 
 }
 

@@ -5,7 +5,7 @@
 - 标准库 HTTP 存活检查与只读 migration history 就绪检查；
 - 基于原生 `pgx/v5`、连续编号与 SHA-256 漂移检测的显式 PostgreSQL migration；
 - Channel / Message / messaging-origin Thread 的正式 schema、权限和幂等 application service；
-- 权限过滤、稳定 keyset 分页的 canonical Channel Message application query；
+- 权限过滤、稳定 keyset 分页的 Project / Channel 发现和 canonical Channel Message application query；
 - Thread → Decision → Ticket 的幂等 application service 与 immutable command receipt；
 - 已验证 Jenkins delivery → 完成态 CI Run 的 application service；
 - 显式授权用户记录终态 staging Deployment 的 application service；
@@ -131,7 +131,7 @@ go run ./cmd/nexus-identity-migrate --mapping-stdin < /path/to/private-identity-
 
 正式 Web 页面为：
 
-- `/`：Session bootstrap、邮箱登录、邀请兑换、Workspace 选择、已知 Deployment ID 入口和 logout；
+- `/`：Session bootstrap、邮箱登录、邀请兑换、Workspace 选择、Project / Channel 浏览、次级已知 ID 入口和 logout；
 - `/account`：当前账户登录方式、owner 创建邀请码、当前用户接受邀请；
 - `/workspaces/{workspace_id}/deployments/{deployment_id}`：先验证 Session，再消费正式 Deployment Nexus View DTO；
 - `/workspaces/{workspace_id}/channels/{channel_id}`：先验证 Session，再分页读取 Message、幂等发送并从 Message 发起 Thread；
@@ -149,6 +149,12 @@ go run ./cmd/nexus-identity-migrate --mapping-stdin < /path/to/private-identity-
 - `GET /api/v1/workspaces/{workspace_id}/deployments/{deployment_id}/nexus-view`：用 Session cookie 在路径 Workspace 中重新验证 active membership，转换为 application `Principal` 后读取权限过滤的 Deployment Current、Relations 和 Timeline。
 
 成功响应使用显式 `data` envelope、结构化 `{type, id}` ref、nullable `started_at` 与安全可见实体，不直接序列化内部 `goldenpath.NexusView`。无 membership、跨 Workspace、未知或不可读对象保持不可发现；所有结果使用 `Cache-Control: private, no-store` 和 `Vary: Cookie`。完整公共 DTO、错误、缓存和 Web 消费边界见 [ADR-0014](../docs/adr/0014-session-scoped-deployment-nexus-view-transport.md)。
+
+## Project / Channel 发现
+
+`GET /api/v1/workspaces/{workspace_id}/projects` 和 `GET /api/v1/workspaces/{workspace_id}/projects/{project_id}/channels` 返回当前可读条目的 `ref / title / status`，以及 nullable `next_cursor`。只接受 `limit`（默认 25、最大 50）和作用域绑定的 opaque `after`；按稳定 ID 升序，在权限过滤后分页，不返回总数或隐藏条目。
+
+每次查询复核 active Workspace membership；restricted Project 和 Channel 需要对应显式成员关系，owner / admin 不穿透。归档对象仍可读；无权限与不存在使用同形 `404`，Session 失效为 `401`，响应 `private, no-store`、`Vary: Cookie`。完整协议、分页变化与升级边界见 [ADR-0025](../docs/adr/0025-project-and-channel-discovery.md)。
 
 ## Channel Message 短请求
 

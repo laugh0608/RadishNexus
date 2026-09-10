@@ -97,6 +97,7 @@ describe("authenticated Web Shell", () => {
     fireEvent.change(screen.getByLabelText("Workspace"), {
       target: { value: "wrk_docs" },
     });
+    fireEvent.click(screen.getByText("按 ID 打开对象"));
     fireEvent.change(screen.getByLabelText("Deployment ID"), {
       target: { value: "dpl_release_42" },
     });
@@ -112,6 +113,7 @@ describe("authenticated Web Shell", () => {
       <App pathname="/" authClient={testAuthClient()} navigate={navigate} />,
     );
     await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
+    fireEvent.click(screen.getByText("按 ID 打开对象"));
     fireEvent.change(screen.getByLabelText("Deployment ID"), {
       target: { value: "not-a-deployment" },
     });
@@ -130,6 +132,7 @@ describe("authenticated Web Shell", () => {
     fireEvent.change(screen.getByLabelText("Workspace"), {
       target: { value: "wrk_docs" },
     });
+    fireEvent.click(screen.getByText("按 ID 打开对象"));
     fireEvent.change(screen.getByLabelText("Channel ID"), {
       target: { value: "chn_team" },
     });
@@ -149,6 +152,7 @@ describe("authenticated Web Shell", () => {
     fireEvent.change(screen.getByLabelText("Workspace"), {
       target: { value: "wrk_docs" },
     });
+    fireEvent.click(screen.getByText("按 ID 打开对象"));
     fireEvent.change(screen.getByLabelText("协作对象类型"), {
       target: { value: "thread" },
     });
@@ -378,6 +382,17 @@ vi.mock("./auth/identity-api", async (importOriginal) => {
         radish: false,
         registration: false,
       }),
+    },
+  };
+});
+
+vi.mock("./workspace/api", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./workspace/api")>();
+  return {
+    ...original,
+    browserDiscoveryClient: {
+      projects: async () => ({ items: [], nextCursor: null }),
+      channels: async () => ({ items: [], nextCursor: null }),
     },
   };
 });
