@@ -809,20 +809,39 @@ func assertCollaborationHTTPTransport(
 		t.Fatalf("HTTP exact Ticket retry = status %d, body %q", response.Code, response.Body.String())
 	}
 
-	for _, viewPath := range []string{
-		"/api/v1/workspaces/wrk_main/decisions/" + decisionID + "/nexus-view",
-		"/api/v1/workspaces/wrk_main/tickets/" + createdTicket.Data.Ticket.Ref.ID + "/nexus-view",
+	// These reads occur after public commands and retries, with no rebuild.
+	for _, check := range []struct {
+		path       string
+		timeline   int
+		relations  int
+		incomingID string
+	}{
+		{"/api/v1/workspaces/wrk_main/threads/" + threadID + "/nexus-view", 0, 2, decisionID},
+		{"/api/v1/workspaces/wrk_main/decisions/" + decisionID + "/nexus-view", 2, 2, createdTicket.Data.Ticket.Ref.ID},
+		{"/api/v1/workspaces/wrk_main/tickets/" + createdTicket.Data.Ticket.Ref.ID + "/nexus-view", 1, 1, ""},
 	} {
 		response = httptest.NewRecorder()
-		handler.ServeHTTP(response, messagingHTTPRequest(
-			http.MethodGet,
-			viewPath,
-			"",
-			contributorSessionToken,
-			contributorCSRFToken,
-		))
-		if response.Code != http.StatusOK {
-			t.Fatalf("HTTP collaboration Nexus View %s = status %d, body %q", viewPath, response.Code, response.Body.String())
+		handler.ServeHTTP(response, messagingHTTPRequest(http.MethodGet, check.path, "", contributorSessionToken, contributorCSRFToken))
+		var view struct {
+			Data struct {
+				Timeline  []json.RawMessage `json:"timeline"`
+				Relations []struct {
+					Direction string `json:"direction"`
+					Target    struct {
+						Ref entityref.Ref `json:"ref"`
+					} `json:"target"`
+				} `json:"relations"`
+			} `json:"data"`
+		}
+		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &view) != nil ||
+			len(view.Data.Timeline) != check.timeline || len(view.Data.Relations) != check.relations {
+			t.Fatalf("normal write -> HTTP Nexus View %s = %d %s", check.path, response.Code, response.Body.String())
+		}
+		if check.incomingID != "" {
+			incoming := view.Data.Relations[len(view.Data.Relations)-1]
+			if incoming.Direction != "incoming" || incoming.Target.Ref.ID != check.incomingID {
+				t.Fatalf("missing incoming discovery: %s", response.Body.String())
+			}
 		}
 	}
 

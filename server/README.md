@@ -13,7 +13,7 @@
 - 与业务状态同事务写入的不可变领域事件与 Outbox 投递状态；
 - 正式 Component、CI Run 与不可变 inbound delivery receipt schema；
 - 正式 Environment、环境级部署授权与不可变 Deployment schema；
-- 从领域事件原子、幂等重建的 Activity projection version 1；
+- 在业务事务内正常更新、并可从领域事件原子重建的 Activity projection version 1；
 - 为 Thread、Decision、Ticket、CI Run 和 Deployment 返回 Current、Relations 和 Timeline 的权限过滤 Nexus View query；
 - 一次性本地管理员 bootstrap、Argon2id credential、账号锁定、opaque Session、CSRF digest 与当前 Workspace membership resolver；
 - 把已验证 Session 用户转换为 application `Principal` 的认证 adapter；
@@ -32,7 +32,9 @@ Channel / Message migration 006 固化 Channel membership、Message 不可变和
 
 collaboration migration 007 以 `(workspace, actor, command, target, client_operation_id)` 固化 Proposed Decision、Decision acceptance 与 Ticket 创建的幂等范围。首次命令在同一事务写入 immutable receipt、业务状态、关系、事件和 Outbox；相同 canonical payload 返回原结果，变化重放冲突。每次 retry 仍重新授权，receipt 不进入领域事件、Activity、普通 DTO 或客户端可见状态，但属于必须备份恢复的权威事实。
 
-当前 Activity 白名单包含 `decision.proposed`、`decision.accepted`、`ticket.created`、`ci-run.recorded` 和 `deployment.recorded`。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，不依赖 Outbox 投递状态，也尚未建立常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
+协作 Nexus View 的 readable relation 明确 `direction: outgoing | incoming`，支持 Thread 发现后续 Decision、Decision 发现后续 Ticket；不可读反向目标完全隐藏，原 evidence 占位不带方向。完整合同、全量关系读取限制与 Go / Web 同步升级要求见 [ADR-0022](../docs/adr/0022-transactional-activity-and-incoming-relations.md)。
+
+当前 Activity 白名单包含 `decision.proposed`、`decision.accepted`、`ticket.created`、`ci-run.recorded` 和 `deployment.recorded`。正常写入在同一事务投影，并将对应 `activity-projector` delivery 标记完成；命令成功返回后的重新读取立即可见，投影错误整单回滚。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，先锁定投影表再取得源事件快照，不依赖 Outbox 投递状态；当前不需要常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
 
 CI Run 的 M0 用户读取由所属 Component 控制：同一 Workspace 的活跃成员可读，非成员、暂停成员和跨 Workspace 主体得到 not-found；owner Team 和 Jenkins source 都不授予读取权。CI Run Current 只返回 status、受控时间与当前 Component，Timeline 隐藏 plugin/source ID，并且不返回 external run key、receipt、digest、Secret、原始 payload 或外部 URL。该 query 仍是内部 application contract，尚未形成 HTTP 或公共响应 schema。
 

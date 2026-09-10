@@ -359,7 +359,7 @@ export function CollaborationPage({
             <div className="channel-section-heading">
               <div>
                 <p className="section-kicker">Structured context</p>
-                <h2 id="relations-title">来源关系</h2>
+                <h2 id="relations-title">来源与后续结果</h2>
               </div>
               <span className="panel-count">{relations.length}</span>
             </div>
@@ -617,7 +617,7 @@ function RelationList({
 }) {
   if (relations.length === 0) {
     return (
-      <p className="collaboration-empty">当前对象没有可展示的来源关系。</p>
+      <p className="collaboration-empty">当前对象没有可展示的关联对象。</p>
     );
   }
   return (
@@ -634,8 +634,13 @@ function RelationList({
             </div>
           </li>
         ) : (
-          <li key={`${relation.relationType}/${relation.target.ref.id}`}>
-            <span>{relation.relationType}</span>
+          <li
+            key={`${relation.direction}/${relation.relationType}/${relation.target.ref.id}`}
+          >
+            <span>
+              {relation.direction === "incoming" ? "后续结果" : "来源"} ·{" "}
+              {relation.relationType}
+            </span>
             <strong>{relation.target.title}</strong>
             <code>
               entity://{relation.target.ref.type}/{relation.target.ref.id}
@@ -664,7 +669,11 @@ function RelationLink({
           target.type === "ticket"
         ? collaborationPagePath(workspaceID, target.type, target.id)
         : null;
-  return href === null ? null : <a href={href}>打开来源对象</a>;
+  return href === null ? null : (
+    <a href={href}>
+      {relation.direction === "incoming" ? "打开后续对象" : "打开来源对象"}
+    </a>
+  );
 }
 
 function TimelineList({

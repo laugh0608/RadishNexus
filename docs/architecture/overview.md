@@ -2,7 +2,7 @@
 
 状态：方向基线，M0.5 / M1 首批纵向边界已冻结
 
-日期：2026-09-05
+日期：2026-09-10
 
 ## 架构目标
 
@@ -185,7 +185,7 @@ entity://environment/env_002
 
 Activity 不是 Outbox 的副本。Outbox 用于可靠投递，Activity 是可重建、可权限过滤的产品时间线投影；审计日志则保存安全与合规所需的操作证据。三者可以来自同一领域事件，但保留不同职责和生命周期。
 
-可重建不等于运行时会自动更新。当前正式实现只有显式 Activity 全量重建，正常业务写入到 Timeline 的更新路径仍待补齐；后续切片需明确可见时效、失败恢复和重建并发，再选择同事务投影或可靠异步消费，不在本次文档审阅中预定实现方案。
+当前白名单事件已在业务事务内同步投影，提交成功后重新读取即可看到对应对象的 Timeline；失败回滚整笔业务。显式全量重建与正常投影共用映射，并通过先锁定投影表、再取源事件快照避免丢失并发提交。Thread / Decision 的反向关系从同一 EntityLink 查询，继续复用当前权限；精确时效、方向、升级与运行成本见 [ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md)。
 
 M0 契约把不可变领域事件事实与可变投递状态作逻辑分离，避免已投递 Outbox 清理后无法重建 Activity 或验证备份；具体一表或分表由 PostgreSQL 原型决定。详见[核心实体、授权与事件契约](core-contracts.md)和 [ADR-0002](../adr/0002-stable-entity-reference-and-event-projection.md)。
 

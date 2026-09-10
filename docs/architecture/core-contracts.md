@@ -2,7 +2,7 @@
 
 状态：M0 契约基线，已由 ADR-0002 接受
 
-日期：2026-09-05
+日期：2026-09-10
 
 ## 目的
 
@@ -265,6 +265,12 @@ safe_facts
 
 查询时间线时先确认 `target_ref` 可读，再对每个 `subject_ref` 使用当前权限重新判定。权限已撤销时，旧投影中的引用不能继续暴露缓存标题或摘要。对象页可以按授权解析规则显示通用受限占位符；全局 Activity、通知、搜索和导出则隐藏不可读项或敏感关联。
 
+### 正常更新与协作对象反向发现
+
+[ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md) 将当前五类 Activity 事件接入同一业务事务；投影完成与业务提交一致，失败整单回滚。显式重建先取得投影表写入排他锁，再读取新的源事件快照，保留完整版本并避免覆盖并发提交。旧数据仍由显式重建补齐，不随启动自动执行。
+
+Thread ← Decision、Decision ← Ticket 从同一权威 EntityLink 反向读取，不复制镜像关系。协作 readable relation 明确 `direction`，不可读反向目标完全隐藏；原 evidence restricted 占位不携带方向或目标信息。结果排序、全量读取成本和 Go / Web 同步升级边界见 ADR-0022。Timeline 仍投影到原事件主要对象，不自动向所有关系端点传播。
+
 ## Outbox、Activity 与 Audit 分工
 
 | 记录 | 主要用途 | 是否权威业务状态 | 是否可重建 | 主要读取者 |
@@ -290,12 +296,12 @@ safe_facts
 
 ## Golden Path 契约走查
 
-本节描述目标契约与已落地切片的衔接，不表示全部消费者和用户入口已经完成。当前实现与缺口以[当前状态](../status/current.md)为准；尤其要区分 Activity 显式重建与正常运行时更新、出向关系与反向发现。
+本节描述目标契约与已落地切片的衔接，不表示全部消费者和用户入口已经完成。当前实现与缺口以[当前状态](../status/current.md)为准；正常更新和首批双向发现已按 ADR-0022 接通，浏览器验收与完整场景成熟度仍分别记录。
 
 1. 用户在 Project Channel 发送不可变 Message；重复 `client_operation_id` 与同正文只返回既有 Message，不同正文冲突。正式 application service 已将 Message、`message.created` 与 Outbox 原子提交，事件和 Activity 不复制正文。
 2. 用户从 Message 发起 Thread；正式 application service 已将 Thread、`started-from` EntityLink、`thread.started` 与 Outbox 原子写入，并同时通过当前 Channel、Project 与 Thread 权限，不让引用扩大可见性。
 3. 用户从私密 Thread 创建 Proposed Decision。Decision、用户命令 receipt 与 `derived-from` EntityLink 在同一事务写入；该关系是 `asserted + user`，因为 `derived-from` 是业务语义，不代表自动推导。相同 target 与 operation ID 的相同 canonical payload 返回原 Decision，payload 变化冲突。
-4. Decision 草案必须保留 evidence 引用。当前正式写入产生 `decision.proposed`，全量 Activity 重建投影到 Decision；`entity-link.created` 与向 Thread 展示后续结果属于尚未落地的目标扩展，不能描述为既有事件或投影。扩展时再冻结事件、correlation 与目标投影合同，不为反向读取复制关系事实。
+4. Decision 草案必须保留 evidence 引用。当前正式写入产生 `decision.proposed`，在同事务投影到 Decision；Thread 通过 incoming Relations 发现该 Decision。`entity-link.created` 与向 Thread Timeline 投影后续事件仍未落地，扩展时另行冻结事件、correlation 与目标投影合同，不为反向读取复制关系事实。
 5. 有确认权限且能读取全部 evidence 的人通过显式确认接受 Decision，产生 `decision.accepted`。Project 管理角色不自动穿透 restricted Thread；系统生成内容只能保留为草案，不能作为 actor 完成接受。精确 retry 仍重新检查当前 evidence 权限，receipt 不授予能力。
 6. 从 Decision 创建 Ticket，Ticket、用户命令 receipt 与 `implements` 关系保留来源，不复制 Thread 正文。读取 Ticket 但不能读取 Thread 的用户只在对象页看到不可识别目标的通用受限占位。
 7. Jenkins 重复发送同一 delivery 时只产生一个 CI Run；相同幂等键的 digest 变化直接冲突。正式核心只接收已经完成来源验证与字段映射的 delivery，并把 receipt、CI Run、`ci-run.recorded` 和 Outbox 原子提交；外部失败重试和安全审计由后续 adapter 定义，不阻塞聊天和 Decision 写入。
@@ -327,7 +333,7 @@ M0 实验与正式纵向切片累计必须证明：
 - 关系类型注册表的完整方向、基数和 metadata schema；
 - Team 角色继承、对象分享、跨 Project 转换和管理员 break-glass 策略；
 - 领域事件保留、压缩和 projection version 迁移策略；
-- Activity 正常更新的时效、事务 / worker 方案、失败恢复及与全量重建的并发；反向关系方向、分页与公共 DTO；
+- Activity 异步消费的实际触发条件与多对象 Timeline；反向关系的分页、上限和索引，当前事务内更新与首批方向 DTO 已由 ADR-0022 冻结；
 - 其余公共 HTTP / OpenAPI 契约和并发控制字段；canonical Message 列表 opaque cursor 已由 ADR-0018 冻结，ADR-0020 的进程内实时 cursor 不是公共列表游标，不能互换；
 - 消息、事件、receipt、Audit 与导出分别需要的保留、归档、受控脱敏和删除标记；在独立合同冻结前不修改现有不可变约束或清理权威数据。
 

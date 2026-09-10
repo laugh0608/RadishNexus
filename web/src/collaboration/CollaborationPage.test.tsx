@@ -53,6 +53,7 @@ const threadView: CollaborationView<ThreadCurrent> = {
   relations: [
     {
       visibility: "readable",
+      direction: "outgoing",
       relationType: "started-from",
       target: {
         ref: { type: "message", id: "msg_source" },
@@ -70,6 +71,38 @@ const decisionView: CollaborationView<DecisionCurrent> = {
 };
 
 describe("CollaborationPage", () => {
+  it("opens an incoming Decision and drops old discoveries when re-entering", async () => {
+    const loadView = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ...threadView,
+        relations: [
+          ...threadView.relations,
+          {
+            visibility: "readable",
+            direction: "incoming",
+            relationType: "derived-from",
+            target: {
+              ref: { type: "decision", id: "dec_choice" },
+              title: "Follow-up decision",
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce(threadView);
+    const page = renderPage("thread", "thr_source", testClient({ loadView }));
+    expect(
+      (await screen.findByRole("link", { name: "打开后续对象" })).getAttribute(
+        "href",
+      ),
+    ).toBe("/workspaces/wrk_main/decisions/dec_choice");
+    page.unmount();
+    renderPage("thread", "thr_source", testClient({ loadView }));
+    await waitFor(() => expect(loadView).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("Follow-up decision")).toBeNull();
+    expect(screen.queryByRole("link", { name: "打开后续对象" })).toBeNull();
+  });
+
   it("keeps one operation ID across an ambiguous Decision proposal retry", async () => {
     const proposeDecision = vi
       .fn()
@@ -265,8 +298,8 @@ function renderPage(
   entityID: string,
   client: CollaborationClient,
   options: { createOperationID?: () => string } = {},
-): void {
-  render(
+): ReturnType<typeof render> {
+  return render(
     <CollaborationPage
       client={client}
       createOperationID={options.createOperationID}

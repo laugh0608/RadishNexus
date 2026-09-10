@@ -61,6 +61,7 @@ export type CollaborationRelation =
   | { visibility: "restricted" }
   | {
       visibility: "readable";
+      direction: "outgoing" | "incoming";
       relationType: "started-from" | "derived-from" | "implements";
       target: VisibleEntity;
     };
@@ -585,27 +586,48 @@ function parseRelation(
     }
     return { visibility: "restricted" };
   }
-  exactKeys(relation, path, ["visibility", "relation_type", "target"]);
+  exactKeys(relation, path, [
+    "visibility",
+    "direction",
+    "relation_type",
+    "target",
+  ]);
   if (relation.visibility !== "readable") {
     throw new TypeError(`${path}.visibility is invalid`);
   }
+  const direction = relation.direction;
+  if (direction !== "outgoing" && direction !== "incoming") {
+    throw new TypeError(`${path}.direction is invalid`);
+  }
+  if (direction === "incoming" && expectedType === "ticket") {
+    throw new TypeError(`${path} cannot be incoming for Ticket`);
+  }
   const expectedRelation =
-    expectedType === "thread"
-      ? "started-from"
-      : expectedType === "decision"
+    direction === "incoming"
+      ? expectedType === "thread"
         ? "derived-from"
-        : "implements";
+        : "implements"
+      : expectedType === "thread"
+        ? "started-from"
+        : expectedType === "decision"
+          ? "derived-from"
+          : "implements";
   const expectedTarget =
-    expectedType === "thread"
-      ? "message"
-      : expectedType === "decision"
-        ? "thread"
-        : "decision";
+    direction === "incoming"
+      ? expectedType === "thread"
+        ? "decision"
+        : "ticket"
+      : expectedType === "thread"
+        ? "message"
+        : expectedType === "decision"
+          ? "thread"
+          : "decision";
   if (relation.relation_type !== expectedRelation) {
     throw new TypeError(`${path}.relation_type is invalid`);
   }
   return {
     visibility: "readable",
+    direction,
     relationType: expectedRelation,
     target: parseVisibleEntity(
       relation.target,
@@ -675,6 +697,22 @@ function validateViewShape(
   relations: readonly CollaborationRelation[],
   timeline: readonly CollaborationTimelineItem[],
 ): void {
+  const seenIncoming = new Set<string>();
+  for (const relation of relations) {
+    if (
+      relation.visibility === "readable" &&
+      relation.direction === "incoming"
+    ) {
+      const key = `${relation.target.ref.type}/${relation.target.ref.id}`;
+      if (seenIncoming.has(key))
+        throw new TypeError("Duplicate incoming relation");
+      seenIncoming.add(key);
+    }
+  }
+  relations = relations.filter(
+    (relation) =>
+      relation.visibility === "restricted" || relation.direction === "outgoing",
+  );
   if (isThreadCurrent(current)) {
     if (timeline.length !== 0) {
       throw new TypeError("Thread Timeline must be empty in this contract");

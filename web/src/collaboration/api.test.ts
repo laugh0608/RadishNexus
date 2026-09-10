@@ -100,6 +100,7 @@ describe("Collaboration API adapter", () => {
           relations: [
             {
               visibility: "readable",
+              direction: "outgoing",
               relation_type: "started-from",
               target: {
                 ref: { type: "message", id: "msg_source" },
@@ -235,6 +236,48 @@ describe("Collaboration API adapter", () => {
       sourceDecision: { id: "dec_choice" },
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("accepts incoming results and rejects direction, source and duplicate drift", () => {
+    const incoming = {
+      visibility: "readable",
+      direction: "incoming",
+      relation_type: "implements",
+      target: { ref: { type: "ticket", id: "tkt_result" }, title: "Result" },
+    };
+    const parse = (relations: unknown[]) =>
+      parseCollaborationView(
+        {
+          data: {
+            current: proposedDecision,
+            relations,
+            timeline: [],
+          },
+        },
+        "decision",
+        "dec_choice",
+      );
+    expect(
+      parse([{ visibility: "restricted" }, incoming]).relations[1],
+    ).toMatchObject({
+      direction: "incoming",
+      target: { ref: { id: "tkt_result" } },
+    });
+    for (const invalid of [
+      { ...incoming, direction: undefined },
+      { ...incoming, direction: "outgoing" },
+      { ...incoming, relation_type: "derived-from" },
+      {
+        ...incoming,
+        target: { ref: { type: "thread", id: "thr_wrong" }, title: "Wrong" },
+      },
+      { visibility: "restricted", direction: "incoming" },
+    ])
+      expect(() => parse([{ visibility: "restricted" }, invalid])).toThrow();
+    expect(() => parse([incoming])).toThrow(/source relation/iu);
+    expect(() =>
+      parse([{ visibility: "restricted" }, incoming, incoming]),
+    ).toThrow(/duplicate/iu);
   });
 
   it("keeps restricted evidence opaque and rejects leaked or extra fields", () => {

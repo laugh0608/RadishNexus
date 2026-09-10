@@ -241,7 +241,7 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decider ListRelations() error = %v", err)
 	}
-	if len(visibleRelations) != 1 || visibleRelations[0].State != goldenpath.ProjectionVisible ||
+	if len(visibleRelations) != 2 || visibleRelations[0].State != goldenpath.ProjectionVisible ||
 		visibleRelations[0].Target != (entityref.Ref{Type: "thread", ID: "thr_private"}) ||
 		visibleRelations[0].Title != "Private rate-limit discussion" {
 		t.Fatalf("visible relations = %#v", visibleRelations)
@@ -252,7 +252,7 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s ListRelations() error = %v", testPrincipal.ID, err)
 		}
-		if len(restrictedRelations) != 1 {
+		if len(restrictedRelations) != 2 {
 			t.Fatalf("%s restricted relations = %#v", testPrincipal.ID, restrictedRelations)
 		}
 		restricted := restrictedRelations[0]
@@ -298,6 +298,11 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 	assertNexusViewReadSlice(t, ctx, pool, store, service, decider, reader, admin, decision, ticket)
 	assertJenkinsCIRunSlice(t, ctx, pool, store, service)
 	assertMessagingSlice(t, ctx, pool, store, service, messageNotifier)
+	assertActivityFailureRollback(t, ctx, pool, store, service, decision.ID)
+	assertActivityRebuildConcurrency(t, ctx, pool, store, service)
+	assertIncomingPermissionBoundary(t, ctx, pool, service, decision.ID)
+	assertIncomingRelationsScale(t, ctx, pool)
+
 }
 
 func assertNexusViewReadSlice(
@@ -314,13 +319,8 @@ func assertNexusViewReadSlice(
 ) {
 	t.Helper()
 
-	projected, err := store.RebuildActivityProjection(ctx)
-	if err != nil {
-		t.Fatalf("RebuildActivityProjection() error = %v", err)
-	}
-	if projected != 3 {
-		t.Fatalf("RebuildActivityProjection() projected = %d, want 3", projected)
-	}
+	// Normal writes must be visible before any explicit rebuild.
+
 	assertTableCount(t, ctx, pool, "radishnexus.activity_items", 3)
 
 	decisionRef := entityref.Ref{Type: "decision", ID: decision.ID}
@@ -348,7 +348,7 @@ func assertNexusViewReadSlice(
 		t.Fatalf("Ticket Timeline = %#v", ticketView.Timeline)
 	}
 
-	projected, err = store.RebuildActivityProjection(ctx)
+	projected, err := store.RebuildActivityProjection(ctx)
 	if err != nil {
 		t.Fatalf("idempotent RebuildActivityProjection() error = %v", err)
 	}
@@ -420,7 +420,7 @@ func assertDecisionNexusView(
 	if view.Current.Ref != decisionRef || view.Current.Title != decision.Question || view.Current.Status != "accepted" {
 		t.Fatalf("Decision Current = %#v", view.Current)
 	}
-	if len(view.Relations) != 1 || view.Relations[0].State != subjectState {
+	if len(view.Relations) != 2 || view.Relations[0].State != subjectState {
 		t.Fatalf("Decision Relations = %#v, want subject state %s", view.Relations, subjectState)
 	}
 	if len(view.Timeline) != 2 || view.Timeline[0].ActivityType != "decision.proposed" ||

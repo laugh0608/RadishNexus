@@ -43,11 +43,18 @@ type activityRecord struct {
 // immutable domain event facts. It deliberately does not read Outbox delivery
 // state, so delivery cleanup cannot remove the source needed for a rebuild.
 func (store *Store) RebuildActivityProjection(ctx context.Context) (projected int, err error) {
-	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return 0, fmt.Errorf("begin Activity rebuild transaction: %w", err)
 	}
 	defer rollback(ctx, tx, &err)
+
+	// Block projection writers before taking the source snapshot. READ COMMITTED
+	// ensures a writer that committed while we waited is included. Writers that
+	// have not committed will project after this transaction releases the lock.
+	if _, err := tx.Exec(ctx, `LOCK TABLE radishnexus.activity_items IN SHARE ROW EXCLUSIVE MODE`); err != nil {
+		return 0, fmt.Errorf("lock Activity projection for rebuild: %w", err)
+	}
 
 	rows, err := tx.Query(ctx, `
 		SELECT event_id, event_type, schema_version, workspace_id,
@@ -103,25 +110,8 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
 	}
 
 	for _, record := range records {
-		subjects, err := json.Marshal(record.subjects)
-		if err != nil {
-			return 0, fmt.Errorf("encode Activity subjects for event %s: %w", record.eventID, err)
-		}
-		safeFacts, err := json.Marshal(record.safeFacts)
-		if err != nil {
-			return 0, fmt.Errorf("encode Activity safe facts for event %s: %w", record.eventID, err)
-		}
-		_, err = tx.Exec(ctx, `
-			INSERT INTO radishnexus.activity_items (
-				workspace_id, target_type, target_id, event_id, activity_type,
-				actor_kind, actor_id, occurred_at, subject_refs,
-				projection_version, safe_facts
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		`, record.workspaceID, record.target.Type, record.target.ID,
-			record.eventID, record.eventType, record.actorKind, record.actorID,
-			record.occurredAt, subjects, goldenpath.ActivityProjectionVersion, safeFacts)
-		if err != nil {
-			return 0, fmt.Errorf("insert Activity projection for event %s: %w", record.eventID, err)
+		if err := insertActivityRecord(ctx, tx, record); err != nil {
+			return 0, err
 		}
 	}
 
@@ -129,6 +119,64 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
 		return 0, fmt.Errorf("commit Activity rebuild: %w", err)
 	}
 	return len(records), nil
+}
+
+// projectActivityDelivery runs inside the business transaction. The delivery is
+// complete only when the projection and the original business facts commit.
+func projectActivityDelivery(ctx context.Context, tx pgx.Tx, eventID string) error {
+	var event activityEvent
+	err := tx.QueryRow(ctx, `
+		SELECT event_id, event_type, schema_version, workspace_id,
+			actor_kind, actor_id, primary_entity_type, primary_entity_id,
+			occurred_at, payload
+		FROM radishnexus.domain_events WHERE event_id = $1
+	`, eventID).Scan(&event.eventID, &event.eventType, &event.schemaVersion,
+		&event.workspaceID, &event.actorKind, &event.actorID,
+		&event.target.Type, &event.target.ID, &event.occurredAt, &event.payload)
+	if err != nil {
+		return fmt.Errorf("read Activity delivery event %s: %w", eventID, err)
+	}
+	record, err := projectActivityEvent(event)
+	if err != nil {
+		return err
+	}
+	if err := insertActivityRecord(ctx, tx, record); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		UPDATE radishnexus.outbox_deliveries
+		SET state = 'delivered', attempt_count = attempt_count + 1,
+			delivered_at = clock_timestamp(), locked_until = NULL, last_error = NULL
+		WHERE event_id = $1 AND consumer = 'activity-projector'
+	`, eventID)
+	if err != nil {
+		return fmt.Errorf("complete Activity delivery %s: %w", eventID, err)
+	}
+	return nil
+}
+
+func insertActivityRecord(ctx context.Context, tx pgx.Tx, record activityRecord) error {
+	subjects, err := json.Marshal(record.subjects)
+	if err != nil {
+		return fmt.Errorf("encode Activity subjects for event %s: %w", record.eventID, err)
+	}
+	safeFacts, err := json.Marshal(record.safeFacts)
+	if err != nil {
+		return fmt.Errorf("encode Activity safe facts for event %s: %w", record.eventID, err)
+	}
+	_, err = tx.Exec(ctx, `
+		INSERT INTO radishnexus.activity_items (
+			workspace_id, target_type, target_id, event_id, activity_type,
+			actor_kind, actor_id, occurred_at, subject_refs,
+			projection_version, safe_facts
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	`, record.workspaceID, record.target.Type, record.target.ID,
+		record.eventID, record.eventType, record.actorKind, record.actorID,
+		record.occurredAt, subjects, goldenpath.ActivityProjectionVersion, safeFacts)
+	if err != nil {
+		return fmt.Errorf("insert Activity projection for event %s: %w", record.eventID, err)
+	}
+	return nil
 }
 
 func projectActivityEvent(event activityEvent) (activityRecord, error) {

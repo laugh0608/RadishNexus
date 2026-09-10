@@ -77,6 +77,7 @@ const (
 // RelationProjection deliberately leaves all target fields empty when State
 // is restricted. Hidden relations are omitted by the Store.
 type RelationProjection struct {
+	Direction    string
 	State        ProjectionState
 	RelationType string
 	Target       entityref.Ref

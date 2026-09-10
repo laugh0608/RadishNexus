@@ -41,6 +41,7 @@ npm run dev
 - 浏览器自动重连沿用原生 `Last-Event-ID`；`resync-required` 关闭旧流、建立新边界并全量重读，断线错误链只允许一次 Session + canonical history 诊断，不做持续轮询。`access-revoked` 或诊断所得 `404` 会清空正文、草稿和 Thread 结果，Session `401` 回到登录态；事件顺序、cursor、空控制数据或 DTO 漂移均 fail closed。
 - Channel 的 `401` 回到登录态；任何后续 `404` 都立即移除已经渲染的 Message 正文和本地草稿。Thread 创建只发送 Source Message ref、标题和可见性，不复制 Message 正文。
 - canonical Thread、Decision 与 Ticket 页面只调用 ADR-0019 的六个同源短请求。Thread 创建 Proposed Decision；Decision 必须由有权主体勾选明确确认后人工 acceptance，接受后才能创建 Ticket；写入发生网络歧义且表单未变化时保留同一 `client_operation_id`。
+- 协作页区分来源与后续结果，支持 Thread → Decision → Ticket 的双向 canonical 跳转；readable relation 必须携带 `direction`，Go 与 Web 成套升级和回退，见 [ADR-0022](../docs/adr/0022-transactional-activity-and-incoming-relations.md)。
 - 协作 adapter 对 Current、Relations、Timeline、结构化来源、状态与受控时间执行严格运行时校验；restricted evidence 不携带类型、ID、关系名、标题或时间。协作请求的 `401` 回到登录态，后续 `404` 会清除已渲染内容、草稿和成功结果。
 - `/prototype/nexus-view` fixture 是明确标注的静态代表数据，不作为 canonical 页面请求失败时的 fallback。
 - 公共结构化 ref 只在展示 adapter 中转换为 `entity://type/id`；静态 fixtures 与组件断言也使用同一 canonical 引用格式和正式类型前缀。

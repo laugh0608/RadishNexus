@@ -267,9 +267,6 @@ func seedAuthenticatedWebBrowserData(
 	`, thread.ID); err != nil {
 		t.Fatalf("seed browser fixture decider Thread membership: %v", err)
 	}
-	if _, err := store.RebuildActivityProjection(ctx); err != nil {
-		t.Fatalf("RebuildActivityProjection() error = %v", err)
-	}
 
 	passwordHash, err := authn.NewArgon2idHasher().Hash(authenticatedWebBrowserPassword)
 	if err != nil {
