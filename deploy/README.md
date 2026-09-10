@@ -81,14 +81,15 @@ curl --cacert deploy/local-data/caddy-root.crt https://localhost:8443/health/rea
 
 ## 身份模型升级
 
-从 migration 007 或更早版本升级前，使用旧版本运维工具备份，并准备私有的旧用户 ID 到邮箱 JSON 映射。同步更新 Go / Web / operation 工件；显式执行 migration 后旧 Session 全部失效，已保留的密码 verifier 在完成邮箱映射后恢复登录：
+从 migration 007 或更早版本升级前，使用旧版本运维工具备份，并准备私有的旧用户 ID 到邮箱 JSON 映射。安排维护窗口，停止公共入口和旧应用写入，再同步更新 Go / Web / operation 工件。使用匹配的新版本工具显式执行 migration 后，旧 Session 全部失效；已保留的密码 verifier 在完成邮箱映射后恢复登录：
 
 ```text
+docker compose -f deploy/compose.yaml run --rm migrate
 docker compose -f deploy/compose.yaml run --rm -T identity-migrate \
   --mapping-stdin < /path/to/private-identity-email-mapping.json
 ```
 
-格式与失败边界见[服务端账户升级](../server/README.md#账户升级与成员准入)。禁止猜测邮箱、清库重建或用旧二进制写新 schema。回退需要旧版本工件及升级前备份，恢复至空目标；本次代码更新不代表真实实例已经迁移。
+格式与失败边界见[服务端账户升级](../server/README.md#账户升级与成员准入)。完成后再启动匹配的新应用与公共入口，并分别验证 `/health/ready` 和邮箱登录；就绪探针只验证 migration history，不验证邮箱是否已映射。禁止猜测邮箱、清库重建或用旧二进制写新 schema。回退需要旧版本工件及升级前备份，恢复至空目标；本次代码更新不代表真实实例已经迁移，也不构成当前版本 Compose 升级演练通过的证据。
 
 ## 运维命令
 

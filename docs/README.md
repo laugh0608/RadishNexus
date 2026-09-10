@@ -37,6 +37,7 @@
 ## 状态与验证入口
 
 - [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
+- [2026-09-10 提交回顾与文档收尾](status/reviews/2026-09-10-daily-closeout.md)：Activity、身份、readiness 与发现入口的提交映射和文档审阅结果。
 - [2026-09-05 项目审阅](status/reviews/2026-09-05-project-review.md)：源码发现、建议与实际验证范围。
 - [2026-09-03 状态快照](status/history/2026-09-03-status.md)：此前阶段事实及浏览器、数据库、部署和编辑器验收流水；旧计划不再生效。
 

@@ -83,7 +83,7 @@ python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Emai
     --credentials-stdin
 ```
 
-密码必须为 15–128 个 Unicode 字符且最多 1024 bytes。命令通过 PostgreSQL transaction advisory lock 保证只有一个调用成功，创建 local account、user、Workspace 和 `owner` membership；已经存在任何本地账号时失败，不提供覆盖或默认密码。成功输出只包含稳定 user / Workspace ID 与规范化 login。
+密码必须为 15–128 个 Unicode 字符且最多 1024 bytes。命令通过 PostgreSQL transaction advisory lock 保证只有一个调用成功，创建 user、独立账户状态、本地密码凭证、Workspace 和 `owner` membership；`user_accounts` 已有任何账户时失败，不提供覆盖或默认密码。成功输出只包含稳定 user / Workspace ID，不输出邮箱、密码或 Session。bootstrap 不创建 Session，完成后通过正式登录入口建立会话；也不创建 Team、Project 或 Channel。
 
 密码 verifier 属于受保护的权威恢复数据，会进入 PostgreSQL 运维备份；`user_sessions` 只备份 schema、不备份数据，恢复后所有旧 Session 与 CSRF token 失效。该边界不授权 `.nexus` 可移植导出携带 credential。
 
@@ -103,7 +103,7 @@ RADISHNEXUS_WEB_ROOT=/srv/radishnexus/web
 
 `RADISHNEXUS_WEB_ROOT` 必须是 `npm run build` 产出的 Vite `dist` 绝对目录；server 不隐式构建前端、不依赖工作目录，也不会在 build 缺失时退回 fixture。reverse proxy 应把页面、静态资源和 `/api/v1` 全部转发到这个 server，保持唯一 HTTPS origin。
 
-当前公共认证路由为：
+基础 Session 路由为：
 
 - `POST /api/v1/auth/sessions`：JSON `email` / `password`，成功返回 `201`、Session context 和两个 Secure Cookie；
 - `GET /api/v1/auth/session`：用 Session cookie 返回当前 user、active Workspace membership 与绝对过期时间；
@@ -125,7 +125,7 @@ go run ./cmd/nexus-identity-migrate --mapping-stdin < /path/to/private-identity-
 
 新成员由 owner 在 `/account` 创建邀请码，24 小时内单次兑换为 `member`；兑换时重查创建者当前 owner 权限。已有账户应先登录再接受邀请；未登录创建账户时，重复邮箱只返回冲突，不把请求登录为已有用户。无公开注册或自动授予 Project / Environment 权限。
 
-账户与准入接口见 [ADR-0023](../docs/adr/0023-local-account-and-radish-oidc-login.md)。当前装配只开放本地方式，`GET /api/v1/auth/methods` 的 `radish` 为 `false`；真实 OIDC provider 与 Radish 联调属于未来规划，当前不新增相关依赖；测试 provider 只验证内部事务边界。
+本地账户与邀请入口为 `GET /api/v1/auth/methods`、`GET /api/v1/auth/account`、`POST /api/v1/workspaces/{workspace_id}/invitations` 与 `POST /api/v1/auth/invitations/accept`；精确合同见 [ADR-0023](../docs/adr/0023-local-account-and-radish-oidc-login.md)。当前装配只开放本地方式，`methods` 的 `radish` 为 `false`；真实 OIDC provider 与 Radish 联调属于未来规划，当前不新增相关依赖；测试 provider 只验证内部事务边界。
 
 ## Authenticated Web Shell
 

@@ -33,9 +33,10 @@ npm run dev
 - Web 只消费已经按当前主体过滤的 `NexusViewData`，不接收角色或权限集合，也不在浏览器中重新判断对象可读性。
 - `restricted` 条目在类型上不携带 EntityRef、对象类型、关系类型、标题、来源或时间；`hidden` 条目不进入客户端数据。
 - 根路径先通过 `GET /api/v1/auth/session` bootstrap；只有稳定 `unauthenticated` 错误进入登录表单，网络、服务和响应契约错误必须显式失败并允许重试。
-- 登录密码只保留在受控表单和当前同源请求体，不写入 URL、浏览器 storage 或自建 Cookie。Session token 只由服务端 `HttpOnly` Cookie 承载；登出从可读 CSRF Cookie 构造正式请求。
+- 登录使用私有邮箱与密码，展示名独立；凭据只保留在受控表单和当前同源请求体，不写入 URL、浏览器 storage 或自建 Cookie。Session token 只由服务端 `HttpOnly` Cookie 承载；登出从可读 CSRF Cookie 构造正式请求。
+- `/account` 展示服务端返回的登录方式，提供 owner 创建邀请与当前用户接受邀请；未登录用户可在首页兑换邀请并创建本地账户。邀请码不写入 URL 或 Web Storage，不自动授予 Project 角色或受限 Channel 成员资格。Radish 登录按 capability 隐藏，真实 provider 当前未装配；精确身份合同见 [ADR-0023](../docs/adr/0023-local-account-and-radish-oidc-login.md)。
 - Workspace 选择来自 Session context，但不写入 Session 或授予权限；canonical 业务请求仍按路径 Workspace 重新验证 current membership。
-- 当前未开放 Deployment、Channel 或协作对象 list API。根路径只校验用户输入的正式 `dpl_` / `chn_` / `thr_` / `dec_` / `tkt_` ID 并导航到 canonical 路径，不从 fixture 猜测对象。
+- 首页已消费 Project / Channel 只读 list API，行为见下文；Deployment、Thread、Decision 与 Ticket 独立列表仍未开放。次级 ID 工具校验正式 `dpl_` / `chn_` / `thr_` / `dec_` / `tkt_` ID 并导航到 canonical 路径，不从 fixture 猜测对象。
 - canonical Deployment 页面只调用同源 `/api/v1/workspaces/{workspace_id}/deployments/{deployment_id}/nexus-view`，使用 `credentials: same-origin`、`cache: no-store`、显式公开 DTO 和运行时校验；未知形状不会被当成成功页面。
 - canonical Channel 页面用原生 EventSource 调用 ADR-0020 的同源 SSE，并继续用 ADR-0018 的三个短请求读写：先等待 `ready`，再读取 canonical history；history 期间的 `message.created` 先缓冲，完成后按 Message ID 去重合并。发送失败时为未修改正文保留同一 `client_operation_id`，`200` 精确重试不会追加重复 Message。
 - 浏览器自动重连沿用原生 `Last-Event-ID`；`resync-required` 关闭旧流、建立新边界并全量重读，断线错误链只允许一次 Session + canonical history 诊断，不做持续轮询。`access-revoked` 或诊断所得 `404` 会清空正文、草稿和 Thread 结果，Session `401` 回到登录态；事件顺序、cursor、空控制数据或 DTO 漂移均 fail closed。
@@ -48,7 +49,7 @@ npm run dev
 - CI Run fixture 与后端安全投影同形，只包含状态、四个受控时间、当前 Component 与唯一 `ci-run.recorded`；不包含 source ID、external run key、delivery receipt、digest、Secret、原始 payload 或外部 URL。
 - Deployment fixture 只包含终态、三个受控时间、Environment、来源 CI Run、`deploys` Relation 与唯一 `deployment.recorded`；不包含 authorization、调用 source、Jenkins 来源字段或执行日志，并明确区分“来源构建成功”和“部署失败”。
 - 状态检视器只用于人工复核 Deployment 的 succeeded、failed、loading 与 error；Decision 的 empty / restricted 和 CI Run 的安全状态继续由组件测试覆盖。检视器不是未来产品导航。
-- 当前 authenticated shell、Deployment、Channel、Thread、Decision、Ticket 与代表检视器由最小 pathname adapter 识别，不引入 router、状态库、组件库、图标包或远程字体。production build 由 Go server 从显式绝对 `RADISHNEXUS_WEB_ROOT` 同源交付；缓存、安全 Header 与页面 allowlist 见 [ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md)。
+- 当前 authenticated shell、账户页、Deployment、Channel、Thread、Decision、Ticket 与代表检视器由最小 pathname adapter 识别，不引入 router、状态库、组件库、图标包或远程字体。production build 由 Go server 从显式绝对 `RADISHNEXUS_WEB_ROOT` 同源交付；缓存、安全 Header 与页面 allowlist 基线见 [ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md)，账户页扩展见 ADR-0023。
 
 ## 依赖与许可证
 

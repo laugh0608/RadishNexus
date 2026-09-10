@@ -111,7 +111,7 @@ Flutter 与 React 不强求共享 UI 代码。
 - Plugin Manager、Secrets 和配置；
 - 数据迁移、健康检查和系统诊断。
 
-M1 Identity 使用一次性显式 bootstrap 建立本地账号、首个 Workspace owner 和服务端 opaque Session；当前已决定按 [ADR-0023](../adr/0023-local-account-and-radish-oidc-login.md) 拆分账户状态与密码凭证、采用邮箱登录并接入可选 Radish OIDC。Session 不携带固定 Workspace 授权，路由选择稳定 Workspace ID 后必须重新验证 active membership。浏览器 Cookie、CSRF、request ID、版本化错误对象和恢复时 Session 失效语义见 [ADR-0012](../adr/0012-local-identity-and-session-foundation.md)；精确 public origin、可信代理、客户端 IP、登录限流和三个公共认证路由见 [ADR-0013](../adr/0013-public-authentication-transport.md)；首个 Workspace 路径业务读取、公共 DTO 和 no-store Web 消费见 [ADR-0014](../adr/0014-session-scoped-deployment-nexus-view-transport.md)；同源 authenticated Web Shell、显式 production build root、页面 allowlist 与静态缓存边界见 [ADR-0015](../adr/0015-same-origin-authenticated-web-shell.md)。
+M1 Identity 使用一次性显式 bootstrap 建立本地账户和首个 Workspace owner；服务端 opaque Session 通过后续登录建立。账户状态与密码凭证已按 [ADR-0023](../adr/0023-local-account-and-radish-oidc-login.md) 拆分，本地登录采用邮箱；可选 Radish OIDC 已确认接入合同，真实 provider 延后且当前保持关闭。Session 不携带固定 Workspace 授权，路由选择稳定 Workspace ID 后必须重新验证 active membership。浏览器 Cookie、CSRF、request ID、版本化错误对象和恢复时 Session 失效语义见 [ADR-0012](../adr/0012-local-identity-and-session-foundation.md)；精确 public origin、可信代理、客户端 IP、登录限流和基础 Session 路由见 [ADR-0013](../adr/0013-public-authentication-transport.md)；首个 Workspace 路径业务读取、公共 DTO 和 no-store Web 消费见 [ADR-0014](../adr/0014-session-scoped-deployment-nexus-view-transport.md)；同源 authenticated Web Shell、显式 production build root、页面 allowlist 与静态缓存边界见 [ADR-0015](../adr/0015-same-origin-authenticated-web-shell.md)。
 
 ### 内建业务模块
 
@@ -231,7 +231,7 @@ canonical Channel Web 对 SSE 使用“先建立连接并收到 `ready`、再读
 
 M0.5 已建立第一条可验证恢复路径：显式命令生成版本化 manifest 与 PostgreSQL custom archive，只在本地或受控私有连接的全新空 PostgreSQL 17 目标上以单事务恢复，随后执行正式 forward-only migration 校验并从不可变领域事件重建 Activity。当前工件是同 major 整库运维备份，不是 `.nexus` 开放导出，也不包含自动覆盖、TLS 工具桥接、跨大版本承诺、远程存储、加密或 Secret 备份。精确边界见 [ADR-0010](../adr/0010-verified-postgresql-backup-and-restore.md)。
 
-M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 Caddy 是唯一宿主 HTTPS 入口，Go server 同源交付 production Web build 与 API，PostgreSQL 只位于内部数据网络；migration、一次性 bootstrap、backup 和 restore 继续使用现有显式 CLI，数据库密码通过按 service 挂载的文件 Secret 输入。该拓扑已经从全新命名 volume 验证 PostgreSQL readiness、migration、一次 bootstrap、重复 bootstrap 拒绝、HTTPS login / Session / logout、转发 Header 清洗和非公开应用/数据库端口；它仍不是公网证书、高可用或跨 major 升级方案。Go 业务就绪探针现按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 只读核对完整 migration history，缺失、漂移或版本不匹配返回不可用。拓扑边界见 [ADR-0016](../adr/0016-minimal-docker-compose-self-hosting.md) 和 [`deploy/README.md`](../../deploy/README.md)。
+M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 Caddy 是唯一宿主 HTTPS 入口，Go server 同源交付 production Web build 与 API，PostgreSQL 只位于内部数据网络；migration、一次性 bootstrap、backup 和 restore 继续使用现有显式 CLI，数据库密码通过按 service 挂载的文件 Secret 输入。该拓扑已经从全新命名 volume 验证 PostgreSQL readiness、migration、一次 bootstrap、重复 bootstrap 拒绝、HTTPS login / Session / logout、转发 Header 清洗和非公开应用/数据库端口；它仍不是公网证书、高可用或跨 major 升级方案。Go 业务就绪探针现按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 只读核对完整 migration history，缺失、漂移或版本不匹配返回不可用。此前 Compose 演练不包含 migration 008 和新业务就绪探针，当前版本的镜像与升级路径仍需单独演练。拓扑边界见 [ADR-0016](../adr/0016-minimal-docker-compose-self-hosting.md) 和 [`deploy/README.md`](../../deploy/README.md)。
 
 ### 可移植上下文包
 

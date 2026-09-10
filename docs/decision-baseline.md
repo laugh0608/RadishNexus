@@ -151,7 +151,7 @@
 ### D-019 本地身份与服务端 Session
 
 - 保留自部署可用的本地账户，以邮箱作为私有凭证、展示名独立；按 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 接入可选 Radish OIDC，两种认证复用相同用户、membership 与服务端 Session，不自动合并账户或继承上游权限。
-- 新实例通过显式、一次性的 `nexus-bootstrap --credentials-stdin` 创建首个 user、Workspace 与 `owner` membership；不随服务启动初始化，不生成默认密码，也邮箱和密码只从标准输入读取，不接受命令参数凭据。
+- 新实例通过显式、一次性的 `nexus-bootstrap --credentials-stdin` 创建首个 user、Workspace 与 `owner` membership；不随服务启动初始化，不生成默认密码。邮箱和密码只从标准输入读取，不接受命令参数凭据；Session 通过后续登录建立。
 - 本地密码使用版本化 Argon2id verifier；不存在、禁用、锁定和错误密码统一失败，连续 5 次错误锁定 15 分钟。账号锁定不替代公共 transport 的客户端 IP 限流。
 - Session 是 24 小时绝对有效的服务端 opaque token，数据库只保存 Session / CSRF token digest。Session 不固定 Workspace，业务请求必须以当前 active membership 解析 `VerifiedUser`。
 - 浏览器合同固定 Secure `__Host-` Cookie、SameSite Strict、精确 HTTPS Origin、CSRF cookie + Header + digest、服务端 request ID 与 `/api/v1` 版本化安全错误对象；不提供 insecure HTTP fallback，也不信任用户身份或转发 Header。
@@ -169,7 +169,7 @@
 - 浏览器页面、静态资源和 `/api/v1` 共享 ADR-0013 的唯一 HTTPS public origin；TLS reverse proxy 保持唯一公共入口，不开放 credentialed CORS 或第二个静态站点 origin。
 - Go server 只从必需的绝对 `RADISHNEXUS_WEB_ROOT` 交付 production build；HTML 路径显式 allowlist，未知路径不使用任意 SPA fallback。HTML `no-cache`、哈希资源 immutable cache，认证和业务 API 继续 `no-store`。
 - 根路径先 bootstrap 正式 Session，再使用现有 login / logout transport；密码和 Session token 不进入浏览器 storage。Workspace 选择不固定到 Session，业务请求仍按路径与 current membership 授权。
-- 在没有对象列表前，只允许用户用已知稳定 Deployment ID 进入 canonical 页面；原代表检视器移动到显式 `/prototype/nexus-view`，不参与真实失败 fallback。
+- Project / Channel 按 [ADR-0025](adr/0025-project-and-channel-discovery.md) 通过当前权限过滤的只读列表进入 canonical 页面；尚无独立列表的 Deployment 与协作对象保留已知稳定 ID 入口。原代表检视器位于显式 `/prototype/nexus-view`，不参与真实失败 fallback。
 - 真实 PostgreSQL、正式 migration / application service、production Web build 和临时 HTTPS browser fixture 共同验证登录到 Deployment 再登出的完整链路。精确装配、页面、安全 Header 与验证边界以 [ADR-0015](adr/0015-same-origin-authenticated-web-shell.md) 为准。
 
 ## 尚未冻结
@@ -189,6 +189,7 @@
 
 ## 变更记录
 
+- 2026-09-10：按已接受 ADR-0023 / ADR-0025 同步 D-019 与 D-021 的邮箱账户、邀请准入和 Project / Channel 发现合同，并修正 bootstrap 与登录创建 Session 的职责说明。OIDC 实施时序与验收证据由当前状态维护；本次文档收尾不新增身份、权限或迁移决策。
 - 2026-09-05：澄清 D-011 的完成证据，原因是内部契约与预置投影验收不足以证明用户链路。影响是后续验收增加正常写入、双向发现和独立操作；无需数据迁移，不改变对象、授权、技术栈或已接受 ADR，近期顺序由当前状态承载。
 - 2026-08-27：建立初始决策基线。
 - 2026-08-27：确认 Decision、研发资产分层、Golden Path 以及 EntityLink/Activity 基线。
