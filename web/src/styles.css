@@ -2077,3 +2077,31 @@ code {
     animation-iteration-count: 1 !important;
   }
 }
+
+.identity-section {
+  display: grid;
+  gap: 1rem;
+  width: min(100%, 48rem);
+  margin: 1.5rem auto;
+  padding: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.identity-section section,
+.identity-section label {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.identity-section input,
+.identity-section select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.75rem;
+  font: inherit;
+}
+
+.identity-section button {
+  padding: 0.75rem 1rem;
+  font: inherit;
+}

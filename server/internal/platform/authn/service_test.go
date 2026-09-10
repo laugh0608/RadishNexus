@@ -118,7 +118,7 @@ func TestBootstrapCanonicalizesIdentityAndCreatesOwnerContext(t *testing.T) {
 	)
 
 	result, err := service.Bootstrap(context.Background(), BootstrapInput{
-		LoginName:     "  Radish.Admin ",
+		Email:         "  Radish.Admin@Example.Test ",
 		DisplayName:   "  萝卜管理员  ",
 		WorkspaceName: "  Radish Nexus  ",
 		Password:      "correct horse battery staple",
@@ -126,13 +126,13 @@ func TestBootstrapCanonicalizesIdentityAndCreatesOwnerContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Bootstrap() error = %v", err)
 	}
-	if result != (BootstrapResult{UserID: "usr_first", WorkspaceID: "wrk_first", LoginName: "radish.admin"}) {
+	if result != (BootstrapResult{UserID: "usr_first", WorkspaceID: "wrk_first"}) {
 		t.Fatalf("Bootstrap() = %#v", result)
 	}
 	wantRecord := BootstrapRecord{
 		UserID:        "usr_first",
 		WorkspaceID:   "wrk_first",
-		LoginName:     "radish.admin",
+		Email:         "radish.admin@example.test",
 		DisplayName:   "萝卜管理员",
 		WorkspaceName: "Radish Nexus",
 		PasswordHash:  "encoded:correct horse battery staple",
@@ -147,7 +147,7 @@ func TestBootstrapRejectsWeakPasswordBeforeHashing(t *testing.T) {
 	t.Parallel()
 	service := NewService(&recordingStore{}, &fakePasswordHasher{}, &fixedSecrets{}, fixedClock{})
 	_, err := service.Bootstrap(context.Background(), BootstrapInput{
-		LoginName:     "admin",
+		Email:         "admin@example.test",
 		DisplayName:   "Admin",
 		WorkspaceName: "Workspace",
 		Password:      "too short",
@@ -166,7 +166,7 @@ func TestLoginHidesUnknownAccountBehindDummyVerification(t *testing.T) {
 		&fixedSecrets{},
 		fixedClock{},
 	)
-	_, err := service.Login(context.Background(), LoginInput{LoginName: "missing", Password: "not-the-password"})
+	_, err := service.Login(context.Background(), LoginInput{Email: "missing@example.test", Password: "not-the-password"})
 	if !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("Login() error = %v, want invalid credentials", err)
 	}
@@ -196,7 +196,7 @@ func TestLoginCreatesOnlyDigestedSessionSecrets(t *testing.T) {
 		fixedClock{now: now},
 	)
 
-	session, err := service.Login(context.Background(), LoginInput{LoginName: "admin", Password: "valid password"})
+	session, err := service.Login(context.Background(), LoginInput{Email: "admin@example.test", Password: "valid password"})
 	if err != nil {
 		t.Fatalf("Login() error = %v", err)
 	}
@@ -221,7 +221,7 @@ func TestFailedLoginRecordsAttemptWithoutCreatingSession(t *testing.T) {
 		account: LocalAccount{UserID: "usr_first", PasswordHash: "encoded:right-password", Status: "active"},
 	}
 	service := NewService(store, &fakePasswordHasher{}, &fixedSecrets{}, fixedClock{})
-	_, err := service.Login(context.Background(), LoginInput{LoginName: "admin", Password: "wrong-password"})
+	_, err := service.Login(context.Background(), LoginInput{Email: "admin@example.test", Password: "wrong-password"})
 	if !errors.Is(err, ErrInvalidCredentials) {
 		t.Fatalf("Login() error = %v, want invalid credentials", err)
 	}

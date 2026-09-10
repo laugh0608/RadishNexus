@@ -29,6 +29,8 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0021](0021-document-editor-and-collaboration-foundation.md) | 提议 | Document 正文、编辑器与协同分层 |
 | [ADR-0022](0022-transactional-activity-and-incoming-relations.md) | 已接受 | 事务内 Activity 更新与协作对象反向关系 |
 
+| [ADR-0023](0023-local-account-and-radish-oidc-login.md) | 已接受 | 本地账户、邮箱迁移与 Radish OIDC 联合登录 |
+
 ## 新建规则
 
 1. 复制以下结构，使用下一个四位编号；

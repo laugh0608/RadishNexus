@@ -27,7 +27,7 @@ type browserFixtureService struct {
 }
 
 func (service *browserFixtureService) Login(_ context.Context, input authn.LoginInput) (authn.Session, error) {
-	if input.LoginName != "admin" || input.Password != "browser fixture password" {
+	if input.Email != "admin@example.test" || input.Password != "browser fixture password" {
 		return authn.Session{}, authn.ErrInvalidCredentials
 	}
 	service.mu.Lock()
@@ -100,7 +100,7 @@ func TestHTTPSBrowserFixture(t *testing.T) {
 		fmt.Fprintf(response, `<!doctype html><html><body>
 <h1>Cross-origin fixture</h1>
 <form method="post" action="%s/api/v1/auth/sessions">
-<input name="login_name" value="admin">
+<input name="email" value="admin@example.test">
 <input name="password" value="browser fixture password">
 <button type="submit">Submit cross-origin login</button>
 </form></body></html>`, publicOrigin)
@@ -142,7 +142,7 @@ func browserFixturePage(response http.ResponseWriter, _ *http.Request) {
 	_, _ = response.Write([]byte(`<!doctype html><html><body>
 <h1>RadishNexus authentication browser fixture</h1>
 <form id="login-form">
-<label>Login <input id="login-name" value="admin"></label>
+<label>Login <input id="login-name" value="admin@example.test"></label>
 <label>Password <input id="password" type="password" value="browser fixture password"></label>
 <button type="submit">Login</button>
 </form>
@@ -162,7 +162,7 @@ document.querySelector('#login-form').addEventListener('submit', async event => 
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
-      login_name: document.querySelector('#login-name').value,
+      email: document.querySelector('#login-name').value,
       password: document.querySelector('#password').value,
     }),
   }));

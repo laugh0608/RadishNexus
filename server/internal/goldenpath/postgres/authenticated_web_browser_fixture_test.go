@@ -150,8 +150,8 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 		"restricted_thread":  fixture.thread.ID,
 		"database_container": os.Getenv("RADISHNEXUS_BROWSER_FIXTURE_DATABASE_CONTAINER"),
 		"deployment_path":    "/workspaces/wrk_main/deployments/" + fixture.deployment.ID,
-		"contributor_login":  "http.contributor",
-		"decider_login":      "http.decider",
+		"contributor_login":  "http.contributor@example.test",
+		"decider_login":      "http.decider@example.test",
 		"password":           authenticatedWebBrowserPassword,
 	})
 	if err != nil {
@@ -273,12 +273,15 @@ func seedAuthenticatedWebBrowserData(
 		t.Fatalf("hash browser fixture password: %v", err)
 	}
 	accountCreatedAt := time.Now().UTC().Add(-time.Minute)
+	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_contributor', 'active', $1), ('usr_decider', 'active', $1)`, accountCreatedAt); err != nil {
+		t.Fatalf("seed identity accounts: %v", err)
+	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO radishnexus.local_accounts (
-			user_id, login_name, password_hash, created_at, password_changed_at
+		INSERT INTO radishnexus.local_credentials (
+			user_id, email, password_hash, created_at, password_changed_at
 		) VALUES
-			('usr_contributor', 'http.contributor', $1, $2, $2),
-			('usr_decider', 'http.decider', $1, $2, $2)
+			('usr_contributor', 'http.contributor@example.test', $1, $2, $2),
+			('usr_decider', 'http.decider@example.test', $1, $2, $2)
 	`, passwordHash, accountCreatedAt); err != nil {
 		t.Fatalf("seed browser fixture local account: %v", err)
 	}

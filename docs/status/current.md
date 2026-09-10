@@ -6,7 +6,7 @@
 
 M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 React Web 已建立若干真实业务切片，尚未完成可由普通成员独立操作、持续使用的完整 Golden Path。
 
-当前重点是把已有权限、事务、来源和恢复能力接成用户可感知的上下文闭环。长期范围与阶段退出条件见[路线图](../roadmap.md)，产品验收见 [Golden Path](../golden-path.md)。本页只维护当前判断和顺序，不重复完整 ADR 与历史测试流水。
+本地邮箱账户与邀请已按 [ADR-0023](../adr/0023-local-account-and-radish-oidc-login.md) 建立。项目所有者已明确将 Radish OIDC 接入延后，当前继续推进 schema readiness 与最小使用入口，把已有权限、事务、来源和恢复能力接成用户可感知的上下文闭环。长期范围与阶段退出条件见[路线图](../roadmap.md)，产品验收见 [Golden Path](../golden-path.md)。本页只维护当前判断和顺序，不重复完整 ADR 与历史测试流水。
 
 ## 完成线与成熟度
 
@@ -14,7 +14,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 | 能力 | 内部契约与实现 | 公共入口与交互 | 普通用户独立操作 / 持续使用 |
 | --- | --- | --- | --- |
-| 本地身份与 Session | bootstrap、密码 verifier、Session、CSRF、当前 membership | 同源 HTTPS login / session / logout、Workspace 选择 | 邀请、账号恢复、成员与角色管理入口尚缺；未完成团队使用验收 |
+| 本地身份与 Session | 账户 / 密码拆分、邮箱 bootstrap、旧账户显式映射、Session、CSRF、邀请和外部身份事务 | 同源 HTTPS 邮箱登录、Workspace 选择、账户页和一次性邀请；真实 OIDC provider 尚未装配 | 本地与迁移自动化已有证据；新页面真实浏览器、Radish 联调、恢复入口、完整成员治理与团队使用仍待验收 |
 | Message → Thread → Decision → Ticket | migration 006 / 007、权限、来源、原子事件与幂等 receipt | canonical 页面和短请求；contributor / decider 浏览器验收已有记录 | 自动 Timeline 与首批双向关系已通过浏览器闭环；仍依赖已知 ID，基础执行管理未闭环 |
 | 单 Channel Message 实时 | 单进程 SSE、当前权限、有界回放、撤权与关闭 | canonical Channel 已接入 ready → history → 增量 | 有技术验收；没有目标团队规模与持续使用的容量证据 |
 | CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment | Deployment 只读入口；CI Run 仍有内部 query 与静态代表页 | Jenkins 来源验证入口、正式 CI Run 页面和 Deployment 写入口尚缺 |
@@ -35,7 +35,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ## 近期执行顺序
 
-每个切片先核对既有合同和失败边界；本轮只按已确认的 ADR-0022 范围实施。后续表项不自动获得数据模型、账号协议、依赖或远程操作授权。
+每个切片先核对既有合同和失败边界。本地账户调整已完成自动化验证；Radish OIDC 属于未来规划，不阻塞近期顺序，本轮不新增相关依赖。恢复该工作时再审查依赖、client registration、配置与联调范围；后续表项不自动获得依赖或远程操作授权。
 
 | 顺序 | 下一切片 | 交付与退出判据 |
 | --- | --- | --- |
@@ -72,9 +72,11 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 - Decision 拒绝、替代、复核与 Ticket 基础执行状态的交互；
 - 安全 Audit、消息 / 事件 / receipt 的保留和受控脱敏边界；
 - `.nexus` 版本化格式、脱敏与导入映射；免费评估路径及授权签发 / 撤销规则；
-- 后续插件运行方式、SDK / 插件许可证、OIDC 关联及搜索边界。
+- 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
 
 ## 证据与历史
+
+- [2026-09-10 账户与联合登录调整](reviews/2026-09-10-identity-alignment.md)：本地实现、旧账户迁移、协议事务证据与 OIDC 延后规划边界。
 
 - [2026-09-10 Activity 与双向关系](reviews/2026-09-10-activity-relations.md)：本轮实现边界、自动化与数据库证据、浏览器验收状态。
 

@@ -42,7 +42,7 @@ staging Deployment 只记录外部已经完成的终态事实，不执行部署�
 
 Deployment 的 M0 读取与写授权分离：同一 Workspace 的 active 成员只有同时能读取目标 Environment 与来源 CI Run 时才可读取；非成员、暂停成员和跨 Workspace 主体得到 not-found，Environment 归档不隐藏既有历史。Current 只返回终态、受控时间、Environment 与来源 CI Run；Relations 和 Timeline 复用当前权限，不返回 authorization ID、调用 source、Jenkins receipt、digest、Secret、原始 payload 或外部 URL。该 query 已通过独立公共 DTO 开放为第一个只读业务端点；授权管理入口、production、审批、回滚和执行引擎均未建立。
 
-本地认证以不可变小写 ASCII login、Argon2id verifier、5 次失败后 15 分钟账号锁定和 24 小时绝对有效的服务端 Session 为基线。数据库只保存 Session / CSRF token 的 SHA-256 digest；Session 不固定 Workspace，业务调用必须以当前 active membership 解析 `VerifiedUser`。登录 transport 另按客户端 IP 每分钟限制 5 次尝试、每进程最多并发 4 个密码校验并有界跟踪 4096 个客户端；多副本或公网部署仍必须在 reverse proxy / gateway 增加全局限流。OIDC、邀请、密码重置、MFA 与其它业务 HTTP 路由尚未建立。不可读资源由 application service 返回 `not found`，Deployment handler 还会把不可用 membership 收敛为同形 `not_found`。
+本地认证以规范化私有邮箱、Argon2id verifier、5 次失败后 15 分钟账号锁定和 24 小时绝对有效的服务端 Session 为基线。数据库只保存 Session / CSRF token 的 SHA-256 digest；Session 不固定 Workspace，业务调用必须以当前 active membership 解析 `VerifiedUser`。登录 transport 另按客户端 IP 每分钟限制 5 次尝试、每进程最多并发 4 个密码校验并有界跟踪 4096 个客户端；多副本或公网部署仍必须在 reverse proxy / gateway 增加全局限流。成员准入使用一次性邀请；OIDC 状态与外部绑定事务已实现，真实 provider adapter 按当前计划延后，Radish 登录保持关闭。密码重置与 MFA 尚未建立。不可读资源由 application service 返回 `not found`，Deployment handler 还会把不可用 membership 收敛为同形 `not_found`。
 
 ## 本地检查
 
@@ -67,17 +67,14 @@ runner 使用 session advisory lock 防止并发执行，每个 migration 单独
 
 ## 首次本地管理员
 
-先显式完成 migration，再在新实例上执行一次 bootstrap。命令只从标准输入读取密码；密码不得放入命令参数、环境变量、日志或 shell history：
+先显式完成 migration，再在新实例上执行一次 bootstrap。命令通过 `--credentials-stdin` 从标准输入读取严格 JSON `{email, password}`；邮箱和密码均不进入命令参数、环境变量、日志或 shell history。以下命令在 `server/` 执行，Python 只负责从终端无回显读取并正确编码 JSON：
 
 ```text
-read -r -s bootstrap_password
-printf '\n'
-printf '%s\n' "$bootstrap_password" | DATABASE_URL=... go run ./cmd/nexus-bootstrap \
-  --login admin \
-  --display-name "First Admin" \
-  --workspace-name "First Workspace" \
-  --password-stdin
-unset bootstrap_password
+python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Email: "),"password":getpass.getpass("Password: ")}))' | \
+  go run ./cmd/nexus-bootstrap \
+    --display-name "First Admin" \
+    --workspace-name "First Workspace" \
+    --credentials-stdin
 ```
 
 密码必须为 15–128 个 Unicode 字符且最多 1024 bytes。命令通过 PostgreSQL transaction advisory lock 保证只有一个调用成功，创建 local account、user、Workspace 和 `owner` membership；已经存在任何本地账号时失败，不提供覆盖或默认密码。成功输出只包含稳定 user / Workspace ID 与规范化 login。
@@ -102,17 +99,34 @@ RADISHNEXUS_WEB_ROOT=/srv/radishnexus/web
 
 当前公共认证路由为：
 
-- `POST /api/v1/auth/sessions`：JSON `login_name` / `password`，成功返回 `201`、Session context 和两个 Secure Cookie；
+- `POST /api/v1/auth/sessions`：JSON `email` / `password`，成功返回 `201`、Session context 和两个 Secure Cookie；
 - `GET /api/v1/auth/session`：用 Session cookie 返回当前 user、active Workspace membership 与绝对过期时间；
 - `DELETE /api/v1/auth/session`：要求精确 `Origin`、CSRF cookie 与 `X-CSRF-Token`，成功撤销 Session、清除 Cookie 并返回 `204`。
 
 登录 JSON 最大 4096 bytes，不接受未知字段；所有认证响应均 `no-store`，错误使用带 server-generated `request_id` 的稳定 JSON envelope。进程内 IP 限流不替代 reverse proxy 的全局限流、TLS、Header 清洗和安全日志责任。完整边界见 [ADR-0013](../docs/adr/0013-public-authentication-transport.md)。
 
+## 账户升级与成员准入
+
+migration 008 分离 `user_accounts`、`local_credentials` 与 `external_identities`。既有本地密码 verifier 和 `users.id` 保留，旧 `login_name` 仅保留为私有 `legacy_login_name`，新协议不再接受它。升级吊销旧 Session；部署必须同步更新 Go、Web 和 schema。
+
+升级前先用旧版本工具生成受控备份，并准备所有仍需本地登录的 `user_id -> email` 映射。迁移后，在私有文件中准备 JSON 数组，例如 `[{"user_id":"usr_existing","email":"admin@example.test"}]`，通过标准输入执行：
+
+```text
+go run ./cmd/nexus-identity-migrate --mapping-stdin < /path/to/private-identity-email-mapping.json
+```
+
+命令只处理尚未映射的旧凭证；重复邮箱、重复用户、无效邮箱或未知 / 已映射用户使整批回滚。它不重置密码、不激活禁用账户、不改变业务关联，不在成功或失败输出中打印邮箱。妥善删除不再需要的私有输入材料，不将其提交或放入可移植导出。
+
+新成员由 owner 在 `/account` 创建邀请码，24 小时内单次兑换为 `member`；兑换时重查创建者当前 owner 权限。已有账户应先登录再接受邀请；未登录创建账户时，重复邮箱只返回冲突，不把请求登录为已有用户。无公开注册或自动授予 Project / Environment 权限。
+
+账户与准入接口见 [ADR-0023](../docs/adr/0023-local-account-and-radish-oidc-login.md)。当前装配只开放本地方式，`GET /api/v1/auth/methods` 的 `radish` 为 `false`；真实 OIDC provider 与 Radish 联调属于未来规划，当前不新增相关依赖；测试 provider 只验证内部事务边界。
+
 ## Authenticated Web Shell
 
 正式 Web 页面为：
 
-- `/`：Session bootstrap、login、Workspace 选择、已知 Deployment ID 入口和 logout；
+- `/`：Session bootstrap、邮箱登录、邀请兑换、Workspace 选择、已知 Deployment ID 入口和 logout；
+- `/account`：当前账户登录方式、owner 创建邀请码、当前用户接受邀请；
 - `/workspaces/{workspace_id}/deployments/{deployment_id}`：先验证 Session，再消费正式 Deployment Nexus View DTO；
 - `/workspaces/{workspace_id}/channels/{channel_id}`：先验证 Session，再分页读取 Message、幂等发送并从 Message 发起 Thread；
 - `/workspaces/{workspace_id}/threads/{thread_id}`：读取 Thread Nexus View 并创建 Proposed Decision；

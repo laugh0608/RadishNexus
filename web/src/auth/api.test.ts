@@ -52,7 +52,7 @@ describe("authentication API", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await browserAuthClient.login({
-      loginName: "admin",
+      email: "admin@example.test",
       password: "correct horse battery staple",
     });
 
@@ -67,7 +67,7 @@ describe("authentication API", () => {
           "Content-Type": "application/json; charset=utf-8",
         },
         body: JSON.stringify({
-          login_name: "admin",
+          email: "admin@example.test",
           password: "correct horse battery staple",
         }),
       }),
@@ -88,11 +88,14 @@ describe("authentication API", () => {
     );
 
     await expect(
-      browserAuthClient.login({ loginName: "admin", password: "wrong" }),
+      browserAuthClient.login({
+        email: "admin@example.test",
+        password: "wrong",
+      }),
     ).rejects.toMatchObject({
       code: "invalid_credentials",
       status: 401,
-      userMessage: "登录名或密码不正确。",
+      userMessage: "邮箱或密码不正确。",
     } satisfies Partial<AuthRequestError>);
   });
 

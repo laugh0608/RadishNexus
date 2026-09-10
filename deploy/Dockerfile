@@ -18,6 +18,7 @@ COPY server/ ./
 RUN CGO_ENABLED=0 go build -buildvcs=false -trimpath -o /out/radishnexus ./cmd/radishnexus \
     && CGO_ENABLED=0 go build -buildvcs=false -trimpath -o /out/nexus-migrate ./cmd/nexus-migrate \
     && CGO_ENABLED=0 go build -buildvcs=false -trimpath -o /out/nexus-bootstrap ./cmd/nexus-bootstrap \
+    && CGO_ENABLED=0 go build -buildvcs=false -trimpath -o /out/nexus-identity-migrate ./cmd/nexus-identity-migrate \
     && CGO_ENABLED=0 go build -buildvcs=false -trimpath -o /out/nexus-backup ./cmd/nexus-backup \
     && CGO_ENABLED=0 go build -buildvcs=false -trimpath -o /out/nexus-restore ./cmd/nexus-restore
 
@@ -36,6 +37,7 @@ ENTRYPOINT ["/usr/local/bin/radishnexus"]
 FROM ${POSTGRES_IMAGE} AS operations
 COPY --from=go-build /out/nexus-migrate /usr/local/bin/nexus-migrate
 COPY --from=go-build /out/nexus-bootstrap /usr/local/bin/nexus-bootstrap
+COPY --from=go-build /out/nexus-identity-migrate /usr/local/bin/nexus-identity-migrate
 COPY --from=go-build /out/nexus-backup /usr/local/bin/nexus-backup
 COPY --from=go-build /out/nexus-restore /usr/local/bin/nexus-restore
 COPY LICENSE /usr/share/licenses/RadishNexus/LICENSE

@@ -104,7 +104,7 @@ func TestLocalIdentityBootstrapLoginAndSessionLifecycle(t *testing.T) {
 		go func(service *authn.Service) {
 			<-start
 			result, err := service.Bootstrap(ctx, authn.BootstrapInput{
-				LoginName:     "admin",
+				Email:         "admin@example.test",
 				DisplayName:   "First Admin",
 				WorkspaceName: "First Workspace",
 				Password:      password,
@@ -154,12 +154,12 @@ func TestLocalIdentityBootstrapLoginAndSessionLifecycle(t *testing.T) {
 		integrationClock{now: now},
 	)
 	for attempt := 0; attempt < authn.LoginFailureLimit; attempt++ {
-		_, err := loginService.Login(ctx, authn.LoginInput{LoginName: "admin", Password: "wrong-password"})
+		_, err := loginService.Login(ctx, authn.LoginInput{Email: "admin@example.test", Password: "wrong-password"})
 		if !errors.Is(err, authn.ErrInvalidCredentials) {
 			t.Fatalf("Login() failed attempt %d error = %v", attempt+1, err)
 		}
 	}
-	if _, err := loginService.Login(ctx, authn.LoginInput{LoginName: "admin", Password: password}); !errors.Is(err, authn.ErrInvalidCredentials) {
+	if _, err := loginService.Login(ctx, authn.LoginInput{Email: "admin@example.test", Password: password}); !errors.Is(err, authn.ErrInvalidCredentials) {
 		t.Fatalf("Login() during lock error = %v", err)
 	}
 
@@ -173,7 +173,7 @@ func TestLocalIdentityBootstrapLoginAndSessionLifecycle(t *testing.T) {
 		},
 		integrationClock{now: unlockedAt},
 	)
-	session, err := sessionService.Login(ctx, authn.LoginInput{LoginName: "admin", Password: password})
+	session, err := sessionService.Login(ctx, authn.LoginInput{Email: "admin@example.test", Password: password})
 	if err != nil {
 		t.Fatalf("Login() after lock error = %v", err)
 	}
@@ -202,7 +202,7 @@ func TestLocalIdentityBootstrapLoginAndSessionLifecycle(t *testing.T) {
 	var lockedUntil *time.Time
 	if err := pool.QueryRow(ctx, `
 		SELECT failed_login_count, locked_until
-		FROM radishnexus.local_accounts
+		FROM radishnexus.local_credentials
 		WHERE user_id = $1
 	`, bootstrap.UserID).Scan(&failedCount, &lockedUntil); err != nil {
 		t.Fatalf("read reset login state: %v", err)
@@ -265,7 +265,7 @@ func TestLocalIdentityBootstrapLoginAndSessionLifecycle(t *testing.T) {
 	loginRequest := httptest.NewRequest(
 		http.MethodPost,
 		"https://nexus.example.test/api/v1/auth/sessions",
-		strings.NewReader(`{"login_name":"admin","password":"correct horse battery staple"}`),
+		strings.NewReader(`{"email":"admin@example.test","password":"correct horse battery staple"}`),
 	)
 	loginRequest.Header.Set("Content-Type", "application/json")
 	loginRequest.Header.Set("Origin", "https://nexus.example.test")
@@ -304,6 +304,7 @@ func TestLocalIdentityBootstrapLoginAndSessionLifecycle(t *testing.T) {
 	if _, err := httpService.ResolveSession(ctx, integrationToken(3)); !errors.Is(err, authn.ErrInvalidSession) {
 		t.Fatalf("HTTP revoked session error = %v", err)
 	}
+	assertIdentityAdmissionAndFederation(t, ctx, pool, bootstrap.WorkspaceID, unlockedAt)
 }
 
 func integrationToken(value byte) string {

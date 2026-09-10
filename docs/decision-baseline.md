@@ -150,12 +150,12 @@
 
 ### D-019 本地身份与服务端 Session
 
-- M1 首段先建立自部署可用的本地账号，OIDC 延后并复用相同 user、membership 与服务端 Session 边界，不建立第二套权限主体。
-- 新实例通过显式、一次性的 `nexus-bootstrap --password-stdin` 创建首个 user、Workspace 与 `owner` membership；不随服务启动初始化，不生成默认密码，也不接受命令参数密码。
+- 保留自部署可用的本地账户，以邮箱作为私有凭证、展示名独立；按 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 接入可选 Radish OIDC，两种认证复用相同用户、membership 与服务端 Session，不自动合并账户或继承上游权限。
+- 新实例通过显式、一次性的 `nexus-bootstrap --credentials-stdin` 创建首个 user、Workspace 与 `owner` membership；不随服务启动初始化，不生成默认密码，也邮箱和密码只从标准输入读取，不接受命令参数凭据。
 - 本地密码使用版本化 Argon2id verifier；不存在、禁用、锁定和错误密码统一失败，连续 5 次错误锁定 15 分钟。账号锁定不替代公共 transport 的客户端 IP 限流。
 - Session 是 24 小时绝对有效的服务端 opaque token，数据库只保存 Session / CSRF token digest。Session 不固定 Workspace，业务请求必须以当前 active membership 解析 `VerifiedUser`。
 - 浏览器合同固定 Secure `__Host-` Cookie、SameSite Strict、精确 HTTPS Origin、CSRF cookie + Header + digest、服务端 request ID 与 `/api/v1` 版本化安全错误对象；不提供 insecure HTTP fallback，也不信任用户身份或转发 Header。
-- `local_accounts` 纳入受控 PostgreSQL 运维备份，`user_sessions` 只恢复 schema，恢复后旧登录态全部失效。精确身份与公共认证边界以 [ADR-0012](adr/0012-local-identity-and-session-foundation.md) 和 [ADR-0013](adr/0013-public-authentication-transport.md) 为准。
+- 账户、密码凭证与外部身份关联纳入受控 PostgreSQL 运维备份；Session、邀请与 OIDC 授权事务只恢复 schema。旧登录名到邮箱由管理员显式映射，保留稳定用户 ID 与业务引用。变更范围以 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 为准，原有 [ADR-0012](adr/0012-local-identity-and-session-foundation.md) / [ADR-0013](adr/0013-public-authentication-transport.md) 的 Session 与代理安全边界继续有效。
 
 ### D-020 首个业务读取 Transport
 

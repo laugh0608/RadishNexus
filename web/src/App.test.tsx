@@ -75,8 +75,8 @@ describe("authenticated Web Shell", () => {
     expect(
       await screen.findByRole("heading", { name: "登录 RadishNexus" }),
     ).toBeDefined();
-    fireEvent.change(screen.getByLabelText("登录名"), {
-      target: { value: "admin" },
+    fireEvent.change(screen.getByLabelText("邮箱"), {
+      target: { value: "admin@example.test" },
     });
     fireEvent.change(screen.getByLabelText("密码"), {
       target: { value: "correct horse battery staple" },
@@ -88,7 +88,7 @@ describe("authenticated Web Shell", () => {
     ).toBeDefined();
     expect(auth.login).toHaveBeenCalledWith(
       {
-        loginName: "admin",
+        email: "admin@example.test",
         password: "correct horse battery staple",
       },
       undefined,
@@ -366,3 +366,18 @@ function testCollaborationClient(
     ...overrides,
   };
 }
+
+vi.mock("./auth/identity-api", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./auth/identity-api")>();
+  return {
+    ...original,
+    browserIdentityClient: {
+      ...original.browserIdentityClient,
+      methods: async () => ({
+        local: true,
+        radish: false,
+        registration: false,
+      }),
+    },
+  };
+});

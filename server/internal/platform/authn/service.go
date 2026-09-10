@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -30,8 +29,6 @@ var (
 	ErrInvalidCredentials  = errors.New("invalid credentials")
 	ErrInvalidSession      = errors.New("invalid session")
 	ErrInvalidCSRFToken    = errors.New("invalid csrf token")
-
-	loginNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{2,63}$`)
 )
 
 type PasswordHasher interface {
@@ -60,7 +57,7 @@ type Store interface {
 }
 
 type BootstrapInput struct {
-	LoginName     string
+	Email         string
 	DisplayName   string
 	WorkspaceName string
 	Password      string
@@ -69,7 +66,7 @@ type BootstrapInput struct {
 type BootstrapRecord struct {
 	UserID        string
 	WorkspaceID   string
-	LoginName     string
+	Email         string
 	DisplayName   string
 	WorkspaceName string
 	PasswordHash  string
@@ -79,7 +76,6 @@ type BootstrapRecord struct {
 type BootstrapResult struct {
 	UserID      string
 	WorkspaceID string
-	LoginName   string
 }
 
 type LocalAccount struct {
@@ -90,8 +86,8 @@ type LocalAccount struct {
 }
 
 type LoginInput struct {
-	LoginName string
-	Password  string
+	Email    string
+	Password string
 }
 
 type SessionRecord struct {
@@ -147,7 +143,7 @@ func (service *Service) Bootstrap(
 	ctx context.Context,
 	input BootstrapInput,
 ) (BootstrapResult, error) {
-	loginName, err := normalizeLoginName(input.LoginName)
+	email, err := NormalizeEmail(input.Email)
 	if err != nil {
 		return BootstrapResult{}, err
 	}
@@ -179,7 +175,7 @@ func (service *Service) Bootstrap(
 	record := BootstrapRecord{
 		UserID:        userID,
 		WorkspaceID:   workspaceID,
-		LoginName:     loginName,
+		Email:         email,
 		DisplayName:   displayName,
 		WorkspaceName: workspaceName,
 		PasswordHash:  passwordHash,
@@ -188,11 +184,11 @@ func (service *Service) Bootstrap(
 	if err := service.store.Bootstrap(ctx, record); err != nil {
 		return BootstrapResult{}, err
 	}
-	return BootstrapResult{UserID: userID, WorkspaceID: workspaceID, LoginName: loginName}, nil
+	return BootstrapResult{UserID: userID, WorkspaceID: workspaceID}, nil
 }
 
 func (service *Service) Login(ctx context.Context, input LoginInput) (Session, error) {
-	loginName, err := normalizeLoginName(input.LoginName)
+	email, err := NormalizeEmail(input.Email)
 	if err != nil || input.Password == "" || len(input.Password) > 1024 || !utf8.ValidString(input.Password) {
 		if dummyErr := service.passwords.VerifyDummy("invalid credential input"); dummyErr != nil {
 			return Session{}, fmt.Errorf("verify dummy password: %w", dummyErr)
@@ -200,7 +196,7 @@ func (service *Service) Login(ctx context.Context, input LoginInput) (Session, e
 		return Session{}, ErrInvalidCredentials
 	}
 
-	account, err := service.store.FindLocalAccount(ctx, loginName)
+	account, err := service.store.FindLocalAccount(ctx, email)
 	if errors.Is(err, ErrAccountNotFound) {
 		if dummyErr := service.passwords.VerifyDummy(input.Password); dummyErr != nil {
 			return Session{}, fmt.Errorf("verify dummy password: %w", dummyErr)
@@ -232,27 +228,11 @@ func (service *Service) Login(ctx context.Context, input LoginInput) (Session, e
 		return Session{}, ErrInvalidCredentials
 	}
 
-	sessionID, err := service.secrets.NewID("ses_")
+	session, record, err := service.newSession(account.UserID)
 	if err != nil {
-		return Session{}, fmt.Errorf("generate session ID: %w", err)
+		return Session{}, err
 	}
-	token, err := service.secrets.NewToken()
-	if err != nil {
-		return Session{}, fmt.Errorf("generate session token: %w", err)
-	}
-	csrfToken, err := service.secrets.NewToken()
-	if err != nil {
-		return Session{}, fmt.Errorf("generate csrf token: %w", err)
-	}
-	record := SessionRecord{
-		ID:              sessionID,
-		UserID:          account.UserID,
-		PasswordHash:    account.PasswordHash,
-		TokenDigest:     digestToken(token),
-		CSRFTokenDigest: digestToken(csrfToken),
-		CreatedAt:       now,
-		ExpiresAt:       now.Add(SessionLifetime),
-	}
+	record.PasswordHash = account.PasswordHash
 	if err := service.store.CreateSession(ctx, record); err != nil {
 		if errors.Is(err, ErrInvalidCredentials) {
 			return Session{}, ErrInvalidCredentials
@@ -263,7 +243,8 @@ func (service *Service) Login(ctx context.Context, input LoginInput) (Session, e
 	if err != nil {
 		return Session{}, fmt.Errorf("resolve newly created session: %w", err)
 	}
-	return Session{Token: token, CSRFToken: csrfToken, Account: resolved.Account}, nil
+	session.Account = resolved.Account
+	return session, nil
 }
 
 func (service *Service) ResolveSession(
@@ -338,14 +319,6 @@ func (service *Service) RevokeSession(
 		return err
 	}
 	return nil
-}
-
-func normalizeLoginName(value string) (string, error) {
-	canonical := strings.ToLower(strings.TrimSpace(value))
-	if !loginNamePattern.MatchString(canonical) {
-		return "", fmt.Errorf("%w: login name must be 3-64 lowercase ASCII letters, digits, dots, underscores, or hyphens", authz.ErrInvalid)
-	}
-	return canonical, nil
 }
 
 func normalizeName(field string, value string) (string, error) {

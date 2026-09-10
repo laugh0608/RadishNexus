@@ -61,7 +61,7 @@ Project、Initiative、Component、Decision、Environment 和 EntityLink 共享�
 
 首期 Workspace membership 独立保存 `status: active / suspended` 与 `role: owner / member`。`owner` 表示 Workspace 级管理责任，不自动授予 restricted Project、私密协作对象或 Environment Deployment 权限；这些能力仍由对应对象的显式授权决定。用户 Session 不固定 Workspace，业务请求选择 Workspace 后必须以当前 active membership 重新解析权限。
 
-M1 本地身份基线以不可变小写 ASCII `login_name` 关联 `users`，密码只保存 Argon2id verifier；服务端 Session 只保存 opaque token 与 CSRF token 的 digest。`local_accounts` 纳入受控 PostgreSQL 运维备份，`user_sessions` 只保留 schema，恢复后旧登录态全部失效。精确边界见 [ADR-0012](adr/0012-local-identity-and-session-foundation.md)。
+身份模型按 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 分离用户、账户状态、本地密码凭证与外部身份。正式本地凭证采用规范化邮箱，展示名独立；Radish OIDC 以 exact `(issuer, subject)` 关联本地用户，两种认证都进入 Nexus Session。旧登录名到邮箱使用管理员显式映射，不改变稳定用户 ID，不自动合并账户或继承上游权限。迁移与当前实现完成线分别见 ADR 和[当前状态](status/current.md)。
 
 ### Team
 

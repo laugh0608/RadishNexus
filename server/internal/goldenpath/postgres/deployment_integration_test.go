@@ -284,10 +284,13 @@ func assertDeploymentNexusViewHTTP(
 	csrfToken := deploymentHTTPToken(8)
 	tokenDigest := sha256.Sum256([]byte(sessionToken))
 	csrfDigest := sha256.Sum256([]byte(csrfToken))
+	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_reader', 'active', $1)`, now); err != nil {
+		t.Fatalf("seed identity accounts: %v", err)
+	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO radishnexus.local_accounts (
-			user_id, login_name, password_hash, created_at, password_changed_at
-		) VALUES ('usr_reader', 'http.reader', $1, $2, $2)
+		INSERT INTO radishnexus.local_credentials (
+			user_id, email, password_hash, created_at, password_changed_at
+		) VALUES ('usr_reader', 'http.reader@example.test', $1, $2, $2)
 	`, passwordHash, now); err != nil {
 		t.Fatalf("seed HTTP integration local account: %v", err)
 	}

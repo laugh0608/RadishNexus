@@ -45,6 +45,18 @@ type ErrorResponse struct {
 // separately without exposing their cause to the caller.
 func MapApplicationError(err error) ErrorMapping {
 	switch {
+	case errors.Is(err, authn.ErrInvitationInvalid):
+		return ErrorMapping{StatusCode: http.StatusForbidden, Code: "invitation_invalid", Message: "invitation unavailable"}
+	case errors.Is(err, authn.ErrRecentAuthentication):
+		return ErrorMapping{StatusCode: http.StatusForbidden, Code: "recent_authentication_required", Message: "sign in again to continue"}
+	case errors.Is(err, authn.ErrLastLoginMethod):
+		return ErrorMapping{StatusCode: http.StatusConflict, Code: "last_login_method", Message: "cannot remove the last login method"}
+	case errors.Is(err, authn.ErrIdentityConflict):
+		return ErrorMapping{StatusCode: http.StatusConflict, Code: "identity_conflict", Message: "identity operation conflicts with current state"}
+	case errors.Is(err, authn.ErrOIDCUnavailable):
+		return ErrorMapping{StatusCode: http.StatusServiceUnavailable, Code: "oidc_unavailable", Message: "Radish login unavailable"}
+	case errors.Is(err, authn.ErrOIDCInvalid):
+		return ErrorMapping{StatusCode: http.StatusUnauthorized, Code: "oidc_failed", Message: "Radish login failed"}
 	case errors.Is(err, ErrSecureTransportRequired):
 		return ErrorMapping{
 			StatusCode: http.StatusBadRequest,

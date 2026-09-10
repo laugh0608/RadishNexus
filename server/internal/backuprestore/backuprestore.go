@@ -53,8 +53,10 @@ var (
 		"radishnexus.entity_types",
 		"radishnexus.environment_deployment_authorizations",
 		"radishnexus.environments",
+		"radishnexus.external_identities",
+		"radishnexus.identity_audit",
 		"radishnexus.inbound_deliveries",
-		"radishnexus.local_accounts",
+		"radishnexus.local_credentials",
 		"radishnexus.messages",
 		"radishnexus.outbox_deliveries",
 		"radishnexus.project_memberships",
@@ -64,12 +66,15 @@ var (
 		"radishnexus.thread_memberships",
 		"radishnexus.threads",
 		"radishnexus.tickets",
+		"radishnexus.user_accounts",
 		"radishnexus.users",
 		"radishnexus.workspace_memberships",
 		"radishnexus.workspaces",
 	}
 	excludedDataTables = []string{
 		"radishnexus.activity_items",
+		"radishnexus.identity_invitations",
+		"radishnexus.oidc_transactions",
 		"radishnexus.user_sessions",
 	}
 	toolVersionPattern = regexp.MustCompile(`\b([0-9]+)(?:\.[0-9]+)+\b`)

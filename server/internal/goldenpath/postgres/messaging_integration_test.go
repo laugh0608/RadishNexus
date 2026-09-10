@@ -278,16 +278,19 @@ func assertMessagingHTTPTransport(
 	csrfDigest := sha256.Sum256([]byte(csrfToken))
 	deciderTokenDigest := sha256.Sum256([]byte(deciderSessionToken))
 	deciderCSRFDigest := sha256.Sum256([]byte(deciderCSRFToken))
+	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_contributor', 'active', $1), ('usr_decider', 'active', $1)`, now); err != nil {
+		t.Fatalf("seed identity accounts: %v", err)
+	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO radishnexus.local_accounts (
-			user_id, login_name, password_hash, created_at, password_changed_at
+		INSERT INTO radishnexus.local_credentials (
+			user_id, email, password_hash, created_at, password_changed_at
 		)
-		SELECT 'usr_contributor', 'http.contributor', password_hash, $1::timestamptz, $1::timestamptz
-		FROM radishnexus.local_accounts
+		SELECT 'usr_contributor', 'http.contributor@example.test', password_hash, $1::timestamptz, $1::timestamptz
+		FROM radishnexus.local_credentials
 		WHERE user_id = 'usr_reader'
 		UNION ALL
-		SELECT 'usr_decider', 'http.decider', password_hash, $1::timestamptz, $1::timestamptz
-		FROM radishnexus.local_accounts
+		SELECT 'usr_decider', 'http.decider@example.test', password_hash, $1::timestamptz, $1::timestamptz
+		FROM radishnexus.local_credentials
 		WHERE user_id = 'usr_reader'
 	`, now); err != nil {
 		t.Fatalf("seed messaging HTTP local account: %v", err)

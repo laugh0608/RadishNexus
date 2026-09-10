@@ -5,6 +5,12 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
+import { IdentityLogin } from "./auth/IdentityLogin";
+import { IdentityPanel } from "./auth/IdentityPanel";
+import {
+  browserIdentityClient,
+  type IdentityClient,
+} from "./auth/identity-api";
 import { NexusView } from "./nexus-view/NexusView";
 import {
   AuthRequestError,
@@ -49,6 +55,7 @@ type PrototypeMode = "succeeded" | "failed" | "loading" | "error";
 
 type AppRoute =
   | { kind: "home" }
+  | { kind: "account" }
   | { kind: "prototype" }
   | { kind: "deployment"; workspaceID: string; deploymentID: string }
   | { kind: "channel"; workspaceID: string; channelID: string }
@@ -87,6 +94,7 @@ const prototypeModes: readonly { id: PrototypeMode; label: string }[] = [
 interface AppProps {
   pathname?: string;
   authClient?: AuthClient;
+  identityClient?: IdentityClient;
   channelClient?: ChannelMessageClient;
   channelRealtimeClient?: ChannelRealtimeClient;
   collaborationClient?: CollaborationClient;
@@ -97,6 +105,7 @@ interface AppProps {
 export function App({
   pathname = window.location.pathname,
   authClient = browserAuthClient,
+  identityClient = browserIdentityClient,
   channelClient = browserChannelMessageClient,
   channelRealtimeClient = browserChannelRealtimeClient,
   collaborationClient = browserCollaborationClient,
@@ -111,6 +120,7 @@ export function App({
     <AuthenticatedApp
       route={route}
       authClient={authClient}
+      identityClient={identityClient}
       channelClient={channelClient}
       channelRealtimeClient={channelRealtimeClient}
       collaborationClient={collaborationClient}
@@ -124,6 +134,7 @@ function appRoute(pathname: string): AppRoute {
   if (pathname === "/" || pathname === "") {
     return { kind: "home" };
   }
+  if (pathname === "/account") return { kind: "account" };
   if (pathname === "/prototype/nexus-view") {
     return { kind: "prototype" };
   }
@@ -144,6 +155,7 @@ function appRoute(pathname: string): AppRoute {
 function AuthenticatedApp({
   route,
   authClient,
+  identityClient,
   channelClient,
   channelRealtimeClient,
   collaborationClient,
@@ -152,6 +164,7 @@ function AuthenticatedApp({
 }: {
   route: Exclude<AppRoute, { kind: "prototype" }>;
   authClient: AuthClient;
+  identityClient: IdentityClient;
   channelClient: ChannelMessageClient;
   channelRealtimeClient: ChannelRealtimeClient;
   collaborationClient: CollaborationClient;
@@ -216,6 +229,11 @@ function AuthenticatedApp({
   if (authentication.status === "signed-out") {
     return (
       <LoginView
+        identityClient={identityClient}
+        navigate={navigate}
+        onSession={(session) =>
+          setAuthentication({ status: "signed-in", session })
+        }
         onLogin={async (credentials, signal) => {
           const session = await authClient.login(credentials, signal);
           setAuthentication({ status: "signed-in", session });
@@ -228,25 +246,35 @@ function AuthenticatedApp({
       route={route}
       session={authentication.session}
       authClient={authClient}
+      identityClient={identityClient}
       channelClient={channelClient}
       channelRealtimeClient={channelRealtimeClient}
       collaborationClient={collaborationClient}
       loadDeployment={loadDeployment}
       navigate={navigate}
       onSignedOut={requireLogin}
+      onSession={(session) =>
+        setAuthentication({ status: "signed-in", session })
+      }
     />
   );
 }
 
 function LoginView({
   onLogin,
+  identityClient,
+  navigate,
+  onSession,
 }: {
+  identityClient: IdentityClient;
+  navigate: (url: string) => void;
+  onSession: (session: SessionContext) => void;
   onLogin: (
     credentials: LoginCredentials,
     signal?: AbortSignal,
   ) => Promise<void>;
 }) {
-  const [loginName, setLoginName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -256,7 +284,7 @@ function LoginView({
     setSubmitting(true);
     setError(null);
     try {
-      await onLogin({ loginName, password });
+      await onLogin({ email, password });
       setPassword("");
     } catch (submitError) {
       setError(authErrorMessage(submitError));
@@ -266,25 +294,25 @@ function LoginView({
 
   return (
     <div className="app-shell">
-      <AppHeader note="安全登录 · 服务端 Session" brandHref="/" />
+      <AppHeader note="团队协作与研发上下文" brandHref="/" />
       <main className="auth-layout">
         <section className="auth-card" aria-labelledby="login-title">
-          <p className="section-kicker">Authenticated Web Shell</p>
+          <p className="section-kicker">欢迎回来</p>
           <h1 id="login-title">登录 RadishNexus</h1>
           <p className="auth-card__intro">
-            使用实例本地账号进入。密码只发送到当前 HTTPS
-            origin，不会写入浏览器存储。
+            使用邮箱登录，继续团队中的讨论与工作。
           </p>
           <form className="auth-form" onSubmit={(event) => void submit(event)}>
             <label>
-              <span>登录名</span>
+              <span>邮箱</span>
               <input
+                type="email"
                 autoComplete="username"
                 autoFocus
                 disabled={submitting}
-                onChange={(event) => setLoginName(event.target.value)}
+                onChange={(event) => setEmail(event.target.value)}
                 required
-                value={loginName}
+                value={email}
               />
             </label>
             <label>
@@ -311,9 +339,14 @@ function LoginView({
               {submitting ? "正在登录…" : "登录"}
             </button>
           </form>
+          <IdentityLogin
+            client={identityClient}
+            navigate={navigate}
+            onSession={onSession}
+          />
         </section>
       </main>
-      <AppFooter label="Authenticated Web Shell / M1" />
+      <AppFooter label="RadishNexus" />
     </div>
   );
 }
@@ -322,22 +355,26 @@ function SignedInShell({
   route,
   session,
   authClient,
+  identityClient,
   channelClient,
   channelRealtimeClient,
   collaborationClient,
   loadDeployment,
   navigate,
   onSignedOut,
+  onSession,
 }: {
   route: Exclude<AppRoute, { kind: "prototype" }>;
   session: SessionContext;
   authClient: AuthClient;
+  identityClient: IdentityClient;
   channelClient: ChannelMessageClient;
   channelRealtimeClient: ChannelRealtimeClient;
   collaborationClient: CollaborationClient;
   loadDeployment: DeploymentNexusViewLoader;
   navigate: (path: string) => void;
   onSignedOut: () => void;
+  onSession: (session: SessionContext) => void;
 }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -380,11 +417,12 @@ function SignedInShell({
           route.kind === "channel" ||
           route.kind === "collaboration"
             ? `真实 API · ${currentWorkspace?.name ?? "当前权限过滤"}`
-            : "Authenticated Web Shell"
+            : "欢迎回来"
         }
         brandHref="/"
       >
         <div className="account-controls">
+          <a href="/account">账户与邀请</a>
           <span>
             <small>已登录</small>
             <strong>{session.user.displayName}</strong>
@@ -405,7 +443,15 @@ function SignedInShell({
         </p>
       )}
 
-      {route.kind === "home" ? (
+      {route.kind === "account" ? (
+        <IdentityPanel
+          client={identityClient}
+          session={session}
+          navigate={navigate}
+          onSignedOut={onSignedOut}
+          onSession={onSession}
+        />
+      ) : route.kind === "home" ? (
         <WorkspaceHome session={session} navigate={navigate} />
       ) : route.kind === "deployment" ? (
         <LiveDeploymentApp
@@ -438,7 +484,7 @@ function SignedInShell({
         <NotFoundView />
       )}
 
-      <AppFooter label="Authenticated Web Shell / M1" />
+      <AppFooter label="欢迎回来 / M1" />
     </div>
   );
 }
@@ -707,7 +753,7 @@ function ShellState({
 }) {
   return (
     <div className="app-shell">
-      <AppHeader note="Authenticated Web Shell" brandHref="/" />
+      <AppHeader note="欢迎回来" brandHref="/" />
       <main className="nexus-layout" aria-busy={onAction === undefined}>
         <section className="state-panel">
           <p className="section-kicker">Session bootstrap</p>
@@ -720,7 +766,7 @@ function ShellState({
           )}
         </section>
       </main>
-      <AppFooter label="Authenticated Web Shell / M1" />
+      <AppFooter label="欢迎回来 / M1" />
     </div>
   );
 }

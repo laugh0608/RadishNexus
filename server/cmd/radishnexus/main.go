@@ -68,23 +68,17 @@ func run() error {
 		return err
 	}
 	defer pool.Close()
+	authStore := authpostgres.New(pool)
 	authService := authn.NewService(
-		authpostgres.New(pool),
+		authStore,
 		authn.NewArgon2idHasher(),
 		authn.CryptoSecretGenerator{},
 		authn.SystemClock{},
 	)
-	authHandler := httptransport.NewAuthHandler(
-		authService,
-		sessionPolicy,
-		proxyPolicy,
-		httptransport.NewLoginGuard(
-			loginAttemptLimit,
-			loginWindowDuration,
-			loginTrackedClientLimit,
-			loginPasswordConcurrencyLimit,
-		),
-	)
+	authenticationGuard := httptransport.NewLoginGuard(loginAttemptLimit, loginWindowDuration, loginTrackedClientLimit, loginPasswordConcurrencyLimit)
+	identityService := authn.NewIdentityService(authStore, authService, "")
+	identityHandler := httptransport.NewIdentityHandler(identityService, authService, nil, sessionPolicy, proxyPolicy, authenticationGuard)
+	authHandler := httptransport.NewAuthHandler(authService, sessionPolicy, proxyPolicy, authenticationGuard, identityHandler)
 	realtimeConfig, err := realtime.DefaultConfig()
 	if err != nil {
 		return err
@@ -128,7 +122,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(pool, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, webHandler),
+		Handler:           newHandler(pool, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, webHandler, identityHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -184,6 +178,7 @@ func newHandler(
 	collaborationHandler http.Handler,
 	deploymentNexusViewHandler http.Handler,
 	webHandler http.Handler,
+	identityHandler ...http.Handler,
 ) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", func(response http.ResponseWriter, _ *http.Request) {
@@ -200,6 +195,10 @@ func newHandler(
 	})
 	mux.HandleFunc("/health/live", healthMethodNotAllowed)
 	mux.HandleFunc("/health/ready", healthMethodNotAllowed)
+	if len(identityHandler) == 1 {
+		mux.Handle("/api/v1/workspaces/{workspace_id}/invitations", identityHandler[0])
+		mux.Handle("/auth/complete", identityHandler[0])
+	}
 	mux.Handle("/api/v1/auth", authHandler)
 	mux.Handle("/api/v1/auth/", authHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages", channelMessagesHandler)

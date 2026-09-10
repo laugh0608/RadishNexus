@@ -63,7 +63,7 @@ func (handler *WebAppHandler) ServeHTTP(response http.ResponseWriter, request *h
 		handler.serveAsset(response, request)
 		return
 	}
-	if request.URL.Path == "/" || request.URL.Path == "/prototype/nexus-view" ||
+	if request.URL.Path == "/" || request.URL.Path == "/account" || request.URL.Path == "/prototype/nexus-view" ||
 		deploymentWebPathPattern.MatchString(request.URL.Path) ||
 		channelWebPathPattern.MatchString(request.URL.Path) ||
 		collaborationWebPathPattern.MatchString(request.URL.Path) {

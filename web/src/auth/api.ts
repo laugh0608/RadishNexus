@@ -16,7 +16,7 @@ export interface SessionContext {
 }
 
 export interface LoginCredentials {
-  loginName: string;
+  email: string;
   password: string;
 }
 
@@ -67,7 +67,7 @@ async function login(
       credentials: "same-origin",
       cache: "no-store",
       body: JSON.stringify({
-        login_name: credentials.loginName,
+        email: credentials.email,
         password: credentials.password,
       }),
       signal,
@@ -229,7 +229,7 @@ async function responseError(response: Response): Promise<AuthRequestError> {
 
 function authErrorMessage(status: number, code?: string): string {
   if (code === "invalid_credentials") {
-    return "登录名或密码不正确。";
+    return "邮箱或密码不正确。";
   }
   if (code === "rate_limited" || status === 429) {
     return "登录尝试过于频繁，请稍后再试。";

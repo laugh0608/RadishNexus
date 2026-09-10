@@ -8,7 +8,7 @@
 - Caddy 使用 internal CA 并覆盖传入的转发 Header；Go server 只信任 Caddy 固定地址的 `/32`。
 - PostgreSQL 数据保存在命名 volume；本地备份工件只写入忽略提交的 `deploy/local-data/backups/`。
 - 数据库密码通过 Compose Secret 文件按 service 挂载，不进入 Compose environment、命令参数或镜像层。
-- migration、bootstrap、backup 和 restore 都是显式一次性 operation；`docker compose up` 不会自动执行它们。
+- migration、bootstrap、identity-migrate、backup 和 restore 都是显式一次性 operation；`docker compose up` 不会自动执行它们。
 
 该入口使用 [Docker Official Images](https://hub.docker.com/search?image_filter=official)：Caddy `2.11.4-alpine`、PostgreSQL `17.10-alpine`、Go builder `1.26.7-alpine3.23`、Node builder `24.16.0-alpine3.23` 和 Alpine runtime `3.23.5`。实际配置同时固定完整 digest；升级时必须重新核验版本、许可证、漏洞和 multi-platform manifest。
 
@@ -54,14 +54,11 @@ docker compose -f deploy/compose.yaml run --rm migrate
 随后从标准输入建立唯一一次本地管理员与 Workspace owner。管理员密码与数据库密码必须不同；密码不会保存为 Compose Secret：
 
 ```text
-read -r -s bootstrap_password
-printf '\n'
-printf '%s\n' "$bootstrap_password" | docker compose -f deploy/compose.yaml run --rm -T bootstrap \
-  --login admin \
-  --display-name "First Admin" \
-  --workspace-name "First Workspace" \
-  --password-stdin
-unset bootstrap_password
+python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Email: "),"password":getpass.getpass("Password: ")}))' | \
+  docker compose -f deploy/compose.yaml run --rm -T bootstrap \
+    --display-name "First Admin" \
+    --workspace-name "First Workspace" \
+    --credentials-stdin
 ```
 
 只有 migration 和 bootstrap 成功后才启动公共入口：
@@ -81,6 +78,17 @@ curl --cacert deploy/local-data/caddy-root.crt https://localhost:8443/health/rea
 ```
 
 把 URL 换成 `.env` 中的精确 origin。浏览器必须显式信任该 CA 后再登录；不要用关闭证书验证作为日常运行方式。
+
+## 身份模型升级
+
+从 migration 007 或更早版本升级前，使用旧版本运维工具备份，并准备私有的旧用户 ID 到邮箱 JSON 映射。同步更新 Go / Web / operation 工件；显式执行 migration 后旧 Session 全部失效，已保留的密码 verifier 在完成邮箱映射后恢复登录：
+
+```text
+docker compose -f deploy/compose.yaml run --rm -T identity-migrate \
+  --mapping-stdin < /path/to/private-identity-email-mapping.json
+```
+
+格式与失败边界见[服务端账户升级](../server/README.md#账户升级与成员准入)。禁止猜测邮箱、清库重建或用旧二进制写新 schema。回退需要旧版本工件及升级前备份，恢复至空目标；本次代码更新不代表真实实例已经迁移。
 
 ## 运维命令
 
@@ -105,7 +113,7 @@ docker compose -f deploy/compose.yaml run --rm restore \
   --input /backups/backup-YYYYMMDD-HHMMSS
 ```
 
-恢复工件保留本地账号 verifier，但不恢复 Session。恢复成功后不要再次 bootstrap；直接启动 `app` 与 `caddy` 并重新登录。跨 major、非空目标、损坏工件或 migration 漂移仍会失败，精确边界见 [ADR-0010](../docs/adr/0010-verified-postgresql-backup-and-restore.md)。
+恢复工件保留本地账号 verifier，以及外部身份映射，但不恢复 Session、未兑换邀请或 OIDC 授权事务。恢复成功后不要再次 bootstrap；直接启动 `app` 与 `caddy` 并重新登录。跨 major、非空目标、损坏工件或 migration 漂移仍会失败，精确边界见 [ADR-0010](../docs/adr/0010-verified-postgresql-backup-and-restore.md)。
 
 普通停止保留 PostgreSQL、Caddy CA 和备份：
 

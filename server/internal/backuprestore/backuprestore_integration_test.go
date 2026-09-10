@@ -65,6 +65,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	}
 	if !reflect.DeepEqual(manifest.ExcludedDataTables, []string{
 		"radishnexus.activity_items",
+		"radishnexus.identity_invitations",
+		"radishnexus.oidc_transactions",
 		"radishnexus.user_sessions",
 	}) {
 		t.Fatalf("backup exclusions = %#v", manifest.ExcludedDataTables)
@@ -124,6 +126,14 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if got := snapshotTable(t, ctx, targetPool, "radishnexus.user_sessions"); got != "[]" {
 		t.Fatalf("restored user sessions = %s, want []", got)
 	}
+	for _, table := range []string{"radishnexus.identity_invitations", "radishnexus.oidc_transactions"} {
+		if snapshotTable(t, ctx, sourcePool, table) == "[]" {
+			t.Fatalf("source %s fixture is empty", table)
+		}
+		if snapshotTable(t, ctx, targetPool, table) != "[]" {
+			t.Fatalf("restored %s retained authentication capabilities", table)
+		}
+	}
 	targetSnapshot := snapshotIncludedTables(t, ctx, targetPool)
 	if !reflect.DeepEqual(targetSnapshot, sourceSnapshot) {
 		t.Fatalf("restored authoritative data differs\nsource: %#v\ntarget: %#v", sourceSnapshot, targetSnapshot)
@@ -131,8 +141,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	var restoredPasswordHash string
 	if err := targetPool.QueryRow(ctx, `
 		SELECT password_hash
-		FROM radishnexus.local_accounts
-		WHERE login_name = 'admin'
+		FROM radishnexus.local_credentials
+		WHERE email = 'admin@example.test'
 	`).Scan(&restoredPasswordHash); err != nil {
 		t.Fatalf("read restored local account: %v", err)
 	}
@@ -254,15 +264,25 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	if err != nil {
 		t.Fatalf("seed backup base data: %v", err)
 	}
+	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_admin', 'active', '2026-08-30T01:00:00Z')`); err != nil {
+		t.Fatalf("seed identity accounts: %v", err)
+	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO radishnexus.local_accounts (
-			user_id, login_name, password_hash, status, created_at, password_changed_at
+		INSERT INTO radishnexus.local_credentials (
+			user_id, email, password_hash, status, created_at, password_changed_at
 		) VALUES (
-			'usr_admin', 'admin', $1,
+			'usr_admin', 'admin@example.test', $1,
 			'active', '2026-08-30T01:00:00Z', '2026-08-30T01:00:00Z'
 		)
 	`, passwordHash); err != nil {
 		t.Fatalf("seed backup local account: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+        INSERT INTO radishnexus.external_identities(user_id,issuer,subject,created_at) VALUES ('usr_admin','https://radish.example.test','backup-fixture-subject',now());
+        INSERT INTO radishnexus.identity_invitations(id,token_digest,workspace_id,created_by,created_at,expires_at) VALUES ('inv_backup',decode(repeat('33',32),'hex'),'wrk_backup','usr_admin',now(),now()+interval '24 hours');
+        INSERT INTO radishnexus.oidc_transactions(state_digest,browser_digest,nonce_digest,provider_digest,created_at,expires_at) VALUES (decode(repeat('44',32),'hex'),decode(repeat('55',32),'hex'),decode(repeat('66',32),'hex'),decode(repeat('77',32),'hex'),now(),now()+interval '5 minutes');
+    `); err != nil {
+		t.Fatalf("seed federated backup fixture: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO radishnexus.user_sessions (
