@@ -89,7 +89,7 @@ python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Emai
 
 ## 公共认证入口
 
-完成 migration 和一次性 bootstrap 后，server 还要求以下部署配置：
+server 要求以下部署配置。对新实例先显式完成 migration，再选择 CLI bootstrap 后登录，或启动已配置初始化码的服务并在网页创建首位管理员；采用网页路径时不预先运行 CLI bootstrap：
 
 ```text
 DATABASE_URL=...
@@ -131,7 +131,7 @@ go run ./cmd/nexus-identity-migrate --mapping-stdin < /path/to/private-identity-
 
 正式 Web 页面为：
 
-- `/`：Session bootstrap、邮箱登录、邀请兑换、Workspace 选择、Project / Channel 浏览、次级已知 ID 入口和 logout；
+- `/`：Session 检查、首次访问管理员初始化、邮箱登录、邀请兑换、Workspace 选择、Project / Channel 浏览、基础对象与首批成员配置、次级已知 ID 入口和 logout；
 - `/account`：当前账户登录方式、owner 创建邀请码、当前用户接受邀请；
 - `/workspaces/{workspace_id}/deployments/{deployment_id}`：先验证 Session，再消费正式 Deployment Nexus View DTO；
 - `/workspaces/{workspace_id}/channels/{channel_id}`：先验证 Session，再分页读取 Message、幂等发送并从 Message 发起 Thread；

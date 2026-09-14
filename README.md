@@ -4,7 +4,7 @@
 
 RadishNexus 是 Radish 家族中的团队协作项目。它把私聊、团队频道、决策、工单、协作文档和 CI/CD 上下文放进同一个工作空间，让一次讨论能够持续关联到结论、任务、软件组件、构建、发布和复盘，而不是把多个独立产品简单拼接在一起。
 
-项目当前处于 M0.5 Golden Path 与 M1 Web 平台基础交界的纵向切片阶段。正式 Go 服务与 React + TypeScript Web 已接通邮箱登录、项目与频道浏览，以及讨论到 Decision / Ticket 的局部协作闭环；基础对象创建、完整成员管理、Document 和真实外部交付入口仍未齐备。各能力的实现、验收证据、下一步与停止线统一见[当前状态](docs/status/current.md)。Flutter 客户端在 Web 产品达到阶段门槛后再启动，并统一覆盖移动端与 PC 端。
+项目当前处于 M0.5 Golden Path 与 M1 Web 平台基础交界的纵向切片阶段。正式 Go 服务与 React + TypeScript Web 已接通首次访问创建管理员、邮箱登录、基础对象与首批成员配置、项目与频道浏览，以及讨论到 Decision / Ticket 的局部协作闭环；管理员交接、完整成员治理、Document 和真实外部交付入口仍未齐备。各能力的实现、验收证据、下一步与停止线统一见[当前状态](docs/status/current.md)。Flutter 客户端在 Web 产品达到阶段门槛后再启动，并统一覆盖移动端与 PC 端。
 
 ## 已确认基线
 

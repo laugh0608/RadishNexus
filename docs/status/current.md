@@ -6,7 +6,7 @@
 
 M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 React Web 已建立若干真实业务切片，尚未完成可由普通成员独立操作、持续使用的完整 Golden Path。
 
-本地邮箱账户与邀请已按 [ADR-0023](../adr/0023-local-account-and-radish-oidc-login.md) 建立。项目所有者已明确将 Radish OIDC 接入延后，schema readiness 和 Project / Channel 首批发现入口已完成，基础对象与首批成员配置已接通，部署后首次访问初始化也已接通，当前准备下一最小业务合同，把已有权限、事务、来源和恢复能力接成用户可感知的上下文闭环。长期范围与阶段退出条件见[路线图](../roadmap.md)，产品验收见 [Golden Path](../golden-path.md)。本页只维护当前判断和顺序，不重复完整 ADR 与历史测试流水。
+本地邮箱账户与邀请已按 [ADR-0023](../adr/0023-local-account-and-radish-oidc-login.md) 建立。项目所有者已明确将 Radish OIDC 接入延后，schema readiness 和 Project / Channel 首批发现入口已完成，基础对象与首批成员配置已接通，部署后首次访问初始化也已接通。最小 Markdown Document 合同已接受，下一工作日进入实施，把已有权限、事务、来源和恢复能力接成用户可感知的上下文闭环。长期范围与阶段退出条件见[路线图](../roadmap.md)，产品验收见 [Golden Path](../golden-path.md)。本页只维护当前判断和顺序，不重复完整 ADR 与历史测试流水。
 
 ## 完成线与成熟度
 
@@ -47,6 +47,16 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 免费书面授权与评估说明应在邀请外部团队前准备，不能等到完整聊天或 CRDT 完成；版本化结构化导出与全新实例导入仍是 M1 的独立退出条件。账号恢复、安全审计、数据生命周期、数据库最小权限与升级演练按[路线图](../roadmap.md)的试用和生产边界推进，不因本表只列近期切片而取消。
 
+### 明天事项（2026-09-15）
+
+项目所有者已确认 [ADR-0028](../adr/0028-minimal-markdown-document.md) 的实施与 `github.com/yuin/goldmark v1.8.6` 依赖范围，要求今晚停止开发。下次继续时先核对 Git 状态与合同，再按以下顺序推进；这是一份接续清单，不是定时任务或后台运行安排。
+
+1. **先完成依赖与安全解析边界**：核验精确包 LICENSE、checksum、依赖图与漏洞结果，再接入固定版本 parser；建立 `nexus-markdown-v1` 源文保留与受限展示 corpus。若实际包或安全结果与合同不符，报告差异，不静默换库或放宽安全策略。
+2. **优先贯通服务端最小闭环**：新增下一连续 migration，接通从 Ticket 创建 Document、首个版本、EntityLink、receipt、事件 / Outbox / Activity 和当前权限读取；随后补保存冲突、历史读取与恢复追加版本。同步注册表、备份分类和真实数据库验证。
+3. **再接通 Web 并验收完整切片**：项目文档列表、Ticket 创建入口、阅读 / 编辑 / 预览、显式保存、冲突重新应用及历史恢复；验证双标签页、中文 IME、手机布局、撤权与备份恢复。按 ADR 的退出判据完成后再推进真实 Jenkins，不能把仅有 parser 或内部 service 当作 Document 已交付。
+
+今晚不安装依赖、不启动新服务、不执行 migration 或远程操作。后续长期服务与真实环境运行应先说明目标、主要副作用及清理方式；新增范围仍遵守协作约定，已确认的合同无需重复设计。管理员交接、账号恢复、完整 Compose 首访与 Linux Secret 挂载验收继续保留为独立缺口。
+
 ### 本轮完成：基础配置与首次访问初始化
 
 9 月 14 日已接受并实施 [ADR-0026](../adr/0026-foundation-configuration-and-membership.md)：owner 显式建立本人初始 Project admin，Project admin 配置其他成员的普通角色，受限 Channel 按明确成员管理。新增配置 Audit / receipt 与 migration 009，撤权清理从属私密授权，精确重试不复权。领域、HTTP、Web、备份分类和正常 Activity 更新已同步。
@@ -55,7 +65,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 项目所有者已确认并实施 [ADR-0027](../adr/0027-first-visit-administrator-setup.md)：部署者配置一次性初始化码，首次访问创建首位 Workspace owner，完成后关闭初始化并进入正式登录。网页与 CLI 复用唯一事务锁，已有或恢复账户不会重开入口；真实数据库并发 / 回滚、恢复和 HTTPS 浏览器已有证据，见[首次初始化记录](reviews/2026-09-14-first-visit-setup.md)。没有新增实例级超级权限、默认业务对象或依赖。最小 Markdown Document 合同现已接受，下一顺位是实施；管理员交接、恢复和真实 Jenkins 接入继续按独立范围推进。
 
-## Document 预研边界
+## Document 实施边界
 
 本轮选择 M0.5 / M1 不引入 CRDT，先完成服务端权威 Markdown、显式保存和 revision 冲突控制。ADR-0021 已保留该接受路径；项目所有者已确认 ADR-0028，最小业务合同已冻结，ADR-0021 与 ADR-0028 均为“已接受”；正式实现安排到下一工作日。
 
@@ -68,7 +78,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 - 不把内部 service、静态 fixture、手工投影重建或一次浏览器验收描述成完整产品闭环。
 - 引用、反向关系、旧 membership、客户端角色和订阅状态都不授予权限；新入口继续复用既有当前权限与不可发现性。
 - SSE replay 不作权威存储，写 command 继续使用短请求；不引入隐藏 polling fallback、多副本 fan-out、独立消息中间件或新的实时 transport。
-- 近期不横向补齐完整聊天 UI、附件、表情、复杂搜索、未读与通知；对象发现只服务最小场景。Document 合同冻结前不接入正式存储、依赖或实时协同。
+- 近期不横向补齐完整聊天 UI、附件、表情、复杂搜索、未读与通知；对象发现只服务最小场景。Document 仅按已接受 ADR-0028 实施，正式富文本依赖、CRDT 与实时协同仍未授权。
 - 不启动 Flutter、微服务拆分、插件市场、通用多语言 SDK、完整软件目录或完整离线文档。
 - CI Run 成功不触发 Deployment；本阶段只记录外部已完成 staging 终态，不执行 production、审批或回滚，不自动确认 AI 草案。
 - 文档顺序调整不授权安装依赖、运行长期服务、改系统配置、提交、push、PR、发布、部署或发送外部消息；具体授权仍按根协作约定。
@@ -77,7 +87,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 - 关系分页、反向索引、查询容量与跨对象 Timeline；事务内 Activity 更新、重建并发及首批 direction 合同已由 ADR-0022 冻结；
 - 管理员交接、其他协作对象发现、账号恢复与应急入口；基础配置和首访 owner 初始化已由 ADR-0026 / ADR-0027 冻结；
-- Document 最小合同、Markdown 子集 / sanitizer、revision 冲突及恢复 / 导出；
+- Document 已接受合同的实现与安全 corpus、并发 / 恢复证据；正式富文本与 CRDT、受控脱敏和可移植导出仍未完成；
 - Jenkins 来源验证、Secret 使用、失败审计、Repository 映射与交付关系；
 - PostgreSQL 支持矩阵、schema 兼容窗口、forward repair、数据库权限拆分和容量基线；
 - Decision 拒绝、替代、复核与 Ticket 基础执行状态的交互；
@@ -86,6 +96,8 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 - 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
 
 ## 证据与历史
+
+- [2026-09-14 提交回顾与文档收尾](reviews/2026-09-14-daily-closeout.md)：当日实现与合同提交、代码 / 文档核对、剩余验收边界和次日接续入口。
 
 - [2026-09-14 首次访问初始化](reviews/2026-09-14-first-visit-setup.md)：一次性初始化码、首位 owner、并发关闭、恢复与浏览器证据。
 

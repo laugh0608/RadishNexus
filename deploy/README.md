@@ -76,7 +76,7 @@ docker compose -f deploy/compose.yaml up -d --wait postgres
 docker compose -f deploy/compose.yaml run --rm migrate
 ```
 
-可选择下面的网页首次初始化；也可沿用 CLI：从标准输入建立唯一一次本地管理员与 Workspace owner。管理员密码与数据库密码必须不同；密码不会保存为 Compose Secret：
+migration 成功后，可按上文[网页首次初始化准备](#网页首次初始化准备)启动 overlay 并创建管理员；也可选择以下 CLI 路径：从标准输入建立唯一一次本地管理员与 Workspace owner。管理员密码与数据库密码必须不同；密码不会保存为 Compose Secret：
 
 ```text
 python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Email: "),"password":getpass.getpass("Password: ")}))' | \
@@ -156,7 +156,7 @@ docker compose -f deploy/compose.yaml down
 | PostgreSQL 未就绪 | `docker compose ps postgres` 与 `logs postgres`；migration 不应继续 |
 | Secret 缺失、空、多行或 URL 歧义 | application / operation 直接失败并指出配置键，不回显密码 |
 | migration 尚未完成 | `migrate` operation 未成功；应用不会替它自动修改 schema |
-| 尚未 bootstrap | `bootstrap` operation 尚无成功输出；重复执行只允许第一次成功 |
+| 尚未初始化 | 网页读取 `/api/v1/setup`：`required` 可提交初始化码，`unavailable` 需部署者配置码或选择 CLI；`complete` 表示已有账户。CLI 与网页均只允许首次创建成功 |
 | Web build 缺失 | application image build 或 Go server 启动失败，不退回 fixture |
 | origin / Host / proxy 配置错误 | app 启动错误、认证 transport 的稳定安全错误或 Caddy health 失败 |
 | 浏览器不信任证书 | 导出并信任当前 `caddy_data` 中的公开 root CA，不关闭 HTTPS 校验 |

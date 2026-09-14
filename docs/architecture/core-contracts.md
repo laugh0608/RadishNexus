@@ -2,7 +2,7 @@
 
 状态：M0 契约基线，已由 ADR-0002 接受
 
-日期：2026-09-10
+日期：2026-09-14
 
 ## 目的
 
@@ -50,7 +50,7 @@ M0 首批冻结以下类型名与 ID 前缀：
 | `ci-run` | `cir_` | 一次构建或流水线运行 |
 | `deployment` | `dpl_` | 一次显式记录的部署终态事实 |
 
-Document 和 Repository 等其余 Golden Path 类型进入同一注册表时，其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结；CI Run 的来源和幂等边界由 [ADR-0006](../adr/0006-verified-jenkins-delivery-and-ci-run.md) 冻结；Deployment 由 [ADR-0009](../adr/0009-explicit-staging-deployment.md) 冻结；Channel、Message 与 messaging-origin Thread 由 [ADR-0017](../adr/0017-channel-message-boundary-and-single-process-realtime.md) 冻结；Thread → Decision → Ticket 的 Session transport 与命令 receipt 由 [ADR-0019](../adr/0019-session-scoped-thread-decision-ticket-transport.md) 冻结。
+Document 的 `document / doc_` 已由 [ADR-0028](../adr/0028-minimal-markdown-document.md) 冻结，但尚未进入上表对应的正式运行时注册表。Repository 等其余 Golden Path 类型进入同一注册表时，其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结；CI Run 的来源和幂等边界由 [ADR-0006](../adr/0006-verified-jenkins-delivery-and-ci-run.md) 冻结；Deployment 由 [ADR-0009](../adr/0009-explicit-staging-deployment.md) 冻结；Channel、Message 与 messaging-origin Thread 由 [ADR-0017](../adr/0017-channel-message-boundary-and-single-process-realtime.md) 冻结；Thread → Decision → Ticket 的 Session transport 与命令 receipt 由 [ADR-0019](../adr/0019-session-scoped-thread-decision-ticket-transport.md) 冻结。
 
 ### 结构化表示
 
@@ -283,6 +283,12 @@ Thread ← Decision、Decision ← Ticket 从同一权威 EntityLink 反向读�
 
 一项操作可以同时产生领域事件、Activity 和 Audit，但它们的 payload、保留周期和读取权限分别定义，不能通过复制同一 JSON 假装职责相同。
 
+## 最小 Document 合同（已接受，待实现）
+
+[ADR-0028](../adr/0028-minimal-markdown-document.md) 冻结 Project 作用域 Document、不可变 Markdown revision、base revision 冲突、恢复追加、单一服务端安全解析、Ticket 来源关系以及新增 HTTP 面。版本是文档内编号，不是独立 EntityRef；正文中的引用不自动建立关系或授予权限。写入复用既有 collaboration receipt 范围，成功返回 applied revision 后重新读取当前权威对象。
+
+Document / revision、关系、receipt、领域事件和必要 Outbox 纳入权威恢复范围；展示树可重建，Activity 仍从事件重建。当前 Go / SQL 注册表、resolver、projector 和 Web adapter 均尚未扩展；本节不宣称 Document API 可调用，精确字段、事件和验收矩阵以 ADR 为准。
+
 ## 基础配置命令
 
 [ADR-0026](../adr/0026-foundation-configuration-and-membership.md) 冻结 Team / Project / Channel 创建及首批普通成员管理。配置命令复用当前用户、Workspace、Project 和窄权限语义，明确初始 admin 与频道成员；引用、Workspace owner 或重放 receipt 均不提供额外权限。
@@ -334,7 +340,7 @@ M0 实验与正式纵向切片累计必须证明：
 
 ## 后续仍需决定
 
-- EntityID 的具体生成算法，以及 Document、Repository 等尚未进入正式纵向切片的类型前缀；
+- EntityID 的具体生成算法，以及 Repository 等尚未冻结的类型前缀；Document 前缀与业务合同已由 ADR-0028 接受，正式注册与存储仍待实施；
 - 后续对象的 PostgreSQL 表、约束、索引，以及事件事实和投递状态的保留与演进策略；
 - 关系类型注册表的完整方向、基数和 metadata schema；
 - Team 角色继承、对象分享、跨 Project 转换和管理员 break-glass 策略；

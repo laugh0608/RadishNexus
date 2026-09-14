@@ -30,4 +30,4 @@ Activity、首批入向关系、备份分类和精确 schema readiness 的专题
 - 最终发现入口与布局的 `./scripts/check-web.sh` 通过：91 个测试、格式、Lint、类型检查、production build 和 152 个锁定 package 检查。
 - 真实隔离浏览器验证邮箱登录、Project / Channel 分页、Workspace 切换、归档与空态、撤权刷新、频道进入及退出；1440px 桌面和 390px 手机截图已复核，320px / 390px 无横向溢出。临时环境和证书材料已清理，没有修改日常浏览器或系统信任。
 - 文档收尾运行 `git diff --check` 与 `./scripts/check-repo.sh`；不为文档变更重复启动数据库、浏览器或 Compose。
-- 当日只在 `dev` 本地提交，没有 push、PR、发布、真实实例迁移或 Radish / RadishMind 修改。明天首项工作及范围确认点集中在[当前状态的明天事项](../current.md#明天事项2026-09-11)，不在本记录维护第二套计划。
+- 当日只在 `dev` 本地提交，没有 push、PR、发布、真实实例迁移或 Radish / RadishMind 修改。明天首项工作及范围确认点集中在[当前状态的近期执行顺序](../current.md#近期执行顺序)，不在本记录维护第二套计划。

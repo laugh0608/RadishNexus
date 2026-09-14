@@ -221,6 +221,8 @@ M0 纵向切片继续冻结 `thread` / `thr_` 与 `ticket` / `tkt_` 的稳定引
 
 承载设计、说明、Runbook 和复盘等长内容。在线协作、版本和离线同步属于 Document 自身能力；Document 不能代替结构化 Decision、Ticket 或 Deployment。
 
+首个最小合同已由 [ADR-0028](adr/0028-minimal-markdown-document.md) 接受，正式代码尚未实现：`document / doc_`，固定 Workspace 与 governing Project，首期仅 `project` 可见性；当前版本指向不可变的标题与 UTF-8 Markdown 快照。读取及全部历史复用当前 Project 权限，写入要求活跃 Project 的 contributor / decider / admin；作者或 Workspace owner 不额外越权。显式保存检查 base revision，恢复旧版追加新版本。首期从 Ticket 创建并原子建立带来源的 `ticket relates-to document`，不表示 Ticket 已确认某个正文版本。格式、限制、事件与备份 / 导出边界集中维护在 ADR，不引入 CRDT 或浏览器持久化。
+
 ### Decision
 
 Decision 是一等对象，不只是文档中的一个标题或被置顶的消息。
