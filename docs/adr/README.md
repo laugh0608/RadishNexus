@@ -26,13 +26,14 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0018](0018-session-scoped-channel-message-transport.md) | 已接受 | Session 作用域下的 Channel Message 短请求 Transport |
 | [ADR-0019](0019-session-scoped-thread-decision-ticket-transport.md) | 已接受 | Session 作用域下的 Thread、Decision 与 Ticket 协作 Transport |
 | [ADR-0020](0020-session-scoped-single-process-message-realtime.md) | 已接受 | Session 作用域下的单进程 Message 实时增量 |
-| [ADR-0021](0021-document-editor-and-collaboration-foundation.md) | 提议 | Document 正文、编辑器与协同分层 |
+| [ADR-0021](0021-document-editor-and-collaboration-foundation.md) | 已接受 | Document 正文、编辑器与协同分层 |
 | [ADR-0022](0022-transactional-activity-and-incoming-relations.md) | 已接受 | 事务内 Activity 更新与协作对象反向关系 |
 | [ADR-0023](0023-local-account-and-radish-oidc-login.md) | 已接受 | 本地账户、邮箱迁移与 Radish OIDC 联合登录 |
 | [ADR-0024](0024-read-only-schema-readiness.md) | 已接受 | 只读 schema readiness 与精确 migration 兼容性 |
 | [ADR-0025](0025-project-and-channel-discovery.md) | 已接受 | Project 与 Channel 最小发现入口 |
 | [ADR-0026](0026-foundation-configuration-and-membership.md) | 已接受 | 基础对象创建与首批成员配置 |
 | [ADR-0027](0027-first-visit-administrator-setup.md) | 已接受 | 部署后首次访问创建管理员 |
+| [ADR-0028](0028-minimal-markdown-document.md) | 已接受 | 最小 Markdown Document 与不可变版本 |
 
 ## 新建规则
 

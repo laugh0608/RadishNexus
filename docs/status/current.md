@@ -22,7 +22,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment | Deployment 只读入口；CI Run 仍有内部 query 与静态代表页 | Jenkins 来源验证入口、正式 CI Run 页面和 Deployment 写入口尚缺 |
 | EntityLink / Activity | 带来源关系、权限过滤 query、同事务 Activity 更新与版本化全量重建 | Nexus View 可读 Current / 出向与首批入向 Relations / 正常更新的 Timeline | 正常写入与双向发现已通过真实 PostgreSQL / HTTP 和浏览器；未完成持续使用观察 |
 | 自部署与恢复 | 显式 migration、只读 schema readiness、PostgreSQL 17 同 major 空目标恢复 | 健康端点拒绝 migration 缺失 / 漂移 / 版本不匹配；固定工件 Compose 开发拓扑与 HTTPS 演练已有记录 | 新探针已有真实数据库证据；本轮未重跑 Compose，升级失败恢复、运维与生产容量尚未完成 |
-| Document | 编辑器阶段 A 已选 Tiptap / ProseMirror 作为后续结构化编辑候选 | 仅隔离实验，无正式 Document 页面 | 最小业务合同、revision、正式存储与保存流程尚缺 |
+| Document | 编辑器阶段 A 已选 Tiptap / ProseMirror；ADR-0028 最小 Markdown 合同已接受 | 仅隔离实验，无正式 Document 页面 | 合同已确认；正式存储、保存、冲突与恢复流程尚未实现 |
 
 ## 已确认缺口
 
@@ -41,7 +41,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 | 顺序 | 下一切片 | 交付与退出判据 |
 | --- | --- | --- |
-| 1 | 最小 Markdown Document | 先审查并冻结最小字段、revision、权限、EntityLink、事件、渲染安全、备份和导出边界，再完成读取、显式保存、冲突与恢复切片；不引入 CRDT |
+| 1 | 最小 Markdown Document | [ADR-0028](../adr/0028-minimal-markdown-document.md) 已接受 Project 可见性、不可变版本、Ticket 来源关系及单一 Go parser 依赖范围；下一工作日实施读取、显式保存、冲突与恢复；不引入 CRDT |
 | 2 | 真实 Jenkins 与 staging 记录链 | 来源验证、幂等和失败隔离连接到已有 CI Run service，用户可读取真实构建并显式记录外部已完成的 staging Deployment；贯通 Ticket / Component / Repository 与交付关系，不依赖预置交付事实 |
 | 3 | 小团队场景试用 | 满足评估授权与必要运维条件后，以真实需求连续使用并记录追溯、重复录入和人工干预；按 Golden Path 验收决定下一批功能，不把一次演示当作持续使用完成 |
 
@@ -53,11 +53,13 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 真实 PostgreSQL、备份恢复、Go 检查和 Web 检查已通过；真实 HTTPS 浏览器已从正式 bootstrap 的空业务工作区创建 Team / Project / Channel，邀请新账户、授予 Project 与 Channel 权限，普通成员进入频道发消息并刷新读取；撤权后发现与旧地址均不可读。精确证据与未覆盖范围见 [9 月 14 日记录](reviews/2026-09-14-foundation-configuration.md)。这不是完整 Golden Path 或真实团队持续使用结论。
 
-项目所有者已确认并实施 [ADR-0027](../adr/0027-first-visit-administrator-setup.md)：部署者配置一次性初始化码，首次访问创建首位 Workspace owner，完成后关闭初始化并进入正式登录。网页与 CLI 复用唯一事务锁，已有或恢复账户不会重开入口；真实数据库并发 / 回滚、恢复和 HTTPS 浏览器已有证据，见[首次初始化记录](reviews/2026-09-14-first-visit-setup.md)。没有新增实例级超级权限、默认业务对象或依赖。下一顺位是冻结最小 Markdown Document 合同；管理员交接、恢复和真实 Jenkins 接入继续按独立范围推进。
+项目所有者已确认并实施 [ADR-0027](../adr/0027-first-visit-administrator-setup.md)：部署者配置一次性初始化码，首次访问创建首位 Workspace owner，完成后关闭初始化并进入正式登录。网页与 CLI 复用唯一事务锁，已有或恢复账户不会重开入口；真实数据库并发 / 回滚、恢复和 HTTPS 浏览器已有证据，见[首次初始化记录](reviews/2026-09-14-first-visit-setup.md)。没有新增实例级超级权限、默认业务对象或依赖。最小 Markdown Document 合同现已接受，下一顺位是实施；管理员交接、恢复和真实 Jenkins 接入继续按独立范围推进。
 
 ## Document 预研边界
 
-本轮选择 M0.5 / M1 不引入 CRDT，先完成服务端权威 Markdown、显式保存和 revision 冲突控制。ADR-0021 已保留该接受路径；现按此收束提议，Document 业务合同尚未冻结，ADR 继续保持“提议”。
+本轮选择 M0.5 / M1 不引入 CRDT，先完成服务端权威 Markdown、显式保存和 revision 冲突控制。ADR-0021 已保留该接受路径；项目所有者已确认 ADR-0028，最小业务合同已冻结，ADR-0021 与 ADR-0028 均为“已接受”；正式实现安排到下一工作日。
+
+9 月 14 日已接受 [ADR-0028](../adr/0028-minimal-markdown-document.md)：从 Ticket 创建、Project 文档发现、不可变 revision、当前权限、显式冲突处理、恢复追加版本、受限展示投影及备份 / 导出边界。已确认的依赖仅为固定版本 goldmark；精确包许可证与安全检查仍须在实际添加时完成。本轮已通过既有编辑器实验的 28 项测试、构建和依赖基线检查，不代表正式 parser 或 Document 已验证；没有改动正式代码、migration 或依赖。
 
 阶段 A 的 corpus、浏览器和 macOS 中文 IME 证据保留；Tiptap / ProseMirror 只是后续结构化编辑候选，未进入正式 Web 依赖。Yjs 阶段 B 延后，不阻塞最小 Document。再次启动时须说明它要解决的具体设计问题、结束条件、投入上限和依赖授权；旧预检结果不能代替届时的版本与供应链复核。详见 [ADR-0021](../adr/0021-document-editor-and-collaboration-foundation.md)。
 
