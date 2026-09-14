@@ -1,12 +1,10 @@
 package httptransport
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -136,7 +134,7 @@ func (h *ConfigurationHandler) serve(w http.ResponseWriter, r *http.Request, kin
 			input.Kind = "channel.member.add"
 		}
 	}
-	body, err := decodeConfigurationBody(w, r, fields)
+	body, err := decodeStrictObject(w, r, fields, 32*1024)
 	if err != nil {
 		writeIdentityError(w, r, err)
 		return
@@ -211,54 +209,6 @@ func (h *ConfigurationHandler) serve(w http.ResponseWriter, r *http.Request, kin
 	writeIdentityJSON(w, r, status, struct {
 		Data any `json:"data"`
 	}{data})
-}
-
-// Decode a bounded object while retaining presence and rejecting duplicate keys;
-// expected_role:null is distinct from an omitted optimistic precondition.
-func decodeConfigurationBody(w http.ResponseWriter, r *http.Request, fields []string) (map[string]json.RawMessage, error) {
-	var raw json.RawMessage
-	if err := decodeJSON(w, r, &raw, 32*1024); err != nil {
-		return nil, err
-	}
-	d := json.NewDecoder(bytes.NewReader(raw))
-	token, err := d.Token()
-	if err != nil || token != json.Delim('{') {
-		return nil, authz.ErrInvalid
-	}
-	values := map[string]json.RawMessage{}
-	for d.More() {
-		token, err = d.Token()
-		if err != nil {
-			return nil, authz.ErrInvalid
-		}
-		key, ok := token.(string)
-		if !ok {
-			return nil, authz.ErrInvalid
-		}
-		if _, exists := values[key]; exists {
-			return nil, authz.ErrInvalid
-		}
-		var value json.RawMessage
-		if err = d.Decode(&value); err != nil {
-			return nil, authz.ErrInvalid
-		}
-		values[key] = value
-	}
-	if _, err = d.Token(); err != nil {
-		return nil, authz.ErrInvalid
-	}
-	if _, err = d.Token(); !errors.Is(err, io.EOF) {
-		return nil, authz.ErrInvalid
-	}
-	if len(values) != len(fields) {
-		return nil, authz.ErrInvalid
-	}
-	for _, field := range fields {
-		if _, exists := values[field]; !exists {
-			return nil, authz.ErrInvalid
-		}
-	}
-	return values, nil
 }
 
 func configurationObjectDTO(o goldenpath.ConfigurationObject) (any, error) {

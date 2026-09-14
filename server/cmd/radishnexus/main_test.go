@@ -219,3 +219,13 @@ func TestHandlerRoutesCollaborationBeforeWorkspaceFallback(t *testing.T) {
 		}
 	}
 }
+
+func TestSetupRouteIsExplicit(t *testing.T) {
+	setup := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(201) })
+	handler := newHandler(fakeReadinessChecker{}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), setup)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("POST", "/api/v1/setup", nil))
+	if response.Code != 201 {
+		t.Fatal(response.Code)
+	}
+}

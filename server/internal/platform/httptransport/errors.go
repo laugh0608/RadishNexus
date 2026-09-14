@@ -45,6 +45,8 @@ type ErrorResponse struct {
 // separately without exposing their cause to the caller.
 func MapApplicationError(err error) ErrorMapping {
 	switch {
+	case errors.Is(err, authn.ErrAlreadyBootstrapped):
+		return ErrorMapping{StatusCode: http.StatusConflict, Code: "setup_complete", Message: "instance setup already complete"}
 	case errors.Is(err, authn.ErrInvitationInvalid):
 		return ErrorMapping{StatusCode: http.StatusForbidden, Code: "invitation_invalid", Message: "invitation unavailable"}
 	case errors.Is(err, authn.ErrRecentAuthentication):

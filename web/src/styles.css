@@ -2316,3 +2316,14 @@ code {
   list-style: none;
   padding: 0;
 }
+
+.setup-recheck {
+  margin-top: 1rem;
+}
+.setup-success {
+  max-width: 520px;
+  margin: 1rem auto;
+  padding-inline: 1rem;
+  color: var(--muted);
+  line-height: 1.75;
+}

@@ -21,6 +21,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
+	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 )
 
@@ -147,6 +148,16 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	replayed, err := goldenpath.NewConfigurationService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}).Configure(ctx, configurationInvocation, configurationInput)
 	if err != nil || replayed.Created || replayed.Object.ID != configured.Object.ID {
 		t.Fatal("restored receipt did not preserve idempotency", replayed, err)
+	}
+	restoredSetup, err := authn.NewSetupService(nil, authpostgres.New(targetPool), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state, err := restoredSetup.Status(ctx); err != nil || state != "complete" {
+		t.Fatal("restore reopened setup", state, err)
+	}
+	if err := restoredSetup.Complete(ctx, "", authn.BootstrapInput{}); !errors.Is(err, authn.ErrAlreadyBootstrapped) {
+		t.Fatal("restore allowed setup", err)
 	}
 	var restoredPasswordHash string
 	if err := targetPool.QueryRow(ctx, `

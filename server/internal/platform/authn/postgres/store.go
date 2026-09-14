@@ -23,6 +23,15 @@ func New(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
 }
 
+func (store *Store) HasAccounts(ctx context.Context) (bool, error) {
+	var exists bool
+	err := store.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM radishnexus.user_accounts)`).Scan(&exists)
+	if err != nil {
+		return false, storeError("inspect setup state", err)
+	}
+	return exists, nil
+}
+
 func (store *Store) Bootstrap(ctx context.Context, record authn.BootstrapRecord) (err error) {
 	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {

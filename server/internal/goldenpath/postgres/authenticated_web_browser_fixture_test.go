@@ -22,6 +22,7 @@ import (
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/httptransport"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/realtime"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/runtimeconfig"
 )
 
 const authenticatedWebBrowserPassword = "authenticated browser fixture password"
@@ -55,9 +56,10 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	}
 	t.Cleanup(pool.Close)
 
+	firstVisit := os.Getenv("RADISHNEXUS_BROWSER_SETUP") == "1"
 	foundation := os.Getenv("RADISHNEXUS_BROWSER_FOUNDATION") == "1"
 	var fixture authenticatedWebFixture
-	if !foundation {
+	if !foundation && !firstVisit {
 		fixture = seedAuthenticatedWebBrowserData(t, ctx, pool)
 	}
 	listener, err := net.Listen("tcp", listenAddress)
@@ -80,12 +82,24 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 		authn.SystemClock{},
 	)
 	ownerWorkspace := ""
-	if foundation {
+	if foundation && !firstVisit {
 		first, err := authService.Bootstrap(ctx, authn.BootstrapInput{Email: "foundation.owner@example.test", DisplayName: "Foundation Owner", WorkspaceName: "Foundation Workspace", Password: authenticatedWebBrowserPassword})
 		if err != nil {
 			t.Fatal(err)
 		}
 		ownerWorkspace = first.WorkspaceID
+	}
+	setupCode, err := runtimeconfig.SetupCode(os.Getenv, os.ReadFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setupService, err := authn.NewSetupService(authService, authpostgres.New(pool), setupCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readiness, err := db.NewReadinessChecker(pool)
+	if err != nil {
+		t.Fatal(err)
 	}
 	authenticationGuard := httptransport.NewLoginGuard(5, time.Minute, 64, 2)
 	identityHandler := httptransport.NewIdentityHandler(authn.NewIdentityService(authpostgres.New(pool), authService, ""), authService, nil, sessionPolicy, proxyPolicy, authenticationGuard)
@@ -142,6 +156,7 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	}
 
 	mux := http.NewServeMux()
+	mux.Handle("/api/v1/setup", httptransport.NewSetupHandler(setupService, readiness, sessionPolicy, proxyPolicy, authenticationGuard))
 	mux.Handle("/api/v1/auth", authHandler)
 	mux.Handle("/api/v1/auth/", authHandler)
 	discoveryHandler := httptransport.NewDiscoveryHandler(authService, goldenpath.NewDiscoveryService(goldenpostgres.New(pool)), sessionPolicy, proxyPolicy)

@@ -1,12 +1,9 @@
+import { AppHeader } from "./AppHeader";
+import { SetupGate } from "./auth/SetupGate";
+import { browserSetupClient, type SetupClient } from "./auth/setup-api";
 import { WorkspaceHome } from "./workspace/WorkspaceHome";
 import { browserDiscoveryClient, type DiscoveryClient } from "./workspace/api";
-import {
-  useCallback,
-  useEffect,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { IdentityLogin } from "./auth/IdentityLogin";
 import { IdentityPanel } from "./auth/IdentityPanel";
 import {
@@ -93,6 +90,7 @@ const prototypeModes: readonly { id: PrototypeMode; label: string }[] = [
 interface AppProps {
   pathname?: string;
   authClient?: AuthClient;
+  setupClient?: SetupClient;
   identityClient?: IdentityClient;
   discoveryClient?: DiscoveryClient;
   channelClient?: ChannelMessageClient;
@@ -105,6 +103,7 @@ interface AppProps {
 export function App({
   pathname = window.location.pathname,
   authClient = browserAuthClient,
+  setupClient = browserSetupClient,
   identityClient = browserIdentityClient,
   discoveryClient = browserDiscoveryClient,
   channelClient = browserChannelMessageClient,
@@ -120,6 +119,7 @@ export function App({
   return (
     <AuthenticatedApp
       route={route}
+      setupClient={setupClient}
       authClient={authClient}
       discoveryClient={discoveryClient}
       identityClient={identityClient}
@@ -156,6 +156,7 @@ function appRoute(pathname: string): AppRoute {
 
 function AuthenticatedApp({
   route,
+  setupClient,
   authClient,
   identityClient,
   discoveryClient,
@@ -166,6 +167,7 @@ function AuthenticatedApp({
   navigate,
 }: {
   route: Exclude<AppRoute, { kind: "prototype" }>;
+  setupClient: SetupClient;
   authClient: AuthClient;
   identityClient: IdentityClient;
   discoveryClient: DiscoveryClient;
@@ -232,17 +234,19 @@ function AuthenticatedApp({
   }
   if (authentication.status === "signed-out") {
     return (
-      <LoginView
-        identityClient={identityClient}
-        navigate={navigate}
-        onSession={(session) =>
-          setAuthentication({ status: "signed-in", session })
-        }
-        onLogin={async (credentials, signal) => {
-          const session = await authClient.login(credentials, signal);
-          setAuthentication({ status: "signed-in", session });
-        }}
-      />
+      <SetupGate client={setupClient}>
+        <LoginView
+          identityClient={identityClient}
+          navigate={navigate}
+          onSession={(session) =>
+            setAuthentication({ status: "signed-in", session })
+          }
+          onLogin={async (credentials, signal) => {
+            const session = await authClient.login(credentials, signal);
+            setAuthentication({ status: "signed-in", session });
+          }}
+        />
+      </SetupGate>
     );
   }
   return (
@@ -631,35 +635,6 @@ function PrototypeApp() {
       />
       <AppFooter label="Representative slice / M0" />
     </div>
-  );
-}
-
-function AppHeader({
-  note,
-  brandHref,
-  children,
-}: {
-  note: string;
-  brandHref: string;
-  children?: ReactNode;
-}) {
-  return (
-    <header className="prototype-header">
-      <a className="brand-lockup" href={brandHref} aria-label="RadishNexus">
-        <span className="brand-mark" aria-hidden="true">
-          R
-        </span>
-        <span>
-          <strong>RadishNexus</strong>
-          <small>Context stays connected.</small>
-        </span>
-      </a>
-      <div className="prototype-note">
-        <span aria-hidden="true" />
-        {note}
-      </div>
-      {children}
-    </header>
   );
 }
 

@@ -42,6 +42,31 @@ docker compose -f deploy/compose.yaml build app migrate
 
 build 只运行现有 `go.mod` / `go.sum` 和 `web/package-lock.json` 固定的下载与构建，不应修改任何 lockfile。
 
+## 网页首次初始化准备
+
+[ADR-0027](../docs/adr/0027-first-visit-administrator-setup.md) 提供部署者凭一次性初始化码创建首位 Workspace owner 的入口。仅对没有任何账户的新实例开放；已有账户的升级或备份恢复不会重新开放。初始化不产生默认 Team / Project / Channel，也不自动建立登录 Session。
+
+在仓库根准备独立随机码文件（不输出码，不复用数据库或用户密码）：
+
+```text
+python3 -c 'import os,secrets; fd=os.open("deploy/secrets/setup_code",os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600); os.write(fd,(secrets.token_urlsafe(32)+"\n").encode()); os.close(fd)'
+```
+
+将此文件通过受控权限提供给容器内 app 的 UID / GID `10001:10001` 只读访问，并限制宿主访问者。Linux bind-backed Secret 可能保留源文件权限，不能只依赖 Compose 的 `mode` 字段；根据宿主所有权 / ACL 配置并验证 app 可读取，不要为省事向所有用户开放。`RADISHNEXUS_SETUP_CODE_SOURCE_FILE` 可指定其他宿主文件；应用内部只使用绝对路径 `RADISHNEXUS_SETUP_CODE_FILE=/run/secrets/setup_code`。初始化码只挂到 app，不挂到 PostgreSQL、Caddy 或运维备份。
+
+完成下节 migration 后，用可选 overlay 启动已构建的应用：
+
+```text
+docker compose -f deploy/compose.yaml -f deploy/compose.setup.yaml config --quiet
+docker compose -f deploy/compose.yaml -f deploy/compose.setup.yaml up -d --wait app caddy
+```
+
+按下节方法信任本实例 Caddy CA 后访问 HTTPS 首页。部署者通过受控本地方式读取码文件，在表单填写初始化码、管理员邮箱 / 称呼 / 密码和工作区名称。成功后使用新账户正式登录，继续创建团队与项目。不要把码放进 URL、聊天记录、截图或日志。
+
+完成后用基础 Compose 配置重新创建 app，移除初始化 Secret 挂载，再按部署者的数据处理方式销毁码文件。即使未移除文件，任何账户已存在时数据库仍拒绝再次初始化。并发创建仅一个成功；结果不明确时在页面重新检查状态，不重复覆盖账户。没有配置码的新实例会提示部署者处理；不会开放无验证注册。
+
+以下 CLI 路径继续有效，与网页入口共享同一事务锁；两者选择其一，不需要先运行 CLI 再使用网页。
+
 ## 全新实例初始化
 
 先只启动 PostgreSQL，并等待官方 healthcheck 成功：
@@ -51,7 +76,7 @@ docker compose -f deploy/compose.yaml up -d --wait postgres
 docker compose -f deploy/compose.yaml run --rm migrate
 ```
 
-随后从标准输入建立唯一一次本地管理员与 Workspace owner。管理员密码与数据库密码必须不同；密码不会保存为 Compose Secret：
+可选择下面的网页首次初始化；也可沿用 CLI：从标准输入建立唯一一次本地管理员与 Workspace owner。管理员密码与数据库密码必须不同；密码不会保存为 Compose Secret：
 
 ```text
 python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Email: "),"password":getpass.getpass("Password: ")}))' | \
@@ -61,7 +86,7 @@ python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Emai
     --credentials-stdin
 ```
 
-只有 migration 和 bootstrap 成功后才启动公共入口：
+采用 CLI 时，migration 和 bootstrap 成功后启动公共入口：
 
 ```text
 docker compose -f deploy/compose.yaml up -d --wait app caddy

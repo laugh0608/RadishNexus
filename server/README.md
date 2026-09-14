@@ -73,7 +73,7 @@ runner 使用 session advisory lock 防止并发执行，每个 migration 单独
 
 ## 首次本地管理员
 
-先显式完成 migration，再在新实例上执行一次 bootstrap。命令通过 `--credentials-stdin` 从标准输入读取严格 JSON `{email, password}`；邮箱和密码均不进入命令参数、环境变量、日志或 shell history。以下命令在 `server/` 执行，Python 只负责从终端无回显读取并正确编码 JSON：
+先显式完成 migration，再选择下文 CLI bootstrap 或 [网页首次初始化](../deploy/README.md#网页首次初始化准备)，两者共享一次性数据库边界。采用 CLI 时：命令通过 `--credentials-stdin` 从标准输入读取严格 JSON `{email, password}`；邮箱和密码均不进入命令参数、环境变量、日志或 shell history。以下命令在 `server/` 执行，Python 只负责从终端无回显读取并正确编码 JSON：
 
 ```text
 python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Email: "),"password":getpass.getpass("Password: ")}))' | \
@@ -197,7 +197,7 @@ Thread DTO 只通过结构化 ref 返回 origin Channel 和 `started-from` Messa
 
 [ADR-0026](../docs/adr/0026-foundation-configuration-and-membership.md) 给出专用 API 路由、严格字段、角色与成员边界。migration 009 新增不可变配置 Audit / receipt，纳入备份与恢复；业务对象仍沿用既有表。`ConfigurationService` 负责规范化命令，PostgreSQL 事务重新验证当前权限并按 Project 串行配置；撤权清理下属显式授权，旧 receipt 不重新授予权限。Project / Channel 创建事件与 Activity 同事务更新，成员明细不进入普通读取。
 
-首次初始化目前仍使用上文 `nexus-bootstrap`，创建 Workspace owner，不建立全局超级权限。部署后首次访问的 Web 初始化方案见 [ADR-0027 提议](../docs/adr/0027-first-visit-administrator-setup.md)，尚未开放。
+首次初始化可使用上文 `nexus-bootstrap`，或按 [ADR-0027](../docs/adr/0027-first-visit-administrator-setup.md) 配置 `RADISHNEXUS_SETUP_CODE_FILE`，通过 `GET /api/v1/setup` 和 `POST /api/v1/setup` 完成网页初始化。均创建 Workspace owner，复用唯一 bootstrap 事务锁，不建立全局超级权限或默认业务对象。Secret 文件须为绝对路径，保存 32 随机字节的 43 字符 base64url 编码；启动读取失败或格式错误直接失败。未配置且无账户时返回 unavailable，已有账户始终 complete。readiness 错误不能当作空实例；POST 同源、限流、4 KiB 严格正文，成功后由用户正式登录。
 
 ## 最小备份与恢复
 

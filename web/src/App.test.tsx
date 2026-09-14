@@ -1,3 +1,4 @@
+import type { SetupClient } from "./auth/setup-api";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
@@ -42,7 +43,12 @@ const threadView: CollaborationView<ThreadCurrent> = {
 
 describe("App prototype state controls", () => {
   it("keeps the representative states on an explicit non-product route", () => {
-    render(<App pathname="/prototype/nexus-view" />);
+    render(
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/prototype/nexus-view"
+      />,
+    );
 
     expect(screen.getByText("部署成功")).toBeDefined();
     const failedButton = screen.getByRole("button", { name: "失败" });
@@ -70,7 +76,14 @@ describe("authenticated Web Shell", () => {
       ),
       login: vi.fn().mockResolvedValue(session),
     });
-    render(<App pathname="/" authClient={auth} navigate={navigate} />);
+    render(
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/"
+        authClient={auth}
+        navigate={navigate}
+      />,
+    );
 
     expect(
       await screen.findByRole("heading", { name: "登录 RadishNexus" }),
@@ -110,7 +123,12 @@ describe("authenticated Web Shell", () => {
   it("does not send invalid object IDs into product navigation", async () => {
     const navigate = vi.fn();
     render(
-      <App pathname="/" authClient={testAuthClient()} navigate={navigate} />,
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/"
+        authClient={testAuthClient()}
+        navigate={navigate}
+      />,
     );
     await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
     fireEvent.click(screen.getByText("按 ID 打开对象"));
@@ -126,7 +144,12 @@ describe("authenticated Web Shell", () => {
   it("opens a known Channel from the selected Workspace", async () => {
     const navigate = vi.fn();
     render(
-      <App pathname="/" authClient={testAuthClient()} navigate={navigate} />,
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/"
+        authClient={testAuthClient()}
+        navigate={navigate}
+      />,
     );
     await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
     fireEvent.change(screen.getByLabelText("Workspace"), {
@@ -146,7 +169,12 @@ describe("authenticated Web Shell", () => {
   it("opens a known collaboration object from the selected Workspace", async () => {
     const navigate = vi.fn();
     render(
-      <App pathname="/" authClient={testAuthClient()} navigate={navigate} />,
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/"
+        authClient={testAuthClient()}
+        navigate={navigate}
+      />,
     );
     await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
     fireEvent.change(screen.getByLabelText("Workspace"), {
@@ -184,6 +212,7 @@ describe("authenticated Web Shell", () => {
     });
     render(
       <App
+        setupClient={establishedSetupClient}
         pathname="/workspaces/wrk_main/channels/chn_team"
         authClient={testAuthClient()}
         channelClient={channelClient}
@@ -207,6 +236,7 @@ describe("authenticated Web Shell", () => {
       .mockResolvedValue(succeededDeploymentNexusViewFixture);
     render(
       <App
+        setupClient={establishedSetupClient}
         pathname="/workspaces/wrk_main/deployments/dpl_release_42"
         authClient={testAuthClient()}
         loadDeployment={loader}
@@ -227,6 +257,7 @@ describe("authenticated Web Shell", () => {
     const collaborationClient = testCollaborationClient();
     render(
       <App
+        setupClient={establishedSetupClient}
         pathname="/workspaces/wrk_main/threads/thr_discussion"
         authClient={testAuthClient()}
         collaborationClient={collaborationClient}
@@ -257,6 +288,7 @@ describe("authenticated Web Shell", () => {
       .mockResolvedValueOnce(succeededDeploymentNexusViewFixture);
     render(
       <App
+        setupClient={establishedSetupClient}
         pathname="/workspaces/wrk_main/deployments/dpl_release_42"
         authClient={testAuthClient()}
         loadDeployment={loader}
@@ -282,6 +314,7 @@ describe("authenticated Web Shell", () => {
       );
     render(
       <App
+        setupClient={establishedSetupClient}
         pathname="/workspaces/wrk_main/deployments/dpl_release_42"
         authClient={testAuthClient()}
         loadDeployment={loader}
@@ -295,7 +328,13 @@ describe("authenticated Web Shell", () => {
 
   it("logs out through the Session client without changing the current route", async () => {
     const auth = testAuthClient();
-    render(<App pathname="/" authClient={auth} />);
+    render(
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/"
+        authClient={auth}
+      />,
+    );
     await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
     fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
 
@@ -314,7 +353,13 @@ describe("authenticated Web Shell", () => {
         }),
       ),
     });
-    render(<App pathname="/" authClient={auth} />);
+    render(
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/"
+        authClient={auth}
+      />,
+    );
     await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
     fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
 
@@ -396,3 +441,10 @@ vi.mock("./workspace/api", async (importOriginal) => {
     },
   };
 });
+
+const establishedSetupClient: SetupClient = {
+  status: async () => "complete",
+  complete: async () => {
+    throw new Error("unexpected setup");
+  },
+};

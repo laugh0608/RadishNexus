@@ -67,6 +67,8 @@ npm ci
 
 验证空业务工作区的基础配置时，使用 `RADISHNEXUS_BROWSER_FOUNDATION=1 ./scripts/run-authenticated-web-browser-fixture.sh`。该模式通过正式 bootstrap 只创建虚构 owner 与 Workspace，不预置 Team / Project / Channel；后续对象、邀请、成员与消息均从 Web 创建。state 的 `foundation_login` / `foundation_workspace` 标明测试身份与作用域。停止与清理方式相同；这不代表首次访问初始化页面已完成。
 
+首次访问初始化验收可使用 `RADISHNEXUS_BROWSER_SETUP=1`，并指定受保护测试文件的 `RADISHNEXUS_SETUP_CODE_FILE`。该模式只执行 migration，不运行 bootstrap 或业务 seed；它优先于 foundation 模式，使用正式 setup handler。测试码不进入 state 或脚本输出，外部测试文件由操作者在停止后清理。已有 foundation / 默认 fixture 同样装配 setup 路由，并因已有账户返回 complete。
+
 ## M0 核心契约实验
 
 不需要数据库的 Go 测试与静态检查：

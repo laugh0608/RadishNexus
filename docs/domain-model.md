@@ -63,6 +63,8 @@ Project、Initiative、Component、Decision、Environment 和 EntityLink 共享�
 
 身份模型按 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 分离用户、账户状态、本地密码凭证与外部身份。正式本地凭证采用规范化邮箱，展示名独立；Radish OIDC 以 exact `(issuer, subject)` 关联本地用户，两种认证都进入 Nexus Session。旧登录名到邮箱使用管理员显式映射，不改变稳定用户 ID，不自动合并账户或继承上游权限。迁移与当前实现完成线分别见 ADR 和[当前状态](status/current.md)。
 
+首位管理员初始化按 [ADR-0027](adr/0027-first-visit-administrator-setup.md) 创建一个本地账户与 Workspace owner；网页凭部署者的一次性初始化码，CLI 使用既有运维入口，两者共享唯一事务锁。该流程不产生跨 Workspace 的超级权限，也不自动建立业务对象或 Session；任何账户已存在后不重新开放。
+
 ### Team
 
 稳定的人员责任边界，用于成员管理、默认权限和软件资产所有权。首期可以只实现简单团队和成员关系，不建设复杂组织架构。

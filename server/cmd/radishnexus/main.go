@@ -80,7 +80,17 @@ func run() error {
 		authn.CryptoSecretGenerator{},
 		authn.SystemClock{},
 	)
+	setupCode, err := runtimeconfig.SetupCode(os.Getenv, os.ReadFile)
+	if err != nil {
+		return err
+	}
+	setupService, err := authn.NewSetupService(authService, authStore, setupCode)
+	if err != nil {
+		return err
+	}
+	setupCode = ""
 	authenticationGuard := httptransport.NewLoginGuard(loginAttemptLimit, loginWindowDuration, loginTrackedClientLimit, loginPasswordConcurrencyLimit)
+	setupHandler := httptransport.NewSetupHandler(setupService, readiness, sessionPolicy, proxyPolicy, authenticationGuard)
 	identityService := authn.NewIdentityService(authStore, authService, "")
 	identityHandler := httptransport.NewIdentityHandler(identityService, authService, nil, sessionPolicy, proxyPolicy, authenticationGuard)
 	authHandler := httptransport.NewAuthHandler(authService, sessionPolicy, proxyPolicy, authenticationGuard, identityHandler)
@@ -130,7 +140,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler),
+		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler, setupHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -208,6 +218,9 @@ func newHandler(
 	if len(identityHandler) >= 1 {
 		mux.Handle("/api/v1/workspaces/{workspace_id}/invitations", identityHandler[0])
 		mux.Handle("/auth/complete", identityHandler[0])
+	}
+	if len(identityHandler) >= 3 {
+		mux.Handle("/api/v1/setup", identityHandler[2])
 	}
 	mux.Handle("/api/v1/auth", authHandler)
 	mux.Handle("/api/v1/auth/", authHandler)

@@ -158,4 +158,4 @@
 
 合同审查本身不代表以上实现或测试已经完成。管理员交接、账号恢复、安全失败审计和生产升级窗口仍按路线图独立验收。
 
-实施与实际验收范围见 [2026-09-14 记录](../status/reviews/2026-09-14-foundation-configuration.md)。上表为验收目标，不能据此推断所有组合均已执行。首次访问初始化另见 [ADR-0027 提议](0027-first-visit-administrator-setup.md)。
+实施与实际验收范围见 [2026-09-14 记录](../status/reviews/2026-09-14-foundation-configuration.md)。上表为验收目标，不能据此推断所有组合均已执行。首次访问初始化另见 [ADR-0027](0027-first-visit-administrator-setup.md)。

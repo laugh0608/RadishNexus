@@ -65,4 +65,4 @@ npm run dev
 
 `workspace/ConfigurationPanel.tsx` 提供 owner 的 Team / Project 创建、显式初始 admin 确认、Project 普通成员角色配置、Channel 创建与受限成员管理；`configuration-api.ts` 校验专用响应。成员选择使用稳定 ID 与展示名区分重名，不返回邮箱。界面说明撤权会清除从属私密授权；管理权交接尚未开放。
 
-写请求复用现有同源 Session / CSRF；连续点击被阻止，网络或 5xx 模糊失败保留原 operation ID，成功后重新读取当前列表。配置面板和分页在刷新、焦点复核与作用域切换时清理旧数据，取消或忽略迟到结果。普通配置能力由服务端返回，客户端显示不构成授权。首次访问建立管理员的 Web 初始化入口尚未实现，当前仍先执行运维 bootstrap。
+写请求复用现有同源 Session / CSRF；连续点击被阻止，网络或 5xx 模糊失败保留原 operation ID，成功后重新读取当前列表。配置面板和分页在刷新、焦点复核与作用域切换时清理旧数据，取消或忽略迟到结果。普通配置能力由服务端返回，客户端显示不构成授权。首次访问通过 `auth/SetupGate.tsx` 与 `setup-api.ts` 实现 [ADR-0027](../docs/adr/0027-first-visit-administrator-setup.md)：Session 确认未登录后读取初始化状态，required 展示首位管理员表单，complete 进入正式登录，unavailable 提示部署者配置。状态读取失败可重试；提交后清理码与密码，模糊结果必须重新检查状态，不自动重放创建。
