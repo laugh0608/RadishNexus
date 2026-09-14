@@ -59,4 +59,10 @@ npm run dev
 
 首页消费 [ADR-0025](../docs/adr/0025-project-and-channel-discovery.md) 的两个只读 GET 合同。列表每次显示一个查询页，翻页与返回均重新读取，不拼接权限可能过期的旧页。切换 Workspace / Project、主动刷新和窗口重新获得焦点会清理旧内容；请求取消与迟到结果保护避免旧作用域覆盖新页面。归档对象标明可浏览，访问失效清空内容，Session 失效回到登录。没有权限变化实时推送，最终打开频道仍由服务端复权。
 
-`workspace/WorkspaceHome.tsx` 承载首页和次级 ID 工具，`ProjectBrowser.tsx` 承载列表状态，`api.ts` 集中校验安全响应。没有新增浏览器存储、前端权限推断或依赖。项目与成员配置仍未开放；空列表不表示可以自行创建或提升角色。
+`workspace/WorkspaceHome.tsx` 承载首页和次级 ID 工具，`ProjectBrowser.tsx` 承载列表状态，`api.ts` 集中校验安全响应。没有新增浏览器存储、前端权限推断或依赖。基础配置入口按 [ADR-0026](../docs/adr/0026-foundation-configuration-and-membership.md) 开放，所有命令仍由服务端独立重新授权。
+
+## 基础对象与成员配置
+
+`workspace/ConfigurationPanel.tsx` 提供 owner 的 Team / Project 创建、显式初始 admin 确认、Project 普通成员角色配置、Channel 创建与受限成员管理；`configuration-api.ts` 校验专用响应。成员选择使用稳定 ID 与展示名区分重名，不返回邮箱。界面说明撤权会清除从属私密授权；管理权交接尚未开放。
+
+写请求复用现有同源 Session / CSRF；连续点击被阻止，网络或 5xx 模糊失败保留原 operation ID，成功后重新读取当前列表。配置面板和分页在刷新、焦点复核与作用域切换时清理旧数据，取消或忽略迟到结果。普通配置能力由服务端返回，客户端显示不构成授权。首次访问建立管理员的 Web 初始化入口尚未实现，当前仍先执行运维 bootstrap。

@@ -227,6 +227,12 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 }
 
 func discoveryPrefix(kind string) string {
+	if kind == "teams" {
+		return "tem_"
+	}
+	if kind == "members" || kind == "project-members" || kind == "channel-members" {
+		return "usr_"
+	}
 	if kind == "project" {
 		return "prj_"
 	}

@@ -65,6 +65,8 @@ npm ci
 
 该入口先执行 Web production build，再启动任务专属 PostgreSQL、fixture upstream 与固定 Caddy HTTPS reverse proxy，输出 origin、本次 Caddy CA、contributor / decider 两个测试账号、canonical Deployment / Channel / Thread path、数据库容器标识与 stop 文件，并等待人工浏览器复核。它不会隐式拉取缺失镜像，测试账号不属于产品默认 credential；浏览器必须在连接前核对并临时信任本次 CA，不应绕过证书告警。创建输出的 stop 文件后，脚本会退出并清理容器、volume 与临时状态；操作者仍须按完整指纹删除导入登录钥匙串的 CA。fixture 可复核正式 Channel SSE 增量 / 重连 / 撤权、Message / Thread 写入以及 Thread → Decision → Ticket 的分权协作链，但不会自动替代交互式浏览器检查。精确安全边界见 [Web App](../web/README.md)、[ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md)、[ADR-0018](../docs/adr/0018-session-scoped-channel-message-transport.md)、[ADR-0019](../docs/adr/0019-session-scoped-thread-decision-ticket-transport.md) 与 [ADR-0020](../docs/adr/0020-session-scoped-single-process-message-realtime.md)。
 
+验证空业务工作区的基础配置时，使用 `RADISHNEXUS_BROWSER_FOUNDATION=1 ./scripts/run-authenticated-web-browser-fixture.sh`。该模式通过正式 bootstrap 只创建虚构 owner 与 Workspace，不预置 Team / Project / Channel；后续对象、邀请、成员与消息均从 Web 创建。state 的 `foundation_login` / `foundation_workspace` 标明测试身份与作用域。停止与清理方式相同；这不代表首次访问初始化页面已完成。
+
 ## M0 核心契约实验
 
 不需要数据库的 Go 测试与静态检查：

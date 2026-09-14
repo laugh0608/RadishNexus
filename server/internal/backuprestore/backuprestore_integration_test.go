@@ -42,6 +42,12 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	sourcePool := connectIntegrationPool(t, ctx, sourceURL)
 	defer sourcePool.Close()
 	seedBackupGoldenPath(t, ctx, sourcePool)
+	configurationInput := goldenpath.ConfigurationInput{Kind: "team.create", ScopeID: "wrk_backup", ClientOperationID: "backup-team", Name: "Configured Team"}
+	configurationInvocation := goldenpath.Invocation{Principal: authz.Principal{Kind: authz.PrincipalUser, ID: "usr_admin", WorkspaceID: "wrk_backup"}, SourceKind: "web", CorrelationID: "req_backup_configuration"}
+	configured, err := goldenpath.NewConfigurationService(goldenpostgres.New(sourcePool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}).Configure(ctx, configurationInvocation, configurationInput)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got := snapshotTable(t, ctx, sourcePool, "radishnexus.user_sessions"); got == "[]" {
 		t.Fatal("source user session fixture is empty")
 	}
@@ -137,6 +143,10 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	targetSnapshot := snapshotIncludedTables(t, ctx, targetPool)
 	if !reflect.DeepEqual(targetSnapshot, sourceSnapshot) {
 		t.Fatalf("restored authoritative data differs\nsource: %#v\ntarget: %#v", sourceSnapshot, targetSnapshot)
+	}
+	replayed, err := goldenpath.NewConfigurationService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}).Configure(ctx, configurationInvocation, configurationInput)
+	if err != nil || replayed.Created || replayed.Object.ID != configured.Object.ID {
+		t.Fatal("restored receipt did not preserve idempotency", replayed, err)
 	}
 	var restoredPasswordHash string
 	if err := targetPool.QueryRow(ctx, `

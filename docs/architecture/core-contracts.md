@@ -283,6 +283,12 @@ Thread ← Decision、Decision ← Ticket 从同一权威 EntityLink 反向读�
 
 一项操作可以同时产生领域事件、Activity 和 Audit，但它们的 payload、保留周期和读取权限分别定义，不能通过复制同一 JSON 假装职责相同。
 
+## 基础配置命令
+
+[ADR-0026](../adr/0026-foundation-configuration-and-membership.md) 冻结 Team / Project / Channel 创建及首批普通成员管理。配置命令复用当前用户、Workspace、Project 和窄权限语义，明确初始 admin 与频道成员；引用、Workspace owner 或重放 receipt 均不提供额外权限。
+
+配置状态、不可变 Audit 与 receipt 在同一事务提交；Project / Channel 创建同时生成最小事件、Outbox 和 Activity。成员变更明细、初始授权与撤权清理只进入受控 Audit，不进入普通 Activity 或 DTO。成员写入使用预期状态检测并发变化，精确重试仅确认原操作已处理，前端随后读取当前状态。新表属于必须保留的权威备份数据，Session 和一次性邀请仍按既有恢复边界处理。
+
 ## Canonical Message query
 
 正式 application query 以 Channel 和当前用户 `Principal` 为作用域，直接读取权威 Message 表。它不是 Activity、实时 replay 或搜索投影：

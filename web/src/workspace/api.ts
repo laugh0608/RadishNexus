@@ -119,7 +119,7 @@ async function load(
   return { items, nextCursor };
 }
 
-function object(
+export function object(
   value: unknown,
   keys: readonly string[],
 ): Record<string, unknown> {
@@ -133,7 +133,7 @@ function object(
     throw contractError();
   return value as Record<string, unknown>;
 }
-function requireID(value: unknown, prefix: string): string {
+export function requireID(value: unknown, prefix: string): string {
   if (
     typeof value !== "string" ||
     value.length > 128 ||
@@ -143,7 +143,7 @@ function requireID(value: unknown, prefix: string): string {
     throw contractError();
   return value;
 }
-function validCursor(value: unknown): value is string {
+export function validCursor(value: unknown): value is string {
   return (
     typeof value === "string" &&
     value.length <= 1024 &&

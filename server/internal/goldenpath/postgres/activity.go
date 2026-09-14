@@ -63,7 +63,7 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
 		FROM radishnexus.domain_events
 		WHERE event_type IN (
 			'decision.proposed', 'decision.accepted', 'ticket.created',
-			'ci-run.recorded', 'deployment.recorded'
+			'ci-run.recorded', 'deployment.recorded', 'project.created', 'channel.created'
 		)
 		ORDER BY occurred_at, event_id
 	`)
@@ -206,6 +206,10 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		safeFacts:     map[string]string{"status": payload.Status},
 	}
 	switch event.eventType {
+	case "project.created", "channel.created":
+		if event.eventType != event.target.Type+".created" || payload.Status != "active" || event.actorKind != "user" || event.actorID == nil {
+			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid configuration creation facts", event.eventID)
+		}
 	case "decision.proposed":
 		if event.target.Type != "decision" || payload.Status != "proposed" || payload.Evidence == nil {
 			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid decision.proposed facts", event.eventID)

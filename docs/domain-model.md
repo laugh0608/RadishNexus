@@ -2,7 +2,7 @@
 
 状态：M0 领域基线，首批核心与沟通入口字段已冻结
 
-日期：2026-09-01
+日期：2026-09-14
 
 ## 目标
 
@@ -67,6 +67,8 @@ Project、Initiative、Component、Decision、Environment 和 EntityLink 共享�
 
 稳定的人员责任边界，用于成员管理、默认权限和软件资产所有权。首期可以只实现简单团队和成员关系，不建设复杂组织架构。
 
+首批 Team 仅维护同 Workspace 的责任元数据，由 owner 显式创建；尚无 Team membership 或权限继承。Team 所有权不授予 Project 或私密对象访问权。
+
 ### Project
 
 用于协作导航和权限管理的工作空间。Project 不是代码仓库、软件服务或一次性计划的同义词。
@@ -85,6 +87,8 @@ M0 最小字段：
 | `status` | `active / archived` |
 
 `workspace` 表示 Workspace 成员默认可发现，`restricted` 表示必须通过显式成员或角色授权。Project 的可见性只提供默认边界，不能自动放宽其中私密 Channel、Conversation、Document 或其它对象的权限。归档 Project 不级联删除其内容或关系。
+
+创建与首批成员配置遵循 [ADR-0026](adr/0026-foundation-configuration-and-membership.md)：owner 显式指定本人为新 Project 的初始 admin；现有 admin 只能配置其他成员的 viewer / contributor / decider，管理权交接独立延后。restricted Channel 配置同时要求 Project admin 与 Channel membership。撤销 Project 角色会清理该成员在其下的显式 Channel / Thread 授权，重新加入不恢复历史私密授权。工作区可见项目的只读基线仍保留。
 
 ### Initiative
 

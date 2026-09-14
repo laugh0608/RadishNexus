@@ -31,6 +31,8 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0023](0023-local-account-and-radish-oidc-login.md) | 已接受 | 本地账户、邮箱迁移与 Radish OIDC 联合登录 |
 | [ADR-0024](0024-read-only-schema-readiness.md) | 已接受 | 只读 schema readiness 与精确 migration 兼容性 |
 | [ADR-0025](0025-project-and-channel-discovery.md) | 已接受 | Project 与 Channel 最小发现入口 |
+| [ADR-0026](0026-foundation-configuration-and-membership.md) | 已接受 | 基础对象创建与首批成员配置 |
+| [ADR-0027](0027-first-visit-administrator-setup.md) | 提议 | 部署后首次访问创建管理员 |
 
 ## 新建规则
 

@@ -30,6 +30,28 @@ func TestHandlerRoutesDiscoveryBeforeWorkspaceFallback(t *testing.T) {
 	}
 }
 
+func TestHandlerRoutesConfigurationAlongsideDiscoveryAndMessages(t *testing.T) {
+	marker := func(status int) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(status) })
+	}
+	handler := newHandler(fakeReadinessChecker{}, http.NotFoundHandler(), marker(204), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), marker(202), http.NotFoundHandler(), http.NotFoundHandler(), marker(201))
+	for _, tc := range []struct {
+		method, path string
+		status       int
+	}{
+		{"GET", "/projects", 202}, {"POST", "/projects", 201},
+		{"GET", "/projects/prj_main/channels", 202}, {"POST", "/projects/prj_main/channels", 201},
+		{"PUT", "/projects/prj_main/members/usr_member", 201}, {"GET", "/channels/chn_main/configuration", 201},
+		{"POST", "/channels/chn_main/messages", 204}, {"DELETE", "/projects", 405},
+	} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(tc.method, "/api/v1/workspaces/wrk_main"+tc.path, nil))
+		if response.Code != tc.status {
+			t.Fatal(tc.method, tc.path, response.Code)
+		}
+	}
+}
+
 func TestReadinessIsBoundedUncachedAndDoesNotExposeDatabaseDetails(t *testing.T) {
 	t.Parallel()
 	calls := 0

@@ -2269,3 +2269,50 @@ code {
     flex-wrap: wrap;
   }
 }
+/* Foundation configuration shares the workspace shell and stays usable on phones. */
+.foundation-configuration {
+  margin-block: 1rem;
+}
+.configuration-panel {
+  padding: 1rem;
+  margin-block: 1rem;
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.configuration-panel form,
+.configuration-panel fieldset {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.configuration-panel fieldset {
+  margin-block: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border, #d4d4d8);
+}
+.configuration-panel label {
+  display: grid;
+  gap: 0.35rem;
+}
+.configuration-panel input:not([type="checkbox"]),
+.configuration-panel select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.configuration-panel .configuration-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.configuration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 0.5rem;
+}
+.configuration-members {
+  list-style: none;
+  padding: 0;
+}

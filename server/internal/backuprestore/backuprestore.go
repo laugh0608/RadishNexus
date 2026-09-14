@@ -68,6 +68,8 @@ var (
 		"radishnexus.tickets",
 		"radishnexus.user_accounts",
 		"radishnexus.users",
+		"radishnexus.workspace_configuration_audit",
+		"radishnexus.workspace_configuration_receipts",
 		"radishnexus.workspace_memberships",
 		"radishnexus.workspaces",
 	}

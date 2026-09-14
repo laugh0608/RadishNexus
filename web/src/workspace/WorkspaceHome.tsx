@@ -8,6 +8,8 @@ import {
 import { deploymentNexusViewPagePath } from "../nexus-view/api";
 import type { DiscoveryClient } from "./api";
 import { ProjectBrowser } from "./ProjectBrowser";
+import { FoundationCreate } from "./ConfigurationPanel";
+import type { ConfigurationObject } from "./configuration-api";
 
 export function WorkspaceHome({
   session,
@@ -29,6 +31,11 @@ export function WorkspaceHome({
     useState<CollaborationEntityType>("thread");
   const [collaborationID, setCollaborationID] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [createdProject, setCreatedProject] = useState<{
+    workspaceID: string;
+    project: ConfigurationObject;
+    generation: number;
+  } | null>(null);
 
   const openDeployment = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -103,13 +110,42 @@ export function WorkspaceHome({
         {workspaceID === "" ? (
           <p>你还没有加入工作区。请在“账户与邀请”中接受邀请。</p>
         ) : (
-          <ProjectBrowser
-            key={workspaceID}
-            workspaceID={workspaceID}
-            client={client}
-            navigate={navigate}
-            onSessionExpired={onSessionExpired}
-          />
+          <>
+            {session.workspaces.find(
+              (workspace) => workspace.id === workspaceID,
+            )?.role === "owner" ? (
+              <FoundationCreate
+                key={`create:${workspaceID}`}
+                workspaceID={workspaceID}
+                userID={session.user.id}
+                onCreated={(project) =>
+                  setCreatedProject((previous) => ({
+                    workspaceID,
+                    project,
+                    generation: (previous?.generation ?? 0) + 1,
+                  }))
+                }
+                onSessionExpired={onSessionExpired}
+              />
+            ) : null}
+            <ProjectBrowser
+              key={`${workspaceID}:${createdProject?.generation ?? 0}`}
+              workspaceID={workspaceID}
+              userID={session.user.id}
+              initialProject={
+                createdProject?.workspaceID === workspaceID
+                  ? {
+                      id: createdProject.project.id,
+                      title: createdProject.project.name,
+                      status: createdProject.project.status,
+                    }
+                  : undefined
+              }
+              client={client}
+              navigate={navigate}
+              onSessionExpired={onSessionExpired}
+            />
+          </>
         )}
         <details className="known-object-launchers">
           <summary>按 ID 打开对象</summary>

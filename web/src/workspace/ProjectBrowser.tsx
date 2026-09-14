@@ -8,6 +8,7 @@ import {
 import { AuthRequestError } from "../auth/api";
 import { channelPagePath } from "../channel/api";
 import type { DiscoveryClient, DiscoveryItem, DiscoveryPage } from "./api";
+import { ConfigurationLauncher } from "./ConfigurationPanel";
 
 type PageState =
   | { status: "loading" }
@@ -16,16 +17,22 @@ type PageState =
 
 export function ProjectBrowser({
   workspaceID,
+  userID,
+  initialProject,
   client,
   navigate,
   onSessionExpired,
 }: {
   workspaceID: string;
+  userID: string;
+  initialProject?: DiscoveryItem;
   client: DiscoveryClient;
   navigate: (path: string) => void;
   onSessionExpired: () => void;
 }) {
-  const [selected, setSelected] = useState<DiscoveryItem | null>(null);
+  const [selected, setSelected] = useState<DiscoveryItem | null>(
+    initialProject ?? null,
+  );
   const [generation, setGeneration] = useState(0);
   const refresh = useCallback(() => {
     setSelected(null);
@@ -83,15 +90,27 @@ export function ProjectBrowser({
             选择一个项目，查看可访问的频道。
           </div>
         ) : (
-          <ProjectChannels
-            key={selected.id}
-            workspaceID={workspaceID}
-            project={selected}
-            onUnavailable={refresh}
-            client={client}
-            navigate={navigate}
-            onSessionExpired={onSessionExpired}
-          />
+          <div>
+            <ConfigurationLauncher
+              key={`config:${selected.id}`}
+              workspaceID={workspaceID}
+              userID={userID}
+              kind="project"
+              id={selected.id}
+              onSessionExpired={onSessionExpired}
+              navigate={navigate}
+            />
+            <ProjectChannels
+              key={selected.id}
+              workspaceID={workspaceID}
+              userID={userID}
+              project={selected}
+              onUnavailable={refresh}
+              client={client}
+              navigate={navigate}
+              onSessionExpired={onSessionExpired}
+            />
+          </div>
         )}
       </div>
     </section>
@@ -100,6 +119,7 @@ export function ProjectBrowser({
 
 function ProjectChannels({
   workspaceID,
+  userID,
   project,
   client,
   navigate,
@@ -107,6 +127,7 @@ function ProjectChannels({
   onUnavailable,
 }: {
   workspaceID: string;
+  userID: string;
   project: DiscoveryItem;
   client: DiscoveryClient;
   navigate: (path: string) => void;
@@ -125,20 +146,30 @@ function ProjectChannels({
       onSessionExpired={onSessionExpired}
       onUnavailable={onUnavailable}
       renderItem={(item) => (
-        <button
-          type="button"
-          onClick={() => {
-            const path = channelPagePath(workspaceID, item.id);
-            if (path !== null) navigate(path);
-          }}
-        >
-          <strong>{item.title}</strong>
-          {item.status === "archived" || project.status === "archived" ? (
-            <span className="discovery-status">已归档 · 可浏览</span>
-          ) : (
-            <span>打开频道 →</span>
-          )}
-        </button>
+        <div>
+          <button
+            type="button"
+            onClick={() => {
+              const path = channelPagePath(workspaceID, item.id);
+              if (path !== null) navigate(path);
+            }}
+          >
+            <strong>{item.title}</strong>
+            {item.status === "archived" || project.status === "archived" ? (
+              <span className="discovery-status">已归档 · 可浏览</span>
+            ) : (
+              <span>打开频道 →</span>
+            )}
+          </button>
+          <ConfigurationLauncher
+            workspaceID={workspaceID}
+            userID={userID}
+            kind="channel"
+            id={item.id}
+            onSessionExpired={onSessionExpired}
+            navigate={navigate}
+          />
+        </div>
       )}
     />
   );

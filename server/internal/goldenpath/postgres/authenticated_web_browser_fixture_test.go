@@ -55,7 +55,11 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	}
 	t.Cleanup(pool.Close)
 
-	fixture := seedAuthenticatedWebBrowserData(t, ctx, pool)
+	foundation := os.Getenv("RADISHNEXUS_BROWSER_FOUNDATION") == "1"
+	var fixture authenticatedWebFixture
+	if !foundation {
+		fixture = seedAuthenticatedWebBrowserData(t, ctx, pool)
+	}
 	listener, err := net.Listen("tcp", listenAddress)
 	if err != nil {
 		t.Fatalf("net.Listen() error = %v", err)
@@ -75,6 +79,14 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 		authn.CryptoSecretGenerator{},
 		authn.SystemClock{},
 	)
+	ownerWorkspace := ""
+	if foundation {
+		first, err := authService.Bootstrap(ctx, authn.BootstrapInput{Email: "foundation.owner@example.test", DisplayName: "Foundation Owner", WorkspaceName: "Foundation Workspace", Password: authenticatedWebBrowserPassword})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ownerWorkspace = first.WorkspaceID
+	}
 	authenticationGuard := httptransport.NewLoginGuard(5, time.Minute, 64, 2)
 	identityHandler := httptransport.NewIdentityHandler(authn.NewIdentityService(authpostgres.New(pool), authService, ""), authService, nil, sessionPolicy, proxyPolicy, authenticationGuard)
 	authHandler := httptransport.NewAuthHandler(
@@ -133,7 +145,8 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	mux.Handle("/api/v1/auth", authHandler)
 	mux.Handle("/api/v1/auth/", authHandler)
 	discoveryHandler := httptransport.NewDiscoveryHandler(authService, goldenpath.NewDiscoveryService(goldenpostgres.New(pool)), sessionPolicy, proxyPolicy)
-	mux.Handle("/api/v1/workspaces/{workspace_id}/projects", discoveryHandler)
+	configurationHandler := httptransport.NewConfigurationHandler(authService, goldenpath.NewConfigurationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy)
+	httptransport.RegisterConfigurationRoutes(mux, discoveryHandler, configurationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/projects/", discoveryHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/invitations", identityHandler)
 	mux.Handle("/auth/complete", identityHandler)
@@ -152,15 +165,17 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	state, err := json.Marshal(map[string]string{
-		"public_origin":      publicOrigin,
-		"channel_path":       "/workspaces/wrk_main/channels/chn_project",
-		"thread_path":        "/workspaces/wrk_main/threads/" + fixture.thread.ID,
-		"restricted_thread":  fixture.thread.ID,
-		"database_container": os.Getenv("RADISHNEXUS_BROWSER_FIXTURE_DATABASE_CONTAINER"),
-		"deployment_path":    "/workspaces/wrk_main/deployments/" + fixture.deployment.ID,
-		"contributor_login":  "http.contributor@example.test",
-		"decider_login":      "http.decider@example.test",
-		"password":           authenticatedWebBrowserPassword,
+		"public_origin":        publicOrigin,
+		"foundation_workspace": ownerWorkspace,
+		"foundation_login":     "foundation.owner@example.test",
+		"channel_path":         "/workspaces/wrk_main/channels/chn_project",
+		"thread_path":          "/workspaces/wrk_main/threads/" + fixture.thread.ID,
+		"restricted_thread":    fixture.thread.ID,
+		"database_container":   os.Getenv("RADISHNEXUS_BROWSER_FIXTURE_DATABASE_CONTAINER"),
+		"deployment_path":      "/workspaces/wrk_main/deployments/" + fixture.deployment.ID,
+		"contributor_login":    "http.contributor@example.test",
+		"decider_login":        "http.decider@example.test",
+		"password":             authenticatedWebBrowserPassword,
 	})
 	if err != nil {
 		t.Fatalf("json.Marshal() error = %v", err)

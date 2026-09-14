@@ -66,7 +66,9 @@ func TestIdentityUpgradePreservesLegacyUsersAndRequiresReviewedEmails(t *testing
     `); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(ctx, `INSERT INTO radishnexus.local_accounts(user_id,login_name,password_hash,status,created_at,password_changed_at) VALUES ('usr_legacy','legacy',$1,'active',now(),now()),('usr_disabled','disabled',$1,'disabled',now(),now())`, hash); err != nil {
+	// Credentials and the login service use the same host clock; the container
+	// clock may be slightly ahead and must not make this fixture a future account.
+	if _, err := conn.Exec(ctx, `INSERT INTO radishnexus.local_accounts(user_id,login_name,password_hash,status,created_at,password_changed_at) VALUES ('usr_legacy','legacy',$1,'active',$2,$2),('usr_disabled','disabled',$1,'disabled',$2,$2)`, hash, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := conn.Exec(ctx, `INSERT INTO radishnexus.user_sessions(id,user_id,token_digest,csrf_token_digest,created_at,expires_at) VALUES ('ses_legacy','usr_legacy',decode(repeat('11',32),'hex'),decode(repeat('22',32),'hex'),now(),now()+interval '24 hours')`); err != nil {
