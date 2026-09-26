@@ -17,6 +17,8 @@
 11. [仓库治理](governance/README.md)：说明分支、PR、Ruleset、Agent 和文档协作规则。
 12. [架构决策记录](adr/README.md)：解释长期工程与治理取舍及其后果。
 13. [开发指南](development/README.md)：说明跨语言工程、测试、安全和兼容性标准。
+14. [视觉方向与页面参考](design/visual-direction.md)：Radish 家族视觉来源、AFFiNE / Mattermost / AppFlowy 参考分工及待评审的页面建议。
+15. [工作台与 Document 代表页设计](design/workbench-v1.md)：Pen 原生设计源、桌面 / 手机预览、状态映射及静态检查边界。
 
 ## 文档职责
 
