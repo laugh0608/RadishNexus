@@ -80,3 +80,9 @@ Document 默认集中阅读，来源 Ticket 保留标题下入口；信息展开
 草稿只在当前页面内存；显式保存携带基线 revision，冲突保留草稿并展示最新正文，用户确认重新应用后才可生成新操作。网络 / 5xx 不确定结果冻结原输入并保留 operation ID 以精确重试；不会自动以最新基线重放。历史恢复同时展示旧版与当前版，确认后追加版本。脏草稿离开、刷新及退出均有提示，没有 Enter 保存快捷键。读取失败显式提示，权限失效立即清除正文、草稿、预览、历史和待重试输入；焦点恢复和主动刷新会重新验证，未接入权限推送或轮询。
 
 安全展示失败时仅提供显式源码查看；源码以 React 文本输出。链接只接受绝对 HTTP(S)，拒绝用户凭据、控制符与反斜杠，外链使用 `noopener noreferrer` 和 `no-referrer`。新功能没有新增 Web 依赖或浏览器持久化。自动化、隔离 Chrome、手机布局和原生 IME 剩余复核范围见[本轮记录](../docs/status/reviews/2026-09-26-markdown-document.md)。
+
+## CI Run 正式读取
+
+`nexus-view/ci-run-api.ts` 校验 [ADR-0029](../docs/adr/0029-session-scoped-ci-run-nexus-view.md) 的字段白名单、终态、受控时间和一致的 Component / Timeline，并消费同源无缓存 GET。`CIRunPage.tsx` 复用已登录工作台与 Nexus View 组件，提供主动重读、失败重试、焦点复权、401 退出与 404 清空；取消或迟到响应不能覆盖更新后的视图。空开始时间显示“未提供”。
+
+正式路径为 `/workspaces/{workspace_id}/ci-runs/{ci_run_id}`。首页次级 ID 工具支持 `cir_`，Deployment 页可跳转来源 CI Run；Component 本身尚无正式页面，不制造无效跳转。页面说明构建成功不代表已经部署，不提供部署写操作或 Jenkins 外部地址。静态代表数据仍只服务原型和测试。

@@ -100,6 +100,7 @@ const statusPresentation: Record<
 };
 
 const entityIDPrefixes: Readonly<Record<string, string>> = {
+  component: "cmp_",
   deployment: "dpl_",
   environment: "env_",
   "ci-run": "cir_",
@@ -411,7 +412,7 @@ function parseSubject(value: unknown, index: number): APIDeploymentSubject {
   };
 }
 
-function parseVisibleEntity(
+export function parseVisibleEntity(
   value: unknown,
   path: string,
   expectedType?: string,
@@ -450,11 +451,11 @@ function timelineDetail(subjects: readonly APIDeploymentSubject[]): string {
   return "这项 Deployment 事实已按当前权限投影到统一时间线；受限对象不会向客户端暴露身份线索。";
 }
 
-function canonicalRef(ref: APIEntityRef): string {
+export function canonicalRef(ref: APIEntityRef): string {
   return `entity://${ref.type}/${ref.id}`;
 }
 
-function formatTimestamp(value: string): string {
+export function formatTimestamp(value: string): string {
   return new Intl.DateTimeFormat("zh-CN", {
     year: "numeric",
     month: "2-digit",
@@ -466,7 +467,7 @@ function formatTimestamp(value: string): string {
   }).format(new Date(value));
 }
 
-function validPathID(value: string, prefix: string): boolean {
+export function validPathID(value: string, prefix: string): boolean {
   if (
     value.length <= prefix.length ||
     value.length > 128 ||
@@ -489,7 +490,7 @@ function validPathID(value: string, prefix: string): boolean {
   return true;
 }
 
-function scopedID(value: unknown, path: string, prefix: string): string {
+export function scopedID(value: unknown, path: string, prefix: string): string {
   const id = string(value, path);
   if (!validPathID(id, prefix)) {
     throw new TypeError(`${path} is invalid`);
@@ -519,14 +520,14 @@ function timestamp(value: unknown, path: string): string {
   return result;
 }
 
-function record(value: unknown, path: string): Record<string, unknown> {
+export function record(value: unknown, path: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new TypeError(`${path} must be an object`);
   }
   return value as Record<string, unknown>;
 }
 
-function array(value: unknown, path: string): unknown[] {
+export function array(value: unknown, path: string): unknown[] {
   if (!Array.isArray(value)) {
     throw new TypeError(`${path} must be an array`);
   }

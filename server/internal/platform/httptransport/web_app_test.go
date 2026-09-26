@@ -27,6 +27,7 @@ func TestWebAppHandlerServesOnlyKnownShellRoutesAndImmutableAssets(t *testing.T)
 		wantContent string
 	}{
 		{name: "root shell", method: http.MethodGet, path: "/", wantStatus: http.StatusOK, wantCache: "no-cache", wantBody: "authenticated shell", wantContent: "text/html; charset=utf-8"},
+		{name: "CI Run shell", method: http.MethodGet, path: "/workspaces/wrk_main/ci-runs/cir_build", wantStatus: http.StatusOK, wantCache: "no-cache", wantBody: "authenticated shell", wantContent: "text/html; charset=utf-8"},
 		{name: "Deployment shell", method: http.MethodGet, path: "/workspaces/wrk_main/deployments/dpl_release", wantStatus: http.StatusOK, wantCache: "no-cache", wantBody: "authenticated shell", wantContent: "text/html; charset=utf-8"},
 		{name: "Channel shell", method: http.MethodGet, path: "/workspaces/wrk_main/channels/chn_project", wantStatus: http.StatusOK, wantCache: "no-cache", wantBody: "authenticated shell", wantContent: "text/html; charset=utf-8"},
 		{name: "Thread shell", method: http.MethodGet, path: "/workspaces/wrk_main/threads/thr_discussion", wantStatus: http.StatusOK, wantCache: "no-cache", wantBody: "authenticated shell", wantContent: "text/html; charset=utf-8"},

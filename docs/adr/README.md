@@ -34,6 +34,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0026](0026-foundation-configuration-and-membership.md) | 已接受 | 基础对象创建与首批成员配置 |
 | [ADR-0027](0027-first-visit-administrator-setup.md) | 已接受 | 部署后首次访问创建管理员 |
 | [ADR-0028](0028-minimal-markdown-document.md) | 已接受 | 最小 Markdown Document 与不可变版本 |
+| [ADR-0029](0029-session-scoped-ci-run-nexus-view.md) | 已接受 | Session 作用域下的 CI Run Nexus View |
 
 ## 新建规则
 

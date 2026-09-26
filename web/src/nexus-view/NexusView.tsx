@@ -354,7 +354,7 @@ function RelationsPanel({
           title="暂无关联上下文"
           description={
             currentEntityType === "ci-run"
-              ? "当前安全合同没有投影 Repository、commit 或 Deployment 关系。"
+              ? "暂未关联其他对象。"
               : currentEntityType === "deployment"
                 ? "当前 Deployment 没有其它你可以看到的关联对象。"
                 : "当前 Decision 还没有你可以看到的关联对象。"

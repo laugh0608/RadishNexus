@@ -141,7 +141,7 @@ func run() error {
 
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler, setupHandler, documentHandler),
+		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler, setupHandler, documentHandler, httptransport.NewCIRunNexusViewHandler(authService, nexusViewService, sessionPolicy, proxyPolicy)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -219,6 +219,9 @@ func newHandler(
 	if len(identityHandler) >= 1 {
 		mux.Handle("/api/v1/workspaces/{workspace_id}/invitations", identityHandler[0])
 		mux.Handle("/auth/complete", identityHandler[0])
+	}
+	if len(identityHandler) >= 5 {
+		httptransport.RegisterCIRunRoutes(mux, identityHandler[4])
 	}
 	if len(identityHandler) >= 4 {
 		httptransport.RegisterDocumentRoutes(mux, identityHandler[3])

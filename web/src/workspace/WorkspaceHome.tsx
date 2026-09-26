@@ -1,3 +1,4 @@
+import { ciRunPagePath } from "../nexus-view/ci-run-api";
 import { useState, type FormEvent } from "react";
 import type { SessionContext } from "../auth/api";
 import { channelPagePath } from "../channel/api";
@@ -25,6 +26,7 @@ export function WorkspaceHome({
   const [workspaceID, setWorkspaceID] = useState(
     session.workspaces[0]?.id ?? "",
   );
+  const [ciRunID, setCIRunID] = useState("");
   const [deploymentID, setDeploymentID] = useState("");
   const [channelID, setChannelID] = useState("");
   const [collaborationType, setCollaborationType] =
@@ -169,6 +171,40 @@ export function WorkspaceHome({
                 type="submit"
               >
                 打开 Channel
+              </button>
+            </form>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const path = ciRunPagePath(workspaceID, ciRunID.trim());
+                if (!path) {
+                  setError(
+                    "请选择 Workspace，并输入以 cir_ 开头的有效 CI Run ID。",
+                  );
+                  return;
+                }
+                setError(null);
+                navigate(path);
+              }}
+            >
+              <p>CI Run</p>
+              <label>
+                <span>CI Run ID</span>
+                <input
+                  autoComplete="off"
+                  disabled={session.workspaces.length === 0}
+                  onChange={(event) => setCIRunID(event.target.value)}
+                  placeholder="cir_…"
+                  required
+                  value={ciRunID}
+                />
+              </label>
+              <button
+                className="secondary-button"
+                disabled={session.workspaces.length === 0}
+                type="submit"
+              >
+                打开 CI Run
               </button>
             </form>
             <form onSubmit={openDeployment}>

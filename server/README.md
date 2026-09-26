@@ -134,6 +134,7 @@ go run ./cmd/nexus-identity-migrate --mapping-stdin < /path/to/private-identity-
 
 - `/`：Session 检查、首次访问管理员初始化、邮箱登录、邀请兑换、Workspace 选择、Project / Channel 浏览、基础对象与首批成员配置、次级已知 ID 入口和 logout；
 - `/account`：当前账户登录方式、owner 创建邀请码、当前用户接受邀请；
+- `/workspaces/{workspace_id}/ci-runs/{ci_run_id}`：读取正式 CI Run 安全 DTO，查看终态、Component 与完成活动；
 - `/workspaces/{workspace_id}/deployments/{deployment_id}`：先验证 Session，再消费正式 Deployment Nexus View DTO；
 - `/workspaces/{workspace_id}/channels/{channel_id}`：先验证 Session，再分页读取 Message、幂等发送并从 Message 发起 Thread；
 - `/workspaces/{workspace_id}/threads/{thread_id}`：读取 Thread Nexus View 并创建 Proposed Decision；
@@ -252,3 +253,11 @@ go run ./cmd/nexus-restore --input /path/to/completed-backup-directory
 POST 精确字段、确认及重试语义按 ADR。相同 operation ID / canonical payload 返回原 `applied_revision`，即使当前版本已前进；不同 payload 冲突，重试仍重新授权。归档 Project 可读不可写。Project 权限锁在 Document 锁之前获取，保存与归档 / 撤权串行检查；新命令版本落后返回 `409` 与 `current_revision`。版本、来源、receipt、事件、Outbox 和 Activity 同事务提交，投影失败全部回滚。
 
 `internal/markdown` 只用固定 `goldmark v1.8.6` 解析。原文只统一 CRLF / CR 为 LF，拒绝无效 UTF-8、未配对 JSON surrogate、NUL、超限文本与未知 format。256 KiB 正文、2 MiB JSON、20,000 投影节点与 32 层深度之外，parser hook 调用也受 20,000 次预算限制，防止深嵌套和分隔符输入在投影前消耗过量资源；超出返回固定诊断。基础 CommonMark 映射为封闭 `nexus-markdown-view-v1` 节点，图片 / HTML / 不安全 URL 拒绝保存；不启用 GFM、嵌入或 HTML renderer。历史解析失败明确返回诊断与保留源码，不能恢复为新版本。许可证见 [第三方声明](THIRD_PARTY_NOTICES.md)，本轮验证和局限见[实施记录](../docs/status/reviews/2026-09-26-markdown-document.md)。
+
+## CI Run Nexus View 读取
+
+[ADR-0029](../docs/adr/0029-session-scoped-ci-run-nexus-view.md) 开放 `GET /api/v1/workspaces/{workspace_id}/ci-runs/{ci_run_id}/nexus-view`，复用现有 Session、当前 Workspace membership、Component 授权和事务内 `GetNexusView`。仅允许 GET；响应与错误使用 `private, no-store`、`Vary: Cookie`。合法 Session 下不可发现对象及撤权统一 404。
+
+公开 DTO 仅包含 CI Run ref、终态、四个受控时间、当前 Component、空 Relations 和唯一 `ci-run.recorded`；actor 只含 `kind: plugin`。`started_at` 可空；Activity 发生时间为构建完成时间，接收记录时间单独展示。来源 ID、external run key、receipt、digest、Secret、Jenkins URL 与内部投影字段不输出。字段、引用、时间或事件漂移显式失败。
+
+这只是已有内部事实的正式读取入口；Jenkins 来源认证 / Webhook 仍未接通，不改变 `VerifiedJenkinsDelivery` 的可信边界，不安装 Jenkins，不自动创建 Deployment。验证范围见[本轮记录](../docs/status/reviews/2026-09-26-jenkins-next-slice.md)。

@@ -310,6 +310,7 @@ func assertDeploymentNexusViewHTTP(
 	if err != nil {
 		t.Fatalf("NewTrustedProxyPolicy() error = %v", err)
 	}
+	assertCIRunHTTPTransport(t, ctx, pool, service, authService, sessionPolicy, proxyPolicy, sessionToken, sourceDelivery, sourceInput)
 	handler := httptransport.WithRequestID(httptransport.NewDeploymentNexusViewHandler(
 		authService,
 		service,
@@ -529,5 +530,58 @@ func assertDeploymentActivityFacts(
 		decodedFacts["status"] != "succeeded" || actorKind != "user" || actorID != "usr_contributor" {
 		t.Fatalf("Deployment Activity subjects = %#v, facts = %#v, actor = %s/%s",
 			decodedSubjects, decodedFacts, actorKind, actorID)
+	}
+}
+
+// Exercise the normal write -> transaction Activity -> authenticated HTTP path,
+// without rebuilding projections or seeding final CI facts.
+func assertCIRunHTTPTransport(t *testing.T, ctx context.Context, pool *pgxpool.Pool, service *goldenpath.Service, authService *authn.Service, session httptransport.BrowserSessionPolicy, proxy httptransport.TrustedProxyPolicy, token string, delivery goldenpath.VerifiedJenkinsDelivery, input goldenpath.RecordCompletedCIRunInput) {
+	t.Helper()
+	delivery.DeliveryID += "-http-read"
+	input.ExternalRunKey += "-http-read"
+	input.StartedAt = nil
+	receipt, err := service.RecordCompletedJenkinsRun(ctx, delivery, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate, err := service.RecordCompletedJenkinsRun(ctx, delivery, input)
+	if err != nil || !duplicate.Duplicate || duplicate.CIRun.ID != receipt.CIRun.ID {
+		t.Fatalf("duplicate CI Run: %v", err)
+	}
+	handler := httptransport.WithRequestID(httptransport.NewCIRunNexusViewHandler(authService, service, session, proxy))
+	read := func(workspace, id string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("GET", "https://nexus.example.test/api/v1/workspaces/"+workspace+"/ci-runs/"+id+"/nexus-view", nil)
+		r.AddCookie(&http.Cookie{Name: httptransport.SessionCookieName, Value: token})
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	w := read("wrk_main", receipt.CIRun.ID)
+	if w.Code != 200 {
+		t.Fatalf("CI Run HTTP %d %s", w.Code, w.Body.String())
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `"started_at":null`) || strings.Count(body, `"activity_type":"ci-run.recorded"`) != 1 {
+		t.Fatal(body)
+	}
+	for _, forbidden := range []string{delivery.SourceID, delivery.DeliveryID, delivery.PayloadSHA256, input.ExternalRunKey, "source_id", "receipt", "digest", "secret"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("CI Run leaked %s", forbidden)
+		}
+	}
+	for _, scope := range [][2]string{{"wrk_other", receipt.CIRun.ID}, {"wrk_main", "cir_unknown"}} {
+		if response := read(scope[0], scope[1]); response.Code != 404 {
+			t.Fatalf("scope %v: %d", scope, response.Code)
+		}
+	}
+	if _, err = pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET status='suspended' WHERE workspace_id='wrk_main' AND user_id='usr_reader'`); err != nil {
+		t.Fatal(err)
+	}
+	revoked := read("wrk_main", receipt.CIRun.ID)
+	if _, err = pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET status='active' WHERE workspace_id='wrk_main' AND user_id='usr_reader'`); err != nil {
+		t.Fatal(err)
+	}
+	if revoked.Code != 404 || strings.Contains(revoked.Body.String(), receipt.CIRun.ID) {
+		t.Fatalf("revoked CI Run %d %s", revoked.Code, revoked.Body.String())
 	}
 }

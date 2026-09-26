@@ -229,3 +229,14 @@ func TestSetupRouteIsExplicit(t *testing.T) {
 		t.Fatal(response.Code)
 	}
 }
+
+func TestHandlerRoutesCIRunBeforeWorkspaceFallback(t *testing.T) {
+	missing := http.NotFoundHandler()
+	ci := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusAccepted) })
+	handler := newHandler(fakeReadinessChecker{}, missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, ci)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/workspaces/wrk_main/ci-runs/cir_build/nexus-view", nil))
+	if w.Code != http.StatusAccepted {
+		t.Fatal(w.Code)
+	}
+}

@@ -141,6 +141,36 @@ describe("authenticated Web Shell", () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
+  it("opens only valid CI Run IDs in the selected Workspace", async () => {
+    const navigate = vi.fn();
+    render(
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/"
+        authClient={testAuthClient()}
+        navigate={navigate}
+      />,
+    );
+    await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
+    fireEvent.change(screen.getByLabelText("Workspace"), {
+      target: { value: "wrk_docs" },
+    });
+    fireEvent.click(screen.getByText("按 ID 打开对象"));
+    fireEvent.change(screen.getByLabelText("CI Run ID"), {
+      target: { value: "dpl_wrong" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "打开 CI Run" }));
+    expect(navigate).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toContain("cir_");
+    fireEvent.change(screen.getByLabelText("CI Run ID"), {
+      target: { value: "cir_build" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "打开 CI Run" }));
+    expect(navigate).toHaveBeenCalledWith(
+      "/workspaces/wrk_docs/ci-runs/cir_build",
+    );
+  });
+
   it("opens a known Channel from the selected Workspace", async () => {
     const navigate = vi.fn();
     render(
@@ -246,6 +276,16 @@ describe("authenticated Web Shell", () => {
     );
 
     expect(await screen.findByText("部署成功")).toBeDefined();
+    const current = succeededDeploymentNexusViewFixture.current;
+    if (current.entityType !== "deployment")
+      throw new Error("expected deployment fixture");
+    expect(
+      screen
+        .getByRole("link", { name: "查看来源 CI Run" })
+        .getAttribute("href"),
+    ).toBe(
+      `/workspaces/wrk_main/ci-runs/${current.ciRun.entityRef.slice("entity://ci-run/".length)}`,
+    );
     expect(
       screen.getByRole("link", { name: "Main Workspace 切换" }),
     ).toBeDefined();
@@ -307,6 +347,16 @@ describe("authenticated Web Shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "重新载入" }));
     await waitFor(() => expect(loader).toHaveBeenCalledTimes(2));
     expect(await screen.findByText("部署成功")).toBeDefined();
+    const current = succeededDeploymentNexusViewFixture.current;
+    if (current.entityType !== "deployment")
+      throw new Error("expected deployment fixture");
+    expect(
+      screen
+        .getByRole("link", { name: "查看来源 CI Run" })
+        .getAttribute("href"),
+    ).toBe(
+      `/workspaces/wrk_main/ci-runs/${current.ciRun.entityRef.slice("entity://ci-run/".length)}`,
+    );
   });
 
   it("returns to login when the business read reports an expired Session", async () => {

@@ -237,3 +237,75 @@
     min-height: 44px;
   }
 }
+
+/* Canonical CI Run reuses Nexus View with the workbench reading rhythm. */
+.ci-run-page .nexus-layout {
+  padding: 28px;
+  max-width: 1200px;
+  margin-inline: auto;
+}
+.ci-run-page .current-card,
+.ci-run-page .panel {
+  background: var(--surface);
+  box-shadow: none;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.ci-run-page .current-card h1 {
+  font-family: inherit;
+  font-size: 32px;
+}
+.ci-run-page .current-card::after {
+  display: none;
+}
+.ci-run-page .current-card__summary {
+  color: var(--muted);
+}
+.ci-run-page .nexus-context,
+.ci-run-page .current-meta,
+.ci-run-page .entity-stamp {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .ci-run-page .nexus-layout {
+    padding: 20px;
+  }
+}
+.ci-run-page .current-card__body {
+  align-items: start;
+  gap: 32px;
+  padding-block: 32px;
+}
+.ci-run-page .panel {
+  min-height: 0;
+  padding: 24px;
+}
+.ci-run-page .empty-state {
+  min-height: 0;
+  padding: 24px 0;
+}
+.ci-run-page :is(.panel-heading h2, .empty-state h3, .context-stamp strong) {
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: normal;
+}
+.ci-run-page .context-stamp {
+  background: var(--paper);
+  border-color: var(--line);
+}
+.ci-run-page
+  :is(
+    .context-stamp code,
+    .entity-stamp code,
+    .current-meta dt,
+    .context-stamp span
+  ) {
+  font-size: 12px;
+}
+.ci-run-page .status-badge--succeeded {
+  background: #e8eee7;
+  border-color: #b6c9bd;
+  color: #3d725e;
+}

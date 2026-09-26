@@ -1,3 +1,5 @@
+import { CIRunPage } from "./nexus-view/CIRunPage";
+import { ciRunLocation, ciRunPagePath } from "./nexus-view/ci-run-api";
 import { WorkbenchShell } from "./WorkbenchShell";
 import { DocumentPage, DocumentList } from "./document/DocumentPage";
 import { documentLocation } from "./document/api";
@@ -62,6 +64,7 @@ type AppRoute =
       projectID: string | null;
     }
   | { kind: "prototype" }
+  | { kind: "ci-run"; workspaceID: string; ciRunID: string }
   | { kind: "deployment"; workspaceID: string; deploymentID: string }
   | { kind: "channel"; workspaceID: string; channelID: string }
   | {
@@ -151,6 +154,8 @@ function appRoute(pathname: string): AppRoute {
   }
   const doc = documentLocation(pathname);
   if (doc) return { kind: "document", ...doc };
+  const ciRun = ciRunLocation(pathname);
+  if (ciRun) return { kind: "ci-run", ...ciRun };
   const deployment = deploymentNexusViewLocation(pathname);
   if (deployment !== null) {
     return { kind: "deployment", ...deployment };
@@ -408,6 +413,7 @@ function SignedInShell({
   );
   const currentWorkspace =
     route.kind === "deployment" ||
+    route.kind === "ci-run" ||
     route.kind === "document" ||
     route.kind === "channel" ||
     route.kind === "collaboration"
@@ -460,6 +466,13 @@ function SignedInShell({
           session={session}
           navigate={navigate}
           client={discoveryClient}
+          onSessionExpired={onSignedOut}
+        />
+      ) : route.kind === "ci-run" ? (
+        <CIRunPage
+          key={`${route.workspaceID}/${route.ciRunID}`}
+          workspaceID={route.workspaceID}
+          ciRunID={route.ciRunID}
           onSessionExpired={onSignedOut}
         />
       ) : route.kind === "deployment" ? (
@@ -551,14 +564,29 @@ function LiveDeploymentApp({
     return () => controller.abort();
   }, [deploymentID, loadDeployment, onSessionExpired, requestKey, workspaceID]);
 
+  const sourcePath =
+    state.status === "ready" && state.data.current.entityType === "deployment"
+      ? ciRunPagePath(
+          workspaceID,
+          state.data.current.ciRun.entityRef.slice("entity://ci-run/".length),
+        )
+      : null;
   return (
-    <NexusView
-      state={state}
-      onRetry={() => {
-        setState({ status: "loading" });
-        setRequestKey((key) => key + 1);
-      }}
-    />
+    <>
+      {sourcePath ? (
+        <nav className="document-toolbar" aria-label="交付来源">
+          <a href="/">工作区</a>
+          <a href={sourcePath}>查看来源 CI Run</a>
+        </nav>
+      ) : null}
+      <NexusView
+        state={state}
+        onRetry={() => {
+          setState({ status: "loading" });
+          setRequestKey((key) => key + 1);
+        }}
+      />
+    </>
   );
 }
 

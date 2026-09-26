@@ -31,7 +31,7 @@ export interface CIRunNexusCurrent {
   statusLabel: string;
   summary: string;
   component: CIRunComponent;
-  startedAt: string;
+  startedAt: string | null;
   startedAtLabel: string;
   completedAt: string;
   completedAtLabel: string;
