@@ -13,6 +13,7 @@ import (
 )
 
 var (
+	documentWebPathPattern      = regexp.MustCompile(`^/workspaces/[^/]+/(documents/[^/]+|projects/[^/]+/documents)/?$`)
 	deploymentWebPathPattern    = regexp.MustCompile(`^/workspaces/[^/]+/deployments/[^/]+/?$`)
 	channelWebPathPattern       = regexp.MustCompile(`^/workspaces/[^/]+/channels/[^/]+/?$`)
 	collaborationWebPathPattern = regexp.MustCompile(
@@ -66,7 +67,7 @@ func (handler *WebAppHandler) ServeHTTP(response http.ResponseWriter, request *h
 	if request.URL.Path == "/" || request.URL.Path == "/account" || request.URL.Path == "/prototype/nexus-view" ||
 		deploymentWebPathPattern.MatchString(request.URL.Path) ||
 		channelWebPathPattern.MatchString(request.URL.Path) ||
-		collaborationWebPathPattern.MatchString(request.URL.Path) {
+		collaborationWebPathPattern.MatchString(request.URL.Path) || documentWebPathPattern.MatchString(request.URL.Path) {
 		response.Header().Set("Content-Type", "text/html; charset=utf-8")
 		response.Header().Set("Cache-Control", "no-cache")
 		response.WriteHeader(http.StatusOK)

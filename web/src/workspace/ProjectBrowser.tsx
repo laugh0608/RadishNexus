@@ -1,3 +1,4 @@
+import { documentsPath } from "../document/api";
 import {
   useCallback,
   useEffect,
@@ -100,6 +101,7 @@ export function ProjectBrowser({
               onSessionExpired={onSessionExpired}
               navigate={navigate}
             />
+            <a href={documentsPath(workspaceID, selected.id)}>查看项目文档</a>
             <ProjectChannels
               key={selected.id}
               workspaceID={workspaceID}

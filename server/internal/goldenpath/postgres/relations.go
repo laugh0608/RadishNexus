@@ -70,7 +70,8 @@ func listRelationProjections(
 			FROM radishnexus.entity_links
 			WHERE workspace_id = $1 AND to_type = $2 AND to_id = $3 AND state = 'active'
 				AND (($2 = 'thread' AND from_type = 'decision' AND relation_type = 'derived-from')
-					OR ($2 = 'decision' AND from_type = 'ticket' AND relation_type = 'implements'))
+					OR ($2 = 'decision' AND from_type = 'ticket' AND relation_type = 'implements')
+ OR ($2 = 'document' AND from_type = 'ticket' AND relation_type = 'relates-to'))
 		) AS relations
 		ORDER BY CASE direction WHEN 'outgoing' THEN 0 ELSE 1 END, created_at, id
 	`, principal.WorkspaceID, source.Type, source.ID)
@@ -135,6 +136,19 @@ func entityAccess(
 	ref entityref.Ref,
 ) (exists bool, canRead bool, err error) {
 	switch ref.Type {
+	case "document":
+		project, err := documentScope(ctx, tx, principal, "document", ref.ID)
+		if errors.Is(err, authz.ErrNotFound) {
+			return false, false, nil
+		}
+		if err != nil {
+			return false, false, err
+		}
+		err = documentProject(ctx, tx, principal, project, false)
+		if errors.Is(err, authz.ErrNotFound) {
+			return true, false, nil
+		}
+		return true, err == nil, err
 	case "channel":
 		_, err := readableChannel(ctx, tx, principal, ref.ID)
 		if errors.Is(err, authz.ErrNotFound) {
@@ -338,6 +352,8 @@ func entityExists(
 func entityTitle(ctx context.Context, tx pgx.Tx, workspaceID string, ref entityref.Ref) (string, error) {
 	var query string
 	switch ref.Type {
+	case "document":
+		query = "SELECT r.title FROM radishnexus.documents d JOIN radishnexus.document_revisions r ON r.workspace_id=d.workspace_id AND r.document_id=d.id AND r.revision=d.current_revision WHERE d.workspace_id=$1 AND d.id=$2"
 	case "thread", "ticket":
 		query = "SELECT title FROM radishnexus." + ref.Type + "s WHERE workspace_id = $1 AND id = $2"
 	case "decision":

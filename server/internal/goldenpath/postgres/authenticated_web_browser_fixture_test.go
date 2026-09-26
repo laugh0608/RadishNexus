@@ -171,6 +171,7 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	mux.Handle("/api/v1/workspaces/{workspace_id}/threads/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/decisions/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/tickets/", collaborationHandler)
+	httptransport.RegisterDocumentRoutes(mux, httptransport.NewDocumentHandler(authService, goldenpath.NewDocumentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy))
 	mux.Handle("/api/v1/workspaces", deploymentHandler)
 	mux.Handle("/api/v1/workspaces/", deploymentHandler)
 	mux.Handle("/", webHandler)

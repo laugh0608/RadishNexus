@@ -62,7 +62,8 @@ export type CollaborationRelation =
   | {
       visibility: "readable";
       direction: "outgoing" | "incoming";
-      relationType: "started-from" | "derived-from" | "implements";
+      relationType:
+        "started-from" | "derived-from" | "implements" | "relates-to";
       target: VisibleEntity;
     };
 
@@ -173,6 +174,7 @@ const entityPrefixes: Readonly<Record<string, string>> = {
   thread: "thr_",
   decision: "dec_",
   ticket: "tkt_",
+  document: "doc_",
 };
 
 const pageSegments: Readonly<Record<CollaborationEntityType, string>> = {
@@ -581,7 +583,7 @@ function parseRelation(
   const relation = record(value, path);
   if (relation.visibility === "restricted") {
     exactKeys(relation, path, ["visibility"]);
-    if (expectedType !== "decision") {
+    if (expectedType !== "decision" && expectedType !== "ticket") {
       throw new TypeError(`${path} cannot be restricted for ${expectedType}`);
     }
     return { visibility: "restricted" };
@@ -602,6 +604,17 @@ function parseRelation(
   if (direction === "incoming" && expectedType === "ticket") {
     throw new TypeError(`${path} cannot be incoming for Ticket`);
   }
+  if (
+    expectedType === "ticket" &&
+    direction === "outgoing" &&
+    relation.relation_type === "relates-to"
+  )
+    return {
+      visibility: "readable",
+      direction,
+      relationType: "relates-to",
+      target: parseVisibleEntity(relation.target, `${path}.target`, "document"),
+    };
   const expectedRelation =
     direction === "incoming"
       ? expectedType === "thread"
@@ -711,7 +724,10 @@ function validateViewShape(
   }
   relations = relations.filter(
     (relation) =>
-      relation.visibility === "restricted" || relation.direction === "outgoing",
+      (relation.visibility === "restricted" && current.ref.type !== "ticket") ||
+      (relation.visibility === "readable" &&
+        relation.direction === "outgoing" &&
+        relation.relationType !== "relates-to"),
   );
   if (isThreadCurrent(current)) {
     if (timeline.length !== 0) {

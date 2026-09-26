@@ -66,3 +66,11 @@ npm run dev
 `workspace/ConfigurationPanel.tsx` 提供 owner 的 Team / Project 创建、显式初始 admin 确认、Project 普通成员角色配置、Channel 创建与受限成员管理；`configuration-api.ts` 校验专用响应。成员选择使用稳定 ID 与展示名区分重名，不返回邮箱。界面说明撤权会清除从属私密授权；管理权交接尚未开放。
 
 写请求复用现有同源 Session / CSRF；连续点击被阻止，网络或 5xx 模糊失败保留原 operation ID，成功后重新读取当前列表。配置面板和分页在刷新、焦点复核与作用域切换时清理旧数据，取消或忽略迟到结果。普通配置能力由服务端返回，客户端显示不构成授权。首次访问通过 `auth/SetupGate.tsx` 与 `setup-api.ts` 实现 [ADR-0027](../docs/adr/0027-first-visit-administrator-setup.md)：Session 确认未登录后读取初始化状态，required 展示首位管理员表单，complete 进入正式登录，unavailable 提示部署者配置。状态读取失败可重试；提交后清理码与密码，模糊结果必须重新检查状态，不自动重放创建。
+
+## 最小 Markdown Document
+
+`document/api.ts` 消费 [ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的八个操作并严格校验响应。Ticket 提供创建入口，明确提示新文档对 Project 可读成员可见；首页 Project 与文档页面提供 Project 文档列表。`DocumentPage.tsx` 使用普通 textarea 编辑服务端权威 Markdown，预览复用服务端 parser；`MarkdownView.tsx` 只将封闭节点映射为固定 React 元素，不注入 HTML、不使用第二套 parser，也不渲染图片或嵌入。
+
+草稿只在当前页面内存；显式保存携带基线 revision，冲突保留草稿并展示最新正文，用户确认重新应用后才可生成新操作。网络 / 5xx 不确定结果冻结原输入并保留 operation ID 以精确重试；不会自动以最新基线重放。历史恢复同时展示旧版与当前版，确认后追加版本。脏草稿离开、刷新及退出均有提示，没有 Enter 保存快捷键。读取失败显式提示，权限失效立即清除正文、草稿、预览、历史和待重试输入；焦点恢复和主动刷新会重新验证，未接入权限推送或轮询。
+
+安全展示失败时仅提供显式源码查看；源码以 React 文本输出。链接只接受绝对 HTTP(S)，拒绝用户凭据、控制符与反斜杠，外链使用 `noopener noreferrer` 和 `no-referrer`。新功能没有新增 Web 依赖或浏览器持久化。自动化、隔离 Chrome、手机布局和原生 IME 剩余复核范围见[本轮记录](../docs/status/reviews/2026-09-26-markdown-document.md)。

@@ -2327,3 +2327,71 @@ code {
   color: var(--muted);
   line-height: 1.75;
 }
+
+.document-layout {
+  width: min(1040px, 100%);
+  margin: 0 auto;
+  padding: 2rem clamp(1rem, 4vw, 3rem);
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+.document-layout section {
+  margin-block: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line, #d9dfe5);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+}
+.document-layout nav,
+.document-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block: 1rem;
+}
+.document-layout label,
+.collaboration-complete label {
+  display: grid;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+.document-layout input,
+.document-layout textarea,
+.collaboration-complete input,
+.collaboration-complete textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.75rem;
+  border: 1px solid var(--line, #d9dfe5);
+  border-radius: 6px;
+  font: inherit;
+}
+.document-layout textarea {
+  resize: vertical;
+  line-height: 1.65;
+}
+.markdown-view {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.markdown-view pre,
+.document-layout pre {
+  overflow: auto;
+  white-space: pre-wrap;
+  max-width: 100%;
+  padding: 1rem;
+  background: #f5f7fa;
+}
+.markdown-view blockquote {
+  border-left: 3px solid #5f817b;
+  margin-left: 0;
+  padding-left: 1rem;
+}
+.document-conflict {
+  border-color: #b47b2b !important;
+}
+.document-layout button {
+  min-height: 40px;
+  margin: 0.25rem;
+}

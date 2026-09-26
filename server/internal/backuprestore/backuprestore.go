@@ -48,6 +48,8 @@ var (
 		"radishnexus.components",
 		"radishnexus.decisions",
 		"radishnexus.deployments",
+		"radishnexus.document_revisions",
+		"radishnexus.documents",
 		"radishnexus.domain_events",
 		"radishnexus.entity_links",
 		"radishnexus.entity_types",

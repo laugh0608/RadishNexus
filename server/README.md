@@ -24,6 +24,7 @@
 - Session 作用域的 Thread / Decision / Ticket Nexus View、人工 acceptance 与幂等写入 handler；
 - 同源 authenticated Web Shell、显式 production build root、页面 allowlist 与安全静态资源缓存；
 - 可选文件 Secret 覆盖数据库 URL 密码的公共 runtime config；
+- Ticket 来源的最小 Markdown Document、Project 发现、不可变版本、显式保存 / 恢复与安全展示投影；
 - PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验与 Activity 重建命令。
 
 公共 transport 已开放 `/api/v1/auth/sessions` 与 `/api/v1/auth/session` 的 login / resolve / logout 闭环、Deployment Nexus View 读取、单 Channel Message 历史 / 发送 / Message → Thread、单进程 Message SSE，以及 Thread → Decision → Ticket 协作短请求；同一个 Go server 从显式 Web build root 交付 authenticated shell 和已注册页面。认证入口要求精确 HTTPS public origin、精确 Host、显式可信代理链、客户端 IP 限流、受控 JSON、Secure Cookie 和 CSRF，不接受可信用户 Header、insecure Cookie 或 credentialed CORS。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。inbound 与 collaboration command receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret、原始 webhook body 或业务正文。
@@ -138,6 +139,8 @@ go run ./cmd/nexus-identity-migrate --mapping-stdin < /path/to/private-identity-
 - `/workspaces/{workspace_id}/threads/{thread_id}`：读取 Thread Nexus View 并创建 Proposed Decision；
 - `/workspaces/{workspace_id}/decisions/{decision_id}`：读取 Decision Nexus View，执行明确人工 acceptance，并在接受后创建 Ticket；
 - `/workspaces/{workspace_id}/tickets/{ticket_id}`：读取 Ticket Nexus View 与结构化 Source Decision；
+- `/workspaces/{workspace_id}/documents/{document_id}`：文档阅读、编辑、预览、保存与历史恢复；
+- `/workspaces/{workspace_id}/projects/{project_id}/documents`：当前 Project 可读文档分页列表；
 - `/prototype/nexus-view`：与真实入口隔离的静态代表状态检视器。
 
 只有上述 HTML 路径和 build 的 `/assets/` 文件会由 Web handler 交付；未知路径返回 `404`。HTML 使用 `no-cache`，哈希资源使用长期 immutable cache，认证和业务 API 继续 `no-store`。完整 same-origin、CSP、启动失败、Session bootstrap 和 fixture 边界见 [ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md)。
@@ -228,3 +231,24 @@ go run ./cmd/nexus-restore --input /path/to/completed-backup-directory
 ```
 
 该脚本使用两个独立的固定 PostgreSQL 17 容器，验证包含 Channel、Message、messaging-origin Thread 和 collaboration command receipt 的完整 Golden Path fixture、恢复前后所有纳入表、Activity 重建，以及 manifest 漂移、dump 损坏和非空目标失败路径；不会隐式拉取缺失镜像。
+
+## 最小 Markdown Document
+
+[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实；Activity projection 升至版本 2，新增事件可全量重建，旧投影不改变原有语义。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。
+
+所有端点在 `/api/v1/workspaces/{workspace_id}` 下，要求当前 Session 与 Workspace membership；POST 另要求同源 CSRF。查询返回 `private, no-store`，不能通过引用授予权限。
+
+| 方法与路径 | 用途 |
+| --- | --- |
+| `POST /tickets/{ticket_id}/documents` | 从当前可读 Ticket 创建 Project 可见文档、首版和来源关系 |
+| `GET /projects/{project_id}/documents` | 当前权限过滤的文档分页 |
+| `POST /projects/{project_id}/document-preview` | 当前写权限下解析草稿，不持久化 |
+| `GET /documents/{document_id}/nexus-view` | 当前版本、权限过滤关系与正常 Activity |
+| `POST /documents/{document_id}/revisions` | 指定 `base_revision` 显式保存 |
+| `GET /documents/{document_id}/revisions` | 分页读取版本元数据 |
+| `GET /documents/{document_id}/revisions/{revision}` | 在当前权限下读取指定历史版本 |
+| `POST /documents/{document_id}/restorations` | 明确确认并指定当前基线，将历史内容追加为新版本 |
+
+POST 精确字段、确认及重试语义按 ADR。相同 operation ID / canonical payload 返回原 `applied_revision`，即使当前版本已前进；不同 payload 冲突，重试仍重新授权。归档 Project 可读不可写。Project 权限锁在 Document 锁之前获取，保存与归档 / 撤权串行检查；新命令版本落后返回 `409` 与 `current_revision`。版本、来源、receipt、事件、Outbox 和 Activity 同事务提交，投影失败全部回滚。
+
+`internal/markdown` 只用固定 `goldmark v1.8.6` 解析。原文只统一 CRLF / CR 为 LF，拒绝无效 UTF-8、未配对 JSON surrogate、NUL、超限文本与未知 format。256 KiB 正文、2 MiB JSON、20,000 投影节点与 32 层深度之外，parser hook 调用也受 20,000 次预算限制，防止深嵌套和分隔符输入在投影前消耗过量资源；超出返回固定诊断。基础 CommonMark 映射为封闭 `nexus-markdown-view-v1` 节点，图片 / HTML / 不安全 URL 拒绝保存；不启用 GFM、嵌入或 HTML renderer。历史解析失败明确返回诊断与保留源码，不能恢复为新版本。许可证见 [第三方声明](THIRD_PARTY_NOTICES.md)，本轮验证和局限见[实施记录](../docs/status/reviews/2026-09-26-markdown-document.md)。

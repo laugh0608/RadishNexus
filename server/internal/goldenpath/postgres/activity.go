@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -25,12 +26,15 @@ type activityEvent struct {
 }
 
 type activityEventPayload struct {
-	Status      string         `json:"status"`
-	Evidence    *entityref.Ref `json:"evidence"`
-	Decision    *entityref.Ref `json:"decision"`
-	Component   *entityref.Ref `json:"component"`
-	Environment *entityref.Ref `json:"environment"`
-	CIRun       *entityref.Ref `json:"ci_run"`
+	Revision             int            `json:"revision"`
+	RestoredFromRevision *int           `json:"restored_from_revision"`
+	Ticket               *entityref.Ref `json:"ticket"`
+	Status               string         `json:"status"`
+	Evidence             *entityref.Ref `json:"evidence"`
+	Decision             *entityref.Ref `json:"decision"`
+	Component            *entityref.Ref `json:"component"`
+	Environment          *entityref.Ref `json:"environment"`
+	CIRun                *entityref.Ref `json:"ci_run"`
 }
 
 type activityRecord struct {
@@ -63,7 +67,7 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
 		FROM radishnexus.domain_events
 		WHERE event_type IN (
 			'decision.proposed', 'decision.accepted', 'ticket.created',
-			'ci-run.recorded', 'deployment.recorded', 'project.created', 'channel.created'
+			'ci-run.recorded', 'deployment.recorded', 'project.created', 'channel.created', 'document.created', 'document.revised'
 		)
 		ORDER BY occurred_at, event_id
 	`)
@@ -196,7 +200,7 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 	if err := json.Unmarshal(event.payload, &payload); err != nil {
 		return activityRecord{}, fmt.Errorf("decode Activity event %s payload: %w", event.eventID, err)
 	}
-	if payload.Status == "" {
+	if payload.Status == "" && event.target.Type != "document" {
 		return activityRecord{}, fmt.Errorf("project Activity event %s: status is required", event.eventID)
 	}
 
@@ -206,6 +210,25 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		safeFacts:     map[string]string{"status": payload.Status},
 	}
 	switch event.eventType {
+	case "document.created", "document.revised":
+		if event.target.Type != "document" || payload.Revision < 1 || event.actorKind != "user" || event.actorID == nil {
+			return activityRecord{}, fmt.Errorf("invalid Document event %s", event.eventID)
+		}
+		record.safeFacts = map[string]string{"revision": strconv.Itoa(payload.Revision)}
+		if event.eventType == "document.created" {
+			if payload.Revision != 1 || payload.Ticket == nil || payload.Ticket.Type != "ticket" || payload.RestoredFromRevision != nil {
+				return activityRecord{}, fmt.Errorf("invalid Document creation %s", event.eventID)
+			}
+			record.subjects = []entityref.Ref{*payload.Ticket}
+		} else if payload.Revision < 2 || payload.Ticket != nil {
+			return activityRecord{}, fmt.Errorf("invalid Document revision %s", event.eventID)
+		}
+		if payload.RestoredFromRevision != nil {
+			if *payload.RestoredFromRevision < 1 || *payload.RestoredFromRevision >= payload.Revision {
+				return activityRecord{}, fmt.Errorf("invalid Document restore %s", event.eventID)
+			}
+			record.safeFacts["restored_from_revision"] = strconv.Itoa(*payload.RestoredFromRevision)
+		}
 	case "project.created", "channel.created":
 		if event.eventType != event.target.Type+".created" || payload.Status != "active" || event.actorKind != "user" || event.actorID == nil {
 			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid configuration creation facts", event.eventID)

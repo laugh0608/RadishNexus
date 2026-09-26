@@ -650,6 +650,16 @@ func collaborationSourceRelations(entityType string, relations []goldenpath.Rela
 	sources := make([]goldenpath.RelationProjection, 0, 1)
 	seen := make(map[entityref.Ref]bool)
 	for _, relation := range relations {
+		if entityType == "ticket" && relation.State == goldenpath.ProjectionRestricted {
+			continue
+		}
+		if entityType == "ticket" && relation.Direction == "outgoing" && relation.State == goldenpath.ProjectionVisible && relation.RelationType == "relates-to" && relation.Target.Type == "document" {
+			if seen[relation.Target] {
+				return nil, errors.New("duplicate Document relation")
+			}
+			seen[relation.Target] = true
+			continue
+		}
 		if relation.State == goldenpath.ProjectionRestricted || relation.Direction == "outgoing" {
 			sources = append(sources, relation)
 			continue
@@ -686,7 +696,7 @@ func publicCollaborationRelations(relations []goldenpath.RelationProjection) ([]
 				return nil, err
 			}
 			if relation.RelationType != "started-from" && relation.RelationType != "derived-from" &&
-				relation.RelationType != "implements" {
+				relation.RelationType != "implements" && relation.RelationType != "relates-to" {
 				return nil, fmt.Errorf("unsupported collaboration relation %q", relation.RelationType)
 			}
 			dto = append(dto, collaborationRelationDTO{

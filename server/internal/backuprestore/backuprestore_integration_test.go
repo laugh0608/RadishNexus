@@ -43,6 +43,28 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	sourcePool := connectIntegrationPool(t, ctx, sourceURL)
 	defer sourcePool.Close()
 	seedBackupGoldenPath(t, ctx, sourcePool)
+	if _, err := sourcePool.Exec(ctx, `INSERT INTO radishnexus.user_accounts(user_id,status,created_at) VALUES ('usr_contributor','active',now())`); err != nil {
+		t.Fatal(err)
+	}
+	var ticketID string
+	if err := sourcePool.QueryRow(ctx, `SELECT id FROM radishnexus.tickets WHERE workspace_id='wrk_backup'`).Scan(&ticketID); err != nil {
+		t.Fatal(err)
+	}
+	documentInvocation := goldenpath.Invocation{Principal: authz.Principal{Kind: authz.PrincipalUser, ID: "usr_contributor", WorkspaceID: "wrk_backup"}, SourceKind: "web", CorrelationID: "backup-document"}
+	documentInput := goldenpath.DocumentInput{TargetID: ticketID, ClientOperationID: "backup-document-create", Title: "设计文档", BodyMarkdown: "# 原始内容  \n中文😀", FormatVersion: "nexus-markdown-v1"}
+	documents := goldenpath.NewDocumentService(goldenpostgres.New(sourcePool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	document, err := documents.WriteDocument(ctx, documentInvocation, "document.create", documentInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saveDocument := goldenpath.DocumentInput{TargetID: document.Ref.ID, ClientOperationID: "backup-document-save", Title: "第二版", BodyMarkdown: "新内容", FormatVersion: "nexus-markdown-v1", BaseRevision: 1}
+	if _, err = documents.WriteDocument(ctx, documentInvocation, "document.save", saveDocument); err != nil {
+		t.Fatal(err)
+	}
+	restoreDocument := goldenpath.DocumentInput{TargetID: document.Ref.ID, ClientOperationID: "backup-document-restore", BaseRevision: 2, RestoreRevision: 1}
+	if _, err = documents.WriteDocument(ctx, documentInvocation, "document.restore", restoreDocument); err != nil {
+		t.Fatal(err)
+	}
 	configurationInput := goldenpath.ConfigurationInput{Kind: "team.create", ScopeID: "wrk_backup", ClientOperationID: "backup-team", Name: "Configured Team"}
 	configurationInvocation := goldenpath.Invocation{Principal: authz.Principal{Kind: authz.PrincipalUser, ID: "usr_admin", WorkspaceID: "wrk_backup"}, SourceKind: "web", CorrelationID: "req_backup_configuration"}
 	configured, err := goldenpath.NewConfigurationService(goldenpostgres.New(sourcePool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}).Configure(ctx, configurationInvocation, configurationInput)
@@ -57,8 +79,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rebuild source Activity projection: %v", err)
 	}
-	if projected != 5 {
-		t.Fatalf("source Activity rows = %d, want 5", projected)
+	if projected != 8 {
+		t.Fatalf("source Activity rows = %d, want 8", projected)
 	}
 	sourceSnapshot := snapshotIncludedTables(t, ctx, sourcePool)
 	sourceActivity := snapshotTable(t, ctx, sourcePool, "radishnexus.activity_items")
@@ -171,13 +193,22 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil || !passwordMatches {
 		t.Fatalf("restored local account verifier = %v, %v", passwordMatches, err)
 	}
+	targetDocuments := goldenpath.NewDocumentService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	retried, err := targetDocuments.WriteDocument(ctx, documentInvocation, "document.save", saveDocument)
+	if err != nil || retried.AppliedRevision != 2 {
+		t.Fatal("restored Document receipt", retried, err)
+	}
+	currentDocument, err := targetDocuments.ReadDocument(ctx, documentInvocation.Principal, document.Ref.ID, 0)
+	if err != nil || currentDocument.Current.Revision != 3 || currentDocument.Current.BodyMarkdown != documentInput.BodyMarkdown {
+		t.Fatal("restored Document authority", err)
+	}
 	targetStore := goldenpostgres.New(targetPool)
 	projected, err = targetStore.RebuildActivityProjection(ctx)
 	if err != nil {
 		t.Fatalf("rebuild target Activity projection: %v", err)
 	}
-	if projected != 5 {
-		t.Fatalf("target Activity rows = %d, want 5", projected)
+	if projected != 8 {
+		t.Fatalf("target Activity rows = %d, want 8", projected)
 	}
 	if targetActivity := snapshotTable(t, ctx, targetPool, "radishnexus.activity_items"); targetActivity != sourceActivity {
 		t.Fatalf("rebuilt Activity differs\nsource: %s\ntarget: %s", sourceActivity, targetActivity)

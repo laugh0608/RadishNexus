@@ -1,3 +1,5 @@
+import { DocumentPage, DocumentList } from "./document/DocumentPage";
+import { documentLocation } from "./document/api";
 import { AppHeader } from "./AppHeader";
 import { SetupGate } from "./auth/SetupGate";
 import { browserSetupClient, type SetupClient } from "./auth/setup-api";
@@ -52,6 +54,12 @@ type PrototypeMode = "succeeded" | "failed" | "loading" | "error";
 type AppRoute =
   | { kind: "home" }
   | { kind: "account" }
+  | {
+      kind: "document";
+      workspaceID: string;
+      documentID: string | null;
+      projectID: string | null;
+    }
   | { kind: "prototype" }
   | { kind: "deployment"; workspaceID: string; deploymentID: string }
   | { kind: "channel"; workspaceID: string; channelID: string }
@@ -140,6 +148,8 @@ function appRoute(pathname: string): AppRoute {
   if (pathname === "/prototype/nexus-view") {
     return { kind: "prototype" };
   }
+  const doc = documentLocation(pathname);
+  if (doc) return { kind: "document", ...doc };
   const deployment = deploymentNexusViewLocation(pathname);
   if (deployment !== null) {
     return { kind: "deployment", ...deployment };
@@ -405,6 +415,12 @@ function SignedInShell({
       : undefined;
 
   const logout = async () => {
+    if (
+      !window.dispatchEvent(
+        new Event("radishnexus-before-discard", { cancelable: true }),
+      )
+    )
+      return;
     setLoggingOut(true);
     setLogoutError(null);
     try {
@@ -487,6 +503,22 @@ function SignedInShell({
           probeSession={probeSession}
           realtimeClient={channelRealtimeClient}
         />
+      ) : route.kind === "document" ? (
+        route.documentID ? (
+          <DocumentPage
+            key={`${route.workspaceID}/${route.documentID}`}
+            workspaceID={route.workspaceID}
+            documentID={route.documentID}
+            onSessionExpired={onSignedOut}
+          />
+        ) : (
+          <DocumentList
+            key={`${route.workspaceID}/${route.projectID}`}
+            workspaceID={route.workspaceID}
+            projectID={route.projectID!}
+            onSessionExpired={onSignedOut}
+          />
+        )
       ) : route.kind === "collaboration" ? (
         <CollaborationPage
           key={`${route.workspaceID}/${route.entityType}/${route.entityID}`}

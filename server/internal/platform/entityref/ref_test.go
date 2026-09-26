@@ -44,7 +44,7 @@ func TestParseRejectsNonCanonicalReferences(t *testing.T) {
 		raw  string
 		want error
 	}{
-		{name: "unknown type", raw: "entity://document/doc_1", want: ErrUnknownType},
+		{name: "unknown type", raw: "entity://unknown/unk_1", want: ErrUnknownType},
 		{name: "wrong thread prefix", raw: "entity://thread/prototype-thread-1", want: ErrInvalidReference},
 		{name: "wrong ticket prefix", raw: "entity://ticket/tic_1", want: ErrInvalidReference},
 		{name: "query", raw: "entity://decision/dec_1?view=full", want: ErrInvalidReference},

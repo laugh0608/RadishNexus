@@ -136,11 +136,12 @@ func run() error {
 	)
 
 	discoveryHandler := httptransport.NewDiscoveryHandler(authService, goldenpath.NewDiscoveryService(goldenpostgres.New(pool)), sessionPolicy, proxyPolicy)
+	documentHandler := httptransport.NewDocumentHandler(authService, goldenpath.NewDocumentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy)
 	configurationHandler := httptransport.NewConfigurationHandler(authService, goldenpath.NewConfigurationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy)
 
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler, setupHandler),
+		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler, setupHandler, documentHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -218,6 +219,9 @@ func newHandler(
 	if len(identityHandler) >= 1 {
 		mux.Handle("/api/v1/workspaces/{workspace_id}/invitations", identityHandler[0])
 		mux.Handle("/auth/complete", identityHandler[0])
+	}
+	if len(identityHandler) >= 4 {
+		httptransport.RegisterDocumentRoutes(mux, identityHandler[3])
 	}
 	if len(identityHandler) >= 3 {
 		mux.Handle("/api/v1/setup", identityHandler[2])
