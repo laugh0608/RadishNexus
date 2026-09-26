@@ -240,3 +240,32 @@ func TestHandlerRoutesCIRunBeforeWorkspaceFallback(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 }
+
+func TestJenkinsDispatchPrecedesPathCleaningAndIsOptional(t *testing.T) {
+	fallback := http.NotFoundHandler()
+	marker := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Request-ID") == "attacker" {
+			t.Fatal("caller request ID")
+		}
+		w.WriteHeader(418)
+	})
+	for _, enabled := range []bool{false, true} {
+		var jenkinsHandler http.Handler
+		if enabled {
+			jenkinsHandler = marker
+		}
+		handler := newHandler(fakeReadinessChecker{}, fallback, fallback, fallback, fallback, fallback, fallback, fallback, fallback, fallback, fallback, fallback, fallback, jenkinsHandler)
+		for _, path := range []string{"/api/v1/integrations/jenkins/source_a/deliveries", "//api/v1/integrations/jenkins/source_a/deliveries", "/prefix/../api/v1/integrations/jenkins/source_a/deliveries", "/api/v1/integrations/jenkins//source_a/deliveries", "/api/v1/integrations/jenkins/source_a/../source_b/deliveries"} {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest("POST", path, nil)
+			r.Header.Set("X-Request-ID", "attacker")
+			handler.ServeHTTP(w, r)
+			if enabled && (w.Code != 418 || w.Header().Get("Location") != "") {
+				t.Fatal(path, w.Code)
+			}
+			if !enabled && path == "/api/v1/integrations/jenkins/source_a/deliveries" && w.Code != 404 {
+				t.Fatal(w.Code)
+			}
+		}
+	}
+}

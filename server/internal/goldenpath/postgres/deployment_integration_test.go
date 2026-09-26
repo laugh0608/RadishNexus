@@ -311,6 +311,7 @@ func assertDeploymentNexusViewHTTP(
 		t.Fatalf("NewTrustedProxyPolicy() error = %v", err)
 	}
 	assertCIRunHTTPTransport(t, ctx, pool, service, authService, sessionPolicy, proxyPolicy, sessionToken, sourceDelivery, sourceInput)
+	assertJenkinsDeliveryHTTP(t, ctx, pool, authService, sessionToken)
 	handler := httptransport.WithRequestID(httptransport.NewDeploymentNexusViewHandler(
 		authService,
 		service,

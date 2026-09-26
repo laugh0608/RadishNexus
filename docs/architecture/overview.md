@@ -150,6 +150,8 @@ entity://environment/env_002
 
 类型注册、结构化表示、Workspace 解析和受限占位的 M0 基线见[核心实体、授权与事件契约](core-contracts.md)。Thread、Decision、Ticket 的首段 Project 作用域与物理 schema 已由 ADR-0004、ADR-0005 和正式 migration 落地；Component、CI Run 的来源与读取边界已由 ADR-0006、ADR-0007 和 migration 003 落地；Environment、显式 staging Deployment、环境级写授权与安全读取已由 ADR-0009、ADR-0011 和 migration 004 落地；Channel、Message 与 messaging-origin Thread 的最小身份、来源、权限和幂等边界已由 ADR-0017 与 migration 006 落地；Thread → Decision → Ticket 的 Session transport、人工确认和命令 receipt 已由 ADR-0019 与 migration 007 落地。Document 的 `document / doc_` 身份、Project 读取边界、不可变 Markdown revision 和公共读写合同已由 [ADR-0028](../adr/0028-minimal-markdown-document.md) 冻结，正式注册表、数据库与 HTTP 尚未实现；精确 SQL 随后续 migration 落地。具体 ID 生成算法及 Repository 等其余对象 schema 仍未冻结。
 
+CI Run 的 Session 公共读取合同见 [ADR-0029](../adr/0029-session-scoped-ci-run-nexus-view.md)，外部终态写入的受控来源、签名与重放边界见 [ADR-0030](../adr/0030-authenticated-jenkins-delivery-adapter.md)。Jenkins adapter 验证后调用既有 service，不承担 Deployment 确认或用户授权，也不要求 Nexus 默认自部署拓扑启动 Jenkins。
+
 ## EntityLink 与 Nexus View
 
 跨模块关系使用一等 `EntityLink` 记录，而不是让每个模块分别维护不可追溯的关联字段。EntityLink 至少保存关系类型、两端实体、来源、创建者、建立时间和状态。

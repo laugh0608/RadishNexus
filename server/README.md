@@ -7,7 +7,7 @@
 - Channel / Message / messaging-origin Thread 的正式 schema、权限和幂等 application service；
 - 权限过滤、稳定 keyset 分页的 Project / Channel 发现和 canonical Channel Message application query；
 - Thread → Decision → Ticket 的幂等 application service 与 immutable command receipt；
-- 已验证 Jenkins delivery → 完成态 CI Run 的 application service；
+- 受控 Jenkins HMAC delivery → 完成态 CI Run 的 HTTP adapter、application service 与有限重试发送命令；
 - 显式授权用户记录终态 staging Deployment 的 application service；
 - Project 角色、restricted Thread 和关系投影权限；
 - 与业务状态同事务写入的不可变领域事件与 Outbox 投递状态；
@@ -37,7 +37,7 @@ collaboration migration 007 以 `(workspace, actor, command, target, client_oper
 
 当前 Activity 白名单包含 `project.created`、`channel.created`、`decision.proposed`、`decision.accepted`、`ticket.created`、`ci-run.recorded` 和 `deployment.recorded`。正常写入在同一事务投影，并将对应 `activity-projector` delivery 标记完成；命令成功返回后的重新读取立即可见，投影错误整单回滚。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，先锁定投影表再取得源事件快照，不依赖 Outbox 投递状态；当前不需要常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
 
-CI Run 的 M0 用户读取由所属 Component 控制：同一 Workspace 的活跃成员可读，非成员、暂停成员和跨 Workspace 主体得到 not-found；owner Team 和 Jenkins source 都不授予读取权。CI Run Current 只返回 status、受控时间与当前 Component，Timeline 隐藏 plugin/source ID，并且不返回 external run key、receipt、digest、Secret、原始 payload 或外部 URL。该 query 仍是内部 application contract，尚未形成 HTTP 或公共响应 schema。
+CI Run 的 M0 用户读取由所属 Component 控制：同一 Workspace 的活跃成员可读，非成员、暂停成员和跨 Workspace 主体得到 not-found；owner Team 和 Jenkins source 都不授予读取权。CI Run Current 只返回 status、受控时间与当前 Component，Timeline 隐藏 plugin/source ID，并且不返回 external run key、receipt、digest、Secret、原始 payload 或外部 URL。该 query 已按 ADR-0029 接入 Session 作用域的正式 HTTP DTO 与 Web 页面。
 
 staging Deployment 只记录外部已经完成的终态事实，不执行部署。目标必须是 active staging Environment，来源必须是 succeeded CI Run，调用者必须是 active Workspace 用户并持有该 Environment 的显式授权；Project 角色、owner Team 和 CI source 不隐式授予部署能力。Deployment、`deploys` 关系、`deployment.recorded` 和 Outbox 同事务提交。
 
@@ -87,6 +87,10 @@ python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Emai
 密码必须为 15–128 个 Unicode 字符且最多 1024 bytes。命令通过 PostgreSQL transaction advisory lock 保证只有一个调用成功，创建 user、独立账户状态、本地密码凭证、Workspace 和 `owner` membership；`user_accounts` 已有任何账户时失败，不提供覆盖或默认密码。成功输出只包含稳定 user / Workspace ID，不输出邮箱、密码或 Session。bootstrap 不创建 Session，完成后通过正式登录入口建立会话；也不创建 Team、Project 或 Channel。
 
 密码 verifier 属于受保护的权威恢复数据，会进入 PostgreSQL 运维备份；`user_sessions` 只备份 schema、不备份数据，恢复后所有旧 Session 与 CSRF token 失效。该边界不授权 `.nexus` 可移植导出携带 credential。
+
+## Jenkins 来源接入
+
+默认关闭，通过 `RADISHNEXUS_JENKINS_SOURCES_FILE` 显式启用受控来源；文件 Secret、来源绑定、HMAC / 重放、终态映射和有限重试发送工具的使用见 [Jenkins 接入说明](jenkins.md)。复用既有 CI Run 事务，无数据库迁移或新依赖。自动化已验证，真实 Jenkins 采集与联调仍待完成。
 
 ## 公共认证入口
 

@@ -21,6 +21,17 @@ func (store *Store) RecordCompletedCIRun(
 	}
 	defer rollback(ctx, tx, &err)
 
+	// Lock the configured target through commit; missing/cross-workspace targets
+	// cannot claim a receipt, even on a duplicate delivery.
+	var componentID string
+	if err := tx.QueryRow(ctx, `SELECT id FROM radishnexus.components
+		WHERE workspace_id=$1 AND id=$2 FOR KEY SHARE`, command.WorkspaceID, command.ComponentID).Scan(&componentID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return receipt, authz.ErrNotFound
+		}
+		return receipt, fmt.Errorf("check CI Run Component: %w", err)
+	}
+
 	result, err := tx.Exec(ctx, `
 		INSERT INTO radishnexus.inbound_deliveries (
 			workspace_id, source_kind, source_id, delivery_id,
@@ -151,4 +162,17 @@ func loadCIRun(
 		return ciRun, fmt.Errorf("load CI Run for delivery receipt: %w", err)
 	}
 	return ciRun, nil
+}
+
+// ValidateJenkinsBinding checks the configured target without granting user
+// permissions. The write transaction's composite foreign key repeats this guard.
+func (store *Store) ValidateJenkinsBinding(ctx context.Context, workspaceID, componentID string) error {
+	var exists bool
+	if err := store.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM radishnexus.components WHERE workspace_id=$1 AND id=$2)`, workspaceID, componentID).Scan(&exists); err != nil {
+		return fmt.Errorf("check Jenkins binding: %w", err)
+	}
+	if !exists {
+		return authz.ErrNotFound
+	}
+	return nil
 }

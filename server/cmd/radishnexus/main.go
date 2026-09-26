@@ -16,6 +16,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/db"
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
+	"github.com/laugh0608/RadishNexus/server/internal/jenkins"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/httptransport"
@@ -139,9 +140,24 @@ func run() error {
 	documentHandler := httptransport.NewDocumentHandler(authService, goldenpath.NewDocumentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy)
 	configurationHandler := httptransport.NewConfigurationHandler(authService, goldenpath.NewConfigurationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy)
 
+	sources, err := runtimeconfig.JenkinsSources(os.Getenv, jenkins.ReadFile)
+	if err != nil {
+		return err
+	}
+	var jenkinsHandler http.Handler
+	if len(sources) > 0 {
+		bindingContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		for _, source := range sources {
+			if err := goldenpostgres.New(pool).ValidateJenkinsBinding(bindingContext, source.WorkspaceID, source.ComponentID); err != nil {
+				return errors.New("Jenkins source target unavailable")
+			}
+		}
+		jenkinsHandler = httptransport.NewJenkinsDeliveryHandler(sources, nexusViewService, sessionPolicy, proxyPolicy, time.Now, httptransport.LogJenkinsDelivery)
+	}
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler, setupHandler, documentHandler, httptransport.NewCIRunNexusViewHandler(authService, nexusViewService, sessionPolicy, proxyPolicy)),
+		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler, setupHandler, documentHandler, httptransport.NewCIRunNexusViewHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), jenkinsHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -248,7 +264,11 @@ func newHandler(
 	mux.Handle("/api/v1/workspaces/", deploymentNexusViewHandler)
 	mux.Handle("/", webHandler)
 
-	return httptransport.WithRequestID(mux)
+	var handler http.Handler = mux
+	if len(identityHandler) >= 6 {
+		handler = httptransport.WithJenkinsDeliveries(handler, identityHandler[5])
+	}
+	return httptransport.WithRequestID(handler)
 }
 
 func healthMethodNotAllowed(response http.ResponseWriter, _ *http.Request) {

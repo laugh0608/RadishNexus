@@ -19,7 +19,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | Project / Channel 发现 | 当前权限过滤、归档可读、稳定 ID 分页、当前成员复核 | 首页 Workspace → Project → Channel 导航；ID 工具保留为次级入口 | 服务端、真实数据库、Web 交互与隔离浏览器验收通过，含分页、撤权刷新、Workspace 切换及桌面 / 手机布局；基础配置已有独立切片证据，见下一行 |
 | 基础对象与首批成员配置 | migration 009、明确初始 admin、普通角色 / 受限成员、配置 Audit / receipt、撤权清理、备份恢复 | owner 创建 Team / Project，Project admin 创建 Channel 与配置成员 | 从正式 bootstrap 的空业务工作区，经 Web 创建、邀请新账户、双层授权、成员发消息与撤权已验收；首次访问 Web 初始化已有独立证据，管理员交接仍缺 |
 | 单 Channel Message 实时 | 单进程 SSE、当前权限、有界回放、撤权与关闭 | canonical Channel 已接入 ready → history → 增量 | 有技术验收；没有目标团队规模与持续使用的容量证据 |
-| CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment | Deployment 与 CI Run 正式只读入口；后者支持来源跳转与已知 ID 打开 | CI Run 正式读取已接通；Jenkins 来源验证入口和 Deployment 写入口尚缺 |
+| CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment | Deployment 与 CI Run 正式只读入口；后者支持来源跳转与已知 ID 打开 | CI Run 正式读取已接通；Jenkins 签名入口与发送工具已完成自动化；真实 Jenkins 采集、联调和 Deployment 写入口尚缺 |
 | EntityLink / Activity | 带来源关系、权限过滤 query、同事务 Activity 更新与版本化全量重建 | Nexus View 可读 Current / 出向与首批入向 Relations / 正常更新的 Timeline | 正常写入与双向发现已通过真实 PostgreSQL / HTTP 和浏览器；未完成持续使用观察 |
 | 自部署与恢复 | 显式 migration、只读 schema readiness、PostgreSQL 17 同 major 空目标恢复 | 健康端点拒绝 migration 缺失 / 漂移 / 版本不匹配；固定工件 Compose 开发拓扑与 HTTPS 演练已有记录 | 新探针已有真实数据库证据；本轮未重跑 Compose，升级失败恢复、运维与生产容量尚未完成 |
 | Document | migration 010、不可变版本、精确 receipt、当前 Project 权限、单一受限 Markdown parser、备份恢复 | Ticket 创建、Project 文档列表、阅读 / 编辑 / 预览、显式冲突重新应用、历史恢复 | 真实数据库及隔离 HTTPS 双标签页、恢复、手机布局、撤权已有证据；原生中文 IME、普通成员独立持续使用仍待验收 |
@@ -51,7 +51,9 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 共享工作台改版已提交为 `b19b722`。所有者随后确认 [ADR-0029](../adr/0029-session-scoped-ci-run-nexus-view.md)，现已将 CI Run 内部安全查询接到正式 GET 接口、React 页面、Deployment 来源跳转和首页次级 ID 工具，复用当前 Component 权限与来源脱敏。服务端、真实 PostgreSQL 与 Web 自动化通过；精确范围、浏览器检查及下一段分工见[实施记录](reviews/2026-09-26-jenkins-next-slice.md)。
 
-下一步冻结并实现 Jenkins 来源 adapter：来源绑定、凭据、签名 / 重放、终态映射、失败审计与有界重试；合同就绪后再用已有或隔离 Jenkins 实例做真实联调。当前没有安装部署 Jenkins，也未接通外部构建送达。staging 写入口与交付关系继续独立推进。
+CI Run 读取切片已提交为 `a394ed6`，未 push。所有者随后确认 [ADR-0030](../adr/0030-authenticated-jenkins-delivery-adapter.md)，受控来源绑定、文件 Secret、HMAC / 重放窗口、终态映射、脱敏运行记录与有限重试发送工具已实现，无数据库迁移或新依赖。Go、隔离 TLS 和真实 PostgreSQL 自动化通过，含提交后响应丢失的幂等恢复；精确证据与边界见[来源接入记录](reviews/2026-09-26-jenkins-adapter.md)。
+
+下一步选择已有或隔离 Jenkins 实例，建立可信的终态采集并做真实成功 / 失败 / 取消联调；实际实例、来源配置、凭据和发送目标仍需部署 / 发送授权。当前没有安装 Jenkins，也没有真实外部构建送达；发送工具消费测试快照不能替代采集验收。staging 写入口与交付关系继续独立推进。
 
 ### 本轮完成：最小 Markdown Document
 
@@ -90,7 +92,7 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - 关系分页、反向索引、查询容量与跨对象 Timeline；事务内 Activity 更新、重建并发及首批 direction 合同已由 ADR-0022 冻结；
 - 管理员交接、其他协作对象发现、账号恢复与应急入口；基础配置和首访 owner 初始化已由 ADR-0026 / ADR-0027 冻结；
 - Document 正式页面原生中文 IME 与持续使用证据；正式富文本与 CRDT、受控脱敏和可移植导出仍未完成；
-- Jenkins 来源验证、Secret 使用、失败审计、Repository 映射与交付关系；
+- Jenkins 真实终态采集与实例联调、持久来源管理 / 安全审计、Repository 映射与交付关系；
 - PostgreSQL 支持矩阵、schema 兼容窗口、forward repair、数据库权限拆分和容量基线；
 - Decision 拒绝、替代、复核与 Ticket 基础执行状态的交互；
 - 安全 Audit、消息 / 事件 / receipt 的保留和受控脱敏边界；
