@@ -1,8 +1,8 @@
 # Jenkins 终态 delivery 接入
 
-状态：按 [ADR-0030](../docs/adr/0030-authenticated-jenkins-delivery-adapter.md) 实现；自动化已验证，真实 Jenkins 采集与实例联调尚未验收。
+状态：按 [ADR-0030](../docs/adr/0030-authenticated-jenkins-delivery-adapter.md) 实现；自动化与真实 Jenkins 三态隔离联调已验证，持续采集和业务实例配置仍待完成。
 
-这是 Nexus 自定义的受控机器写入口。接收端验证来源后调用已有 CI Run service，发送命令只发送一份可信终态快照；不会安装 Jenkins、触发构建、轮询 Jenkins 或创建 Deployment。构建完成到快照的可信采集是下一步实际联调的一部分，不能用手写 JSON 替代真实构建证据。
+这是 Nexus 自定义的受控机器写入口。接收端验证来源后调用已有 CI Run service，发送命令只发送一份可信终态快照；不会安装 Jenkins、触发构建、轮询 Jenkins 或创建 Deployment。构建完成到快照的可信采集由独立 Jenkins 实验验证，不能用手写 JSON 替代真实构建证据；持久运行的采集与转发仍需另行设计。
 
 ## 接收端配置
 
@@ -106,4 +106,4 @@ go run ./cmd/jenkins-delivery -config /run/config/jenkins-sender.json -input /ru
 
 没有 schema 变更。CI Run 与 receipt 按现有备份规则保留，来源配置与密钥不进入数据库或可移植导出；恢复后需重新建立来源授权。禁用配置并重启可以停止新写入，回退服务工件不删除历史记录。
 
-尚未在真实 Jenkins 实例上验证采集、专用 job、受控发送凭据、取消和失败构建；也没有新增 Component 管理页面、staging 写入口、production 部署、通用插件配置 UI 或 Jenkins 默认 Compose 服务。
+真实 Jenkins controller / agent 已完成成功、失败、取消构建以及 finalized 快照交付，证据与实验边界见[隔离联调记录](../docs/status/reviews/2026-09-26-real-jenkins-lab.md)和[实验操作说明](../experiments/jenkins-lab/README.md)。该批次使用临时接收端和测试数据，不代表持久来源配置或持续采集完成。staging 显式记录另由 [ADR-0031](../docs/adr/0031-session-scoped-staging-deployment-recording.md) 的 Session 入口提供，不是 adapter 的自动行为；Component / Environment 管理页面、授权管理、production 部署、通用插件配置 UI 和默认 Compose Jenkins 服务仍未提供。

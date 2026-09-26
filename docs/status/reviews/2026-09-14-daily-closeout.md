@@ -32,4 +32,4 @@ Web README 已描述配置入口、SetupGate 和敏感输入清理；当日 ADR�
 - 合同准备时已运行既有编辑器实验 `npm run check`：28 项测试、构建及 115 包依赖基线检查通过；原有实验 bundle 大小提示保留。这不证明 goldmark 或正式 Document 已通过安全测试。
 - 本轮文档收尾运行 `git diff --check` 与 `./scripts/check-repo.sh`。不重新启动数据库、浏览器或 Compose；没有依赖 / lockfile、业务代码或 schema 改动。
 - 当日 HTTPS 浏览器证据覆盖从空业务工作区配置到普通成员发消息，以及空账户实例首访创建 owner 并登录；对应任务环境已按原记录清理。完整 Compose 镜像部署、Linux Secret 挂载、生产运维、管理员交接与完整 Golden Path 仍未完成。
-- 所有本日提交位于本地 `dev`，没有 push、PR、发布、真实实例 migration 或部署。次日事项集中维护在[当前状态](../current.md#明天事项2026-09-15)；本记录不维护第二套执行计划。
+- 所有本日提交位于本地 `dev`，没有 push、PR、发布、真实实例 migration 或部署。次日事项集中维护在[当前状态的近期执行顺序](../current.md#近期执行顺序)；本记录不维护第二套执行计划。

@@ -2,7 +2,7 @@
 
 状态：M0 契约基线，已由 ADR-0002 接受
 
-日期：2026-09-14
+日期：2026-09-26
 
 ## 目的
 
@@ -47,10 +47,11 @@ M0 首批冻结以下类型名与 ID 前缀：
 | `message` | `msg_` | 不可变原始讨论记录 |
 | `thread` | `thr_` | 作为讨论证据的 Thread |
 | `ticket` | `tkt_` | 可执行工作对象 |
+| `document` | `doc_` | Project 内有不可变 Markdown 版本的文档 |
 | `ci-run` | `cir_` | 一次构建或流水线运行 |
 | `deployment` | `dpl_` | 一次显式记录的部署终态事实 |
 
-Document 的 `document / doc_` 已由 [ADR-0028](../adr/0028-minimal-markdown-document.md) 冻结，但尚未进入上表对应的正式运行时注册表。Repository 等其余 Golden Path 类型进入同一注册表时，其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结；CI Run 的来源和幂等边界由 [ADR-0006](../adr/0006-verified-jenkins-delivery-and-ci-run.md) 冻结；Deployment 由 [ADR-0009](../adr/0009-explicit-staging-deployment.md) 冻结；Channel、Message 与 messaging-origin Thread 由 [ADR-0017](../adr/0017-channel-message-boundary-and-single-process-realtime.md) 冻结；Thread → Decision → Ticket 的 Session transport 与命令 receipt 由 [ADR-0019](../adr/0019-session-scoped-thread-decision-ticket-transport.md) 冻结。
+Document 的 `document / doc_` 已按 [ADR-0028](../adr/0028-minimal-markdown-document.md) 进入 Go 注册表与 migration 010，Ticket → Document 的 `relates-to` 保留来源并按当前 Project 权限提供双向读取。Repository 等其余 Golden Path 类型进入同一注册表时，其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结；CI Run 的来源和幂等边界由 [ADR-0006](../adr/0006-verified-jenkins-delivery-and-ci-run.md) 冻结；Deployment 由 [ADR-0009](../adr/0009-explicit-staging-deployment.md) 冻结；Channel、Message 与 messaging-origin Thread 由 [ADR-0017](../adr/0017-channel-message-boundary-and-single-process-realtime.md) 冻结；Thread → Decision → Ticket 的 Session transport 与命令 receipt 由 [ADR-0019](../adr/0019-session-scoped-thread-decision-ticket-transport.md) 冻结。
 
 ### 结构化表示
 
@@ -143,7 +144,7 @@ request_context
 - staging Deployment 只由明确用户的独立 command 记录。调用者必须是 active Workspace 成员，并持有目标 Environment 的 active 显式授权；Project 角色、Component、EntityLink、CI source 或 plugin actor 均不授予该能力。
 - 目标必须是 active staging Environment，来源必须是 succeeded CI Run。CI Run 写入路径不调用 Deployment，production 也不能通过改名或普通参数进入该 command。
 - Deployment 是不可变终态事实，同一 Environment 与 CI Run 组合唯一；它保留 authorization、actor、source 和时间，但不冒充外部执行日志或通用 Audit。
-- 成功命令原子写入 Deployment、asserted user `deploys` 关系、`deployment.recorded` 和 Outbox。事件只保留 status、Environment 与 CI Run 引用。精确边界见 [ADR-0009](../adr/0009-explicit-staging-deployment.md)。
+- 成功命令原子写入 Deployment、receipt、asserted user `deploys` 关系、`deployment.recorded`、Outbox 和 Activity。事件只保留 status、Environment 与 CI Run 引用。首次与精确重试都复核当前读取和环境写授权，receipt 不授予能力；同一 Environment / CI Run 的不同操作仍冲突。初始领域边界见 [ADR-0009](../adr/0009-explicit-staging-deployment.md)，公共入口和重试扩展以 [ADR-0031](../adr/0031-session-scoped-staging-deployment-recording.md) 为准。
 
 ### Environment 与 Deployment 的 M0 读取
 
@@ -267,7 +268,7 @@ safe_facts
 
 ### 正常更新与协作对象反向发现
 
-[ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md) 将当前五类 Activity 事件接入同一业务事务；投影完成与业务提交一致，失败整单回滚。显式重建先取得投影表写入排他锁，再读取新的源事件快照，保留完整版本并避免覆盖并发提交。旧数据仍由显式重建补齐，不随启动自动执行。
+[ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md) 将首批五类 Activity 事件接入同一业务事务；投影完成与业务提交一致，失败整单回滚。显式重建先取得投影表写入排他锁，再读取新的源事件快照，保留完整版本并避免覆盖并发提交。后续基础配置与 Document 扩展事件映射；当前投影版本为 2，包含 `document.created` 与 `document.revised`，恢复历史通过 revised 事件记录来源版本。旧数据仍由显式重建补齐，不随启动自动执行。
 
 Thread ← Decision、Decision ← Ticket 从同一权威 EntityLink 反向读取，不复制镜像关系。协作 readable relation 明确 `direction`，不可读反向目标完全隐藏；原 evidence restricted 占位不携带方向或目标信息。结果排序、全量读取成本和 Go / Web 同步升级边界见 ADR-0022。Timeline 仍投影到原事件主要对象，不自动向所有关系端点传播。
 
@@ -283,11 +284,11 @@ Thread ← Decision、Decision ← Ticket 从同一权威 EntityLink 反向读�
 
 一项操作可以同时产生领域事件、Activity 和 Audit，但它们的 payload、保留周期和读取权限分别定义，不能通过复制同一 JSON 假装职责相同。
 
-## 最小 Document 合同（已接受，待实现）
+## 最小 Document 合同
 
 [ADR-0028](../adr/0028-minimal-markdown-document.md) 冻结 Project 作用域 Document、不可变 Markdown revision、base revision 冲突、恢复追加、单一服务端安全解析、Ticket 来源关系以及新增 HTTP 面。版本是文档内编号，不是独立 EntityRef；正文中的引用不自动建立关系或授予权限。写入复用既有 collaboration receipt 范围，成功返回 applied revision 后重新读取当前权威对象。
 
-Document / revision、关系、receipt、领域事件和必要 Outbox 纳入权威恢复范围；展示树可重建，Activity 仍从事件重建。当前 Go / SQL 注册表、resolver、projector 和 Web adapter 均尚未扩展；本节不宣称 Document API 可调用，精确字段、事件和验收矩阵以 ADR 为准。
+Document / revision、关系、receipt、领域事件和必要 Outbox 纳入权威恢复范围；展示树可重建，Activity 仍从事件重建。Go / SQL 注册表、resolver、版本 2 projector、Session HTTP 与 Web adapter 已按该合同接通；精确字段和事件以 ADR 为准，实际验收范围见[实施记录](../status/reviews/2026-09-26-markdown-document.md)。
 
 ## 基础配置命令
 
@@ -316,8 +317,8 @@ Document / revision、关系、receipt、领域事件和必要 Outbox 纳入权�
 4. Decision 草案必须保留 evidence 引用。当前正式写入产生 `decision.proposed`，在同事务投影到 Decision；Thread 通过 incoming Relations 发现该 Decision。`entity-link.created` 与向 Thread Timeline 投影后续事件仍未落地，扩展时另行冻结事件、correlation 与目标投影合同，不为反向读取复制关系事实。
 5. 有确认权限且能读取全部 evidence 的人通过显式确认接受 Decision，产生 `decision.accepted`。Project 管理角色不自动穿透 restricted Thread；系统生成内容只能保留为草案，不能作为 actor 完成接受。精确 retry 仍重新检查当前 evidence 权限，receipt 不授予能力。
 6. 从 Decision 创建 Ticket，Ticket、用户命令 receipt 与 `implements` 关系保留来源，不复制 Thread 正文。读取 Ticket 但不能读取 Thread 的用户只在对象页看到不可识别目标的通用受限占位。
-7. Jenkins 重复发送同一 delivery 时只产生一个 CI Run；相同幂等键的 digest 变化直接冲突。正式核心只接收已经完成来源验证与字段映射的 delivery，并把 receipt、CI Run、`ci-run.recorded` 和 Outbox 原子提交；外部失败重试和安全审计由后续 adapter 定义，不阻塞聊天和 Decision 写入。
-8. 构建成功只更新 CI Run。只有 active 用户持有目标 Environment 的显式授权后，才能通过独立 command 原子记录 staging Deployment、`deploys` 关系、`deployment.recorded` 和 Outbox；该 command 不执行外部部署。
+7. Jenkins 重复发送同一 delivery 时只产生一个 CI Run；相同幂等键的 digest 变化直接冲突。正式核心只接收已经完成来源验证与字段映射的 delivery，并把 receipt、CI Run、`ci-run.recorded` 和 Outbox 原子提交；[ADR-0030](../adr/0030-authenticated-jenkins-delivery-adapter.md) 的 adapter 负责受控来源、签名 / 重放、有限重试与脱敏运行记录，不阻塞聊天和 Decision 写入；持久采集与通用安全 Audit 仍未完成。
+8. 构建成功只更新 CI Run。只有 active 用户持有目标 Environment 的显式授权后，才能按 [ADR-0031](../adr/0031-session-scoped-staging-deployment-recording.md) 通过独立 Session command 原子记录 staging Deployment、receipt、`deploys` 关系、`deployment.recorded`、Outbox 和 Activity；精确重试复核当前读取与写授权后返回原结果，该 command 不执行外部部署。
 9. 备份恢复保留所有稳定 ID、关系来源、事件 correlation 和审计；Activity 可以重新投影且不产生重复项。
 
 ## M0 验证清单
@@ -340,7 +341,7 @@ M0 实验与正式纵向切片累计必须证明：
 
 ## 后续仍需决定
 
-- EntityID 的具体生成算法，以及 Repository 等尚未冻结的类型前缀；Document 前缀与业务合同已由 ADR-0028 接受，正式注册与存储仍待实施；
+- EntityID 的具体生成算法，以及 Repository 等尚未冻结的类型前缀；Document 前缀、业务合同、正式注册与存储已按 ADR-0028 落地；
 - 后续对象的 PostgreSQL 表、约束、索引，以及事件事实和投递状态的保留与演进策略；
 - 关系类型注册表的完整方向、基数和 metadata schema；
 - Team 角色继承、对象分享、跨 Project 转换和管理员 break-glass 策略；

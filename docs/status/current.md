@@ -41,13 +41,22 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 | 顺序 | 下一切片 | 交付与退出判据 |
 | --- | --- | --- |
-| 1 | 最小 Markdown Document 验收收尾（人工部分暂缓） | [ADR-0028](../adr/0028-minimal-markdown-document.md) 的正式实现、数据库 / Web 自动化与隔离浏览器流程已接通；恢复人工验收时补正式 textarea 的 macOS 原生中文 IME 组合输入、候选确认与显式保存复核，见[本轮记录](reviews/2026-09-26-markdown-document.md) |
-| 2 | 真实 Jenkins 与 staging 记录链 | 来源验证、幂等和失败隔离连接到已有 CI Run service，用户可读取真实构建并显式记录外部已完成的 staging Deployment；贯通 Ticket / Component / Repository 与交付关系，不依赖预置交付事实 |
+| 1 | Environment / Component 最小配置与环境授权管理范围 | 对照既有对象、当前权限与配置 Audit / receipt，冻结最小创建 / 发现、显式授予 / 撤销环境授权和验收范围；涉及权限或公共协议的内容确认后再实施，不让 owner Team 或 Project 角色隐式获得部署权 |
+| 2 | 交付链剩余关系与持续采集 | 在已完成的 CI Run 读取、Jenkins 隔离三态采集和 staging 显式记录之上，分别推进 Repository 映射、Ticket / Component / 交付关系和持续采集；逐段移除对预置配置的依赖 |
+| 暂缓 | 最小 Markdown Document 人工验收 | 正式实现和隔离浏览器已验证；待所有者恢复人工验收时补 macOS 原生中文 IME，见[实施记录](reviews/2026-09-26-markdown-document.md)，不阻塞上述切片 |
 | 3 | 小团队场景试用 | 满足评估授权与必要运维条件后，以真实需求连续使用并记录追溯、重复录入和人工干预；按 Golden Path 验收决定下一批功能，不把一次演示当作持续使用完成 |
 
 免费书面授权与评估说明应在邀请外部团队前准备，不能等到完整聊天或 CRDT 完成；版本化结构化导出与全新实例导入仍是 M1 的独立退出条件。账号恢复、安全审计、数据生命周期、数据库最小权限与升级演练按[路线图](../roadmap.md)的试用和生产边界推进，不因本表只列近期切片而取消。
 
-### 本轮完成：CI Run 正式读取
+### 明天事项（2026-09-27）
+
+1. 先检查 `dev` 工作区和本日[收尾记录](reviews/2026-09-26-daily-closeout.md)，继续表中首项；今天结束后不继续开发或自动启动服务。
+2. 核对 Environment / Component 的现有 schema、读取权限和环境授权约束，复用既有基础配置模式，写出最小配置与授权管理 ADR 提案。明确操作者、授予 / 撤销边界、配置审计、幂等、所需 migration 与公共 API 的影响，交由所有者确认。
+3. 确认后再实现从正式配置到 staging 记录的纵向切片，并覆盖撤权、重复请求、失败回滚和正常 Activity；不顺带加入 production、执行器、Repository 全量管理或持久 Jenkins 服务。
+
+原生 IME 人工验收继续暂缓；真实团队试用仍受评估授权与运维退出条件约束。此清单只记录接续事项，不构成新的实现、服务启动或远程操作授权。
+
+### 本轮完成：CI Run、Jenkins 与 staging 记录
 
 共享工作台改版已提交为 `b19b722`。所有者随后确认 [ADR-0029](../adr/0029-session-scoped-ci-run-nexus-view.md)，现已将 CI Run 内部安全查询接到正式 GET 接口、React 页面、Deployment 来源跳转和首页次级 ID 工具，复用当前 Component 权限与来源脱敏。服务端、真实 PostgreSQL 与 Web 自动化通过；精确范围、浏览器检查及下一段分工见[实施记录](reviews/2026-09-26-jenkins-next-slice.md)。
 
@@ -57,7 +66,7 @@ Jenkins adapter 已提交为 `0001a82`，未 push。所有者确认本机 Docker
 
 真实 Jenkins 联调已提交为 `be780b7`，未 push。所有者随后确认 [ADR-0031](../adr/0031-session-scoped-staging-deployment-recording.md)，现已接通成功 CI Run → 已授权 staging 环境 → 显式确认外部部署终态 → Deployment 回读。新增两个 Session 端点与 migration 011，复用唯一 Deployment 事务和既有 receipt，精确重试不重复生成事实。Go、真实 PostgreSQL、备份恢复、Web 和隔离 HTTPS 浏览器验收通过；桌面 / 手机、失败结果与成功构建分离、撤权后禁止记录及历史仍可读已有证据，见[实施记录](reviews/2026-09-26-staging-deployment-recording.md)。本轮临时服务和测试数据已清理，未启动 Jenkins 或部署到业务实例。
 
-下一步优先冻结 Environment / Component 最小配置与显式环境授权管理的独立范围，使交付记录不再依赖预置配置；配置权限、审计与公共协议需另行确认后实施。随后推进 Repository 映射、交付关系及 Jenkins 持续采集，保持构建事实、部署记录和实际执行的边界。
+staging 记录切片已提交为 `486a330`，未 push。下一步统一按上方近期顺序与明天事项推进；当日提交和文档核对见[收尾记录](reviews/2026-09-26-daily-closeout.md)。
 
 ### 本轮完成：最小 Markdown Document
 
@@ -104,6 +113,8 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
 
 ## 证据与历史
+
+- [2026-09-26 提交回顾与文档收尾](reviews/2026-09-26-daily-closeout.md)：当日八笔实现 / 设计提交、文档漂移修正与次日接续入口。
 
 - [2026-09-26 工作台与 Document 视觉落地](reviews/2026-09-26-workbench-ui.md)：正式 React、响应式、键盘与交互回归及证据边界。
 

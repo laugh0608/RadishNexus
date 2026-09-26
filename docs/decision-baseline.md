@@ -137,6 +137,8 @@
 - M0 staging Deployment 只由明确用户通过受控 `web / api` 调用记录；调用者必须是 active Workspace 成员，并持有目标 active staging Environment 的 active 显式授权。
 - Project 角色、owner Team、CI source 和成功构建都不隐式授予部署能力。记录必须保留实际操作者、所用授权、来源 CI Run 与 Environment，并与 `deploys` 关系、领域事件和 Outbox 原子提交。
 - M0 Deployment 读取要求同 Workspace 的 active 成员同时能读取目标 Environment 与来源 CI Run；写授权不授予读取、也不是读取历史的必要条件。不可读对象统一返回 not-found，Environment 归档不隐藏既有事实。
+- [ADR-0029](adr/0029-session-scoped-ci-run-nexus-view.md) 开放 CI Run 的 Session 安全读取；[ADR-0030](adr/0030-authenticated-jenkins-delivery-adapter.md) 明确来源绑定、文件 Secret、HMAC / 重放窗口和有限重试，不把 Jenkins 来源身份转成用户部署授权。
+- [ADR-0031](adr/0031-session-scoped-staging-deployment-recording.md) 开放已授权 staging 目标分页与 Session 显式记录，复用 collaboration receipt；首次和精确重试都复核当前权限，相同内容返回原结果，变化内容或不同操作 / 用户重复同一 Environment / CI Run 冲突。该 ADR 部分替代 ADR-0009 的内部入口与重复一律冲突约定，migration 011 扩展 receipt 而不回填历史身份。
 - 当前 Deployment command 只记录调用方已经确认的外部终态事实，不执行部署、不读取 Secret，也不支持 production、审批、回滚或运行中状态。精确技术契约以 [ADR-0006](adr/0006-verified-jenkins-delivery-and-ci-run.md)、[ADR-0007](adr/0007-component-scoped-ci-run-read.md)、[ADR-0009](adr/0009-explicit-staging-deployment.md) 与 [ADR-0011](adr/0011-workspace-scoped-deployment-read.md) 为准。
 
 ### D-018 可验证 PostgreSQL 备份恢复
@@ -175,7 +177,7 @@
 ### D-022 基础配置与最小 Document
 
 - 基础对象创建与首批普通成员管理按 [ADR-0026](adr/0026-foundation-configuration-and-membership.md) 实施；创建 Project 必须明确初始 admin，受限 Channel 保留窄授权，撤权清理从属权限，Audit 与 receipt 不可变。管理员交接不由普通成员配置隐式完成。
-- 最小 Document 按 [ADR-0028](adr/0028-minimal-markdown-document.md) 冻结身份、Project 权限、权威 Markdown、不可变版本、显式保存 / 冲突 / 恢复与 Ticket 来源关系；合同已接受，正式实现未开始。后续结构化编辑与 CRDT 仍按 ADR-0021 分阶段推进。
+- 最小 Document 按 [ADR-0028](adr/0028-minimal-markdown-document.md) 冻结身份、Project 权限、权威 Markdown、不可变版本、显式保存 / 冲突 / 恢复与 Ticket 来源关系；正式实现已接通，验收成熟度由[当前状态](status/current.md)维护。后续结构化编辑与 CRDT 仍按 ADR-0021 分阶段推进。
 
 ## 尚未冻结
 
@@ -193,6 +195,8 @@
 - 是否以及何时引入 AI 能力。
 
 ## 变更记录
+
+- 2026-09-26：按已确认 ADR-0029 / 0030 / 0031 同步 CI Run 公共读取、Jenkins 受控来源与 staging 显式记录及精确重试合同，修正最小 Document 实施状态。实现包含 migration 010 / 011 与已授权 goldmark 依赖，具体迁移和回退见对应 ADR；本次收尾不新增权限、公共协议或依赖决策。
 
 - 2026-09-14：同步已接受 ADR-0026 / ADR-0027 的基础配置与首访初始化，以及 ADR-0028 的最小 Document 合同；区分已实现入口和待实施文档能力，不改变完整 Golden Path 与长期阶段门槛。
 

@@ -1,6 +1,6 @@
 # RadishNexus Web
 
-`web/` 是 RadishNexus 第一正式产品形态的 React + TypeScript 入口。当前根路径已经建立最小 authenticated Web Shell，消费正式 login / session / logout transport，允许从当前 Session context 选择 Workspace、分页浏览可读 Project 并打开可读 Channel；Deployment、Thread、Decision 与 Ticket 的已知 ID 工具保留在次级入口。Deployment 页面安全读取 Nexus View；Channel 页面通过类型化 adapter 分页读取 Message、幂等发送并从 Message 发起 Thread；Thread → Proposed Decision → 人工 Accepted Decision → Ticket 继续使用权限过滤后的 canonical Nexus View 和幂等短请求。原 Decision、CI Run 与 Deployment 代表原型移动到显式 `/prototype/nexus-view`，不参与真实失败 fallback。
+`web/` 是 RadishNexus 第一正式产品形态的 React + TypeScript 入口。当前根路径已经建立最小 authenticated Web Shell，消费正式 login / session / logout transport，允许从当前 Session context 选择 Workspace、分页浏览可读 Project 并打开可读 Channel；Deployment、CI Run、Thread、Decision 与 Ticket 的已知 ID 工具保留在次级入口。Deployment / CI Run 页面安全读取 Nexus View，成功 CI Run 可显式记录外部 staging 部署结果；Ticket 可创建 Markdown Document，Project 提供文档列表，Document 页面提供编辑与历史恢复；Channel 页面通过类型化 adapter 分页读取 Message、幂等发送并从 Message 发起 Thread；Thread → Proposed Decision → 人工 Accepted Decision → Ticket 继续使用权限过滤后的 canonical Nexus View 和幂等短请求。原 Decision、CI Run 与 Deployment 代表原型移动到显式 `/prototype/nexus-view`，不参与真实失败 fallback。
 
 ## 本地运行
 
@@ -49,7 +49,7 @@ npm run dev
 - CI Run fixture 与后端安全投影同形，只包含状态、四个受控时间、当前 Component 与唯一 `ci-run.recorded`；不包含 source ID、external run key、delivery receipt、digest、Secret、原始 payload 或外部 URL。
 - Deployment fixture 只包含终态、三个受控时间、Environment、来源 CI Run、`deploys` Relation 与唯一 `deployment.recorded`；不包含 authorization、调用 source、Jenkins 来源字段或执行日志，并明确区分“来源构建成功”和“部署失败”。
 - 状态检视器只用于人工复核 Deployment 的 succeeded、failed、loading 与 error；Decision 的 empty / restricted 和 CI Run 的安全状态继续由组件测试覆盖。检视器不是未来产品导航。
-- 当前 authenticated shell、账户页、Deployment、Channel、Thread、Decision、Ticket 与代表检视器由最小 pathname adapter 识别，不引入 router、状态库、组件库、图标包或远程字体。production build 由 Go server 从显式绝对 `RADISHNEXUS_WEB_ROOT` 同源交付；缓存、安全 Header 与页面 allowlist 基线见 [ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md)，账户页扩展见 ADR-0023。
+- 当前 authenticated shell、账户页、Deployment、CI Run、Document / Project 文档列表、Channel、Thread、Decision、Ticket 与代表检视器由最小 pathname adapter 识别，不引入 router、状态库、组件库、图标包或远程字体。production build 由 Go server 从显式绝对 `RADISHNEXUS_WEB_ROOT` 同源交付；缓存、安全 Header 与页面 allowlist 基线见 [ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md)，账户页扩展见 ADR-0023。
 
 ## 依赖与许可证
 
@@ -85,7 +85,7 @@ Document 默认集中阅读，来源 Ticket 保留标题下入口；信息展开
 
 `nexus-view/ci-run-api.ts` 校验 [ADR-0029](../docs/adr/0029-session-scoped-ci-run-nexus-view.md) 的字段白名单、终态、受控时间和一致的 Component / Timeline，并消费同源无缓存 GET。`CIRunPage.tsx` 复用已登录工作台与 Nexus View 组件，提供主动重读、失败重试、焦点复权、401 退出与 404 清空；取消或迟到响应不能覆盖更新后的视图。空开始时间显示“未提供”。
 
-正式路径为 `/workspaces/{workspace_id}/ci-runs/{ci_run_id}`。首页次级 ID 工具支持 `cir_`，Deployment 页可跳转来源 CI Run；Component 本身尚无正式页面，不制造无效跳转。页面说明构建成功不代表已经部署，不提供部署写操作或 Jenkins 外部地址。静态代表数据仍只服务原型和测试。
+正式路径为 `/workspaces/{workspace_id}/ci-runs/{ci_run_id}`。首页次级 ID 工具支持 `cir_`，Deployment 页可跳转来源 CI Run；Component 本身尚无正式页面，不制造无效跳转。页面说明构建成功不代表已经部署，不公开 Jenkins 外部地址；成功构建的显式记录入口见下节，失败 / 取消构建不提供该动作。静态代表数据仍只服务原型和测试。
 
 ## staging 部署结果记录
 
