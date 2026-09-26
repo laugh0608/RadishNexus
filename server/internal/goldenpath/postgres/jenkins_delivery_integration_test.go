@@ -211,6 +211,7 @@ func assertJenkinsDeliveryHTTP(t *testing.T, ctx context.Context, pool *pgxpool.
 			t.Fatal(query, count, err)
 		}
 	}
+	assertRealJenkinsLabSnapshots(t, ctx, pool, auth, sessionToken)
 	var deploymentsAfter int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM radishnexus.deployments`).Scan(&deploymentsAfter); err != nil || deploymentsAfter != deploymentsBefore {
 		t.Fatal("unexpected deployment", deploymentsAfter, err)
