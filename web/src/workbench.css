@@ -1,0 +1,239 @@
+/* Radish family Workbench tokens, shared by authenticated pages. */
+.workbench {
+  --ink: #2f2a25;
+  --muted: #6a5c4f;
+  --faint: #6a5c4f;
+  --paper: #f7f4ee;
+  --paper-strong: #fffdf8;
+  --surface: #fffdf8;
+  --line: #ddd6cb;
+  --line-strong: #b6aa9a;
+  --brand: #5d6c57;
+  --accent: #e7eced;
+  --accent-dark: #435c74;
+  --error: #a0423a;
+  --error-soft: #f7e9e5;
+  min-height: 100dvh;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.workbench a {
+  color: var(--accent-dark);
+  text-underline-offset: 3px;
+}
+.workbench button {
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.workbench button:hover:not(:disabled) {
+  background: #f3eee5;
+}
+.workbench .primary-button {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+  color: #fffdf8;
+  border-radius: 8px;
+  box-shadow: none;
+}
+.workbench .primary-button:hover:not(:disabled) {
+  background: #344a60;
+}
+.workbench button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.workbench :is(button, a, input, textarea, select, summary):focus-visible {
+  outline: 2px solid var(--accent-dark);
+  outline-offset: 3px;
+}
+.workbench-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 224px;
+  padding: 20px 12px 16px;
+  background: var(--paper);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+.workbench .workbench-brand {
+  color: var(--brand);
+  text-decoration: none;
+  font-size: 18px;
+  font-weight: 650;
+}
+.workbench-workspace {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.workbench-workspace span:first-child {
+  min-width: 0;
+}
+.workbench :is(.workbench-sidebar, .workbench-drawer) nav {
+  display: grid;
+  gap: 4px;
+}
+.workbench :is(.workbench-sidebar, .workbench-drawer) nav a {
+  display: block;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.workbench nav a[aria-current="page"],
+.workbench :is(.workbench-sidebar, .workbench-drawer) nav a:hover {
+  background: #e7eced;
+}
+.workbench-account {
+  display: grid;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+.workbench-content {
+  min-width: 0;
+  margin-left: 224px;
+}
+.workbench-mobile-bar {
+  display: none;
+}
+.workbench-drawer {
+  color: var(--ink);
+  background: var(--paper);
+  border: 0;
+  border-right: 1px solid var(--line);
+  width: min(320px, calc(100% - 32px));
+  max-width: none;
+  max-height: none;
+  height: 100dvh;
+  margin: 0;
+  padding: 20px;
+}
+.workbench-drawer[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.workbench-drawer::backdrop {
+  background: rgb(47 42 37 / 35%);
+}
+.workbench .drawer-close {
+  align-self: flex-end;
+}
+.skip-link {
+  position: fixed;
+  top: -100px;
+  left: 16px;
+  z-index: 30;
+  padding: 12px;
+  background: var(--surface);
+}
+.skip-link:focus {
+  top: 8px;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.workbench .shell-alert {
+  margin: 0;
+  padding: 16px 28px;
+  background: var(--error-soft);
+  color: var(--error);
+}
+.workbench .workspace-home {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--surface);
+}
+.workbench .workspace-home .shell-welcome {
+  color: var(--ink);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.workbench .shell-welcome::after {
+  display: none;
+}
+.workbench .shell-welcome h1 {
+  font-family: inherit;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: normal;
+  line-height: 1.4;
+}
+.workbench .shell-welcome > p {
+  color: var(--muted);
+}
+.workbench .workspace-launcher {
+  background: var(--surface);
+}
+.workbench .section-kicker {
+  color: var(--muted);
+}
+.workbench .identity-section {
+  margin-block: 0;
+}
+@media (max-width: 900px) {
+  .workbench-sidebar {
+    display: none;
+  }
+  .workbench-content {
+    margin-left: 0;
+  }
+  .workbench-mobile-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 60px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 12;
+  }
+  .workbench-mobile-bar .workbench-brand {
+    flex: 1;
+    font-size: 16px;
+  }
+  .workbench-mobile-bar > a:last-child {
+    display: grid;
+    place-items: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .workbench button,
+  .workbench :is(.workbench-sidebar, .workbench-drawer) nav a {
+    min-height: 44px;
+  }
+}

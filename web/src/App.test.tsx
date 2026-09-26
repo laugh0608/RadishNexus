@@ -221,7 +221,9 @@ describe("authenticated Web Shell", () => {
     );
 
     expect(await screen.findByText("Canonical Channel body.")).toBeDefined();
-    expect(screen.getByText("真实 API · Main Workspace")).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Main Workspace 切换" }),
+    ).toBeDefined();
     expect(channelClient.listMessages).toHaveBeenCalledWith(
       "wrk_main",
       "chn_team",
@@ -244,7 +246,9 @@ describe("authenticated Web Shell", () => {
     );
 
     expect(await screen.findByText("部署成功")).toBeDefined();
-    expect(screen.getByText("真实 API · Main Workspace")).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Main Workspace 切换" }),
+    ).toBeDefined();
     expect(screen.queryByLabelText("原型状态检视")).toBeNull();
     expect(loader).toHaveBeenCalledWith(
       "wrk_main",
@@ -267,7 +271,9 @@ describe("authenticated Web Shell", () => {
     expect(
       await screen.findByRole("heading", { name: "Canonical Thread" }),
     ).toBeDefined();
-    expect(screen.getByText("真实 API · Main Workspace")).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Main Workspace 切换" }),
+    ).toBeDefined();
     expect(collaborationClient.loadView).toHaveBeenCalledWith(
       "wrk_main",
       "thread",

@@ -6,7 +6,7 @@
 
 M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 React Web 已建立若干真实业务切片，尚未完成可由普通成员独立操作、持续使用的完整 Golden Path。
 
-本地邮箱账户与邀请已按 [ADR-0023](../adr/0023-local-account-and-radish-oidc-login.md) 建立。项目所有者已明确将 Radish OIDC 接入延后，schema readiness 和 Project / Channel 首批发现入口已完成，基础对象与首批成员配置已接通，部署后首次访问初始化也已接通。最小 Markdown Document 已按 ADR-0028 接入正式 Go、PostgreSQL 与 Web，自动化和隔离 HTTPS 浏览器已验证创建、保存、冲突、恢复与撤权；正式页面的 macOS 原生中文 IME 尚未验收，项目所有者现已明确暂缓人工验收，并明确视觉语言主要参考 RadishX 的 Radish 家族规范、页面重点参考 AFFiNE / Mattermost / AppFlowy；已确认使用 pen.dev 推进共享工作台与 Document 代表页，静态稿已按实际界面参考优化至 v1.1，并获所有者认可；正式 React 页面尚未改版。长期范围与阶段退出条件见[路线图](../roadmap.md)，产品验收见 [Golden Path](../golden-path.md)。本页只维护当前判断和顺序，不重复完整 ADR 与历史测试流水。
+本地邮箱账户与邀请已按 [ADR-0023](../adr/0023-local-account-and-radish-oidc-login.md) 建立。项目所有者已明确将 Radish OIDC 接入延后，schema readiness 和 Project / Channel 首批发现入口已完成，基础对象与首批成员配置已接通，部署后首次访问初始化也已接通。最小 Markdown Document 已按 ADR-0028 接入正式 Go、PostgreSQL 与 Web，自动化和隔离 HTTPS 浏览器已验证创建、保存、冲突、恢复与撤权；正式页面的 macOS 原生中文 IME 尚未验收，项目所有者现已明确暂缓人工验收，并明确视觉语言主要参考 RadishX 的 Radish 家族规范、页面重点参考 AFFiNE / Mattermost / AppFlowy；已确认使用 pen.dev 推进共享工作台与 Document 代表页，静态稿已按实际界面参考优化至 v1.1，并获所有者认可；共享工作台与 Document 代表页现已落到正式 React，验证范围见[视觉落地记录](reviews/2026-09-26-workbench-ui.md)。长期范围与阶段退出条件见[路线图](../roadmap.md)，产品验收见 [Golden Path](../golden-path.md)。本页只维护当前判断和顺序，不重复完整 ADR 与历史测试流水。
 
 ## 完成线与成熟度
 
@@ -51,7 +51,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 9 月 26 日接通从 Ticket 创建、Project 列表、不可变 revision、当前权限、保存冲突、恢复追加版本与双向关系；正常命令在同一事务生成 receipt、领域事件、Outbox 与 Activity。受限 Markdown 展示不使用浏览器 HTML 注入，原文除换行归一化外不被展示投影覆盖。
 
-Go、真实 PostgreSQL、备份恢复、Web 检查及隔离 HTTPS 浏览器已验证，精确范围见[本轮记录](reviews/2026-09-26-markdown-document.md)。原生 macOS 中文 IME 尚未在正式页面复核，不引用编辑器实验结果代替。临时浏览器、数据库和代理已清理；项目所有者已要求提交本轮工作区改动，未 push 或部署。人工验收按所有者要求暂缓，保留未验收状态，不以暂缓代替通过。[视觉方向与参考分工](../design/visual-direction.md)已记录。项目所有者随后确认使用 pen.dev，并参考 Radish、RadishFlow、RadishMind 的设计工作方式；已使用本机现有 Pen 创建[共享工作台与 Document 首轮设计稿](../design/workbench-v1.md)，首稿提交后，所有者给出初步认可并要求继续优化；现已根据 AFFiNE 实际编辑页、AppFlowy 官方编辑器配图和 Mattermost 官方讨论串截图优化至 v1.1，包含 10 个画板，新增桌面信息展开与手机信息页。所有者已认可本轮静态稿并要求提交，尚未替换正式 React 页面。下一步建议先以共享工作台与 Document 完成有限的视觉落地切片；此项建议不代表已经启动实现。后续业务切片仍按表中的真实 Jenkins 顺位推进，不扩大为富文本或 CRDT。
+Go、真实 PostgreSQL、备份恢复、Web 检查及隔离 HTTPS 浏览器已验证，精确范围见[本轮记录](reviews/2026-09-26-markdown-document.md)。原生 macOS 中文 IME 尚未在正式页面复核，不引用编辑器实验结果代替。临时浏览器、数据库和代理已清理；项目所有者已要求提交本轮工作区改动，未 push 或部署。人工验收按所有者要求暂缓，保留未验收状态，不以暂缓代替通过。[视觉方向与参考分工](../design/visual-direction.md)已记录。项目所有者随后确认使用 pen.dev，并参考 Radish、RadishFlow、RadishMind 的设计工作方式；已使用本机现有 Pen 创建[共享工作台与 Document 首轮设计稿](../design/workbench-v1.md)，首稿提交后，所有者给出初步认可并要求继续优化；现已根据 AFFiNE 实际编辑页、AppFlowy 官方编辑器配图和 Mattermost 官方讨论串截图优化至 v1.1，包含 10 个画板，新增桌面信息展开与手机信息页。所有者认可并提交静态稿后，已授权并完成共享工作台与 Document 的有限 React 视觉落地：家族配色、桌面侧栏、手机导航、集中阅读 / 编辑及按需文档信息，详见[实施与验证记录](reviews/2026-09-26-workbench-ui.md)。本轮浏览器使用虚构 API 数据验证实际 DOM，不替代真实后端与原生 IME 验收。下一业务切片按表中的真实 Jenkins 顺位推进，不扩大为富文本或 CRDT。
 
 ### 本轮完成：基础配置与首次访问初始化
 
@@ -92,6 +92,8 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
 
 ## 证据与历史
+
+- [2026-09-26 工作台与 Document 视觉落地](reviews/2026-09-26-workbench-ui.md)：正式 React、响应式、键盘与交互回归及证据边界。
 
 - [2026-09-26 最小 Markdown Document](reviews/2026-09-26-markdown-document.md)：正式切片、安全解析、并发 / 备份、浏览器证据与原生 IME 待复核边界。
 

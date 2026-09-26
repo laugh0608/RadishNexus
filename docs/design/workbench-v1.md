@@ -2,7 +2,7 @@
 
 日期：2026-09-26。实现参考基线：`1503511`；上一版设计基线：`92f4a7f`。继续维护同一个 `.pen` 文件，文件名中的 `v1` 表示本轮设计系列。
 
-本稿落实已确认的[视觉方向](visual-direction.md)，用于评审共享工作台和最小 Markdown Document 的阅读、编辑及关键失败状态。项目所有者已认可本次 v1.1 并要求提交；本稿作为后续页面实施的视觉参考，未替换正式 React 页面，也不代表功能、完整可访问性或原生 IME 验收通过。
+本稿落实已确认的[视觉方向](visual-direction.md)，用于评审共享工作台和最小 Markdown Document 的阅读、编辑及关键失败状态。项目所有者已认可本次 v1.1 并要求提交；本稿是正式页面实施的视觉参考；随后完成的 React 落地与验证单独见[实施记录](../status/reviews/2026-09-26-workbench-ui.md)，静态稿本身不代表功能、完整可访问性或原生 IME 验收通过。
 
 ## 设计源与参考方法
 
@@ -61,7 +61,7 @@
 
 ## 与真实行为的映射
 
-业务依据为 [ADR-0028](../adr/0028-minimal-markdown-document.md)；正式实现入口为 [DocumentPage.tsx](../../web/src/document/DocumentPage.tsx)、[Document API](../../web/src/document/api.ts) 和 [MarkdownView.tsx](../../web/src/document/MarkdownView.tsx)。工作台改造涉及 [App.tsx](../../web/src/App.tsx)、[AppHeader.tsx](../../web/src/AppHeader.tsx) 与 [WorkspaceHome.tsx](../../web/src/workspace/WorkspaceHome.tsx)，本轮没有修改这些文件。
+业务依据为 [ADR-0028](../adr/0028-minimal-markdown-document.md)；正式实现入口为 [DocumentPage.tsx](../../web/src/document/DocumentPage.tsx)、[Document API](../../web/src/document/api.ts) 和 [MarkdownView.tsx](../../web/src/document/MarkdownView.tsx)。工作台改造涉及 [App.tsx](../../web/src/App.tsx)、[AppHeader.tsx](../../web/src/AppHeader.tsx) 与 [WorkspaceHome.tsx](../../web/src/workspace/WorkspaceHome.tsx)；静态设计阶段没有修改这些文件，后续实现使用 [WorkbenchShell.tsx](../../web/src/WorkbenchShell.tsx) 承载共享布局。
 
 | 场景 | 设计表达与实现约束 |
 | --- | --- |
@@ -80,6 +80,6 @@
 - Pen 原生布局检查覆盖 446 个展开节点：无裁切报告、未命名节点、残留 placeholder、缺少文字填色或小于 12px 的文字。
 - 已查看本轮修改的阅读 / 编辑、信息展开及手机冲突原生截图，并从同一源导出 10 张 PNG，核对桌面 / 手机代表页与局部状态的排版。
 - 使用 sRGB 相对亮度公式计算主要文字配对：正文 / 内容面 13.97:1，次文字 / 内容面 6.34:1，品牌 / 应用底 5.10:1，主按钮文字 / 墨蓝 6.84:1，成功、警告、危险文字 / 对应浅底分别为 4.73:1、5.36:1、5.32:1。这仅覆盖所列静态配色，不代表焦点、控件边界或完整 WCAG 验收。
-- 所有者已认可本轮静态视觉稿；真实 DOM 响应式验证、键盘 / 读屏验证、完整深色映射及原生输入法复核尚未完成。
+- 所有者已认可本轮静态视觉稿；设计阶段未进行真实 DOM 验证，后续响应式与键盘检查见实施记录；读屏、完整深色映射及原生输入法复核仍未完成。
 
-下一步建议以共享工作台与 Document 为有限实施切片，将已认可稿落实到现有 React 组件，再核对真实内容、响应式和操作状态。实际功能与原生 IME 验收独立记录，人工验收是否恢复以[当前状态](../status/current.md)为准。
+共享工作台与 Document 的有限实施切片现已完成；实际 DOM 使用系统字体和已有 API 字段，不引入额外字体、图标或组件依赖。原生 IME 验收独立记录，人工验收是否恢复与下一业务顺位以[当前状态](../status/current.md)为准。

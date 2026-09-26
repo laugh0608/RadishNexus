@@ -67,6 +67,12 @@ npm run dev
 
 写请求复用现有同源 Session / CSRF；连续点击被阻止，网络或 5xx 模糊失败保留原 operation ID，成功后重新读取当前列表。配置面板和分页在刷新、焦点复核与作用域切换时清理旧数据，取消或忽略迟到结果。普通配置能力由服务端返回，客户端显示不构成授权。首次访问通过 `auth/SetupGate.tsx` 与 `setup-api.ts` 实现 [ADR-0027](../docs/adr/0027-first-visit-administrator-setup.md)：Session 确认未登录后读取初始化状态，required 展示首位管理员表单，complete 进入正式登录，unavailable 提示部署者配置。状态读取失败可重试；提交后清理码与密码，模糊结果必须重新检查状态，不自动重放创建。
 
+## 共享工作台
+
+已登录页面由 `WorkbenchShell.tsx` 与 `workbench.css` 提供共享布局，采用 Radish 家族暖纸底、灰玉品牌色和墨蓝主操作。桌面侧栏宽 224px；900px 及以下改为顶部导航与原生模态 `dialog` 抽屉，支持 Escape、焦点约束与关闭后焦点返回。导航只使用 Session 中的 Workspace 和现有入口，不推断 Project 名称或权限。
+
+Document 默认集中阅读，来源 Ticket 保留标题下入口；信息展开在宽屏显示 288px 侧栏，1180px 及以下进入单栏信息视图，关闭后返回触发按钮和阅读位置。编辑、冲突、历史恢复与错误状态沿用原有 API 与显式操作。样式局限于工作台与 Document，不改变登录及静态原型主题。范围和验证见[视觉落地记录](../docs/status/reviews/2026-09-26-workbench-ui.md)。
+
 ## 最小 Markdown Document
 
 `document/api.ts` 消费 [ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的八个操作并严格校验响应。Ticket 提供创建入口，明确提示新文档对 Project 可读成员可见；首页 Project 与文档页面提供 Project 文档列表。`DocumentPage.tsx` 使用普通 textarea 编辑服务端权威 Markdown，预览复用服务端 parser；`MarkdownView.tsx` 只将封闭节点映射为固定 React 元素，不注入 HTML、不使用第二套 parser，也不渲染图片或嵌入。

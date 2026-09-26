@@ -53,7 +53,7 @@ function mockClient(): DocumentClient {
 }
 const noop = () => {};
 async function edit() {
-  fireEvent.click(await screen.findByRole("button", { name: "编辑 Markdown" }));
+  fireEvent.click(await screen.findByRole("button", { name: "编辑文档" }));
   fireEvent.change(screen.getByLabelText("Markdown 正文"), {
     target: { value: "本地草稿😀" },
   });
@@ -181,9 +181,10 @@ describe("Document editing", () => {
       target: { value: "设计" },
     });
     fireEvent.click(screen.getByRole("button", { name: "创建设计文档" }));
-    fireEvent.click(
-      await screen.findByRole("button", { name: "重试原创建操作" }),
-    );
+    await screen.findByText("结果不明");
+    const retry = screen.getByRole("button", { name: "重试原创建操作" });
+    await waitFor(() => expect(retry.hasAttribute("disabled")).toBe(false));
+    fireEvent.click(retry);
     await screen.findByRole("link", { name: "打开设计文档" });
     expect(client.create.mock.calls[0]).toEqual(client.create.mock.calls[1]);
   });
@@ -224,5 +225,159 @@ describe("safe display projection", () => {
     const link = screen.getByRole("link", { name: "外链" });
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
     expect(link.getAttribute("referrerpolicy")).toBe("no-referrer");
+  });
+});
+
+describe("Document workbench", () => {
+  it("opens permission-filtered information and returns focus on Escape", async () => {
+    const client = mockClient();
+    const data = view();
+    data.relations = [
+      { visibility: "restricted" },
+      {
+        visibility: "readable",
+        direction: "incoming",
+        relation_type: "relates-to",
+        target: {
+          ref: { type: "ticket", id: "tkt_source" },
+          title: "设计来源",
+        },
+      },
+    ];
+    vi.mocked(client.read).mockResolvedValue(data);
+    const scroll = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+    render(
+      <DocumentPage
+        workspaceID="wrk_test"
+        documentID="doc_test"
+        client={client}
+        onSessionExpired={noop}
+      />,
+    );
+    const toggle = await screen.findByRole("button", { name: "文档信息" });
+    expect(
+      screen.queryByRole("complementary", { name: "文档信息" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "设计来源" }).getAttribute("href"),
+    ).toBe("/workspaces/wrk_test/tickets/tkt_source");
+    fireEvent.click(toggle);
+    const info = screen.getByRole("complementary", { name: "文档信息" });
+    expect(document.activeElement).toBe(info);
+    expect(info.textContent).toContain("受限来源");
+    fireEvent.keyDown(info, { key: "Escape" });
+    await waitFor(() => expect(document.activeElement).toBe(toggle));
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    scroll.mockRestore();
+  });
+
+  it("clears an open information panel and source links on revocation", async () => {
+    const client = mockClient();
+    const data = view();
+    data.relations = [
+      {
+        visibility: "readable",
+        direction: "incoming",
+        relation_type: "relates-to",
+        target: {
+          ref: { type: "ticket", id: "tkt_secret" },
+          title: "来源标题待清除",
+        },
+      },
+    ];
+    vi.mocked(client.read)
+      .mockResolvedValueOnce(data)
+      .mockRejectedValue(new DocumentError("不可用", 404));
+    render(
+      <DocumentPage
+        workspaceID="wrk_test"
+        documentID="doc_test"
+        client={client}
+        onSessionExpired={noop}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "文档信息" }));
+    fireEvent(window, new Event("focus"));
+    await screen.findByRole("heading", { name: "文档不可用" });
+    expect(
+      screen.queryByRole("complementary", { name: "文档信息" }),
+    ).toBeNull();
+    expect(screen.queryAllByText("来源标题待清除")).toHaveLength(0);
+    expect(screen.queryByRole("link", { name: "项目文档" })).toBeNull();
+  });
+
+  it("preserves explicit history restore confirmation after layout changes", async () => {
+    const client = mockClient();
+    const data = view(2);
+    vi.mocked(client.read).mockResolvedValue(data);
+    client.history = vi
+      .fn()
+      .mockResolvedValue({ items: [view().current], next_cursor: null });
+    client.revision = vi.fn().mockResolvedValue(view().current);
+    client.restore = vi
+      .fn()
+      .mockResolvedValue({ ref: data.current.ref, applied_revision: 3 });
+    const confirm = vi
+      .spyOn(window, "confirm")
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    render(
+      <DocumentPage
+        workspaceID="wrk_test"
+        documentID="doc_test"
+        client={client}
+        onSessionExpired={noop}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "版本历史" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "版本 1 · 标题 1" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "确认恢复为新版本" }),
+    );
+    expect(client.restore).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "确认恢复为新版本" }));
+    await waitFor(() =>
+      expect(client.restore).toHaveBeenCalledWith(
+        "wrk_test",
+        "doc_test",
+        expect.objectContaining({
+          base_revision: 2,
+          restore_revision: 1,
+          confirmed: true,
+        }),
+      ),
+    );
+    confirm.mockRestore();
+  });
+});
+
+describe("workbench draft navigation", () => {
+  it("keeps skip links local while still protecting navigation away", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(
+      <>
+        <a href="#content">跳到内容</a>
+        <a href="/account">离开文档</a>
+        <div id="content">
+          <DocumentPage
+            workspaceID="wrk_test"
+            documentID="doc_test"
+            client={mockClient()}
+            onSessionExpired={noop}
+          />
+        </div>
+      </>,
+    );
+    await edit();
+    fireEvent.click(screen.getByRole("link", { name: "跳到内容" }));
+    expect(confirm).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("link", { name: "离开文档" }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(
+      (screen.getByLabelText("Markdown 正文") as HTMLTextAreaElement).value,
+    ).toBe("本地草稿😀");
+    confirm.mockRestore();
   });
 });

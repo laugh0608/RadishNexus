@@ -1,3 +1,4 @@
+import { WorkbenchShell } from "./WorkbenchShell";
 import { DocumentPage, DocumentList } from "./document/DocumentPage";
 import { documentLocation } from "./document/api";
 import { AppHeader } from "./AppHeader";
@@ -407,6 +408,7 @@ function SignedInShell({
   );
   const currentWorkspace =
     route.kind === "deployment" ||
+    route.kind === "document" ||
     route.kind === "channel" ||
     route.kind === "collaboration"
       ? session.workspaces.find(
@@ -437,39 +439,14 @@ function SignedInShell({
   };
 
   return (
-    <div className="app-shell">
-      <AppHeader
-        note={
-          route.kind === "deployment" ||
-          route.kind === "channel" ||
-          route.kind === "collaboration"
-            ? `真实 API · ${currentWorkspace?.name ?? "当前权限过滤"}`
-            : "欢迎回来"
-        }
-        brandHref="/"
-      >
-        <div className="account-controls">
-          <a href="/account">账户与邀请</a>
-          <span>
-            <small>已登录</small>
-            <strong>{session.user.displayName}</strong>
-          </span>
-          <button
-            disabled={loggingOut}
-            onClick={() => void logout()}
-            type="button"
-          >
-            {loggingOut ? "正在退出…" : "退出登录"}
-          </button>
-        </div>
-      </AppHeader>
-
-      {logoutError === null ? null : (
-        <p className="shell-alert" role="alert">
-          {logoutError}
-        </p>
-      )}
-
+    <WorkbenchShell
+      workspaceName={currentWorkspace?.name}
+      userName={session.user.displayName}
+      accountActive={route.kind === "account"}
+      loggingOut={loggingOut}
+      logoutError={logoutError}
+      onLogout={() => void logout()}
+    >
       {route.kind === "account" ? (
         <IdentityPanel
           client={identityClient}
@@ -531,9 +508,7 @@ function SignedInShell({
       ) : (
         <NotFoundView />
       )}
-
-      <AppFooter label="欢迎回来 / M1" />
-    </div>
+    </WorkbenchShell>
   );
 }
 
