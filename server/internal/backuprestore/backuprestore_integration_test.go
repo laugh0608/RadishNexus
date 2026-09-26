@@ -202,6 +202,17 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil || currentDocument.Current.Revision != 3 || currentDocument.Current.BodyMarkdown != documentInput.BodyMarkdown {
 		t.Fatal("restored Document authority", err)
 	}
+	// Deployment receipts survive restore and still identify the original fact.
+	var deploymentID, buildID string
+	if err := targetPool.QueryRow(ctx, `SELECT id,ci_run_id FROM radishnexus.deployments WHERE environment_id='env_backup_staging'`).Scan(&deploymentID, &buildID); err != nil {
+		t.Fatal(err)
+	}
+	deploymentStarted := time.Date(2026, 8, 30, 1, 20, 0, 0, time.UTC)
+	restoredDeployment, err := goldenpath.NewService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}).RecordStagingDeployment(ctx, goldenpath.Invocation{Principal: authz.Principal{Kind: authz.PrincipalUser, ID: "usr_contributor", WorkspaceID: "wrk_backup"}, SourceKind: "api", CorrelationID: "restored-deployment"}, goldenpath.RecordStagingDeploymentInput{ClientOperationID: "staging-test", Confirmed: true, EnvironmentID: "env_backup_staging", CIRunID: buildID, Status: "succeeded", StartedAt: &deploymentStarted, CompletedAt: time.Date(2026, 8, 30, 1, 29, 0, 0, time.UTC)})
+	if err != nil || !restoredDeployment.Duplicate || restoredDeployment.ID != deploymentID {
+		t.Fatal("restored Deployment receipt", restoredDeployment, err)
+	}
+
 	targetStore := goldenpostgres.New(targetPool)
 	projected, err = targetStore.RebuildActivityProjection(ctx)
 	if err != nil {
@@ -450,6 +461,7 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 		ctx,
 		invocation(contributor, "cor_backup_deployment"),
 		goldenpath.RecordStagingDeploymentInput{
+			ClientOperationID: "staging-test", Confirmed: true,
 			EnvironmentID: "env_backup_staging",
 			CIRunID:       ciReceipt.CIRun.ID,
 			Status:        "succeeded",

@@ -269,3 +269,21 @@ func TestJenkinsDispatchPrecedesPathCleaningAndIsOptional(t *testing.T) {
 		}
 	}
 }
+
+func TestHandlerRoutesStagingBeforeWorkspaceFallback(t *testing.T) {
+	missing := http.NotFoundHandler()
+	marker := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.PathValue("ci_run_id") != "cir_build" {
+			t.Error("missing source scope")
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+	h := newHandler(fakeReadinessChecker{}, missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, marker)
+	for _, v := range []struct{ method, suffix string }{{"GET", "staging-targets"}, {"POST", "staging-deployments"}} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(v.method, "/api/v1/workspaces/wrk_main/ci-runs/cir_build/"+v.suffix, nil))
+		if w.Code != 202 {
+			t.Fatal(v, w.Code)
+		}
+	}
+}

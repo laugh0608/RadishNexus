@@ -192,7 +192,7 @@ M0 正式切片先冻结 `deployment` 类型与 `dpl_` ID 前缀，并只记录�
 | `source_kind / source_id` | 受控 `web / api` 调用来源 |
 | `recorded_at` | RadishNexus 原子记录时间 |
 
-同一 CI Run 在同一 Environment 最多形成一条 Deployment。CI Run 成功不会调用 Deployment 写入；只有 active Workspace 用户持有目标 Environment 的显式授权后，才能通过独立命令记录。Project 角色、owner Team、EntityLink 和 CI source 都不隐式授予部署能力。
+同一 CI Run 在同一 Environment 最多形成一条 Deployment。[ADR-0031](adr/0031-session-scoped-staging-deployment-recording.md) 为显式记录增加操作身份：同一操作者 / 来源构建 / 操作 ID 的精确重试返回原事实，修改内容或不同操作重复该组合仍冲突；重试继续验证当前环境授权。CI Run 成功不会调用 Deployment 写入；只有 active Workspace 用户持有目标 Environment 的显式授权后，才能通过独立命令记录。Project 角色、owner Team、EntityLink 和 CI source 都不隐式授予部署能力。
 
 M0 command 只记录调用方已经确认的外部终态，不执行部署、不读取 Secret，也不建立 production、审批、回滚或运行中状态。Deployment、`deploys` CI Run 关系、`deployment.recorded` 事件和 Outbox 原子提交；权威行保留授权、操作者和来源，但不替代未来通用 Audit 与外部执行日志。精确边界见 [ADR-0009](adr/0009-explicit-staging-deployment.md)。
 

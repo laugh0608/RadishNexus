@@ -36,6 +36,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0028](0028-minimal-markdown-document.md) | 已接受 | 最小 Markdown Document 与不可变版本 |
 | [ADR-0029](0029-session-scoped-ci-run-nexus-view.md) | 已接受 | Session 作用域下的 CI Run Nexus View |
 | [ADR-0030](0030-authenticated-jenkins-delivery-adapter.md) | 已接受 | 受控 Jenkins 终态 delivery adapter |
+| [ADR-0031](0031-session-scoped-staging-deployment-recording.md) | 已接受 | Session 作用域下的 staging Deployment 显式记录 |
 
 ## 新建规则
 

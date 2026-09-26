@@ -473,6 +473,7 @@ function SignedInShell({
           key={`${route.workspaceID}/${route.ciRunID}`}
           workspaceID={route.workspaceID}
           ciRunID={route.ciRunID}
+          navigate={navigate}
           onSessionExpired={onSignedOut}
         />
       ) : route.kind === "deployment" ? (

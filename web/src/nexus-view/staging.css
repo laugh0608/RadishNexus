@@ -1,0 +1,63 @@
+.staging-entry,
+.staging-record {
+  margin: 1.5rem auto;
+  padding: 1.5rem;
+  max-width: 56rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.staging-record form,
+.staging-record label {
+  display: grid;
+  gap: 0.6rem;
+}
+.staging-record form {
+  gap: 1.25rem;
+}
+.staging-record input,
+.staging-record select {
+  min-width: 0;
+  width: 100%;
+  padding: 0.65rem;
+  font: inherit;
+}
+.staging-times {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.staging-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.staging-record .staging-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.staging-confirm input {
+  width: auto;
+}
+.staging-record dl {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr);
+  gap: 0.5rem;
+}
+.staging-record dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.staging-source {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .staging-entry,
+  .staging-record {
+    padding: 1rem;
+  }
+  .staging-times {
+    grid-template-columns: 1fr;
+  }
+}

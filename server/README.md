@@ -265,3 +265,16 @@ POST 精确字段、确认及重试语义按 ADR。相同 operation ID / canonic
 公开 DTO 仅包含 CI Run ref、终态、四个受控时间、当前 Component、空 Relations 和唯一 `ci-run.recorded`；actor 只含 `kind: plugin`。`started_at` 可空；Activity 发生时间为构建完成时间，接收记录时间单独展示。来源 ID、external run key、receipt、digest、Secret、Jenkins URL 与内部投影字段不输出。字段、引用、时间或事件漂移显式失败。
 
 这只是已有内部事实的正式读取入口；Jenkins 来源认证 / Webhook 仍未接通，不改变 `VerifiedJenkinsDelivery` 的可信边界，不安装 Jenkins，不自动创建 Deployment。验证范围见[本轮记录](../docs/status/reviews/2026-09-26-jenkins-next-slice.md)。
+
+## staging Deployment 显式记录
+
+[ADR-0031](../docs/adr/0031-session-scoped-staging-deployment-recording.md) 将现有 `RecordStagingDeployment` 接到正式 Session 入口：
+
+- `GET /api/v1/workspaces/{workspace_id}/ci-runs/{ci_run_id}/staging-targets`：当前已授权的 active staging 环境，按 ID 分页，`limit` 默认 25 / 最大 50，`after` 与 `next_cursor` 使用带 Workspace / CI Run 作用域的游标。
+- `POST /api/v1/workspaces/{workspace_id}/ci-runs/{ci_run_id}/staging-deployments`：8 KiB 严格 JSON，字段为 `client_operation_id`、`environment_id`、终态 `status`、nullable `started_at`、`completed_at` 和必须为 true 的 `confirmed`。时间为 UTC RFC3339，最多毫秒精度，完成时间不能晚于接收时刻加 300 秒。
+
+写入要求 Session、精确 Origin / HTTPS、CSRF、当前 Workspace membership、来源 / 目标读取资格和独立 active 环境授权。首次 `201`，同一操作者 / 来源 / 操作 ID 的精确重试 `200`，返回 `data.deployment` EntityRef 与 `data.duplicate`。撤权或归档后不能通过旧操作 ID 重放；历史读取保持原权限。不同操作 / 用户再次记录同一 Environment / CI Run 仍为 `409`。
+
+migration 011 扩展既有协作 receipt 的 CHECK，保留 revision 合同。receipt、Deployment、`deploys`、领域事件、Outbox 和 Activity 同事务提交。显式迁移后才能使用匹配版本服务；不通过删除 migration history 回退。备份保留 receipt，恢复后精确重试返回原 Deployment。
+
+本入口记录外部已结束事实，不执行部署、调用 Jenkins、读取 Secrets 或授予环境权限。Environment / Component 配置和环境授权管理仍未提供产品入口。

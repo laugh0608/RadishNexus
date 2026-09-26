@@ -36,6 +36,7 @@ type DiscoveryHandler struct {
 }
 
 type discoveryCursor struct {
+	CIRunID     string `json:"ci_run_id,omitempty"`
 	Version     int    `json:"v"`
 	WorkspaceID string `json:"workspace_id"`
 	Kind        string `json:"kind"`
@@ -227,6 +228,9 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 }
 
 func discoveryPrefix(kind string) string {
+	if kind == "staging-environment" {
+		return "env_"
+	}
 	if kind == "document" {
 		return "doc_"
 	}

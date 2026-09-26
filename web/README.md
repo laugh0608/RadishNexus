@@ -86,3 +86,11 @@ Document 默认集中阅读，来源 Ticket 保留标题下入口；信息展开
 `nexus-view/ci-run-api.ts` 校验 [ADR-0029](../docs/adr/0029-session-scoped-ci-run-nexus-view.md) 的字段白名单、终态、受控时间和一致的 Component / Timeline，并消费同源无缓存 GET。`CIRunPage.tsx` 复用已登录工作台与 Nexus View 组件，提供主动重读、失败重试、焦点复权、401 退出与 404 清空；取消或迟到响应不能覆盖更新后的视图。空开始时间显示“未提供”。
 
 正式路径为 `/workspaces/{workspace_id}/ci-runs/{ci_run_id}`。首页次级 ID 工具支持 `cir_`，Deployment 页可跳转来源 CI Run；Component 本身尚无正式页面，不制造无效跳转。页面说明构建成功不代表已经部署，不提供部署写操作或 Jenkins 外部地址。静态代表数据仍只服务原型和测试。
+
+## staging 部署结果记录
+
+成功 CI Run 的正式页面提供“记录 staging 部署结果”。表单读取当前用户已获授权的 staging 环境，要求选择实际结果、填写外部完成时间并确认摘要；不预选成功，也不复用构建时间作为部署时间。记录成功后进入既有 Deployment 页面。
+
+网络或响应异常时保留原操作 ID / payload，用户可显式“重试原请求”。刷新或放弃本地重试不会撤销可能已经写入的事实。UI 不授予权限，提交时服务端重新校验；此功能不执行部署。合同与精确范围见 [ADR-0031](../docs/adr/0031-session-scoped-staging-deployment-recording.md)。
+
+隔离浏览器 fixture 可在仓库根设置 `RADISHNEXUS_BROWSER_STAGING=1` 后运行 `scripts/run-authenticated-web-browser-fixture.sh`：通过正式 service 准备成功 CI Run，跳过预置 Deployment，返回 `ci_run_path` 供页面真实记录验收。需要事先授权启动测试服务；fixture 的 Go 后端与 HTTPS 入口仅绑定 loopback，结束后按 stop 文件清理。

@@ -1,3 +1,4 @@
+import { StagingDeploymentForm } from "./StagingDeploymentForm";
 import { useEffect, useState } from "react";
 import { AuthRequestError } from "../auth/api";
 import { loadCIRun, type CIRunLoader } from "./ci-run-api";
@@ -9,11 +10,13 @@ export function CIRunPage({
   ciRunID,
   onSessionExpired,
   load = loadCIRun,
+  navigate = (path: string) => window.location.assign(path),
 }: {
   workspaceID: string;
   ciRunID: string;
   onSessionExpired: () => void;
   load?: CIRunLoader;
+  navigate?: (path: string) => void;
 }) {
   const [state, setState] = useState<NexusViewState>({ status: "loading" });
   const [requestKey, setRequestKey] = useState(0);
@@ -63,6 +66,17 @@ export function CIRunPage({
           读取最新构建
         </button>
       </header>
+      <StagingDeploymentForm
+        workspaceID={workspaceID}
+        ciRunID={ciRunID}
+        available={
+          state.status === "ready" &&
+          state.data.current.entityType === "ci-run" &&
+          state.data.current.status === "succeeded"
+        }
+        navigate={navigate}
+        onSessionExpired={onSessionExpired}
+      />
       <NexusView
         state={state}
         onRetry={() => setRequestKey((key) => key + 1)}

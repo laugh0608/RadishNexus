@@ -42,6 +42,7 @@ func assertStagingDeploymentSlice(
 	startedAt := time.Date(2026, 8, 28, 11, 56, 0, 0, time.UTC)
 	completedAt := time.Date(2026, 8, 28, 11, 59, 0, 0, time.UTC)
 	input := goldenpath.RecordStagingDeploymentInput{
+		ClientOperationID: "staging-test", Confirmed: true,
 		EnvironmentID: "env_staging",
 		CIRunID:       ciRun.ID,
 		Status:        "succeeded",
@@ -88,10 +89,12 @@ func assertStagingDeploymentSlice(
 	assertDeploymentCounts(t, ctx, pool, 1, 3, 6, 3)
 	assertDeploymentAuditFields(t, ctx, pool, deployment.ID)
 
+	duplicateInput := input
+	duplicateInput.ClientOperationID = "different-operation"
 	_, err = service.RecordStagingDeployment(
 		ctx,
 		invocation(principal("usr_contributor"), "cor_duplicate_deployment"),
-		input,
+		duplicateInput,
 	)
 	if !errors.Is(err, authz.ErrConflict) {
 		t.Fatalf("duplicate staging Deployment error = %v, want conflict", err)
