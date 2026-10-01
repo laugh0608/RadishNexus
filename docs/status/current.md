@@ -1,6 +1,6 @@
 # RadishNexus 当前状态
 
-状态日期：2026-09-26
+状态日期：2026-10-01
 
 ## 当前阶段
 
@@ -41,20 +41,20 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 | 顺序 | 下一切片 | 交付与退出判据 |
 | --- | --- | --- |
-| 1 | Environment / Component 最小配置与环境授权管理范围 | 对照既有对象、当前权限与配置 Audit / receipt，冻结最小创建 / 发现、显式授予 / 撤销环境授权和验收范围；涉及权限或公共协议的内容确认后再实施，不让 owner Team 或 Project 角色隐式获得部署权 |
+| 1 | Environment / Component 最小配置与环境授权管理范围 | [ADR-0032 提案](../adr/0032-component-environment-configuration-and-authorization.md)已完成源码核对与范围设计，待所有者确认；覆盖最小创建 / 发现、显式授予 / 撤销 / 重新授予、配置 Audit / receipt 与验收。确认权限、migration 和公共 API 范围后再实施，不让 owner Team 或 Project 角色隐式获得部署权 |
 | 2 | 交付链剩余关系与持续采集 | 在已完成的 CI Run 读取、Jenkins 隔离三态采集和 staging 显式记录之上，分别推进 Repository 映射、Ticket / Component / 交付关系和持续采集；逐段移除对预置配置的依赖 |
 | 暂缓 | 最小 Markdown Document 人工验收 | 正式实现和隔离浏览器已验证；待所有者恢复人工验收时补 macOS 原生中文 IME，见[实施记录](reviews/2026-09-26-markdown-document.md)，不阻塞上述切片 |
 | 3 | 小团队场景试用 | 满足评估授权与必要运维条件后，以真实需求连续使用并记录追溯、重复录入和人工干预；按 Golden Path 验收决定下一批功能，不把一次演示当作持续使用完成 |
 
 免费书面授权与评估说明应在邀请外部团队前准备，不能等到完整聊天或 CRDT 完成；版本化结构化导出与全新实例导入仍是 M1 的独立退出条件。账号恢复、安全审计、数据生命周期、数据库最小权限与升级演练按[路线图](../roadmap.md)的试用和生产边界推进，不因本表只列近期切片而取消。
 
-### 明天事项（2026-09-27）
+### 当前推进：最小配置与环境授权
 
-1. 先检查 `dev` 工作区和本日[收尾记录](reviews/2026-09-26-daily-closeout.md)，继续表中首项；今天结束后不继续开发或自动启动服务。
-2. 核对 Environment / Component 的现有 schema、读取权限和环境授权约束，复用既有基础配置模式，写出最小配置与授权管理 ADR 提案。明确操作者、授予 / 撤销边界、配置审计、幂等、所需 migration 与公共 API 的影响，交由所有者确认。
-3. 确认后再实现从正式配置到 staging 记录的纵向切片，并覆盖撤权、重复请求、失败回滚和正常 Activity；不顺带加入 production、执行器、Repository 全量管理或持久 Jenkins 服务。
+2026-10-01 已核对 `dev`，工作区起始干净；本地 `dev`、`master` 与 `origin/dev`、`origin/master` 跟踪引用均指向 `efa002b`（PR #12 合并），本轮未 fetch 或核验远端设置。以下 9 月 26 日完成记录中的“未 push”保留当时的历史含义，不代表本轮 Git 状态。
 
-原生 IME 人工验收继续暂缓；真实团队试用仍受评估授权与运维退出条件约束。此清单只记录接续事项，不构成新的实现、服务启动或远程操作授权。
+[ADR-0032](../adr/0032-component-environment-configuration-and-authorization.md) 处于提议状态，尚未实施。关键待确认范围是 active Workspace owner 的配置与授权管理能力、显式自授权、撤销后新增授权代次，以及 migration 012 和有限 Session API。源码核对确认现有全量唯一约束与 revoked 不可变规则会阻止重新授予，提案保留旧授权和 Deployment 外键，通过新代次解决，而不复活旧记录。
+
+下一步为所有者审阅具体提案；确认后按其中顺序实现并验证正式配置 → staging 记录接续。Repository 映射、交付关系和持续采集仍按表中后续切片推进。原生 IME 人工验收继续暂缓，真实团队试用仍受评估授权与运维退出条件约束；本次提案不构成服务启动、业务 migration 或远程操作授权。
 
 ### 本轮完成：CI Run、Jenkins 与 staging 记录
 
