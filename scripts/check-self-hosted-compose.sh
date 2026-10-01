@@ -83,17 +83,15 @@ docker run --rm \
 "${compose[@]}" run --rm migrate
 
 bootstrap_password="compose-browser-fixture-password-2026"
-printf '%s\n' "${bootstrap_password}" | "${compose[@]}" run --rm -T bootstrap \
-  --login admin \
+printf '{"email":"admin@example.test","password":"%s"}' "${bootstrap_password}" | "${compose[@]}" run --rm -T bootstrap \
   --display-name "Compose Admin" \
   --workspace-name "Compose Workspace" \
-  --password-stdin
+  --credentials-stdin
 
-if printf '%s\n' "${bootstrap_password}" | "${compose[@]}" run --rm -T bootstrap \
-  --login second \
+if printf '{"email":"admin@example.test","password":"%s"}' "${bootstrap_password}" | "${compose[@]}" run --rm -T bootstrap \
   --display-name "Second Admin" \
   --workspace-name "Second Workspace" \
-  --password-stdin >"${run_dir}/second-bootstrap.log" 2>&1; then
+  --credentials-stdin >"${run_dir}/second-bootstrap.log" 2>&1; then
   echo "Second bootstrap unexpectedly succeeded." >&2
   exit 1
 fi
@@ -107,7 +105,7 @@ curl --fail --silent --show-error \
   "${RADISHNEXUS_PUBLIC_ORIGIN}/health/ready"
 
 login_status="$({
-  printf '{"login_name":"admin","password":"%s"}' "${bootstrap_password}"
+  printf '{"email":"admin@example.test","password":"%s"}' "${bootstrap_password}"
 } | curl --silent --show-error \
   --cacert "${ca_path}" \
   --cookie-jar "${cookie_jar}" \

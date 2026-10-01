@@ -8,7 +8,7 @@
 - Caddy 使用 internal CA 并覆盖传入的转发 Header；Go server 只信任 Caddy 固定地址的 `/32`。
 - PostgreSQL 数据保存在命名 volume；本地备份工件只写入忽略提交的 `deploy/local-data/backups/`。
 - 数据库密码通过 Compose Secret 文件按 service 挂载，不进入 Compose environment、命令参数或镜像层。
-- migration、bootstrap、backup 和 restore 都是显式一次性 operation；`docker compose up` 不会自动执行它们。
+- migration、bootstrap、identity-migrate、backup 和 restore 都是显式一次性 operation；`docker compose up` 不会自动执行它们。
 
 该入口使用 [Docker Official Images](https://hub.docker.com/search?image_filter=official)：Caddy `2.11.4-alpine`、PostgreSQL `17.10-alpine`、Go builder `1.26.7-alpine3.23`、Node builder `24.16.0-alpine3.23` 和 Alpine runtime `3.23.5`。实际配置同时固定完整 digest；升级时必须重新核验版本、许可证、漏洞和 multi-platform manifest。
 
@@ -42,6 +42,31 @@ docker compose -f deploy/compose.yaml build app migrate
 
 build 只运行现有 `go.mod` / `go.sum` 和 `web/package-lock.json` 固定的下载与构建，不应修改任何 lockfile。
 
+## 网页首次初始化准备
+
+[ADR-0027](../docs/adr/0027-first-visit-administrator-setup.md) 提供部署者凭一次性初始化码创建首位 Workspace owner 的入口。仅对没有任何账户的新实例开放；已有账户的升级或备份恢复不会重新开放。初始化不产生默认 Team / Project / Channel，也不自动建立登录 Session。
+
+在仓库根准备独立随机码文件（不输出码，不复用数据库或用户密码）：
+
+```text
+python3 -c 'import os,secrets; fd=os.open("deploy/secrets/setup_code",os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600); os.write(fd,(secrets.token_urlsafe(32)+"\n").encode()); os.close(fd)'
+```
+
+将此文件通过受控权限提供给容器内 app 的 UID / GID `10001:10001` 只读访问，并限制宿主访问者。Linux bind-backed Secret 可能保留源文件权限，不能只依赖 Compose 的 `mode` 字段；根据宿主所有权 / ACL 配置并验证 app 可读取，不要为省事向所有用户开放。`RADISHNEXUS_SETUP_CODE_SOURCE_FILE` 可指定其他宿主文件；应用内部只使用绝对路径 `RADISHNEXUS_SETUP_CODE_FILE=/run/secrets/setup_code`。初始化码只挂到 app，不挂到 PostgreSQL、Caddy 或运维备份。
+
+完成下节 migration 后，用可选 overlay 启动已构建的应用：
+
+```text
+docker compose -f deploy/compose.yaml -f deploy/compose.setup.yaml config --quiet
+docker compose -f deploy/compose.yaml -f deploy/compose.setup.yaml up -d --wait app caddy
+```
+
+按下节方法信任本实例 Caddy CA 后访问 HTTPS 首页。部署者通过受控本地方式读取码文件，在表单填写初始化码、管理员邮箱 / 称呼 / 密码和工作区名称。成功后使用新账户正式登录，继续创建团队与项目。不要把码放进 URL、聊天记录、截图或日志。
+
+完成后用基础 Compose 配置重新创建 app，移除初始化 Secret 挂载，再按部署者的数据处理方式销毁码文件。即使未移除文件，任何账户已存在时数据库仍拒绝再次初始化。并发创建仅一个成功；结果不明确时在页面重新检查状态，不重复覆盖账户。没有配置码的新实例会提示部署者处理；不会开放无验证注册。
+
+以下 CLI 路径继续有效，与网页入口共享同一事务锁；两者选择其一，不需要先运行 CLI 再使用网页。
+
 ## 全新实例初始化
 
 先只启动 PostgreSQL，并等待官方 healthcheck 成功：
@@ -51,20 +76,17 @@ docker compose -f deploy/compose.yaml up -d --wait postgres
 docker compose -f deploy/compose.yaml run --rm migrate
 ```
 
-随后从标准输入建立唯一一次本地管理员与 Workspace owner。管理员密码与数据库密码必须不同；密码不会保存为 Compose Secret：
+migration 成功后，可按上文[网页首次初始化准备](#网页首次初始化准备)启动 overlay 并创建管理员；也可选择以下 CLI 路径：从标准输入建立唯一一次本地管理员与 Workspace owner。管理员密码与数据库密码必须不同；密码不会保存为 Compose Secret：
 
 ```text
-read -r -s bootstrap_password
-printf '\n'
-printf '%s\n' "$bootstrap_password" | docker compose -f deploy/compose.yaml run --rm -T bootstrap \
-  --login admin \
-  --display-name "First Admin" \
-  --workspace-name "First Workspace" \
-  --password-stdin
-unset bootstrap_password
+python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Email: "),"password":getpass.getpass("Password: ")}))' | \
+  docker compose -f deploy/compose.yaml run --rm -T bootstrap \
+    --display-name "First Admin" \
+    --workspace-name "First Workspace" \
+    --credentials-stdin
 ```
 
-只有 migration 和 bootstrap 成功后才启动公共入口：
+采用 CLI 时，migration 和 bootstrap 成功后启动公共入口：
 
 ```text
 docker compose -f deploy/compose.yaml up -d --wait app caddy
@@ -81,6 +103,18 @@ curl --cacert deploy/local-data/caddy-root.crt https://localhost:8443/health/rea
 ```
 
 把 URL 换成 `.env` 中的精确 origin。浏览器必须显式信任该 CA 后再登录；不要用关闭证书验证作为日常运行方式。
+
+## 身份模型升级
+
+从 migration 007 或更早版本升级前，使用旧版本运维工具备份，并准备私有的旧用户 ID 到邮箱 JSON 映射。安排维护窗口，停止公共入口和旧应用写入，再同步更新 Go / Web / operation 工件。使用匹配的新版本工具显式执行 migration 后，旧 Session 全部失效；已保留的密码 verifier 在完成邮箱映射后恢复登录：
+
+```text
+docker compose -f deploy/compose.yaml run --rm migrate
+docker compose -f deploy/compose.yaml run --rm -T identity-migrate \
+  --mapping-stdin < /path/to/private-identity-email-mapping.json
+```
+
+格式与失败边界见[服务端账户升级](../server/README.md#账户升级与成员准入)。完成后再启动匹配的新应用与公共入口，并分别验证 `/health/ready` 和邮箱登录；就绪探针只验证 migration history，不验证邮箱是否已映射。禁止猜测邮箱、清库重建或用旧二进制写新 schema。回退需要旧版本工件及升级前备份，恢复至空目标；本次代码更新不代表真实实例已经迁移，也不构成当前版本 Compose 升级演练通过的证据。
 
 ## 运维命令
 
@@ -105,7 +139,7 @@ docker compose -f deploy/compose.yaml run --rm restore \
   --input /backups/backup-YYYYMMDD-HHMMSS
 ```
 
-恢复工件保留本地账号 verifier，但不恢复 Session。恢复成功后不要再次 bootstrap；直接启动 `app` 与 `caddy` 并重新登录。跨 major、非空目标、损坏工件或 migration 漂移仍会失败，精确边界见 [ADR-0010](../docs/adr/0010-verified-postgresql-backup-and-restore.md)。
+恢复工件保留本地账号 verifier，以及外部身份映射，但不恢复 Session、未兑换邀请或 OIDC 授权事务。恢复成功后不要再次 bootstrap；直接启动 `app` 与 `caddy` 并重新登录。跨 major、非空目标、损坏工件或 migration 漂移仍会失败，精确边界见 [ADR-0010](../docs/adr/0010-verified-postgresql-backup-and-restore.md)。
 
 普通停止保留 PostgreSQL、Caddy CA 和备份：
 
@@ -122,12 +156,14 @@ docker compose -f deploy/compose.yaml down
 | PostgreSQL 未就绪 | `docker compose ps postgres` 与 `logs postgres`；migration 不应继续 |
 | Secret 缺失、空、多行或 URL 歧义 | application / operation 直接失败并指出配置键，不回显密码 |
 | migration 尚未完成 | `migrate` operation 未成功；应用不会替它自动修改 schema |
-| 尚未 bootstrap | `bootstrap` operation 尚无成功输出；重复执行只允许第一次成功 |
+| 尚未初始化 | 网页读取 `/api/v1/setup`：`required` 可提交初始化码，`unavailable` 需部署者配置码或选择 CLI；`complete` 表示已有账户。CLI 与网页均只允许首次创建成功 |
 | Web build 缺失 | application image build 或 Go server 启动失败，不退回 fixture |
 | origin / Host / proxy 配置错误 | app 启动错误、认证 transport 的稳定安全错误或 Caddy health 失败 |
 | 浏览器不信任证书 | 导出并信任当前 `caddy_data` 中的公开 root CA，不关闭 HTTPS 校验 |
 
-`/health/ready` 只证明 Go server 当前能够 ping PostgreSQL，不声称 migration 或 bootstrap 已完成；这两个状态始终以显式 operation 结果为准。
+`/health/ready` 现在检查数据库 migration history 与当前应用工件的序号、名称和 checksum 完全匹配。匹配返回 `204`；缺失、未迁移完成、漂移、数据库更新于二进制、连接或查询失败返回 `503`，预算为 2 秒，响应不缓存。应用不自动迁移或修复；先检查显式 `migrate` operation 的结果及工件版本，不以修改历史表绕过失败。`/health/live` 仍只检查进程存活。
+
+就绪成功不代表 bootstrap 或旧账户邮箱映射已完成，也不验证 migration 之外的手工 DDL；初始化与升级操作仍分别确认结果。当前不支持跨 schema 版本滚动兼容，探针只是即时判断，不代替升级窗口协调。详见[服务端健康检查](../server/README.md#存活与业务就绪)。
 
 ## 仓库演练
 

@@ -35,7 +35,7 @@ func TestAuthHandlerLoginSetsSecureCookiesAndReturnsOnlySafeContext(t *testing.T
 	expiresAt := time.Date(2026, 8, 31, 8, 0, 0, 0, time.UTC)
 	service := &fakeSessionService{
 		login: func(_ context.Context, input authn.LoginInput) (authn.Session, error) {
-			if input != (authn.LoginInput{LoginName: "admin", Password: "correct horse battery staple"}) {
+			if input != (authn.LoginInput{Email: "admin@example.test", Password: "correct horse battery staple"}) {
 				t.Fatalf("Login() input = %#v", input)
 			}
 			return authn.Session{
@@ -46,7 +46,7 @@ func TestAuthHandlerLoginSetsSecureCookiesAndReturnsOnlySafeContext(t *testing.T
 		},
 	}
 	handler := testAuthHandler(t, service, NewLoginGuard(5, time.Minute, 8, 2))
-	request := secureJSONRequest(http.MethodPost, "/api/v1/auth/sessions", `{"login_name":"admin","password":"correct horse battery staple"}`)
+	request := secureJSONRequest(http.MethodPost, "/api/v1/auth/sessions", `{"email":"admin@example.test","password":"correct horse battery staple"}`)
 	request.Header.Set("Origin", "https://nexus.example.test")
 	response := httptest.NewRecorder()
 
@@ -87,7 +87,7 @@ func TestAuthHandlerRejectsUnsafeLoginBeforeCredentialVerification(t *testing.T)
 		{
 			name: "plaintext untrusted",
 			request: func() *http.Request {
-				request := httptest.NewRequest(http.MethodPost, "http://nexus.example.test/api/v1/auth/sessions", strings.NewReader(`{"login_name":"admin","password":"password"}`))
+				request := httptest.NewRequest(http.MethodPost, "http://nexus.example.test/api/v1/auth/sessions", strings.NewReader(`{"email":"admin@example.test","password":"password"}`))
 				request.Header.Set("Content-Type", "application/json")
 				request.Header.Set("Origin", "https://nexus.example.test")
 				return request
@@ -98,7 +98,7 @@ func TestAuthHandlerRejectsUnsafeLoginBeforeCredentialVerification(t *testing.T)
 		{
 			name: "wrong origin",
 			request: func() *http.Request {
-				request := secureJSONRequest(http.MethodPost, "/api/v1/auth/sessions", `{"login_name":"admin","password":"password"}`)
+				request := secureJSONRequest(http.MethodPost, "/api/v1/auth/sessions", `{"email":"admin@example.test","password":"password"}`)
 				request.Header.Set("Origin", "https://evil.example.test")
 				return request
 			},
@@ -119,7 +119,7 @@ func TestAuthHandlerRejectsUnsafeLoginBeforeCredentialVerification(t *testing.T)
 		{
 			name: "oversized body",
 			request: func() *http.Request {
-				request := secureJSONRequest(http.MethodPost, "/api/v1/auth/sessions", `{"login_name":"admin","password":"`+strings.Repeat("a", int(MaxLoginBodyBytes))+`"}`)
+				request := secureJSONRequest(http.MethodPost, "/api/v1/auth/sessions", `{"email":"admin@example.test","password":"`+strings.Repeat("a", int(MaxLoginBodyBytes))+`"}`)
 				request.Header.Set("Origin", "https://nexus.example.test")
 				return request
 			},
@@ -129,7 +129,7 @@ func TestAuthHandlerRejectsUnsafeLoginBeforeCredentialVerification(t *testing.T)
 		{
 			name: "unknown field",
 			request: func() *http.Request {
-				request := secureJSONRequest(http.MethodPost, "/api/v1/auth/sessions", `{"login_name":"admin","password":"password","remember":true}`)
+				request := secureJSONRequest(http.MethodPost, "/api/v1/auth/sessions", `{"email":"admin@example.test","password":"password","remember":true}`)
 				request.Header.Set("Origin", "https://nexus.example.test")
 				return request
 			},
@@ -139,7 +139,7 @@ func TestAuthHandlerRejectsUnsafeLoginBeforeCredentialVerification(t *testing.T)
 		{
 			name: "multiple JSON values",
 			request: func() *http.Request {
-				request := secureJSONRequest(http.MethodPost, "/api/v1/auth/sessions", `{"login_name":"admin","password":"password"} {}`)
+				request := secureJSONRequest(http.MethodPost, "/api/v1/auth/sessions", `{"email":"admin@example.test","password":"password"} {}`)
 				request.Header.Set("Origin", "https://nexus.example.test")
 				return request
 			},
@@ -170,7 +170,7 @@ func TestAuthHandlerRateLimitsBeforeRepeatedCredentialVerification(t *testing.T)
 	}}
 	handler := testAuthHandler(t, service, NewLoginGuard(1, time.Minute, 8, 1))
 	for attempt, wantStatus := range []int{http.StatusUnauthorized, http.StatusTooManyRequests} {
-		request := secureJSONRequest(http.MethodPost, "/api/v1/auth/sessions", `{"login_name":"admin","password":"wrong password"}`)
+		request := secureJSONRequest(http.MethodPost, "/api/v1/auth/sessions", `{"email":"admin@example.test","password":"wrong password"}`)
 		request.Header.Set("Origin", "https://nexus.example.test")
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)

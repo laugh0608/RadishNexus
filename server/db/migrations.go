@@ -95,14 +95,8 @@ func Migrate(ctx context.Context, connection *pgx.Conn) (err error) {
 	if err != nil {
 		return err
 	}
-	if len(applied) > len(migrations) {
-		return fmt.Errorf("database migration %d is newer than embedded migration %d", len(applied), len(migrations))
-	}
-	for index, recorded := range applied {
-		expected := migrations[index]
-		if recorded.sequence != expected.sequence || recorded.name != expected.name || recorded.checksum != expected.checksum {
-			return fmt.Errorf("migration history drift at sequence %d", index+1)
-		}
+	if err := validateAppliedHistory(applied, migrations); err != nil {
+		return err
 	}
 
 	for _, pending := range migrations[len(applied):] {
@@ -159,7 +153,7 @@ func loadMigrations(root fs.FS) ([]migration, error) {
 	return migrations, nil
 }
 
-func loadApplied(ctx context.Context, connection *pgx.Conn) ([]migration, error) {
+func loadApplied(ctx context.Context, connection migrationQuerier) ([]migration, error) {
 	rows, err := connection.Query(ctx, `
 		SELECT sequence, name, checksum
 		FROM public.radishnexus_schema_migrations

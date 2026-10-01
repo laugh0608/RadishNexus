@@ -1,0 +1,11 @@
+# Opt-in first-visit setup. Use together with compose.yaml only on a new instance.
+services:
+  app:
+    environment:
+      RADISHNEXUS_SETUP_CODE_FILE: /run/secrets/setup_code
+    secrets:
+      - setup_code
+
+secrets:
+  setup_code:
+    file: "${RADISHNEXUS_SETUP_CODE_SOURCE_FILE:-./secrets/setup_code}"

@@ -21,6 +21,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
+	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 )
 
@@ -42,6 +43,34 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	sourcePool := connectIntegrationPool(t, ctx, sourceURL)
 	defer sourcePool.Close()
 	seedBackupGoldenPath(t, ctx, sourcePool)
+	if _, err := sourcePool.Exec(ctx, `INSERT INTO radishnexus.user_accounts(user_id,status,created_at) VALUES ('usr_contributor','active',now())`); err != nil {
+		t.Fatal(err)
+	}
+	var ticketID string
+	if err := sourcePool.QueryRow(ctx, `SELECT id FROM radishnexus.tickets WHERE workspace_id='wrk_backup'`).Scan(&ticketID); err != nil {
+		t.Fatal(err)
+	}
+	documentInvocation := goldenpath.Invocation{Principal: authz.Principal{Kind: authz.PrincipalUser, ID: "usr_contributor", WorkspaceID: "wrk_backup"}, SourceKind: "web", CorrelationID: "backup-document"}
+	documentInput := goldenpath.DocumentInput{TargetID: ticketID, ClientOperationID: "backup-document-create", Title: "设计文档", BodyMarkdown: "# 原始内容  \n中文😀", FormatVersion: "nexus-markdown-v1"}
+	documents := goldenpath.NewDocumentService(goldenpostgres.New(sourcePool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	document, err := documents.WriteDocument(ctx, documentInvocation, "document.create", documentInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saveDocument := goldenpath.DocumentInput{TargetID: document.Ref.ID, ClientOperationID: "backup-document-save", Title: "第二版", BodyMarkdown: "新内容", FormatVersion: "nexus-markdown-v1", BaseRevision: 1}
+	if _, err = documents.WriteDocument(ctx, documentInvocation, "document.save", saveDocument); err != nil {
+		t.Fatal(err)
+	}
+	restoreDocument := goldenpath.DocumentInput{TargetID: document.Ref.ID, ClientOperationID: "backup-document-restore", BaseRevision: 2, RestoreRevision: 1}
+	if _, err = documents.WriteDocument(ctx, documentInvocation, "document.restore", restoreDocument); err != nil {
+		t.Fatal(err)
+	}
+	configurationInput := goldenpath.ConfigurationInput{Kind: "team.create", ScopeID: "wrk_backup", ClientOperationID: "backup-team", Name: "Configured Team"}
+	configurationInvocation := goldenpath.Invocation{Principal: authz.Principal{Kind: authz.PrincipalUser, ID: "usr_admin", WorkspaceID: "wrk_backup"}, SourceKind: "web", CorrelationID: "req_backup_configuration"}
+	configured, err := goldenpath.NewConfigurationService(goldenpostgres.New(sourcePool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}).Configure(ctx, configurationInvocation, configurationInput)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got := snapshotTable(t, ctx, sourcePool, "radishnexus.user_sessions"); got == "[]" {
 		t.Fatal("source user session fixture is empty")
 	}
@@ -50,8 +79,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rebuild source Activity projection: %v", err)
 	}
-	if projected != 5 {
-		t.Fatalf("source Activity rows = %d, want 5", projected)
+	if projected != 8 {
+		t.Fatalf("source Activity rows = %d, want 8", projected)
 	}
 	sourceSnapshot := snapshotIncludedTables(t, ctx, sourcePool)
 	sourceActivity := snapshotTable(t, ctx, sourcePool, "radishnexus.activity_items")
@@ -65,6 +94,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	}
 	if !reflect.DeepEqual(manifest.ExcludedDataTables, []string{
 		"radishnexus.activity_items",
+		"radishnexus.identity_invitations",
+		"radishnexus.oidc_transactions",
 		"radishnexus.user_sessions",
 	}) {
 		t.Fatalf("backup exclusions = %#v", manifest.ExcludedDataTables)
@@ -124,15 +155,37 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if got := snapshotTable(t, ctx, targetPool, "radishnexus.user_sessions"); got != "[]" {
 		t.Fatalf("restored user sessions = %s, want []", got)
 	}
+	for _, table := range []string{"radishnexus.identity_invitations", "radishnexus.oidc_transactions"} {
+		if snapshotTable(t, ctx, sourcePool, table) == "[]" {
+			t.Fatalf("source %s fixture is empty", table)
+		}
+		if snapshotTable(t, ctx, targetPool, table) != "[]" {
+			t.Fatalf("restored %s retained authentication capabilities", table)
+		}
+	}
 	targetSnapshot := snapshotIncludedTables(t, ctx, targetPool)
 	if !reflect.DeepEqual(targetSnapshot, sourceSnapshot) {
 		t.Fatalf("restored authoritative data differs\nsource: %#v\ntarget: %#v", sourceSnapshot, targetSnapshot)
 	}
+	replayed, err := goldenpath.NewConfigurationService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}).Configure(ctx, configurationInvocation, configurationInput)
+	if err != nil || replayed.Created || replayed.Object.ID != configured.Object.ID {
+		t.Fatal("restored receipt did not preserve idempotency", replayed, err)
+	}
+	restoredSetup, err := authn.NewSetupService(nil, authpostgres.New(targetPool), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state, err := restoredSetup.Status(ctx); err != nil || state != "complete" {
+		t.Fatal("restore reopened setup", state, err)
+	}
+	if err := restoredSetup.Complete(ctx, "", authn.BootstrapInput{}); !errors.Is(err, authn.ErrAlreadyBootstrapped) {
+		t.Fatal("restore allowed setup", err)
+	}
 	var restoredPasswordHash string
 	if err := targetPool.QueryRow(ctx, `
 		SELECT password_hash
-		FROM radishnexus.local_accounts
-		WHERE login_name = 'admin'
+		FROM radishnexus.local_credentials
+		WHERE email = 'admin@example.test'
 	`).Scan(&restoredPasswordHash); err != nil {
 		t.Fatalf("read restored local account: %v", err)
 	}
@@ -140,13 +193,33 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil || !passwordMatches {
 		t.Fatalf("restored local account verifier = %v, %v", passwordMatches, err)
 	}
+	targetDocuments := goldenpath.NewDocumentService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	retried, err := targetDocuments.WriteDocument(ctx, documentInvocation, "document.save", saveDocument)
+	if err != nil || retried.AppliedRevision != 2 {
+		t.Fatal("restored Document receipt", retried, err)
+	}
+	currentDocument, err := targetDocuments.ReadDocument(ctx, documentInvocation.Principal, document.Ref.ID, 0)
+	if err != nil || currentDocument.Current.Revision != 3 || currentDocument.Current.BodyMarkdown != documentInput.BodyMarkdown {
+		t.Fatal("restored Document authority", err)
+	}
+	// Deployment receipts survive restore and still identify the original fact.
+	var deploymentID, buildID string
+	if err := targetPool.QueryRow(ctx, `SELECT id,ci_run_id FROM radishnexus.deployments WHERE environment_id='env_backup_staging'`).Scan(&deploymentID, &buildID); err != nil {
+		t.Fatal(err)
+	}
+	deploymentStarted := time.Date(2026, 8, 30, 1, 20, 0, 0, time.UTC)
+	restoredDeployment, err := goldenpath.NewService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}).RecordStagingDeployment(ctx, goldenpath.Invocation{Principal: authz.Principal{Kind: authz.PrincipalUser, ID: "usr_contributor", WorkspaceID: "wrk_backup"}, SourceKind: "api", CorrelationID: "restored-deployment"}, goldenpath.RecordStagingDeploymentInput{ClientOperationID: "staging-test", Confirmed: true, EnvironmentID: "env_backup_staging", CIRunID: buildID, Status: "succeeded", StartedAt: &deploymentStarted, CompletedAt: time.Date(2026, 8, 30, 1, 29, 0, 0, time.UTC)})
+	if err != nil || !restoredDeployment.Duplicate || restoredDeployment.ID != deploymentID {
+		t.Fatal("restored Deployment receipt", restoredDeployment, err)
+	}
+
 	targetStore := goldenpostgres.New(targetPool)
 	projected, err = targetStore.RebuildActivityProjection(ctx)
 	if err != nil {
 		t.Fatalf("rebuild target Activity projection: %v", err)
 	}
-	if projected != 5 {
-		t.Fatalf("target Activity rows = %d, want 5", projected)
+	if projected != 8 {
+		t.Fatalf("target Activity rows = %d, want 8", projected)
 	}
 	if targetActivity := snapshotTable(t, ctx, targetPool, "radishnexus.activity_items"); targetActivity != sourceActivity {
 		t.Fatalf("rebuilt Activity differs\nsource: %s\ntarget: %s", sourceActivity, targetActivity)
@@ -254,15 +327,25 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	if err != nil {
 		t.Fatalf("seed backup base data: %v", err)
 	}
+	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_admin', 'active', '2026-08-30T01:00:00Z')`); err != nil {
+		t.Fatalf("seed identity accounts: %v", err)
+	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO radishnexus.local_accounts (
-			user_id, login_name, password_hash, status, created_at, password_changed_at
+		INSERT INTO radishnexus.local_credentials (
+			user_id, email, password_hash, status, created_at, password_changed_at
 		) VALUES (
-			'usr_admin', 'admin', $1,
+			'usr_admin', 'admin@example.test', $1,
 			'active', '2026-08-30T01:00:00Z', '2026-08-30T01:00:00Z'
 		)
 	`, passwordHash); err != nil {
 		t.Fatalf("seed backup local account: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+        INSERT INTO radishnexus.external_identities(user_id,issuer,subject,created_at) VALUES ('usr_admin','https://radish.example.test','backup-fixture-subject',now());
+        INSERT INTO radishnexus.identity_invitations(id,token_digest,workspace_id,created_by,created_at,expires_at) VALUES ('inv_backup',decode(repeat('33',32),'hex'),'wrk_backup','usr_admin',now(),now()+interval '24 hours');
+        INSERT INTO radishnexus.oidc_transactions(state_digest,browser_digest,nonce_digest,provider_digest,created_at,expires_at) VALUES (decode(repeat('44',32),'hex'),decode(repeat('55',32),'hex'),decode(repeat('66',32),'hex'),decode(repeat('77',32),'hex'),now(),now()+interval '5 minutes');
+    `); err != nil {
+		t.Fatalf("seed federated backup fixture: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO radishnexus.user_sessions (
@@ -378,6 +461,7 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 		ctx,
 		invocation(contributor, "cor_backup_deployment"),
 		goldenpath.RecordStagingDeploymentInput{
+			ClientOperationID: "staging-test", Confirmed: true,
 			EnvironmentID: "env_backup_staging",
 			CIRunID:       ciReceipt.CIRun.ID,
 			Status:        "succeeded",

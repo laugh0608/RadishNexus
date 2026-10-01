@@ -16,7 +16,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
-	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
@@ -253,36 +252,7 @@ func (handler *ChannelMessagesHandler) authenticate(
 	workspaceID string,
 	write bool,
 ) (authz.Principal, error) {
-	if _, err := handler.proxy.ClientIP(request); err != nil {
-		return authz.Principal{}, err
-	}
-	if err := handler.session.ValidateHost(request); err != nil {
-		return authz.Principal{}, err
-	}
-	token, err := handler.session.SessionToken(request)
-	if err != nil {
-		return authz.Principal{}, err
-	}
-	if write {
-		csrfToken, err := handler.session.ValidateCSRF(request)
-		if err != nil {
-			return authz.Principal{}, err
-		}
-		if err := handler.sessions.VerifyCSRF(request.Context(), token, csrfToken); err != nil {
-			return authz.Principal{}, err
-		}
-	}
-	if !validScopedID(workspaceID, "wrk_") {
-		return authz.Principal{}, fmt.Errorf("%w: invalid Workspace ID", authz.ErrInvalid)
-	}
-	verified, err := handler.sessions.ResolveWorkspace(request.Context(), token, workspaceID)
-	if err != nil {
-		if errors.Is(err, authz.ErrForbidden) {
-			err = authz.ErrNotFound
-		}
-		return authz.Principal{}, err
-	}
-	return authn.UserPrincipal(verified)
+	return authenticateWorkspaceRequest(request, workspaceID, write, handler.sessions, handler.session, handler.proxy)
 }
 
 func validateMessagingPath(workspaceID string, channelID string, messageID string) error {

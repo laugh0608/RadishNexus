@@ -1,3 +1,4 @@
+import type { SetupClient } from "./auth/setup-api";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
@@ -42,7 +43,12 @@ const threadView: CollaborationView<ThreadCurrent> = {
 
 describe("App prototype state controls", () => {
   it("keeps the representative states on an explicit non-product route", () => {
-    render(<App pathname="/prototype/nexus-view" />);
+    render(
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/prototype/nexus-view"
+      />,
+    );
 
     expect(screen.getByText("部署成功")).toBeDefined();
     const failedButton = screen.getByRole("button", { name: "失败" });
@@ -70,13 +76,20 @@ describe("authenticated Web Shell", () => {
       ),
       login: vi.fn().mockResolvedValue(session),
     });
-    render(<App pathname="/" authClient={auth} navigate={navigate} />);
+    render(
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/"
+        authClient={auth}
+        navigate={navigate}
+      />,
+    );
 
     expect(
       await screen.findByRole("heading", { name: "登录 RadishNexus" }),
     ).toBeDefined();
-    fireEvent.change(screen.getByLabelText("登录名"), {
-      target: { value: "admin" },
+    fireEvent.change(screen.getByLabelText("邮箱"), {
+      target: { value: "admin@example.test" },
     });
     fireEvent.change(screen.getByLabelText("密码"), {
       target: { value: "correct horse battery staple" },
@@ -88,7 +101,7 @@ describe("authenticated Web Shell", () => {
     ).toBeDefined();
     expect(auth.login).toHaveBeenCalledWith(
       {
-        loginName: "admin",
+        email: "admin@example.test",
         password: "correct horse battery staple",
       },
       undefined,
@@ -97,6 +110,7 @@ describe("authenticated Web Shell", () => {
     fireEvent.change(screen.getByLabelText("Workspace"), {
       target: { value: "wrk_docs" },
     });
+    fireEvent.click(screen.getByText("按 ID 打开对象"));
     fireEvent.change(screen.getByLabelText("Deployment ID"), {
       target: { value: "dpl_release_42" },
     });
@@ -109,9 +123,15 @@ describe("authenticated Web Shell", () => {
   it("does not send invalid object IDs into product navigation", async () => {
     const navigate = vi.fn();
     render(
-      <App pathname="/" authClient={testAuthClient()} navigate={navigate} />,
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/"
+        authClient={testAuthClient()}
+        navigate={navigate}
+      />,
     );
     await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
+    fireEvent.click(screen.getByText("按 ID 打开对象"));
     fireEvent.change(screen.getByLabelText("Deployment ID"), {
       target: { value: "not-a-deployment" },
     });
@@ -121,15 +141,51 @@ describe("authenticated Web Shell", () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it("opens a known Channel from the selected Workspace", async () => {
+  it("opens only valid CI Run IDs in the selected Workspace", async () => {
     const navigate = vi.fn();
     render(
-      <App pathname="/" authClient={testAuthClient()} navigate={navigate} />,
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/"
+        authClient={testAuthClient()}
+        navigate={navigate}
+      />,
     );
     await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
     fireEvent.change(screen.getByLabelText("Workspace"), {
       target: { value: "wrk_docs" },
     });
+    fireEvent.click(screen.getByText("按 ID 打开对象"));
+    fireEvent.change(screen.getByLabelText("CI Run ID"), {
+      target: { value: "dpl_wrong" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "打开 CI Run" }));
+    expect(navigate).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toContain("cir_");
+    fireEvent.change(screen.getByLabelText("CI Run ID"), {
+      target: { value: "cir_build" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "打开 CI Run" }));
+    expect(navigate).toHaveBeenCalledWith(
+      "/workspaces/wrk_docs/ci-runs/cir_build",
+    );
+  });
+
+  it("opens a known Channel from the selected Workspace", async () => {
+    const navigate = vi.fn();
+    render(
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/"
+        authClient={testAuthClient()}
+        navigate={navigate}
+      />,
+    );
+    await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
+    fireEvent.change(screen.getByLabelText("Workspace"), {
+      target: { value: "wrk_docs" },
+    });
+    fireEvent.click(screen.getByText("按 ID 打开对象"));
     fireEvent.change(screen.getByLabelText("Channel ID"), {
       target: { value: "chn_team" },
     });
@@ -143,12 +199,18 @@ describe("authenticated Web Shell", () => {
   it("opens a known collaboration object from the selected Workspace", async () => {
     const navigate = vi.fn();
     render(
-      <App pathname="/" authClient={testAuthClient()} navigate={navigate} />,
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/"
+        authClient={testAuthClient()}
+        navigate={navigate}
+      />,
     );
     await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
     fireEvent.change(screen.getByLabelText("Workspace"), {
       target: { value: "wrk_docs" },
     });
+    fireEvent.click(screen.getByText("按 ID 打开对象"));
     fireEvent.change(screen.getByLabelText("协作对象类型"), {
       target: { value: "thread" },
     });
@@ -180,6 +242,7 @@ describe("authenticated Web Shell", () => {
     });
     render(
       <App
+        setupClient={establishedSetupClient}
         pathname="/workspaces/wrk_main/channels/chn_team"
         authClient={testAuthClient()}
         channelClient={channelClient}
@@ -188,7 +251,9 @@ describe("authenticated Web Shell", () => {
     );
 
     expect(await screen.findByText("Canonical Channel body.")).toBeDefined();
-    expect(screen.getByText("真实 API · Main Workspace")).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Main Workspace 切换" }),
+    ).toBeDefined();
     expect(channelClient.listMessages).toHaveBeenCalledWith(
       "wrk_main",
       "chn_team",
@@ -203,6 +268,7 @@ describe("authenticated Web Shell", () => {
       .mockResolvedValue(succeededDeploymentNexusViewFixture);
     render(
       <App
+        setupClient={establishedSetupClient}
         pathname="/workspaces/wrk_main/deployments/dpl_release_42"
         authClient={testAuthClient()}
         loadDeployment={loader}
@@ -210,7 +276,19 @@ describe("authenticated Web Shell", () => {
     );
 
     expect(await screen.findByText("部署成功")).toBeDefined();
-    expect(screen.getByText("真实 API · Main Workspace")).toBeDefined();
+    const current = succeededDeploymentNexusViewFixture.current;
+    if (current.entityType !== "deployment")
+      throw new Error("expected deployment fixture");
+    expect(
+      screen
+        .getByRole("link", { name: "查看来源 CI Run" })
+        .getAttribute("href"),
+    ).toBe(
+      `/workspaces/wrk_main/ci-runs/${current.ciRun.entityRef.slice("entity://ci-run/".length)}`,
+    );
+    expect(
+      screen.getByRole("link", { name: "Main Workspace 切换" }),
+    ).toBeDefined();
     expect(screen.queryByLabelText("原型状态检视")).toBeNull();
     expect(loader).toHaveBeenCalledWith(
       "wrk_main",
@@ -223,6 +301,7 @@ describe("authenticated Web Shell", () => {
     const collaborationClient = testCollaborationClient();
     render(
       <App
+        setupClient={establishedSetupClient}
         pathname="/workspaces/wrk_main/threads/thr_discussion"
         authClient={testAuthClient()}
         collaborationClient={collaborationClient}
@@ -232,7 +311,9 @@ describe("authenticated Web Shell", () => {
     expect(
       await screen.findByRole("heading", { name: "Canonical Thread" }),
     ).toBeDefined();
-    expect(screen.getByText("真实 API · Main Workspace")).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Main Workspace 切换" }),
+    ).toBeDefined();
     expect(collaborationClient.loadView).toHaveBeenCalledWith(
       "wrk_main",
       "thread",
@@ -253,6 +334,7 @@ describe("authenticated Web Shell", () => {
       .mockResolvedValueOnce(succeededDeploymentNexusViewFixture);
     render(
       <App
+        setupClient={establishedSetupClient}
         pathname="/workspaces/wrk_main/deployments/dpl_release_42"
         authClient={testAuthClient()}
         loadDeployment={loader}
@@ -265,6 +347,16 @@ describe("authenticated Web Shell", () => {
     fireEvent.click(screen.getByRole("button", { name: "重新载入" }));
     await waitFor(() => expect(loader).toHaveBeenCalledTimes(2));
     expect(await screen.findByText("部署成功")).toBeDefined();
+    const current = succeededDeploymentNexusViewFixture.current;
+    if (current.entityType !== "deployment")
+      throw new Error("expected deployment fixture");
+    expect(
+      screen
+        .getByRole("link", { name: "查看来源 CI Run" })
+        .getAttribute("href"),
+    ).toBe(
+      `/workspaces/wrk_main/ci-runs/${current.ciRun.entityRef.slice("entity://ci-run/".length)}`,
+    );
   });
 
   it("returns to login when the business read reports an expired Session", async () => {
@@ -278,6 +370,7 @@ describe("authenticated Web Shell", () => {
       );
     render(
       <App
+        setupClient={establishedSetupClient}
         pathname="/workspaces/wrk_main/deployments/dpl_release_42"
         authClient={testAuthClient()}
         loadDeployment={loader}
@@ -291,7 +384,13 @@ describe("authenticated Web Shell", () => {
 
   it("logs out through the Session client without changing the current route", async () => {
     const auth = testAuthClient();
-    render(<App pathname="/" authClient={auth} />);
+    render(
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/"
+        authClient={auth}
+      />,
+    );
     await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
     fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
 
@@ -310,7 +409,13 @@ describe("authenticated Web Shell", () => {
         }),
       ),
     });
-    render(<App pathname="/" authClient={auth} />);
+    render(
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/"
+        authClient={auth}
+      />,
+    );
     await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
     fireEvent.click(screen.getByRole("button", { name: "退出登录" }));
 
@@ -366,3 +471,36 @@ function testCollaborationClient(
     ...overrides,
   };
 }
+
+vi.mock("./auth/identity-api", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./auth/identity-api")>();
+  return {
+    ...original,
+    browserIdentityClient: {
+      ...original.browserIdentityClient,
+      methods: async () => ({
+        local: true,
+        radish: false,
+        registration: false,
+      }),
+    },
+  };
+});
+
+vi.mock("./workspace/api", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./workspace/api")>();
+  return {
+    ...original,
+    browserDiscoveryClient: {
+      projects: async () => ({ items: [], nextCursor: null }),
+      channels: async () => ({ items: [], nextCursor: null }),
+    },
+  };
+});
+
+const establishedSetupClient: SetupClient = {
+  status: async () => "complete",
+  complete: async () => {
+    throw new Error("unexpected setup");
+  },
+};

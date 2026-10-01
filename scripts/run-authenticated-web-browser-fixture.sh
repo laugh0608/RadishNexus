@@ -112,7 +112,7 @@ database_url="postgres://${database_user}:${database_password}@127.0.0.1:${publi
         RADISHNEXUS_WEB_ROOT="${web_dir}/dist" \
         RADISHNEXUS_BROWSER_FIXTURE_STATE="${state_path}" \
         RADISHNEXUS_BROWSER_FIXTURE_STOP="${stop_path}" \
-        RADISHNEXUS_BROWSER_FIXTURE_LISTEN_ADDRESS="0.0.0.0:${backend_port}" \
+        RADISHNEXUS_BROWSER_FIXTURE_LISTEN_ADDRESS="127.0.0.1:${backend_port}" \
         RADISHNEXUS_BROWSER_FIXTURE_PUBLIC_ORIGIN="${public_origin}" \
         RADISHNEXUS_BROWSER_FIXTURE_DATABASE_CONTAINER="${container_name}" \
         go test \

@@ -97,7 +97,7 @@ func TestCollaborationHandlerReadsMessagingOriginThreadWithoutMessageBody(t *tes
 			},
 		},
 		Relations: []goldenpath.RelationProjection{{
-			State: goldenpath.ProjectionVisible, RelationType: "started-from",
+			State: goldenpath.ProjectionVisible, Direction: "outgoing", RelationType: "started-from",
 			Target: entityref.Ref{Type: "message", ID: "msg_source"}, Title: "Message",
 		}},
 	}}
@@ -287,6 +287,43 @@ func TestCollaborationHandlerKeepsRestrictedDecisionEvidenceOpaque(t *testing.T)
 	}
 }
 
+func TestCollaborationViewIncomingContract(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
+	view := goldenpath.NexusView{
+		Current: goldenpath.CurrentProjection{
+			Ref: entityref.Ref{Type: "decision", ID: "dec_target"}, GoverningProjectID: "prj_main",
+			Title: "Choose boundary", Status: "proposed", ProposerID: "usr_writer",
+			CreatedAt: now, UpdatedAt: now,
+		},
+		Relations: []goldenpath.RelationProjection{
+			{State: goldenpath.ProjectionRestricted},
+			{State: goldenpath.ProjectionVisible, Direction: "incoming", RelationType: "implements",
+				Target: entityref.Ref{Type: "ticket", ID: "tkt_result"}, Title: "Result"},
+		},
+	}
+	dto, err := publicCollaborationView(view.Current.Ref, view)
+	if err != nil || len(dto.Relations) != 2 || dto.Relations[1].Direction != "incoming" {
+		t.Fatalf("valid incoming projection = %#v, %v", dto, err)
+	}
+	for _, mutate := range []func(*goldenpath.NexusView){
+		func(v *goldenpath.NexusView) { v.Relations[0].Direction = "incoming" },
+		func(v *goldenpath.NexusView) { v.Relations[1].Direction = "" },
+		func(v *goldenpath.NexusView) { v.Relations[1].Direction = "outgoing" },
+		func(v *goldenpath.NexusView) { v.Relations[1].Target = entityref.Ref{Type: "thread", ID: "thr_wrong"} },
+		func(v *goldenpath.NexusView) { v.Relations[1].RelationType = "derived-from" },
+		func(v *goldenpath.NexusView) { v.Relations = append(v.Relations, v.Relations[1]) },
+		func(v *goldenpath.NexusView) { v.Relations = v.Relations[1:] },
+	} {
+		invalid := view
+		invalid.Relations = append([]goldenpath.RelationProjection(nil), view.Relations...)
+		mutate(&invalid)
+		if _, err := publicCollaborationView(invalid.Current.Ref, invalid); err == nil {
+			t.Fatalf("accepted direction/source drift: %#v", invalid.Relations)
+		}
+	}
+}
+
 func TestCollaborationHandlerEnforcesSessionCSRFMethodsAndStrictBodies(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -397,7 +434,7 @@ func TestPublicCollaborationViewFailsClosedOnProjectionDrift(t *testing.T) {
 			CreatedBy: goldenpath.ActorRef{Kind: "user", ID: "usr_reader"}, CreatedAt: now, UpdatedAt: now,
 		},
 		Relations: []goldenpath.RelationProjection{{
-			State: goldenpath.ProjectionVisible, RelationType: "implements",
+			State: goldenpath.ProjectionVisible, Direction: "outgoing", RelationType: "implements",
 			Target: entityref.Ref{Type: "decision", ID: "dec_target"}, Title: "Decision",
 		}},
 	}

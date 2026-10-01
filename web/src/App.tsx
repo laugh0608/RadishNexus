@@ -1,10 +1,20 @@
+import { CIRunPage } from "./nexus-view/CIRunPage";
+import { ciRunLocation, ciRunPagePath } from "./nexus-view/ci-run-api";
+import { WorkbenchShell } from "./WorkbenchShell";
+import { DocumentPage, DocumentList } from "./document/DocumentPage";
+import { documentLocation } from "./document/api";
+import { AppHeader } from "./AppHeader";
+import { SetupGate } from "./auth/SetupGate";
+import { browserSetupClient, type SetupClient } from "./auth/setup-api";
+import { WorkspaceHome } from "./workspace/WorkspaceHome";
+import { browserDiscoveryClient, type DiscoveryClient } from "./workspace/api";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { IdentityLogin } from "./auth/IdentityLogin";
+import { IdentityPanel } from "./auth/IdentityPanel";
 import {
-  useCallback,
-  useEffect,
-  useState,
-  type FormEvent,
-  type ReactNode,
-} from "react";
+  browserIdentityClient,
+  type IdentityClient,
+} from "./auth/identity-api";
 import { NexusView } from "./nexus-view/NexusView";
 import {
   AuthRequestError,
@@ -17,7 +27,6 @@ import { ChannelPage } from "./channel/ChannelPage";
 import {
   browserChannelMessageClient,
   channelLocation,
-  channelPagePath,
   type ChannelMessageClient,
 } from "./channel/api";
 import {
@@ -28,14 +37,12 @@ import { CollaborationPage } from "./collaboration/CollaborationPage";
 import {
   browserCollaborationClient,
   collaborationLocation,
-  collaborationPagePath,
   type CollaborationClient,
   type CollaborationEntityType,
 } from "./collaboration/api";
 import {
   DeploymentNexusViewLoadError,
   deploymentNexusViewLocation,
-  deploymentNexusViewPagePath,
   loadDeploymentNexusViewData,
   type DeploymentNexusViewLoader,
 } from "./nexus-view/api";
@@ -49,7 +56,15 @@ type PrototypeMode = "succeeded" | "failed" | "loading" | "error";
 
 type AppRoute =
   | { kind: "home" }
+  | { kind: "account" }
+  | {
+      kind: "document";
+      workspaceID: string;
+      documentID: string | null;
+      projectID: string | null;
+    }
   | { kind: "prototype" }
+  | { kind: "ci-run"; workspaceID: string; ciRunID: string }
   | { kind: "deployment"; workspaceID: string; deploymentID: string }
   | { kind: "channel"; workspaceID: string; channelID: string }
   | {
@@ -87,6 +102,9 @@ const prototypeModes: readonly { id: PrototypeMode; label: string }[] = [
 interface AppProps {
   pathname?: string;
   authClient?: AuthClient;
+  setupClient?: SetupClient;
+  identityClient?: IdentityClient;
+  discoveryClient?: DiscoveryClient;
   channelClient?: ChannelMessageClient;
   channelRealtimeClient?: ChannelRealtimeClient;
   collaborationClient?: CollaborationClient;
@@ -97,6 +115,9 @@ interface AppProps {
 export function App({
   pathname = window.location.pathname,
   authClient = browserAuthClient,
+  setupClient = browserSetupClient,
+  identityClient = browserIdentityClient,
+  discoveryClient = browserDiscoveryClient,
   channelClient = browserChannelMessageClient,
   channelRealtimeClient = browserChannelRealtimeClient,
   collaborationClient = browserCollaborationClient,
@@ -110,7 +131,10 @@ export function App({
   return (
     <AuthenticatedApp
       route={route}
+      setupClient={setupClient}
       authClient={authClient}
+      discoveryClient={discoveryClient}
+      identityClient={identityClient}
       channelClient={channelClient}
       channelRealtimeClient={channelRealtimeClient}
       collaborationClient={collaborationClient}
@@ -124,9 +148,14 @@ function appRoute(pathname: string): AppRoute {
   if (pathname === "/" || pathname === "") {
     return { kind: "home" };
   }
+  if (pathname === "/account") return { kind: "account" };
   if (pathname === "/prototype/nexus-view") {
     return { kind: "prototype" };
   }
+  const doc = documentLocation(pathname);
+  if (doc) return { kind: "document", ...doc };
+  const ciRun = ciRunLocation(pathname);
+  if (ciRun) return { kind: "ci-run", ...ciRun };
   const deployment = deploymentNexusViewLocation(pathname);
   if (deployment !== null) {
     return { kind: "deployment", ...deployment };
@@ -143,7 +172,10 @@ function appRoute(pathname: string): AppRoute {
 
 function AuthenticatedApp({
   route,
+  setupClient,
   authClient,
+  identityClient,
+  discoveryClient,
   channelClient,
   channelRealtimeClient,
   collaborationClient,
@@ -151,7 +183,10 @@ function AuthenticatedApp({
   navigate,
 }: {
   route: Exclude<AppRoute, { kind: "prototype" }>;
+  setupClient: SetupClient;
   authClient: AuthClient;
+  identityClient: IdentityClient;
+  discoveryClient: DiscoveryClient;
   channelClient: ChannelMessageClient;
   channelRealtimeClient: ChannelRealtimeClient;
   collaborationClient: CollaborationClient;
@@ -215,12 +250,19 @@ function AuthenticatedApp({
   }
   if (authentication.status === "signed-out") {
     return (
-      <LoginView
-        onLogin={async (credentials, signal) => {
-          const session = await authClient.login(credentials, signal);
-          setAuthentication({ status: "signed-in", session });
-        }}
-      />
+      <SetupGate client={setupClient}>
+        <LoginView
+          identityClient={identityClient}
+          navigate={navigate}
+          onSession={(session) =>
+            setAuthentication({ status: "signed-in", session })
+          }
+          onLogin={async (credentials, signal) => {
+            const session = await authClient.login(credentials, signal);
+            setAuthentication({ status: "signed-in", session });
+          }}
+        />
+      </SetupGate>
     );
   }
   return (
@@ -228,25 +270,36 @@ function AuthenticatedApp({
       route={route}
       session={authentication.session}
       authClient={authClient}
+      discoveryClient={discoveryClient}
+      identityClient={identityClient}
       channelClient={channelClient}
       channelRealtimeClient={channelRealtimeClient}
       collaborationClient={collaborationClient}
       loadDeployment={loadDeployment}
       navigate={navigate}
       onSignedOut={requireLogin}
+      onSession={(session) =>
+        setAuthentication({ status: "signed-in", session })
+      }
     />
   );
 }
 
 function LoginView({
   onLogin,
+  identityClient,
+  navigate,
+  onSession,
 }: {
+  identityClient: IdentityClient;
+  navigate: (url: string) => void;
+  onSession: (session: SessionContext) => void;
   onLogin: (
     credentials: LoginCredentials,
     signal?: AbortSignal,
   ) => Promise<void>;
 }) {
-  const [loginName, setLoginName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -256,7 +309,7 @@ function LoginView({
     setSubmitting(true);
     setError(null);
     try {
-      await onLogin({ loginName, password });
+      await onLogin({ email, password });
       setPassword("");
     } catch (submitError) {
       setError(authErrorMessage(submitError));
@@ -266,25 +319,25 @@ function LoginView({
 
   return (
     <div className="app-shell">
-      <AppHeader note="安全登录 · 服务端 Session" brandHref="/" />
+      <AppHeader note="团队协作与研发上下文" brandHref="/" />
       <main className="auth-layout">
         <section className="auth-card" aria-labelledby="login-title">
-          <p className="section-kicker">Authenticated Web Shell</p>
+          <p className="section-kicker">欢迎回来</p>
           <h1 id="login-title">登录 RadishNexus</h1>
           <p className="auth-card__intro">
-            使用实例本地账号进入。密码只发送到当前 HTTPS
-            origin，不会写入浏览器存储。
+            使用邮箱登录，继续团队中的讨论与工作。
           </p>
           <form className="auth-form" onSubmit={(event) => void submit(event)}>
             <label>
-              <span>登录名</span>
+              <span>邮箱</span>
               <input
+                type="email"
                 autoComplete="username"
                 autoFocus
                 disabled={submitting}
-                onChange={(event) => setLoginName(event.target.value)}
+                onChange={(event) => setEmail(event.target.value)}
                 required
-                value={loginName}
+                value={email}
               />
             </label>
             <label>
@@ -311,9 +364,14 @@ function LoginView({
               {submitting ? "正在登录…" : "登录"}
             </button>
           </form>
+          <IdentityLogin
+            client={identityClient}
+            navigate={navigate}
+            onSession={onSession}
+          />
         </section>
       </main>
-      <AppFooter label="Authenticated Web Shell / M1" />
+      <AppFooter label="RadishNexus" />
     </div>
   );
 }
@@ -322,22 +380,28 @@ function SignedInShell({
   route,
   session,
   authClient,
+  identityClient,
+  discoveryClient,
   channelClient,
   channelRealtimeClient,
   collaborationClient,
   loadDeployment,
   navigate,
   onSignedOut,
+  onSession,
 }: {
   route: Exclude<AppRoute, { kind: "prototype" }>;
   session: SessionContext;
   authClient: AuthClient;
+  identityClient: IdentityClient;
+  discoveryClient: DiscoveryClient;
   channelClient: ChannelMessageClient;
   channelRealtimeClient: ChannelRealtimeClient;
   collaborationClient: CollaborationClient;
   loadDeployment: DeploymentNexusViewLoader;
   navigate: (path: string) => void;
   onSignedOut: () => void;
+  onSession: (session: SessionContext) => void;
 }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -349,6 +413,8 @@ function SignedInShell({
   );
   const currentWorkspace =
     route.kind === "deployment" ||
+    route.kind === "ci-run" ||
+    route.kind === "document" ||
     route.kind === "channel" ||
     route.kind === "collaboration"
       ? session.workspaces.find(
@@ -357,6 +423,12 @@ function SignedInShell({
       : undefined;
 
   const logout = async () => {
+    if (
+      !window.dispatchEvent(
+        new Event("radishnexus-before-discard", { cancelable: true }),
+      )
+    )
+      return;
     setLoggingOut(true);
     setLogoutError(null);
     try {
@@ -373,40 +445,37 @@ function SignedInShell({
   };
 
   return (
-    <div className="app-shell">
-      <AppHeader
-        note={
-          route.kind === "deployment" ||
-          route.kind === "channel" ||
-          route.kind === "collaboration"
-            ? `真实 API · ${currentWorkspace?.name ?? "当前权限过滤"}`
-            : "Authenticated Web Shell"
-        }
-        brandHref="/"
-      >
-        <div className="account-controls">
-          <span>
-            <small>已登录</small>
-            <strong>{session.user.displayName}</strong>
-          </span>
-          <button
-            disabled={loggingOut}
-            onClick={() => void logout()}
-            type="button"
-          >
-            {loggingOut ? "正在退出…" : "退出登录"}
-          </button>
-        </div>
-      </AppHeader>
-
-      {logoutError === null ? null : (
-        <p className="shell-alert" role="alert">
-          {logoutError}
-        </p>
-      )}
-
-      {route.kind === "home" ? (
-        <WorkspaceHome session={session} navigate={navigate} />
+    <WorkbenchShell
+      workspaceName={currentWorkspace?.name}
+      userName={session.user.displayName}
+      accountActive={route.kind === "account"}
+      loggingOut={loggingOut}
+      logoutError={logoutError}
+      onLogout={() => void logout()}
+    >
+      {route.kind === "account" ? (
+        <IdentityPanel
+          client={identityClient}
+          session={session}
+          navigate={navigate}
+          onSignedOut={onSignedOut}
+          onSession={onSession}
+        />
+      ) : route.kind === "home" ? (
+        <WorkspaceHome
+          session={session}
+          navigate={navigate}
+          client={discoveryClient}
+          onSessionExpired={onSignedOut}
+        />
+      ) : route.kind === "ci-run" ? (
+        <CIRunPage
+          key={`${route.workspaceID}/${route.ciRunID}`}
+          workspaceID={route.workspaceID}
+          ciRunID={route.ciRunID}
+          navigate={navigate}
+          onSessionExpired={onSignedOut}
+        />
       ) : route.kind === "deployment" ? (
         <LiveDeploymentApp
           key={`${route.workspaceID}/${route.deploymentID}`}
@@ -425,6 +494,22 @@ function SignedInShell({
           probeSession={probeSession}
           realtimeClient={channelRealtimeClient}
         />
+      ) : route.kind === "document" ? (
+        route.documentID ? (
+          <DocumentPage
+            key={`${route.workspaceID}/${route.documentID}`}
+            workspaceID={route.workspaceID}
+            documentID={route.documentID}
+            onSessionExpired={onSignedOut}
+          />
+        ) : (
+          <DocumentList
+            key={`${route.workspaceID}/${route.projectID}`}
+            workspaceID={route.workspaceID}
+            projectID={route.projectID!}
+            onSessionExpired={onSignedOut}
+          />
+        )
       ) : route.kind === "collaboration" ? (
         <CollaborationPage
           key={`${route.workspaceID}/${route.entityType}/${route.entityID}`}
@@ -437,192 +522,7 @@ function SignedInShell({
       ) : (
         <NotFoundView />
       )}
-
-      <AppFooter label="Authenticated Web Shell / M1" />
-    </div>
-  );
-}
-
-function WorkspaceHome({
-  session,
-  navigate,
-}: {
-  session: SessionContext;
-  navigate: (path: string) => void;
-}) {
-  const [workspaceID, setWorkspaceID] = useState(
-    session.workspaces[0]?.id ?? "",
-  );
-  const [deploymentID, setDeploymentID] = useState("");
-  const [channelID, setChannelID] = useState("");
-  const [collaborationType, setCollaborationType] =
-    useState<CollaborationEntityType>("thread");
-  const [collaborationID, setCollaborationID] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const openDeployment = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const path = deploymentNexusViewPagePath(workspaceID, deploymentID.trim());
-    if (path === null) {
-      setError("请选择 Workspace，并输入以 dpl_ 开头的有效 Deployment ID。");
-      return;
-    }
-    setError(null);
-    navigate(path);
-  };
-
-  const openChannel = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const path = channelPagePath(workspaceID, channelID.trim());
-    if (path === null) {
-      setError("请选择 Workspace，并输入以 chn_ 开头的有效 Channel ID。");
-      return;
-    }
-    setError(null);
-    navigate(path);
-  };
-
-  const openCollaboration = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const path = collaborationPagePath(
-      workspaceID,
-      collaborationType,
-      collaborationID.trim(),
-    );
-    if (path === null) {
-      setError(
-        "请选择 Workspace、协作对象类型，并输入匹配 thr_ / dec_ / tkt_ 的稳定 ID。",
-      );
-      return;
-    }
-    setError(null);
-    navigate(path);
-  };
-
-  return (
-    <main className="shell-home">
-      <section className="shell-welcome" aria-labelledby="shell-home-title">
-        <p className="section-kicker">Current workspace context</p>
-        <h1 id="shell-home-title">欢迎回来，{session.user.displayName}</h1>
-        <p>
-          Session 不固定 Workspace。每次打开业务对象时，服务端都会按当前
-          membership 重新验证权限。
-        </p>
-      </section>
-      <section
-        className="workspace-launcher"
-        aria-labelledby="deployment-launcher-title"
-      >
-        <div>
-          <p className="section-kicker">Known object launchers</p>
-          <h2 id="deployment-launcher-title">进入当前工作上下文</h2>
-          <p>
-            当前尚未开放对象列表；请使用已知稳定 ID 进入权限过滤后的正式页面。
-          </p>
-        </div>
-        <label className="workspace-selector">
-          <span>Workspace</span>
-          <select
-            disabled={session.workspaces.length === 0}
-            onChange={(event) => setWorkspaceID(event.target.value)}
-            required
-            value={workspaceID}
-          >
-            {session.workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name} · {workspace.role}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="resource-launchers">
-          <form onSubmit={openChannel}>
-            <p>Channel</p>
-            <label>
-              <span>Channel ID</span>
-              <input
-                autoComplete="off"
-                disabled={session.workspaces.length === 0}
-                onChange={(event) => setChannelID(event.target.value)}
-                placeholder="chn_…"
-                required
-                value={channelID}
-              />
-            </label>
-            <button
-              className="primary-button"
-              disabled={session.workspaces.length === 0}
-              type="submit"
-            >
-              打开 Channel
-            </button>
-          </form>
-          <form onSubmit={openDeployment}>
-            <p>Deployment</p>
-            <label>
-              <span>Deployment ID</span>
-              <input
-                autoComplete="off"
-                disabled={session.workspaces.length === 0}
-                onChange={(event) => setDeploymentID(event.target.value)}
-                placeholder="dpl_…"
-                required
-                value={deploymentID}
-              />
-            </label>
-            <button
-              className="secondary-button"
-              disabled={session.workspaces.length === 0}
-              type="submit"
-            >
-              打开 Nexus View
-            </button>
-          </form>
-          <form onSubmit={openCollaboration}>
-            <p>Collaboration</p>
-            <label>
-              <span>协作对象类型</span>
-              <select
-                disabled={session.workspaces.length === 0}
-                onChange={(event) =>
-                  setCollaborationType(
-                    event.target.value as CollaborationEntityType,
-                  )
-                }
-                value={collaborationType}
-              >
-                <option value="thread">Thread</option>
-                <option value="decision">Decision</option>
-                <option value="ticket">Ticket</option>
-              </select>
-            </label>
-            <label>
-              <span>协作对象 ID</span>
-              <input
-                autoComplete="off"
-                disabled={session.workspaces.length === 0}
-                onChange={(event) => setCollaborationID(event.target.value)}
-                placeholder="thr_… / dec_… / tkt_…"
-                required
-                value={collaborationID}
-              />
-            </label>
-            <button
-              className="secondary-button"
-              disabled={session.workspaces.length === 0}
-              type="submit"
-            >
-              打开协作对象
-            </button>
-          </form>
-        </div>
-        {error === null ? null : (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        )}
-      </section>
-    </main>
+    </WorkbenchShell>
   );
 }
 
@@ -665,14 +565,29 @@ function LiveDeploymentApp({
     return () => controller.abort();
   }, [deploymentID, loadDeployment, onSessionExpired, requestKey, workspaceID]);
 
+  const sourcePath =
+    state.status === "ready" && state.data.current.entityType === "deployment"
+      ? ciRunPagePath(
+          workspaceID,
+          state.data.current.ciRun.entityRef.slice("entity://ci-run/".length),
+        )
+      : null;
   return (
-    <NexusView
-      state={state}
-      onRetry={() => {
-        setState({ status: "loading" });
-        setRequestKey((key) => key + 1);
-      }}
-    />
+    <>
+      {sourcePath ? (
+        <nav className="document-toolbar" aria-label="交付来源">
+          <a href="/">工作区</a>
+          <a href={sourcePath}>查看来源 CI Run</a>
+        </nav>
+      ) : null}
+      <NexusView
+        state={state}
+        onRetry={() => {
+          setState({ status: "loading" });
+          setRequestKey((key) => key + 1);
+        }}
+      />
+    </>
   );
 }
 
@@ -707,7 +622,7 @@ function ShellState({
 }) {
   return (
     <div className="app-shell">
-      <AppHeader note="Authenticated Web Shell" brandHref="/" />
+      <AppHeader note="欢迎回来" brandHref="/" />
       <main className="nexus-layout" aria-busy={onAction === undefined}>
         <section className="state-panel">
           <p className="section-kicker">Session bootstrap</p>
@@ -720,7 +635,7 @@ function ShellState({
           )}
         </section>
       </main>
-      <AppFooter label="Authenticated Web Shell / M1" />
+      <AppFooter label="欢迎回来 / M1" />
     </div>
   );
 }
@@ -756,35 +671,6 @@ function PrototypeApp() {
       />
       <AppFooter label="Representative slice / M0" />
     </div>
-  );
-}
-
-function AppHeader({
-  note,
-  brandHref,
-  children,
-}: {
-  note: string;
-  brandHref: string;
-  children?: ReactNode;
-}) {
-  return (
-    <header className="prototype-header">
-      <a className="brand-lockup" href={brandHref} aria-label="RadishNexus">
-        <span className="brand-mark" aria-hidden="true">
-          R
-        </span>
-        <span>
-          <strong>RadishNexus</strong>
-          <small>Context stays connected.</small>
-        </span>
-      </a>
-      <div className="prototype-note">
-        <span aria-hidden="true" />
-        {note}
-      </div>
-      {children}
-    </header>
   );
 }
 

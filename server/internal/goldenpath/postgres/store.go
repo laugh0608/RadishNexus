@@ -481,7 +481,10 @@ func insertEvent(ctx context.Context, tx pgx.Tx, event eventRecord) error {
 }
 
 func insertOutbox(ctx context.Context, tx pgx.Tx, eventID string) error {
-	return insertOutboxFor(ctx, tx, eventID, "activity-projector")
+	if err := insertOutboxFor(ctx, tx, eventID, "activity-projector"); err != nil {
+		return err
+	}
+	return projectActivityDelivery(ctx, tx, eventID)
 }
 
 func insertOutboxFor(ctx context.Context, tx pgx.Tx, eventID string, consumer string) error {

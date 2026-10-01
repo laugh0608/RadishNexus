@@ -13,8 +13,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/laugh0608/RadishNexus/server/db"
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
+	"github.com/laugh0608/RadishNexus/server/internal/jenkins"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/httptransport"
@@ -68,23 +70,31 @@ func run() error {
 		return err
 	}
 	defer pool.Close()
+	readiness, err := db.NewReadinessChecker(pool)
+	if err != nil {
+		return fmt.Errorf("configure schema readiness: %w", err)
+	}
+	authStore := authpostgres.New(pool)
 	authService := authn.NewService(
-		authpostgres.New(pool),
+		authStore,
 		authn.NewArgon2idHasher(),
 		authn.CryptoSecretGenerator{},
 		authn.SystemClock{},
 	)
-	authHandler := httptransport.NewAuthHandler(
-		authService,
-		sessionPolicy,
-		proxyPolicy,
-		httptransport.NewLoginGuard(
-			loginAttemptLimit,
-			loginWindowDuration,
-			loginTrackedClientLimit,
-			loginPasswordConcurrencyLimit,
-		),
-	)
+	setupCode, err := runtimeconfig.SetupCode(os.Getenv, os.ReadFile)
+	if err != nil {
+		return err
+	}
+	setupService, err := authn.NewSetupService(authService, authStore, setupCode)
+	if err != nil {
+		return err
+	}
+	setupCode = ""
+	authenticationGuard := httptransport.NewLoginGuard(loginAttemptLimit, loginWindowDuration, loginTrackedClientLimit, loginPasswordConcurrencyLimit)
+	setupHandler := httptransport.NewSetupHandler(setupService, readiness, sessionPolicy, proxyPolicy, authenticationGuard)
+	identityService := authn.NewIdentityService(authStore, authService, "")
+	identityHandler := httptransport.NewIdentityHandler(identityService, authService, nil, sessionPolicy, proxyPolicy, authenticationGuard)
+	authHandler := httptransport.NewAuthHandler(authService, sessionPolicy, proxyPolicy, authenticationGuard, identityHandler)
 	realtimeConfig, err := realtime.DefaultConfig()
 	if err != nil {
 		return err
@@ -126,9 +136,28 @@ func run() error {
 		proxyPolicy,
 	)
 
+	discoveryHandler := httptransport.NewDiscoveryHandler(authService, goldenpath.NewDiscoveryService(goldenpostgres.New(pool)), sessionPolicy, proxyPolicy)
+	documentHandler := httptransport.NewDocumentHandler(authService, goldenpath.NewDocumentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy)
+	configurationHandler := httptransport.NewConfigurationHandler(authService, goldenpath.NewConfigurationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy)
+
+	sources, err := runtimeconfig.JenkinsSources(os.Getenv, jenkins.ReadFile)
+	if err != nil {
+		return err
+	}
+	var jenkinsHandler http.Handler
+	if len(sources) > 0 {
+		bindingContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		for _, source := range sources {
+			if err := goldenpostgres.New(pool).ValidateJenkinsBinding(bindingContext, source.WorkspaceID, source.ComponentID); err != nil {
+				return errors.New("Jenkins source target unavailable")
+			}
+		}
+		jenkinsHandler = httptransport.NewJenkinsDeliveryHandler(sources, nexusViewService, sessionPolicy, proxyPolicy, time.Now, httptransport.LogJenkinsDelivery)
+	}
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(pool, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, webHandler),
+		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler, setupHandler, documentHandler, httptransport.NewCIRunNexusViewHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), jenkinsHandler, httptransport.NewStagingDeploymentHandler(authService, nexusViewService, sessionPolicy, proxyPolicy)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -172,27 +201,30 @@ func (notifier messageRealtimeNotifier) NotifyMessageCreated(notification golden
 	})
 }
 
-type databasePinger interface {
-	Ping(context.Context) error
+type readinessChecker interface {
+	CheckReady(context.Context) error
 }
 
 func newHandler(
-	database databasePinger,
+	database readinessChecker,
 	authHandler http.Handler,
 	channelMessagesHandler http.Handler,
 	channelEventsHandler http.Handler,
 	collaborationHandler http.Handler,
 	deploymentNexusViewHandler http.Handler,
+	discoveryHandler http.Handler,
 	webHandler http.Handler,
+	identityHandler ...http.Handler,
 ) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", func(response http.ResponseWriter, _ *http.Request) {
 		response.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /health/ready", func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Cache-Control", "no-store")
 		ctx, cancel := context.WithTimeout(request.Context(), 2*time.Second)
 		defer cancel()
-		if err := database.Ping(ctx); err != nil {
+		if err := database.CheckReady(ctx); err != nil {
 			http.Error(response, "not ready", http.StatusServiceUnavailable)
 			return
 		}
@@ -200,6 +232,22 @@ func newHandler(
 	})
 	mux.HandleFunc("/health/live", healthMethodNotAllowed)
 	mux.HandleFunc("/health/ready", healthMethodNotAllowed)
+	if len(identityHandler) >= 1 {
+		mux.Handle("/api/v1/workspaces/{workspace_id}/invitations", identityHandler[0])
+		mux.Handle("/auth/complete", identityHandler[0])
+	}
+	if len(identityHandler) >= 7 {
+		httptransport.RegisterStagingDeploymentRoutes(mux, identityHandler[6])
+	}
+	if len(identityHandler) >= 5 {
+		httptransport.RegisterCIRunRoutes(mux, identityHandler[4])
+	}
+	if len(identityHandler) >= 4 {
+		httptransport.RegisterDocumentRoutes(mux, identityHandler[3])
+	}
+	if len(identityHandler) >= 3 {
+		mux.Handle("/api/v1/setup", identityHandler[2])
+	}
 	mux.Handle("/api/v1/auth", authHandler)
 	mux.Handle("/api/v1/auth/", authHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages", channelMessagesHandler)
@@ -209,11 +257,21 @@ func newHandler(
 	mux.Handle("/api/v1/workspaces/{workspace_id}/threads/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/decisions/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/tickets/", collaborationHandler)
+	if len(identityHandler) >= 2 {
+		httptransport.RegisterConfigurationRoutes(mux, discoveryHandler, identityHandler[1])
+	} else {
+		mux.Handle("/api/v1/workspaces/{workspace_id}/projects", discoveryHandler)
+	}
+	mux.Handle("/api/v1/workspaces/{workspace_id}/projects/", discoveryHandler)
 	mux.Handle("/api/v1/workspaces", deploymentNexusViewHandler)
 	mux.Handle("/api/v1/workspaces/", deploymentNexusViewHandler)
 	mux.Handle("/", webHandler)
 
-	return httptransport.WithRequestID(mux)
+	var handler http.Handler = mux
+	if len(identityHandler) >= 6 {
+		handler = httptransport.WithJenkinsDeliveries(handler, identityHandler[5])
+	}
+	return httptransport.WithRequestID(handler)
 }
 
 func healthMethodNotAllowed(response http.ResponseWriter, _ *http.Request) {

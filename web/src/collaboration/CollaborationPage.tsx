@@ -1,3 +1,5 @@
+import { CreateDocument } from "../document/DocumentPage";
+import { documentPath } from "../document/api";
 import { useEffect, useState, type FormEvent } from "react";
 import { channelPagePath } from "../channel/api";
 import {
@@ -359,7 +361,7 @@ export function CollaborationPage({
             <div className="channel-section-heading">
               <div>
                 <p className="section-kicker">Structured context</p>
-                <h2 id="relations-title">来源关系</h2>
+                <h2 id="relations-title">来源与后续结果</h2>
               </div>
               <span className="panel-count">{relations.length}</span>
             </div>
@@ -456,6 +458,18 @@ export function CollaborationPage({
           ) : (
             <div className="collaboration-complete">
               <strong>Ticket 已进入执行上下文</strong>
+              <CreateDocument
+                workspaceID={workspaceID}
+                ticketID={entityID}
+                projectID={current.project.id}
+                onSessionExpired={onSessionExpired}
+                onRevoked={() =>
+                  setState({
+                    status: "error",
+                    message: "当前权限已变化，请重新读取。",
+                  })
+                }
+              />
               <p>
                 当前切片只读展示 open Ticket；状态流转将在后续工作流合同中建立。
               </p>
@@ -617,7 +631,7 @@ function RelationList({
 }) {
   if (relations.length === 0) {
     return (
-      <p className="collaboration-empty">当前对象没有可展示的来源关系。</p>
+      <p className="collaboration-empty">当前对象没有可展示的关联对象。</p>
     );
   }
   return (
@@ -634,8 +648,17 @@ function RelationList({
             </div>
           </li>
         ) : (
-          <li key={`${relation.relationType}/${relation.target.ref.id}`}>
-            <span>{relation.relationType}</span>
+          <li
+            key={`${relation.direction}/${relation.relationType}/${relation.target.ref.id}`}
+          >
+            <span>
+              {relation.target.ref.type === "document"
+                ? "设计文档"
+                : relation.direction === "incoming"
+                  ? "后续结果"
+                  : "来源"}{" "}
+              · {relation.relationType}
+            </span>
             <strong>{relation.target.title}</strong>
             <code>
               entity://{relation.target.ref.type}/{relation.target.ref.id}
@@ -657,14 +680,24 @@ function RelationLink({
 }) {
   const target = relation.target.ref;
   const href =
-    target.type === "channel"
-      ? channelPagePath(workspaceID, target.id)
-      : target.type === "thread" ||
-          target.type === "decision" ||
-          target.type === "ticket"
-        ? collaborationPagePath(workspaceID, target.type, target.id)
-        : null;
-  return href === null ? null : <a href={href}>打开来源对象</a>;
+    target.type === "document"
+      ? documentPath(workspaceID, target.id)
+      : target.type === "channel"
+        ? channelPagePath(workspaceID, target.id)
+        : target.type === "thread" ||
+            target.type === "decision" ||
+            target.type === "ticket"
+          ? collaborationPagePath(workspaceID, target.type, target.id)
+          : null;
+  return href === null ? null : (
+    <a href={href}>
+      {target.type === "document"
+        ? "打开关联文档"
+        : relation.direction === "incoming"
+          ? "打开后续对象"
+          : "打开来源对象"}
+    </a>
+  );
 }
 
 function TimelineList({

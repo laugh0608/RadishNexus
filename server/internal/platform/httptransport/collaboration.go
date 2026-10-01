@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
-	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
@@ -105,6 +104,7 @@ type ticketCurrentDTO struct {
 }
 
 type collaborationRelationDTO struct {
+	Direction    string            `json:"direction,omitempty"`
 	Visibility   string            `json:"visibility"`
 	RelationType string            `json:"relation_type,omitempty"`
 	Target       *visibleEntityDTO `json:"target,omitempty"`
@@ -401,36 +401,7 @@ func (handler *CollaborationHandler) authenticate(
 	workspaceID string,
 	write bool,
 ) (authz.Principal, error) {
-	if _, err := handler.proxy.ClientIP(request); err != nil {
-		return authz.Principal{}, err
-	}
-	if err := handler.session.ValidateHost(request); err != nil {
-		return authz.Principal{}, err
-	}
-	token, err := handler.session.SessionToken(request)
-	if err != nil {
-		return authz.Principal{}, err
-	}
-	if write {
-		csrfToken, err := handler.session.ValidateCSRF(request)
-		if err != nil {
-			return authz.Principal{}, err
-		}
-		if err := handler.sessions.VerifyCSRF(request.Context(), token, csrfToken); err != nil {
-			return authz.Principal{}, err
-		}
-	}
-	if !validScopedID(workspaceID, "wrk_") {
-		return authz.Principal{}, fmt.Errorf("%w: invalid Workspace ID", authz.ErrInvalid)
-	}
-	verified, err := handler.sessions.ResolveWorkspace(request.Context(), token, workspaceID)
-	if err != nil {
-		if errors.Is(err, authz.ErrForbidden) {
-			err = authz.ErrNotFound
-		}
-		return authz.Principal{}, err
-	}
-	return authn.UserPrincipal(verified)
+	return authenticateWorkspaceRequest(request, workspaceID, write, handler.sessions, handler.session, handler.proxy)
 }
 
 func validateCollaborationPath(workspaceID string, entityType string, entityID string) (entityref.Ref, error) {
@@ -452,6 +423,10 @@ func publicCollaborationView(target entityref.Ref, view goldenpath.NexusView) (c
 	if err != nil {
 		return collaborationViewDTO{}, err
 	}
+	sources, err := collaborationSourceRelations(target.Type, view.Relations)
+	if err != nil {
+		return collaborationViewDTO{}, err
+	}
 	timeline, err := publicCollaborationTimeline(view.Timeline)
 	if err != nil {
 		return collaborationViewDTO{}, err
@@ -459,19 +434,19 @@ func publicCollaborationView(target entityref.Ref, view goldenpath.NexusView) (c
 	dto := collaborationViewDTO{Relations: relations, Timeline: timeline}
 	switch target.Type {
 	case "thread":
-		current, err := publicThreadCurrent(view.Current, view.Relations, view.Timeline)
+		current, err := publicThreadCurrent(view.Current, sources, view.Timeline)
 		if err != nil {
 			return collaborationViewDTO{}, err
 		}
 		dto.Current = current
 	case "decision":
-		current, err := publicDecisionProjection(view.Current, view.Relations, view.Timeline)
+		current, err := publicDecisionProjection(view.Current, sources, view.Timeline)
 		if err != nil {
 			return collaborationViewDTO{}, err
 		}
 		dto.Current = current
 	case "ticket":
-		current, err := publicTicketProjection(view.Current, view.Relations, view.Timeline)
+		current, err := publicTicketProjection(view.Current, sources, view.Timeline)
 		if err != nil {
 			return collaborationViewDTO{}, err
 		}
@@ -669,16 +644,49 @@ func publicTicket(ticket goldenpath.Ticket) (ticketCurrentDTO, error) {
 	}, nil
 }
 
+// Separate original evidence from allowed incoming discoveries before validating
+// the existing Current/source contract. Restricted discoveries are never valid.
+func collaborationSourceRelations(entityType string, relations []goldenpath.RelationProjection) ([]goldenpath.RelationProjection, error) {
+	sources := make([]goldenpath.RelationProjection, 0, 1)
+	seen := make(map[entityref.Ref]bool)
+	for _, relation := range relations {
+		if entityType == "ticket" && relation.State == goldenpath.ProjectionRestricted {
+			continue
+		}
+		if entityType == "ticket" && relation.Direction == "outgoing" && relation.State == goldenpath.ProjectionVisible && relation.RelationType == "relates-to" && relation.Target.Type == "document" {
+			if seen[relation.Target] {
+				return nil, errors.New("duplicate Document relation")
+			}
+			seen[relation.Target] = true
+			continue
+		}
+		if relation.State == goldenpath.ProjectionRestricted || relation.Direction == "outgoing" {
+			sources = append(sources, relation)
+			continue
+		}
+		if relation.Direction != "incoming" || relation.State != goldenpath.ProjectionVisible ||
+			!((entityType == "thread" && relation.RelationType == "derived-from" && relation.Target.Type == "decision") ||
+				(entityType == "decision" && relation.RelationType == "implements" && relation.Target.Type == "ticket")) || seen[relation.Target] {
+			return nil, errors.New("unexpected incoming collaboration relation")
+		}
+		seen[relation.Target] = true
+	}
+	return sources, nil
+}
+
 func publicCollaborationRelations(relations []goldenpath.RelationProjection) ([]collaborationRelationDTO, error) {
 	dto := make([]collaborationRelationDTO, 0, len(relations))
 	for _, relation := range relations {
 		switch relation.State {
 		case goldenpath.ProjectionRestricted:
-			if relation.RelationType != "" || relation.Target != (entityref.Ref{}) || relation.Title != "" {
+			if relation.Direction != "" || relation.RelationType != "" || relation.Target != (entityref.Ref{}) || relation.Title != "" {
 				return nil, errors.New("restricted relation leaks fields")
 			}
 			dto = append(dto, collaborationRelationDTO{Visibility: "restricted"})
 		case goldenpath.ProjectionVisible:
+			if relation.Direction != "outgoing" && relation.Direction != "incoming" {
+				return nil, errors.New("invalid collaboration relation direction")
+			}
 			entity, err := requiredVisibleEntity(goldenpath.SubjectProjection{
 				State: relation.State,
 				Ref:   relation.Target,
@@ -688,11 +696,12 @@ func publicCollaborationRelations(relations []goldenpath.RelationProjection) ([]
 				return nil, err
 			}
 			if relation.RelationType != "started-from" && relation.RelationType != "derived-from" &&
-				relation.RelationType != "implements" {
+				relation.RelationType != "implements" && relation.RelationType != "relates-to" {
 				return nil, fmt.Errorf("unsupported collaboration relation %q", relation.RelationType)
 			}
 			dto = append(dto, collaborationRelationDTO{
 				Visibility:   "readable",
+				Direction:    relation.Direction,
 				RelationType: relation.RelationType,
 				Target:       &entity,
 			})

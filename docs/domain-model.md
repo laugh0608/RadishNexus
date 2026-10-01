@@ -2,7 +2,7 @@
 
 状态：M0 领域基线，首批核心与沟通入口字段已冻结
 
-日期：2026-09-01
+日期：2026-09-14
 
 ## 目标
 
@@ -61,11 +61,15 @@ Project、Initiative、Component、Decision、Environment 和 EntityLink 共享�
 
 首期 Workspace membership 独立保存 `status: active / suspended` 与 `role: owner / member`。`owner` 表示 Workspace 级管理责任，不自动授予 restricted Project、私密协作对象或 Environment Deployment 权限；这些能力仍由对应对象的显式授权决定。用户 Session 不固定 Workspace，业务请求选择 Workspace 后必须以当前 active membership 重新解析权限。
 
-M1 本地身份基线以不可变小写 ASCII `login_name` 关联 `users`，密码只保存 Argon2id verifier；服务端 Session 只保存 opaque token 与 CSRF token 的 digest。`local_accounts` 纳入受控 PostgreSQL 运维备份，`user_sessions` 只保留 schema，恢复后旧登录态全部失效。精确边界见 [ADR-0012](adr/0012-local-identity-and-session-foundation.md)。
+身份模型按 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 分离用户、账户状态、本地密码凭证与外部身份。正式本地凭证采用规范化邮箱，展示名独立；Radish OIDC 以 exact `(issuer, subject)` 关联本地用户，两种认证都进入 Nexus Session。旧登录名到邮箱使用管理员显式映射，不改变稳定用户 ID，不自动合并账户或继承上游权限。迁移与当前实现完成线分别见 ADR 和[当前状态](status/current.md)。
+
+首位管理员初始化按 [ADR-0027](adr/0027-first-visit-administrator-setup.md) 创建一个本地账户与 Workspace owner；网页凭部署者的一次性初始化码，CLI 使用既有运维入口，两者共享唯一事务锁。该流程不产生跨 Workspace 的超级权限，也不自动建立业务对象或 Session；任何账户已存在后不重新开放。
 
 ### Team
 
 稳定的人员责任边界，用于成员管理、默认权限和软件资产所有权。首期可以只实现简单团队和成员关系，不建设复杂组织架构。
+
+首批 Team 仅维护同 Workspace 的责任元数据，由 owner 显式创建；尚无 Team membership 或权限继承。Team 所有权不授予 Project 或私密对象访问权。
 
 ### Project
 
@@ -85,6 +89,8 @@ M0 最小字段：
 | `status` | `active / archived` |
 
 `workspace` 表示 Workspace 成员默认可发现，`restricted` 表示必须通过显式成员或角色授权。Project 的可见性只提供默认边界，不能自动放宽其中私密 Channel、Conversation、Document 或其它对象的权限。归档 Project 不级联删除其内容或关系。
+
+创建与首批成员配置遵循 [ADR-0026](adr/0026-foundation-configuration-and-membership.md)：owner 显式指定本人为新 Project 的初始 admin；现有 admin 只能配置其他成员的 viewer / contributor / decider，管理权交接独立延后。restricted Channel 配置同时要求 Project admin 与 Channel membership。撤销 Project 角色会清理该成员在其下的显式 Channel / Thread 授权，重新加入不恢复历史私密授权。工作区可见项目的只读基线仍保留。
 
 ### Initiative
 
@@ -186,7 +192,7 @@ M0 正式切片先冻结 `deployment` 类型与 `dpl_` ID 前缀，并只记录�
 | `source_kind / source_id` | 受控 `web / api` 调用来源 |
 | `recorded_at` | RadishNexus 原子记录时间 |
 
-同一 CI Run 在同一 Environment 最多形成一条 Deployment。CI Run 成功不会调用 Deployment 写入；只有 active Workspace 用户持有目标 Environment 的显式授权后，才能通过独立命令记录。Project 角色、owner Team、EntityLink 和 CI source 都不隐式授予部署能力。
+同一 CI Run 在同一 Environment 最多形成一条 Deployment。[ADR-0031](adr/0031-session-scoped-staging-deployment-recording.md) 为显式记录增加操作身份：同一操作者 / 来源构建 / 操作 ID 的精确重试返回原事实，修改内容或不同操作重复该组合仍冲突；重试继续验证当前环境授权。CI Run 成功不会调用 Deployment 写入；只有 active Workspace 用户持有目标 Environment 的显式授权后，才能通过独立命令记录。Project 角色、owner Team、EntityLink 和 CI source 都不隐式授予部署能力。
 
 M0 command 只记录调用方已经确认的外部终态，不执行部署、不读取 Secret，也不建立 production、审批、回滚或运行中状态。Deployment、`deploys` CI Run 关系、`deployment.recorded` 事件和 Outbox 原子提交；权威行保留授权、操作者和来源，但不替代未来通用 Audit 与外部执行日志。精确边界见 [ADR-0009](adr/0009-explicit-staging-deployment.md)。
 
@@ -214,6 +220,8 @@ M0 纵向切片继续冻结 `thread` / `thr_` 与 `ticket` / `tkt_` 的稳定引
 ### Document
 
 承载设计、说明、Runbook 和复盘等长内容。在线协作、版本和离线同步属于 Document 自身能力；Document 不能代替结构化 Decision、Ticket 或 Deployment。
+
+首个最小合同已按 [ADR-0028](adr/0028-minimal-markdown-document.md) 接入正式实现：`document / doc_`，固定 Workspace 与 governing Project，首期仅 `project` 可见性；当前版本指向不可变的标题与 UTF-8 Markdown 快照。读取及全部历史复用当前 Project 权限，写入要求活跃 Project 的 contributor / decider / admin；作者或 Workspace owner 不额外越权。显式保存检查 base revision，恢复旧版追加新版本。首期从 Ticket 创建并原子建立带来源的 `ticket relates-to document`，不表示 Ticket 已确认某个正文版本。格式、限制、事件与备份 / 导出边界集中维护在 ADR，不引入 CRDT 或浏览器持久化。
 
 ### Decision
 

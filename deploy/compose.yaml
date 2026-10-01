@@ -153,6 +153,11 @@ services:
     entrypoint:
       - /usr/local/bin/nexus-bootstrap
 
+  identity-migrate:
+    <<: *operation
+    entrypoint:
+      - /usr/local/bin/nexus-identity-migrate
+
   backup:
     <<: *operation
     entrypoint:

@@ -278,16 +278,19 @@ func assertMessagingHTTPTransport(
 	csrfDigest := sha256.Sum256([]byte(csrfToken))
 	deciderTokenDigest := sha256.Sum256([]byte(deciderSessionToken))
 	deciderCSRFDigest := sha256.Sum256([]byte(deciderCSRFToken))
+	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_contributor', 'active', $1), ('usr_decider', 'active', $1)`, now); err != nil {
+		t.Fatalf("seed identity accounts: %v", err)
+	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO radishnexus.local_accounts (
-			user_id, login_name, password_hash, created_at, password_changed_at
+		INSERT INTO radishnexus.local_credentials (
+			user_id, email, password_hash, created_at, password_changed_at
 		)
-		SELECT 'usr_contributor', 'http.contributor', password_hash, $1::timestamptz, $1::timestamptz
-		FROM radishnexus.local_accounts
+		SELECT 'usr_contributor', 'http.contributor@example.test', password_hash, $1::timestamptz, $1::timestamptz
+		FROM radishnexus.local_credentials
 		WHERE user_id = 'usr_reader'
 		UNION ALL
-		SELECT 'usr_decider', 'http.decider', password_hash, $1::timestamptz, $1::timestamptz
-		FROM radishnexus.local_accounts
+		SELECT 'usr_decider', 'http.decider@example.test', password_hash, $1::timestamptz, $1::timestamptz
+		FROM radishnexus.local_credentials
 		WHERE user_id = 'usr_reader'
 	`, now); err != nil {
 		t.Fatalf("seed messaging HTTP local account: %v", err)
@@ -809,20 +812,39 @@ func assertCollaborationHTTPTransport(
 		t.Fatalf("HTTP exact Ticket retry = status %d, body %q", response.Code, response.Body.String())
 	}
 
-	for _, viewPath := range []string{
-		"/api/v1/workspaces/wrk_main/decisions/" + decisionID + "/nexus-view",
-		"/api/v1/workspaces/wrk_main/tickets/" + createdTicket.Data.Ticket.Ref.ID + "/nexus-view",
+	// These reads occur after public commands and retries, with no rebuild.
+	for _, check := range []struct {
+		path       string
+		timeline   int
+		relations  int
+		incomingID string
+	}{
+		{"/api/v1/workspaces/wrk_main/threads/" + threadID + "/nexus-view", 0, 2, decisionID},
+		{"/api/v1/workspaces/wrk_main/decisions/" + decisionID + "/nexus-view", 2, 2, createdTicket.Data.Ticket.Ref.ID},
+		{"/api/v1/workspaces/wrk_main/tickets/" + createdTicket.Data.Ticket.Ref.ID + "/nexus-view", 1, 1, ""},
 	} {
 		response = httptest.NewRecorder()
-		handler.ServeHTTP(response, messagingHTTPRequest(
-			http.MethodGet,
-			viewPath,
-			"",
-			contributorSessionToken,
-			contributorCSRFToken,
-		))
-		if response.Code != http.StatusOK {
-			t.Fatalf("HTTP collaboration Nexus View %s = status %d, body %q", viewPath, response.Code, response.Body.String())
+		handler.ServeHTTP(response, messagingHTTPRequest(http.MethodGet, check.path, "", contributorSessionToken, contributorCSRFToken))
+		var view struct {
+			Data struct {
+				Timeline  []json.RawMessage `json:"timeline"`
+				Relations []struct {
+					Direction string `json:"direction"`
+					Target    struct {
+						Ref entityref.Ref `json:"ref"`
+					} `json:"target"`
+				} `json:"relations"`
+			} `json:"data"`
+		}
+		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &view) != nil ||
+			len(view.Data.Timeline) != check.timeline || len(view.Data.Relations) != check.relations {
+			t.Fatalf("normal write -> HTTP Nexus View %s = %d %s", check.path, response.Code, response.Body.String())
+		}
+		if check.incomingID != "" {
+			incoming := view.Data.Relations[len(view.Data.Relations)-1]
+			if incoming.Direction != "incoming" || incoming.Target.Ref.ID != check.incomingID {
+				t.Fatalf("missing incoming discovery: %s", response.Body.String())
+			}
 		}
 	}
 

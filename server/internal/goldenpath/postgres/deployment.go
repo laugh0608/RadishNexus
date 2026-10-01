@@ -9,6 +9,7 @@ import (
 
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
 
 func (store *Store) RecordStagingDeployment(
@@ -31,6 +32,16 @@ func (store *Store) RecordStagingDeployment(
 	}
 	if !member {
 		return deployment, authz.ErrNotFound
+	}
+
+	for _, ref := range []entityref.Ref{{Type: "ci-run", ID: command.CIRunID}, {Type: "environment", ID: command.EnvironmentID}} {
+		exists, readable, e := entityAccess(ctx, tx, command.Principal, ref)
+		if e != nil {
+			return deployment, e
+		}
+		if !exists || !readable {
+			return deployment, authz.ErrNotFound
+		}
 	}
 
 	var environmentClassification string
@@ -88,6 +99,22 @@ func (store *Store) RecordStagingDeployment(
 	}
 	if ciRunStatus != "succeeded" {
 		return deployment, fmt.Errorf("%w: staging Deployment requires a succeeded CI Run", authz.ErrConflict)
+	}
+
+	receipt, duplicate, err := claimCollaborationCommand(ctx, tx, command.Invocation, "deployment.record", "ci-run", command.CIRunID, command.ClientOperationID, command.PayloadSHA256, "deployment", command.DeploymentID, command.EventID, command.RecordedAt)
+	if err != nil {
+		return deployment, err
+	}
+	if duplicate {
+		deployment, err = loadDeployment(ctx, tx, command.Principal.WorkspaceID, receipt.resultID)
+		if err != nil {
+			return deployment, err
+		}
+		if err = tx.Commit(ctx); err != nil {
+			return deployment, fmt.Errorf("commit Deployment retry: %w", err)
+		}
+		deployment.Duplicate = true
+		return deployment, nil
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -159,4 +186,75 @@ func (store *Store) RecordStagingDeployment(
 		SourceID:      command.SourceID,
 		RecordedAt:    command.RecordedAt,
 	}, nil
+}
+
+func loadDeployment(ctx context.Context, tx pgx.Tx, workspace, id string) (d goldenpath.Deployment, err error) {
+	err = tx.QueryRow(ctx, `SELECT id,workspace_id,environment_id,ci_run_id,status,started_at,completed_at,recorded_by,source_kind,COALESCE(source_id,''),recorded_at FROM radishnexus.deployments WHERE workspace_id=$1 AND id=$2`, workspace, id).Scan(&d.ID, &d.WorkspaceID, &d.EnvironmentID, &d.CIRunID, &d.Status, &d.StartedAt, &d.CompletedAt, &d.RecordedBy, &d.SourceKind, &d.SourceID, &d.RecordedAt)
+	if err != nil {
+		return d, fmt.Errorf("load Deployment receipt result: %w", err)
+	}
+	return d, nil
+}
+
+func (s *Store) ListStagingTargets(ctx context.Context, p authz.Principal, ciRun string, in goldenpath.DiscoveryPageInput) (page goldenpath.StagingTargetPage, err error) {
+	if err = p.ValidateUser(); err != nil {
+		return page, err
+	}
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return page, fmt.Errorf("begin staging targets: %w", err)
+	}
+	defer rollback(ctx, tx, &err)
+	member, err := activeWorkspaceMember(ctx, tx, p)
+	if err != nil {
+		return page, err
+	}
+	if !member {
+		return page, authz.ErrNotFound
+	}
+	exists, readable, err := entityAccess(ctx, tx, p, entityref.Ref{Type: "ci-run", ID: ciRun})
+	if err != nil {
+		return page, err
+	}
+	if !exists || !readable {
+		return page, authz.ErrNotFound
+	}
+	var status string
+	if err = tx.QueryRow(ctx, `SELECT status FROM radishnexus.ci_runs WHERE workspace_id=$1 AND id=$2`, p.WorkspaceID, ciRun).Scan(&status); err != nil {
+		return page, fmt.Errorf("load target source: %w", err)
+	}
+	if status != "succeeded" {
+		return page, authz.ErrConflict
+	}
+	// Environment read access is active Workspace membership (ADR-0011).
+	// Authorization narrows this list to permitted writes, never grants read access.
+	rows, err := tx.Query(ctx, `SELECT e.id,e.name,e.key FROM radishnexus.environments e
+ WHERE e.workspace_id=$1 AND e.id>$3 AND e.status='active' AND e.classification='staging'
+ AND EXISTS (SELECT 1 FROM radishnexus.environment_deployment_authorizations a WHERE a.workspace_id=e.workspace_id AND a.environment_id=e.id AND a.user_id=$2 AND a.status='active')
+ ORDER BY e.id LIMIT $4`, p.WorkspaceID, p.ID, in.AfterID, in.Limit+1)
+	if err != nil {
+		return page, fmt.Errorf("query staging targets: %w", err)
+	}
+	page.Items = []goldenpath.StagingTarget{}
+	for rows.Next() {
+		v := goldenpath.StagingTarget{Ref: entityref.Ref{Type: "environment"}}
+		if err = rows.Scan(&v.Ref.ID, &v.Name, &v.Key); err != nil {
+			rows.Close()
+			return page, fmt.Errorf("scan staging target: %w", err)
+		}
+		page.Items = append(page.Items, v)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return page, fmt.Errorf("read staging targets: %w", err)
+	}
+	if len(page.Items) > in.Limit {
+		page.Items = page.Items[:in.Limit]
+		page.NextID = page.Items[len(page.Items)-1].Ref.ID
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return page, fmt.Errorf("commit staging targets: %w", err)
+	}
+	return page, nil
 }

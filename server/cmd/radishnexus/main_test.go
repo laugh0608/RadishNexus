@@ -6,25 +6,91 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
-type fakePinger struct{ err error }
+type fakeReadinessChecker struct{ err error }
 
-func (pinger fakePinger) Ping(context.Context) error { return pinger.err }
+func (pinger fakeReadinessChecker) CheckReady(context.Context) error { return pinger.err }
+
+type readinessFunc func(context.Context) error
+
+func (check readinessFunc) CheckReady(ctx context.Context) error { return check(ctx) }
+
+func TestHandlerRoutesDiscoveryBeforeWorkspaceFallback(t *testing.T) {
+	t.Parallel()
+	discovery := http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) { response.WriteHeader(http.StatusAccepted) })
+	handler := newHandler(fakeReadinessChecker{}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), discovery, http.NotFoundHandler())
+	for _, path := range []string{"/api/v1/workspaces/wrk_main/projects", "/api/v1/workspaces/wrk_main/projects/prj_main/channels"} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		if response.Code != http.StatusAccepted {
+			t.Fatal(path, response.Code)
+		}
+	}
+}
+
+func TestHandlerRoutesConfigurationAlongsideDiscoveryAndMessages(t *testing.T) {
+	marker := func(status int) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(status) })
+	}
+	handler := newHandler(fakeReadinessChecker{}, http.NotFoundHandler(), marker(204), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), marker(202), http.NotFoundHandler(), http.NotFoundHandler(), marker(201))
+	for _, tc := range []struct {
+		method, path string
+		status       int
+	}{
+		{"GET", "/projects", 202}, {"POST", "/projects", 201},
+		{"GET", "/projects/prj_main/channels", 202}, {"POST", "/projects/prj_main/channels", 201},
+		{"PUT", "/projects/prj_main/members/usr_member", 201}, {"GET", "/channels/chn_main/configuration", 201},
+		{"POST", "/channels/chn_main/messages", 204}, {"DELETE", "/projects", 405},
+	} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(tc.method, "/api/v1/workspaces/wrk_main"+tc.path, nil))
+		if response.Code != tc.status {
+			t.Fatal(tc.method, tc.path, response.Code)
+		}
+	}
+}
+
+func TestReadinessIsBoundedUncachedAndDoesNotExposeDatabaseDetails(t *testing.T) {
+	t.Parallel()
+	calls := 0
+	check := readinessFunc(func(ctx context.Context) error {
+		calls++
+		deadline, ok := ctx.Deadline()
+		if !ok || time.Until(deadline) > 2*time.Second {
+			t.Fatal("readiness has no bounded deadline")
+		}
+		return errors.New("private database detail / migration checksum")
+	})
+	handler := newHandler(check, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler())
+	for range 2 {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/health/ready", nil))
+		if response.Code != http.StatusServiceUnavailable || response.Body.String() != "not ready\n" || response.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("unexpected readiness response: %d %q %v", response.Code, response.Body.String(), response.Header())
+		}
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/health/live", nil))
+	if response.Code != http.StatusNoContent || calls != 2 {
+		t.Fatal("liveness depended on schema or readiness reused stale state")
+	}
+}
 
 func TestHealthRoutesUseMethodPatterns(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name       string
-		pinger     fakePinger
+		pinger     fakeReadinessChecker
 		method     string
 		path       string
 		wantStatus int
 	}{
 		{name: "live", method: http.MethodGet, path: "/health/live", wantStatus: http.StatusNoContent},
 		{name: "ready", method: http.MethodGet, path: "/health/ready", wantStatus: http.StatusNoContent},
-		{name: "database unavailable", pinger: fakePinger{err: errors.New("offline")}, method: http.MethodGet, path: "/health/ready", wantStatus: http.StatusServiceUnavailable},
+		{name: "database unavailable", pinger: fakeReadinessChecker{err: errors.New("offline")}, method: http.MethodGet, path: "/health/ready", wantStatus: http.StatusServiceUnavailable},
 		{name: "wrong method", method: http.MethodPost, path: "/health/live", wantStatus: http.StatusMethodNotAllowed},
 	}
 
@@ -32,7 +98,7 @@ func TestHealthRoutesUseMethodPatterns(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			request := httptest.NewRequest(test.method, test.path, nil)
 			response := httptest.NewRecorder()
-			newHandler(test.pinger, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler()).ServeHTTP(response, request)
+			newHandler(test.pinger, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler()).ServeHTTP(response, request)
 			if response.Code != test.wantStatus {
 				t.Fatalf("status = %d, want %d", response.Code, test.wantStatus)
 			}
@@ -50,7 +116,7 @@ func TestHandlerReplacesCallerRequestID(t *testing.T) {
 	request.Header.Set("X-Request-ID", "caller-controlled")
 	response := httptest.NewRecorder()
 
-	newHandler(fakePinger{}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler()).ServeHTTP(response, request)
+	newHandler(fakeReadinessChecker{}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler()).ServeHTTP(response, request)
 
 	if requestID := response.Header().Get("X-Request-ID"); requestID == "caller-controlled" || len(requestID) != 36 {
 		t.Fatalf("X-Request-ID = %q", requestID)
@@ -69,12 +135,13 @@ func TestHandlerRoutesChannelMessagesBeforeWorkspaceFallback(t *testing.T) {
 		response.WriteHeader(http.StatusTeapot)
 	})
 	handler := newHandler(
-		fakePinger{},
+		fakeReadinessChecker{},
 		http.NotFoundHandler(),
 		channelMessages,
 		http.NotFoundHandler(),
 		http.NotFoundHandler(),
 		deploymentFallback,
+		http.NotFoundHandler(),
 		http.NotFoundHandler(),
 	)
 
@@ -100,12 +167,13 @@ func TestHandlerRoutesChannelEventsBeforeWorkspaceFallback(t *testing.T) {
 		response.WriteHeader(http.StatusTeapot)
 	})
 	handler := newHandler(
-		fakePinger{},
+		fakeReadinessChecker{},
 		http.NotFoundHandler(),
 		http.NotFoundHandler(),
 		channelEvents,
 		http.NotFoundHandler(),
 		deploymentFallback,
+		http.NotFoundHandler(),
 		http.NotFoundHandler(),
 	)
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/wrk_main/channels/chn_main/events", nil)
@@ -125,12 +193,13 @@ func TestHandlerRoutesCollaborationBeforeWorkspaceFallback(t *testing.T) {
 		response.WriteHeader(http.StatusTeapot)
 	})
 	handler := newHandler(
-		fakePinger{},
+		fakeReadinessChecker{},
 		http.NotFoundHandler(),
 		http.NotFoundHandler(),
 		http.NotFoundHandler(),
 		collaboration,
 		deploymentFallback,
+		http.NotFoundHandler(),
 		http.NotFoundHandler(),
 	)
 
@@ -147,6 +216,74 @@ func TestHandlerRoutesCollaborationBeforeWorkspaceFallback(t *testing.T) {
 		handler.ServeHTTP(response, request)
 		if response.Code != http.StatusAccepted {
 			t.Fatalf("%s status = %d, want %d", path, response.Code, http.StatusAccepted)
+		}
+	}
+}
+
+func TestSetupRouteIsExplicit(t *testing.T) {
+	setup := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(201) })
+	handler := newHandler(fakeReadinessChecker{}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), setup)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("POST", "/api/v1/setup", nil))
+	if response.Code != 201 {
+		t.Fatal(response.Code)
+	}
+}
+
+func TestHandlerRoutesCIRunBeforeWorkspaceFallback(t *testing.T) {
+	missing := http.NotFoundHandler()
+	ci := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusAccepted) })
+	handler := newHandler(fakeReadinessChecker{}, missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, ci)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/workspaces/wrk_main/ci-runs/cir_build/nexus-view", nil))
+	if w.Code != http.StatusAccepted {
+		t.Fatal(w.Code)
+	}
+}
+
+func TestJenkinsDispatchPrecedesPathCleaningAndIsOptional(t *testing.T) {
+	fallback := http.NotFoundHandler()
+	marker := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Request-ID") == "attacker" {
+			t.Fatal("caller request ID")
+		}
+		w.WriteHeader(418)
+	})
+	for _, enabled := range []bool{false, true} {
+		var jenkinsHandler http.Handler
+		if enabled {
+			jenkinsHandler = marker
+		}
+		handler := newHandler(fakeReadinessChecker{}, fallback, fallback, fallback, fallback, fallback, fallback, fallback, fallback, fallback, fallback, fallback, fallback, jenkinsHandler)
+		for _, path := range []string{"/api/v1/integrations/jenkins/source_a/deliveries", "//api/v1/integrations/jenkins/source_a/deliveries", "/prefix/../api/v1/integrations/jenkins/source_a/deliveries", "/api/v1/integrations/jenkins//source_a/deliveries", "/api/v1/integrations/jenkins/source_a/../source_b/deliveries"} {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest("POST", path, nil)
+			r.Header.Set("X-Request-ID", "attacker")
+			handler.ServeHTTP(w, r)
+			if enabled && (w.Code != 418 || w.Header().Get("Location") != "") {
+				t.Fatal(path, w.Code)
+			}
+			if !enabled && path == "/api/v1/integrations/jenkins/source_a/deliveries" && w.Code != 404 {
+				t.Fatal(w.Code)
+			}
+		}
+	}
+}
+
+func TestHandlerRoutesStagingBeforeWorkspaceFallback(t *testing.T) {
+	missing := http.NotFoundHandler()
+	marker := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.PathValue("ci_run_id") != "cir_build" {
+			t.Error("missing source scope")
+		}
+		w.WriteHeader(http.StatusAccepted)
+	})
+	h := newHandler(fakeReadinessChecker{}, missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, missing, marker)
+	for _, v := range []struct{ method, suffix string }{{"GET", "staging-targets"}, {"POST", "staging-deployments"}} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(v.method, "/api/v1/workspaces/wrk_main/ci-runs/cir_build/"+v.suffix, nil))
+		if w.Code != 202 {
+			t.Fatal(v, w.Code)
 		}
 	}
 }

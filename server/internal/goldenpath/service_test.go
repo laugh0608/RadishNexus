@@ -316,6 +316,7 @@ func TestRecordStagingDeploymentBuildsExplicitAtomicCommand(t *testing.T) {
 		context.Background(),
 		invocation,
 		RecordStagingDeploymentInput{
+			ClientOperationID: "staging-test", Confirmed: true,
 			EnvironmentID: "env_staging",
 			CIRunID:       "cir_1",
 			Status:        "succeeded",
@@ -346,6 +347,7 @@ func TestRecordStagingDeploymentRejectsInvalidFactsBeforeStore(t *testing.T) {
 		{
 			name: "nonterminal status",
 			input: RecordStagingDeploymentInput{
+				ClientOperationID: "staging-test", Confirmed: true,
 				EnvironmentID: "env_staging", CIRunID: "cir_1", Status: "running",
 				CompletedAt: time.Date(2026, 8, 29, 3, 4, 0, 0, time.UTC),
 			},
@@ -356,6 +358,7 @@ func TestRecordStagingDeploymentRejectsInvalidFactsBeforeStore(t *testing.T) {
 				completedAt := time.Date(2026, 8, 29, 3, 4, 0, 0, time.UTC)
 				startedAt := completedAt.Add(time.Minute)
 				return RecordStagingDeploymentInput{
+					ClientOperationID: "staging-test", Confirmed: true,
 					EnvironmentID: "env_staging", CIRunID: "cir_1", Status: "succeeded",
 					StartedAt: &startedAt, CompletedAt: completedAt,
 				}
@@ -441,5 +444,31 @@ func TestGetNexusViewValidatesTargetAndForwardsPrincipal(t *testing.T) {
 	)
 	if err != nil || store.nexusTarget != threadTarget {
 		t.Fatalf("Thread GetNexusView() error = %v, target = %#v", err, store.nexusTarget)
+	}
+}
+
+func (store *recordingStore) ListStagingTargets(context.Context, authz.Principal, string, DiscoveryPageInput) (StagingTargetPage, error) {
+	return StagingTargetPage{}, nil
+}
+
+func TestStagingConfirmationTimesAndOperationIdentity(t *testing.T) {
+	now := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	valid := RecordStagingDeploymentInput{ClientOperationID: "operation", Confirmed: true, EnvironmentID: "env_stage", CIRunID: "cir_build", Status: "failed", CompletedAt: now}
+	for _, change := range []func(*RecordStagingDeploymentInput){
+		func(v *RecordStagingDeploymentInput) { v.Confirmed = false },
+		func(v *RecordStagingDeploymentInput) { v.ClientOperationID = "" },
+		func(v *RecordStagingDeploymentInput) { v.EnvironmentID = "production" },
+		func(v *RecordStagingDeploymentInput) { v.Status = "running" },
+		func(v *RecordStagingDeploymentInput) { v.CompletedAt = now.Add(time.Nanosecond) },
+		func(v *RecordStagingDeploymentInput) { v.StartedAt = new(time.Time) },
+	} {
+		in := valid
+		change(&in)
+		if validateStagingDeploymentInput(in) == nil {
+			t.Fatalf("accepted invalid input: %#v", in)
+		}
+	}
+	if err := validateStagingDeploymentInput(valid); err != nil {
+		t.Fatal(err)
 	}
 }

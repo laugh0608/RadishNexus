@@ -137,6 +137,8 @@
 - M0 staging Deployment 只由明确用户通过受控 `web / api` 调用记录；调用者必须是 active Workspace 成员，并持有目标 active staging Environment 的 active 显式授权。
 - Project 角色、owner Team、CI source 和成功构建都不隐式授予部署能力。记录必须保留实际操作者、所用授权、来源 CI Run 与 Environment，并与 `deploys` 关系、领域事件和 Outbox 原子提交。
 - M0 Deployment 读取要求同 Workspace 的 active 成员同时能读取目标 Environment 与来源 CI Run；写授权不授予读取、也不是读取历史的必要条件。不可读对象统一返回 not-found，Environment 归档不隐藏既有事实。
+- [ADR-0029](adr/0029-session-scoped-ci-run-nexus-view.md) 开放 CI Run 的 Session 安全读取；[ADR-0030](adr/0030-authenticated-jenkins-delivery-adapter.md) 明确来源绑定、文件 Secret、HMAC / 重放窗口和有限重试，不把 Jenkins 来源身份转成用户部署授权。
+- [ADR-0031](adr/0031-session-scoped-staging-deployment-recording.md) 开放已授权 staging 目标分页与 Session 显式记录，复用 collaboration receipt；首次和精确重试都复核当前权限，相同内容返回原结果，变化内容或不同操作 / 用户重复同一 Environment / CI Run 冲突。该 ADR 部分替代 ADR-0009 的内部入口与重复一律冲突约定，migration 011 扩展 receipt 而不回填历史身份。
 - 当前 Deployment command 只记录调用方已经确认的外部终态事实，不执行部署、不读取 Secret，也不支持 production、审批、回滚或运行中状态。精确技术契约以 [ADR-0006](adr/0006-verified-jenkins-delivery-and-ci-run.md)、[ADR-0007](adr/0007-component-scoped-ci-run-read.md)、[ADR-0009](adr/0009-explicit-staging-deployment.md) 与 [ADR-0011](adr/0011-workspace-scoped-deployment-read.md) 为准。
 
 ### D-018 可验证 PostgreSQL 备份恢复
@@ -150,12 +152,12 @@
 
 ### D-019 本地身份与服务端 Session
 
-- M1 首段先建立自部署可用的本地账号，OIDC 延后并复用相同 user、membership 与服务端 Session 边界，不建立第二套权限主体。
-- 新实例通过显式、一次性的 `nexus-bootstrap --password-stdin` 创建首个 user、Workspace 与 `owner` membership；不随服务启动初始化，不生成默认密码，也不接受命令参数密码。
+- 保留自部署可用的本地账户，以邮箱作为私有凭证、展示名独立；按 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 接入可选 Radish OIDC，两种认证复用相同用户、membership 与服务端 Session，不自动合并账户或继承上游权限。
+- 新实例通过显式 CLI `nexus-bootstrap --credentials-stdin`，或 [ADR-0027](adr/0027-first-visit-administrator-setup.md) 的一次性初始化码保护网页入口，创建首个 user、Workspace 与 `owner` membership。二者共享事务锁，任意账户存在后关闭初始化；不随服务启动创建账户，不生成默认密码或全局超级权限。CLI 凭据只从标准输入读取，网页经同源 HTTPS 严格请求提交；Session 通过后续登录建立。
 - 本地密码使用版本化 Argon2id verifier；不存在、禁用、锁定和错误密码统一失败，连续 5 次错误锁定 15 分钟。账号锁定不替代公共 transport 的客户端 IP 限流。
 - Session 是 24 小时绝对有效的服务端 opaque token，数据库只保存 Session / CSRF token digest。Session 不固定 Workspace，业务请求必须以当前 active membership 解析 `VerifiedUser`。
 - 浏览器合同固定 Secure `__Host-` Cookie、SameSite Strict、精确 HTTPS Origin、CSRF cookie + Header + digest、服务端 request ID 与 `/api/v1` 版本化安全错误对象；不提供 insecure HTTP fallback，也不信任用户身份或转发 Header。
-- `local_accounts` 纳入受控 PostgreSQL 运维备份，`user_sessions` 只恢复 schema，恢复后旧登录态全部失效。精确身份与公共认证边界以 [ADR-0012](adr/0012-local-identity-and-session-foundation.md) 和 [ADR-0013](adr/0013-public-authentication-transport.md) 为准。
+- 账户、密码凭证与外部身份关联纳入受控 PostgreSQL 运维备份；Session、邀请与 OIDC 授权事务只恢复 schema。旧登录名到邮箱由管理员显式映射，保留稳定用户 ID 与业务引用。变更范围以 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 为准，原有 [ADR-0012](adr/0012-local-identity-and-session-foundation.md) / [ADR-0013](adr/0013-public-authentication-transport.md) 的 Session 与代理安全边界继续有效。
 
 ### D-020 首个业务读取 Transport
 
@@ -168,16 +170,21 @@
 
 - 浏览器页面、静态资源和 `/api/v1` 共享 ADR-0013 的唯一 HTTPS public origin；TLS reverse proxy 保持唯一公共入口，不开放 credentialed CORS 或第二个静态站点 origin。
 - Go server 只从必需的绝对 `RADISHNEXUS_WEB_ROOT` 交付 production build；HTML 路径显式 allowlist，未知路径不使用任意 SPA fallback。HTML `no-cache`、哈希资源 immutable cache，认证和业务 API 继续 `no-store`。
-- 根路径先 bootstrap 正式 Session，再使用现有 login / logout transport；密码和 Session token 不进入浏览器 storage。Workspace 选择不固定到 Session，业务请求仍按路径与 current membership 授权。
-- 在没有对象列表前，只允许用户用已知稳定 Deployment ID 进入 canonical 页面；原代表检视器移动到显式 `/prototype/nexus-view`，不参与真实失败 fallback。
+- 根路径先检查正式 Session，未登录时读取初始化状态；新实例完成 ADR-0027 首访初始化后，再使用现有 login / logout transport。初始化码、密码和 Session token 不进入浏览器 storage。Workspace 选择不固定到 Session，业务请求仍按路径与 current membership 授权。
+- Project / Channel 按 [ADR-0025](adr/0025-project-and-channel-discovery.md) 通过当前权限过滤的只读列表进入 canonical 页面；尚无独立列表的 Deployment 与协作对象保留已知稳定 ID 入口。原代表检视器位于显式 `/prototype/nexus-view`，不参与真实失败 fallback。
 - 真实 PostgreSQL、正式 migration / application service、production Web build 和临时 HTTPS browser fixture 共同验证登录到 Deployment 再登出的完整链路。精确装配、页面、安全 Header 与验证边界以 [ADR-0015](adr/0015-same-origin-authenticated-web-shell.md) 为准。
+
+### D-022 基础配置与最小 Document
+
+- 基础对象创建与首批普通成员管理按 [ADR-0026](adr/0026-foundation-configuration-and-membership.md) 实施；创建 Project 必须明确初始 admin，受限 Channel 保留窄授权，撤权清理从属权限，Audit 与 receipt 不可变。管理员交接不由普通成员配置隐式完成。
+- 最小 Document 按 [ADR-0028](adr/0028-minimal-markdown-document.md) 冻结身份、Project 权限、权威 Markdown、不可变版本、显式保存 / 冲突 / 恢复与 Ticket 来源关系；正式实现已接通，验收成熟度由[当前状态](status/current.md)维护。后续结构化编辑与 CRDT 仍按 ADR-0021 分阶段推进。
 
 ## 尚未冻结
 
 以下事项仍需在实现前通过原型或 ADR 决定：
 
 - SQL 代码生成；
-- 文档编辑器与 CRDT 具体技术；
+- 后续结构化编辑器正式接入与 CRDT 协议 / 存储；最小非 CRDT Markdown 合同已由 ADR-0028 冻结；
 - 插件后端首版采用 WASM、独立进程还是只提供声明式自动化；
 - SDK 和官方插件统一采用 Apache-2.0、MIT 或按组件选择；
 - 搜索从 PostgreSQL 迁移到独立搜索服务的阈值；
@@ -189,6 +196,11 @@
 
 ## 变更记录
 
+- 2026-09-26：按已确认 ADR-0029 / 0030 / 0031 同步 CI Run 公共读取、Jenkins 受控来源与 staging 显式记录及精确重试合同，修正最小 Document 实施状态。实现包含 migration 010 / 011 与已授权 goldmark 依赖，具体迁移和回退见对应 ADR；本次收尾不新增权限、公共协议或依赖决策。
+
+- 2026-09-14：同步已接受 ADR-0026 / ADR-0027 的基础配置与首访初始化，以及 ADR-0028 的最小 Document 合同；区分已实现入口和待实施文档能力，不改变完整 Golden Path 与长期阶段门槛。
+
+- 2026-09-10：按已接受 ADR-0023 / ADR-0025 同步 D-019 与 D-021 的邮箱账户、邀请准入和 Project / Channel 发现合同，并修正 bootstrap 与登录创建 Session 的职责说明。OIDC 实施时序与验收证据由当前状态维护；本次文档收尾不新增身份、权限或迁移决策。
 - 2026-09-05：澄清 D-011 的完成证据，原因是内部契约与预置投影验收不足以证明用户链路。影响是后续验收增加正常写入、双向发现和独立操作；无需数据迁移，不改变对象、授权、技术栈或已接受 ADR，近期顺序由当前状态承载。
 - 2026-08-27：建立初始决策基线。
 - 2026-08-27：确认 Decision、研发资产分层、Golden Path 以及 EntityLink/Activity 基线。

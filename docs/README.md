@@ -17,6 +17,8 @@
 11. [仓库治理](governance/README.md)：说明分支、PR、Ruleset、Agent 和文档协作规则。
 12. [架构决策记录](adr/README.md)：解释长期工程与治理取舍及其后果。
 13. [开发指南](development/README.md)：说明跨语言工程、测试、安全和兼容性标准。
+14. [视觉方向与页面参考](design/visual-direction.md)：Radish 家族视觉来源、AFFiNE / Mattermost / AppFlowy 参考分工及待评审的页面建议。
+15. [工作台与 Document 代表页设计](design/workbench-v1.md)：Pen 原生设计源、桌面 / 手机预览、状态映射及静态检查边界。
 
 ## 文档职责
 
@@ -37,6 +39,8 @@
 ## 状态与验证入口
 
 - [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
+- [2026-09-26 提交回顾与文档收尾](status/reviews/2026-09-26-daily-closeout.md)：Document、工作台视觉、CI Run、Jenkins 与 staging 记录的提交映射和文档核对。
+- [2026-09-10 提交回顾与文档收尾](status/reviews/2026-09-10-daily-closeout.md)：Activity、身份、readiness 与发现入口的提交映射和文档审阅结果。
 - [2026-09-05 项目审阅](status/reviews/2026-09-05-project-review.md)：源码发现、建议与实际验证范围。
 - [2026-09-03 状态快照](status/history/2026-09-03-status.md)：此前阶段事实及浏览器、数据库、部署和编辑器验收流水；旧计划不再生效。
 

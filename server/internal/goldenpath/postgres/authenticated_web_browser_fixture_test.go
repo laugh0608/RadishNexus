@@ -22,6 +22,7 @@ import (
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/httptransport"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/realtime"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/runtimeconfig"
 )
 
 const authenticatedWebBrowserPassword = "authenticated browser fixture password"
@@ -55,7 +56,12 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	}
 	t.Cleanup(pool.Close)
 
-	fixture := seedAuthenticatedWebBrowserData(t, ctx, pool)
+	firstVisit := os.Getenv("RADISHNEXUS_BROWSER_SETUP") == "1"
+	foundation := os.Getenv("RADISHNEXUS_BROWSER_FOUNDATION") == "1"
+	var fixture authenticatedWebFixture
+	if !foundation && !firstVisit {
+		fixture = seedAuthenticatedWebBrowserData(t, ctx, pool)
+	}
 	listener, err := net.Listen("tcp", listenAddress)
 	if err != nil {
 		t.Fatalf("net.Listen() error = %v", err)
@@ -75,11 +81,34 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 		authn.CryptoSecretGenerator{},
 		authn.SystemClock{},
 	)
+	ownerWorkspace := ""
+	if foundation && !firstVisit {
+		first, err := authService.Bootstrap(ctx, authn.BootstrapInput{Email: "foundation.owner@example.test", DisplayName: "Foundation Owner", WorkspaceName: "Foundation Workspace", Password: authenticatedWebBrowserPassword})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ownerWorkspace = first.WorkspaceID
+	}
+	setupCode, err := runtimeconfig.SetupCode(os.Getenv, os.ReadFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setupService, err := authn.NewSetupService(authService, authpostgres.New(pool), setupCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readiness, err := db.NewReadinessChecker(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticationGuard := httptransport.NewLoginGuard(5, time.Minute, 64, 2)
+	identityHandler := httptransport.NewIdentityHandler(authn.NewIdentityService(authpostgres.New(pool), authService, ""), authService, nil, sessionPolicy, proxyPolicy, authenticationGuard)
 	authHandler := httptransport.NewAuthHandler(
 		authService,
 		sessionPolicy,
 		proxyPolicy,
-		httptransport.NewLoginGuard(5, time.Minute, 64, 2),
+		authenticationGuard,
+		identityHandler,
 	)
 	realtimeConfig, err := realtime.DefaultConfig()
 	if err != nil {
@@ -127,14 +156,24 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	}
 
 	mux := http.NewServeMux()
+	mux.Handle("/api/v1/setup", httptransport.NewSetupHandler(setupService, readiness, sessionPolicy, proxyPolicy, authenticationGuard))
 	mux.Handle("/api/v1/auth", authHandler)
 	mux.Handle("/api/v1/auth/", authHandler)
+	discoveryHandler := httptransport.NewDiscoveryHandler(authService, goldenpath.NewDiscoveryService(goldenpostgres.New(pool)), sessionPolicy, proxyPolicy)
+	configurationHandler := httptransport.NewConfigurationHandler(authService, goldenpath.NewConfigurationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy)
+	httptransport.RegisterConfigurationRoutes(mux, discoveryHandler, configurationHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/projects/", discoveryHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/invitations", identityHandler)
+	mux.Handle("/auth/complete", identityHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages", channelHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages/", channelHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/events", channelEventsHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/threads/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/decisions/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/tickets/", collaborationHandler)
+	httptransport.RegisterDocumentRoutes(mux, httptransport.NewDocumentHandler(authService, goldenpath.NewDocumentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy))
+	httptransport.RegisterStagingDeploymentRoutes(mux, httptransport.NewStagingDeploymentHandler(authService, viewService, sessionPolicy, proxyPolicy))
+	httptransport.RegisterCIRunRoutes(mux, httptransport.NewCIRunNexusViewHandler(authService, viewService, sessionPolicy, proxyPolicy))
 	mux.Handle("/api/v1/workspaces", deploymentHandler)
 	mux.Handle("/api/v1/workspaces/", deploymentHandler)
 	mux.Handle("/", webHandler)
@@ -144,15 +183,18 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	state, err := json.Marshal(map[string]string{
-		"public_origin":      publicOrigin,
-		"channel_path":       "/workspaces/wrk_main/channels/chn_project",
-		"thread_path":        "/workspaces/wrk_main/threads/" + fixture.thread.ID,
-		"restricted_thread":  fixture.thread.ID,
-		"database_container": os.Getenv("RADISHNEXUS_BROWSER_FIXTURE_DATABASE_CONTAINER"),
-		"deployment_path":    "/workspaces/wrk_main/deployments/" + fixture.deployment.ID,
-		"contributor_login":  "http.contributor",
-		"decider_login":      "http.decider",
-		"password":           authenticatedWebBrowserPassword,
+		"public_origin":        publicOrigin,
+		"foundation_workspace": ownerWorkspace,
+		"foundation_login":     "foundation.owner@example.test",
+		"channel_path":         "/workspaces/wrk_main/channels/chn_project",
+		"thread_path":          "/workspaces/wrk_main/threads/" + fixture.thread.ID,
+		"restricted_thread":    fixture.thread.ID,
+		"database_container":   os.Getenv("RADISHNEXUS_BROWSER_FIXTURE_DATABASE_CONTAINER"),
+		"ci_run_path":          "/workspaces/wrk_main/ci-runs/" + fixture.ciRunID,
+		"deployment_path":      "/workspaces/wrk_main/deployments/" + fixture.deployment.ID,
+		"contributor_login":    "http.contributor@example.test",
+		"decider_login":        "http.decider@example.test",
+		"password":             authenticatedWebBrowserPassword,
 	})
 	if err != nil {
 		t.Fatalf("json.Marshal() error = %v", err)
@@ -176,6 +218,7 @@ func (notifier authenticatedBrowserNotifier) NotifyMessageCreated(notification g
 }
 
 type authenticatedWebFixture struct {
+	ciRunID    string
 	deployment goldenpath.Deployment
 	thread     goldenpath.Thread
 }
@@ -220,20 +263,24 @@ func seedAuthenticatedWebBrowserData(
 		t.Fatalf("RecordCompletedJenkinsRun() error = %v", err)
 	}
 
-	deploymentStartedAt := time.Date(2026, 8, 30, 11, 56, 0, 0, time.UTC)
-	deployment, err := service.RecordStagingDeployment(
-		ctx,
-		invocation(principal("usr_contributor"), "cor_browser_fixture_deployment"),
-		goldenpath.RecordStagingDeploymentInput{
-			EnvironmentID: "env_staging",
-			CIRunID:       ciRun.CIRun.ID,
-			Status:        "succeeded",
-			StartedAt:     &deploymentStartedAt,
-			CompletedAt:   time.Date(2026, 8, 30, 11, 59, 0, 0, time.UTC),
-		},
-	)
-	if err != nil {
-		t.Fatalf("RecordStagingDeployment() error = %v", err)
+	var deployment goldenpath.Deployment
+	if os.Getenv("RADISHNEXUS_BROWSER_STAGING") != "1" {
+		deploymentStartedAt := time.Date(2026, 8, 30, 11, 56, 0, 0, time.UTC)
+		deployment, err = service.RecordStagingDeployment(
+			ctx,
+			invocation(principal("usr_contributor"), "cor_browser_fixture_deployment"),
+			goldenpath.RecordStagingDeploymentInput{
+				ClientOperationID: "staging-test", Confirmed: true,
+				EnvironmentID: "env_staging",
+				CIRunID:       ciRun.CIRun.ID,
+				Status:        "succeeded",
+				StartedAt:     &deploymentStartedAt,
+				CompletedAt:   time.Date(2026, 8, 30, 11, 59, 0, 0, time.UTC),
+			},
+		)
+		if err != nil {
+			t.Fatalf("RecordStagingDeployment() error = %v", err)
+		}
 	}
 	messageResult, err := service.CreateMessage(
 		ctx,
@@ -267,25 +314,25 @@ func seedAuthenticatedWebBrowserData(
 	`, thread.ID); err != nil {
 		t.Fatalf("seed browser fixture decider Thread membership: %v", err)
 	}
-	if _, err := store.RebuildActivityProjection(ctx); err != nil {
-		t.Fatalf("RebuildActivityProjection() error = %v", err)
-	}
 
 	passwordHash, err := authn.NewArgon2idHasher().Hash(authenticatedWebBrowserPassword)
 	if err != nil {
 		t.Fatalf("hash browser fixture password: %v", err)
 	}
 	accountCreatedAt := time.Now().UTC().Add(-time.Minute)
+	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_contributor', 'active', $1), ('usr_decider', 'active', $1)`, accountCreatedAt); err != nil {
+		t.Fatalf("seed identity accounts: %v", err)
+	}
 	if _, err := pool.Exec(ctx, `
-		INSERT INTO radishnexus.local_accounts (
-			user_id, login_name, password_hash, created_at, password_changed_at
+		INSERT INTO radishnexus.local_credentials (
+			user_id, email, password_hash, created_at, password_changed_at
 		) VALUES
-			('usr_contributor', 'http.contributor', $1, $2, $2),
-			('usr_decider', 'http.decider', $1, $2, $2)
+			('usr_contributor', 'http.contributor@example.test', $1, $2, $2),
+			('usr_decider', 'http.decider@example.test', $1, $2, $2)
 	`, passwordHash, accountCreatedAt); err != nil {
 		t.Fatalf("seed browser fixture local account: %v", err)
 	}
-	return authenticatedWebFixture{deployment: deployment, thread: thread}
+	return authenticatedWebFixture{deployment: deployment, thread: thread, ciRunID: ciRun.CIRun.ID}
 }
 
 func waitForBrowserFixtureStop(t *testing.T, stopPath string) {

@@ -2077,3 +2077,321 @@ code {
     animation-iteration-count: 1 !important;
   }
 }
+
+.identity-section {
+  display: grid;
+  gap: 1rem;
+  width: min(100%, 48rem);
+  margin: 1.5rem auto;
+  padding: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.identity-section section,
+.identity-section label {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.identity-section input,
+.identity-section select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.75rem;
+  font: inherit;
+}
+
+.identity-section button {
+  padding: 0.75rem 1rem;
+  font: inherit;
+}
+.project-browser {
+  margin-top: 1.5rem;
+}
+.discovery-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.discovery-heading p {
+  margin: 0.4rem 0 1rem;
+  color: var(--muted);
+}
+.discovery-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+.discovery-list,
+.discovery-placeholder {
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  min-width: 0;
+}
+.discovery-list h3 {
+  margin-top: 0;
+  overflow-wrap: anywhere;
+}
+.discovery-list ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+.discovery-list li button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  text-align: left;
+  padding: 0.85rem;
+}
+.discovery-list li button strong {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.discovery-list li button span {
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+.discovery-list button[aria-pressed="true"] {
+  background: #e8f1e8;
+  border-color: #608168;
+}
+.discovery-status {
+  color: #59685c;
+}
+.discovery-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+}
+.known-object-launchers {
+  margin-top: 1.5rem;
+  border-top: 1px solid #dbe1db;
+  padding-top: 1rem;
+}
+.known-object-launchers summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+@media (max-width: 720px) {
+  .discovery-columns {
+    grid-template-columns: 1fr;
+  }
+  .discovery-heading {
+    align-items: flex-start;
+  }
+  .discovery-pagination {
+    flex-wrap: wrap;
+  }
+}
+
+.workspace-home {
+  grid-template-columns: 1fr;
+  min-height: auto;
+}
+.workspace-home .shell-welcome,
+.workspace-home .workspace-launcher {
+  min-height: auto;
+  padding: 28px 36px;
+  align-content: start;
+}
+.workspace-home .shell-welcome h1 {
+  font-size: clamp(28px, 3vw, 36px);
+  overflow-wrap: anywhere;
+}
+.workspace-home .shell-welcome > p {
+  margin-top: 10px;
+}
+.workspace-home .workspace-launcher h2 {
+  font-family: inherit;
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: normal;
+}
+.workspace-home .workspace-selector {
+  max-width: 440px;
+  margin-top: 20px;
+}
+.project-browser button {
+  min-height: 40px;
+  padding: 9px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--paper-strong);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 13px;
+}
+.project-browser button:hover:not(:disabled) {
+  border-color: var(--accent-dark);
+  background: #f2f7e9;
+}
+.project-browser button:focus-visible {
+  outline: 2px solid var(--accent-dark);
+  outline-offset: 3px;
+}
+.project-browser button:disabled {
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.5;
+}
+.project-browser .discovery-heading button {
+  flex-shrink: 0;
+}
+.project-browser .discovery-list li button {
+  min-height: 50px;
+}
+.account-controls > a {
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 650;
+  text-underline-offset: 3px;
+}
+@media (max-width: 720px) {
+  .workspace-home .shell-welcome,
+  .workspace-home .workspace-launcher {
+    padding: 24px 18px;
+  }
+  .workspace-home .discovery-heading h2 {
+    font-size: 21px;
+  }
+  .discovery-heading {
+    flex-wrap: wrap;
+  }
+}
+/* Foundation configuration shares the workspace shell and stays usable on phones. */
+.foundation-configuration {
+  margin-block: 1rem;
+}
+.configuration-panel {
+  padding: 1rem;
+  margin-block: 1rem;
+  border: 1px solid var(--border, #d4d4d8);
+  border-radius: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.configuration-panel form,
+.configuration-panel fieldset {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.configuration-panel fieldset {
+  margin-block: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border, #d4d4d8);
+}
+.configuration-panel label {
+  display: grid;
+  gap: 0.35rem;
+}
+.configuration-panel input:not([type="checkbox"]),
+.configuration-panel select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.configuration-panel .configuration-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.configuration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 0.5rem;
+}
+.configuration-members {
+  list-style: none;
+  padding: 0;
+}
+
+.setup-recheck {
+  margin-top: 1rem;
+}
+.setup-success {
+  max-width: 520px;
+  margin: 1rem auto;
+  padding-inline: 1rem;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.document-layout {
+  width: min(1040px, 100%);
+  margin: 0 auto;
+  padding: 2rem clamp(1rem, 4vw, 3rem);
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+.document-layout section {
+  margin-block: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line, #d9dfe5);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+}
+.document-layout nav,
+.document-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block: 1rem;
+}
+.document-layout label,
+.collaboration-complete label {
+  display: grid;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+.document-layout input,
+.document-layout textarea,
+.collaboration-complete input,
+.collaboration-complete textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.75rem;
+  border: 1px solid var(--line, #d9dfe5);
+  border-radius: 6px;
+  font: inherit;
+}
+.document-layout textarea {
+  resize: vertical;
+  line-height: 1.65;
+}
+.markdown-view {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.markdown-view pre,
+.document-layout pre {
+  overflow: auto;
+  white-space: pre-wrap;
+  max-width: 100%;
+  padding: 1rem;
+  background: #f5f7fa;
+}
+.markdown-view blockquote {
+  border-left: 3px solid #5f817b;
+  margin-left: 0;
+  padding-left: 1rem;
+}
+.document-conflict {
+  border-color: #b47b2b !important;
+}
+.document-layout button {
+  min-height: 40px;
+  margin: 0.25rem;
+}

@@ -13,6 +13,7 @@ import (
 )
 
 type relationFact struct {
+	direction    string
 	relationType string
 	target       entityref.Ref
 }
@@ -26,7 +27,7 @@ func (store *Store) ListRelations(
 		return nil, err
 	}
 
-	tx, err := store.pool.Begin(ctx)
+	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return nil, fmt.Errorf("begin relation projection transaction: %w", err)
 	}
@@ -58,10 +59,21 @@ func listRelationProjections(
 	source entityref.Ref,
 ) ([]goldenpath.RelationProjection, error) {
 	rows, err := tx.Query(ctx, `
-		SELECT relation_type, to_type, to_id
-		FROM radishnexus.entity_links
-		WHERE workspace_id = $1 AND from_type = $2 AND from_id = $3 AND state = 'active'
-		ORDER BY created_at, id
+		SELECT direction, relation_type, target_type, target_id
+		FROM (
+			SELECT 'outgoing' AS direction, relation_type, to_type AS target_type,
+				to_id AS target_id, created_at, id
+			FROM radishnexus.entity_links
+			WHERE workspace_id = $1 AND from_type = $2 AND from_id = $3 AND state = 'active'
+			UNION ALL
+			SELECT 'incoming', relation_type, from_type, from_id, created_at, id
+			FROM radishnexus.entity_links
+			WHERE workspace_id = $1 AND to_type = $2 AND to_id = $3 AND state = 'active'
+				AND (($2 = 'thread' AND from_type = 'decision' AND relation_type = 'derived-from')
+					OR ($2 = 'decision' AND from_type = 'ticket' AND relation_type = 'implements')
+ OR ($2 = 'document' AND from_type = 'ticket' AND relation_type = 'relates-to'))
+		) AS relations
+		ORDER BY CASE direction WHEN 'outgoing' THEN 0 ELSE 1 END, created_at, id
 	`, principal.WorkspaceID, source.Type, source.ID)
 	if err != nil {
 		return nil, fmt.Errorf("list relation facts: %w", err)
@@ -69,7 +81,7 @@ func listRelationProjections(
 	var facts []relationFact
 	for rows.Next() {
 		var fact relationFact
-		if err := rows.Scan(&fact.relationType, &fact.target.Type, &fact.target.ID); err != nil {
+		if err := rows.Scan(&fact.direction, &fact.relationType, &fact.target.Type, &fact.target.ID); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan relation fact: %w", err)
 		}
@@ -91,6 +103,11 @@ func listRelationProjections(
 			continue
 		}
 		if !targetReadable {
+			// Incoming links are discoveries from another object, not evidence
+			// asserted by the current one. Even a placeholder would leak existence.
+			if fact.direction == "incoming" {
+				continue
+			}
 			projections = append(projections, goldenpath.RelationProjection{
 				State: goldenpath.ProjectionRestricted,
 			})
@@ -103,6 +120,7 @@ func listRelationProjections(
 		}
 		projections = append(projections, goldenpath.RelationProjection{
 			State:        goldenpath.ProjectionVisible,
+			Direction:    fact.direction,
 			RelationType: fact.relationType,
 			Target:       fact.target,
 			Title:        title,
@@ -118,6 +136,19 @@ func entityAccess(
 	ref entityref.Ref,
 ) (exists bool, canRead bool, err error) {
 	switch ref.Type {
+	case "document":
+		project, err := documentScope(ctx, tx, principal, "document", ref.ID)
+		if errors.Is(err, authz.ErrNotFound) {
+			return false, false, nil
+		}
+		if err != nil {
+			return false, false, err
+		}
+		err = documentProject(ctx, tx, principal, project, false)
+		if errors.Is(err, authz.ErrNotFound) {
+			return true, false, nil
+		}
+		return true, err == nil, err
 	case "channel":
 		_, err := readableChannel(ctx, tx, principal, ref.ID)
 		if errors.Is(err, authz.ErrNotFound) {
@@ -321,6 +352,8 @@ func entityExists(
 func entityTitle(ctx context.Context, tx pgx.Tx, workspaceID string, ref entityref.Ref) (string, error) {
 	var query string
 	switch ref.Type {
+	case "document":
+		query = "SELECT r.title FROM radishnexus.documents d JOIN radishnexus.document_revisions r ON r.workspace_id=d.workspace_id AND r.document_id=d.id AND r.revision=d.current_revision WHERE d.workspace_id=$1 AND d.id=$2"
 	case "thread", "ticket":
 		query = "SELECT title FROM radishnexus." + ref.Type + "s WHERE workspace_id = $1 AND id = $2"
 	case "decision":

@@ -34,8 +34,8 @@ type AuthHandler struct {
 }
 
 type loginRequest struct {
-	LoginName string `json:"login_name"`
-	Password  string `json:"password"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type sessionResponse struct {
@@ -60,6 +60,7 @@ func NewAuthHandler(
 	session BrowserSessionPolicy,
 	proxy TrustedProxyPolicy,
 	guard *LoginGuard,
+	identityHandler ...http.Handler,
 ) http.Handler {
 	handler := &AuthHandler{
 		service: service,
@@ -74,7 +75,11 @@ func NewAuthHandler(
 	mux.HandleFunc("DELETE /api/v1/auth/session", handler.logout)
 	mux.HandleFunc("/api/v1/auth/sessions", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/auth/session", handler.methodNotAllowed)
-	mux.HandleFunc("/api/v1/auth/", handler.notFound)
+	if len(identityHandler) == 1 {
+		mux.Handle("/api/v1/auth/", identityHandler[0])
+	} else {
+		mux.HandleFunc("/api/v1/auth/", handler.notFound)
+	}
 	mux.HandleFunc("/api/v1/auth", handler.notFound)
 	return noStore(mux)
 }
@@ -112,8 +117,8 @@ func (handler *AuthHandler) login(response http.ResponseWriter, request *http.Re
 	defer release()
 
 	session, err := handler.service.Login(request.Context(), authn.LoginInput{
-		LoginName: input.LoginName,
-		Password:  input.Password,
+		Email:    input.Email,
+		Password: input.Password,
 	})
 	if err != nil {
 		handler.writeError(response, request, err)
@@ -212,6 +217,11 @@ func (handler *AuthHandler) logout(response http.ResponseWriter, request *http.R
 }
 
 func (handler *AuthHandler) writeError(response http.ResponseWriter, request *http.Request, err error) {
+	if errors.Is(err, authn.ErrInvalidSession) {
+		for _, cookie := range ExpiredSessionCookies() {
+			http.SetCookie(response, cookie)
+		}
+	}
 	if MapApplicationError(err).StatusCode == http.StatusInternalServerError {
 		log.Printf("public authentication request failed request_id=%s: %v", RequestID(request.Context()), err)
 	}

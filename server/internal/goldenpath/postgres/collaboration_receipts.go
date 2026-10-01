@@ -19,10 +19,11 @@ const (
 )
 
 type collaborationCommandReceipt struct {
-	payloadSHA256 string
-	resultType    string
-	resultID      string
-	eventID       string
+	payloadSHA256  string
+	resultType     string
+	resultID       string
+	eventID        string
+	resultRevision *int
 }
 
 func claimCollaborationCommand(
@@ -38,35 +39,41 @@ func claimCollaborationCommand(
 	resultID string,
 	eventID string,
 	createdAt time.Time,
+	revision ...int,
 ) (collaborationCommandReceipt, bool, error) {
+	var resultRevision *int
+	if len(revision) == 1 {
+		resultRevision = &revision[0]
+	}
 	result, err := tx.Exec(ctx, `
 		INSERT INTO radishnexus.collaboration_command_receipts (
 			workspace_id, actor_id, command_kind, target_type, target_id,
 			client_operation_id, payload_sha256, result_type, result_id,
-			event_id, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			event_id, created_at, result_revision
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (
 			workspace_id, actor_id, command_kind, target_type, target_id,
 			client_operation_id
 		) DO NOTHING
 	`, invocation.Principal.WorkspaceID, invocation.Principal.ID, commandKind,
 		targetType, targetID, clientOperationID, payloadSHA256, resultType,
-		resultID, eventID, createdAt)
+		resultID, eventID, createdAt, resultRevision)
 	if err != nil {
 		return collaborationCommandReceipt{}, false, mapDatabaseError("claim collaboration command", err)
 	}
 	if result.RowsAffected() == 1 {
 		return collaborationCommandReceipt{
-			payloadSHA256: payloadSHA256,
-			resultType:    resultType,
-			resultID:      resultID,
-			eventID:       eventID,
+			payloadSHA256:  payloadSHA256,
+			resultType:     resultType,
+			resultID:       resultID,
+			eventID:        eventID,
+			resultRevision: resultRevision,
 		}, false, nil
 	}
 
 	var existing collaborationCommandReceipt
 	err = tx.QueryRow(ctx, `
-		SELECT payload_sha256, result_type, result_id, event_id
+		SELECT payload_sha256, result_type, result_id, event_id, result_revision
 		FROM radishnexus.collaboration_command_receipts
 		WHERE workspace_id = $1
 		  AND actor_id = $2
@@ -80,6 +87,7 @@ func claimCollaborationCommand(
 		&existing.resultType,
 		&existing.resultID,
 		&existing.eventID,
+		&existing.resultRevision,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return collaborationCommandReceipt{}, false, errors.New("concurrent collaboration command receipt winner is missing")
