@@ -105,18 +105,35 @@ func (s *Store) Configure(ctx context.Context, c goldenpath.ConfigurationCommand
 		return result, err
 	}
 	defer rollback(ctx, tx, &err)
-	owner, err := configurationActor(ctx, tx, c.Principal)
+	var owner, targetEligible bool
+	authorizationCommand := c.Kind == "environment.authorization.grant" || c.Kind == "environment.authorization.revoke"
+	if authorizationCommand {
+		owner, targetEligible, err = authorizationActors(ctx, tx, c.Principal, c.UserID)
+	} else {
+		owner, err = configurationActor(ctx, tx, c.Principal)
+	}
 	if err != nil {
 		return result, err
 	}
 	projectID := ""
-	if c.Kind == "team.create" || c.Kind == "project.create" {
+	if c.Kind == "team.create" || c.Kind == "project.create" || c.Kind == "component.create" || c.Kind == "environment.create" {
 		if !owner {
 			return result, authz.ErrForbidden
 		}
 		// Lock the workspace once for creation and unique receipt resolution.
 		if _, err = tx.Exec(ctx, `SELECT id FROM radishnexus.workspaces WHERE id=$1 FOR UPDATE`, c.Principal.WorkspaceID); err != nil {
 			return result, err
+		}
+	} else if authorizationCommand {
+		o, e := deliveryConfigurationObject(ctx, tx, c.Principal.WorkspaceID, "environment", c.ScopeID, owner, true)
+		if e != nil {
+			return result, e
+		}
+		if !owner {
+			return result, authz.ErrForbidden
+		}
+		if o.Classification != "staging" || (c.Kind == "environment.authorization.grant" && o.Status != "active") {
+			return result, authz.ErrConflict
 		}
 	} else {
 		projectID = c.ScopeID
@@ -150,6 +167,8 @@ func (s *Store) Configure(ctx context.Context, c goldenpath.ConfigurationCommand
 		case "team.create":
 			result.Object = goldenpath.ConfigurationObject{ID: resultID, Kind: "team"}
 			err = tx.QueryRow(ctx, `SELECT name FROM radishnexus.teams WHERE workspace_id=$1 AND id=$2`, c.Principal.WorkspaceID, resultID).Scan(&result.Object.Name)
+		case "component.create", "environment.create":
+			result.Object, err = deliveryConfigurationObject(ctx, tx, c.Principal.WorkspaceID, strings.TrimSuffix(c.Kind, ".create"), resultID, owner, false)
 		case "project.create":
 			result.Object, err = configurationProject(ctx, tx, c.Principal, resultID, false)
 		case "channel.create":
@@ -173,7 +192,13 @@ func (s *Store) Configure(ctx context.Context, c goldenpath.ConfigurationCommand
 	changed := true
 	removedChannels, removedThreads := []string{}, []string{}
 	grantedUsers := []string{}
+	authorizationID := ""
 	switch c.Kind {
+	case "component.create", "environment.create":
+		result.Object, err = createDeliveryConfiguration(ctx, tx, c)
+	case "environment.authorization.grant", "environment.authorization.revoke":
+		before, after, authorizationID, changed, err = configureEnvironmentAuthorization(ctx, tx, c, targetEligible)
+		result.UserID = c.UserID
 	case "team.create":
 		_, err = tx.Exec(ctx, `INSERT INTO radishnexus.teams(id,workspace_id,name,created_at) VALUES($1,$2,$3,$4)`, c.ID, c.Principal.WorkspaceID, c.Name, c.OccurredAt)
 		result.Object = goldenpath.ConfigurationObject{ID: c.ID, Kind: "team", Name: c.Name}
@@ -223,7 +248,7 @@ func (s *Store) Configure(ctx context.Context, c goldenpath.ConfigurationCommand
 	if resultID == "" {
 		resultID = c.UserID
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO radishnexus.workspace_configuration_audit(id,workspace_id,actor_id,command_kind,scope_id,subject_id,result_id,before_state,after_state,changed,removed_channel_ids,removed_thread_ids,request_id,occurred_at,granted_user_ids) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`, c.AuditID, c.Principal.WorkspaceID, c.Principal.ID, c.Kind, c.ScopeID, c.UserID, resultID, before, after, changed, removedChannels, removedThreads, c.CorrelationID, c.OccurredAt, grantedUsers)
+	_, err = tx.Exec(ctx, `INSERT INTO radishnexus.workspace_configuration_audit(id,workspace_id,actor_id,command_kind,scope_id,subject_id,result_id,before_state,after_state,changed,removed_channel_ids,removed_thread_ids,request_id,occurred_at,granted_user_ids,authorization_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`, c.AuditID, c.Principal.WorkspaceID, c.Principal.ID, c.Kind, c.ScopeID, c.UserID, resultID, before, after, changed, removedChannels, removedThreads, c.CorrelationID, c.OccurredAt, grantedUsers, nullable(authorizationID))
 	if err != nil {
 		return result, fmt.Errorf("record configuration audit: %w", err)
 	}
@@ -232,7 +257,14 @@ func (s *Store) Configure(ctx context.Context, c goldenpath.ConfigurationCommand
 		return result, fmt.Errorf("record configuration receipt: %w", err)
 	}
 	if c.EventID != "" {
-		err = insertEvent(ctx, tx, eventRecord{ID: c.EventID, Type: result.Object.Kind + ".created", WorkspaceID: c.Principal.WorkspaceID, ActorKind: "user", ActorID: c.Principal.ID, SourceKind: c.SourceKind, PrimaryType: result.Object.Kind, PrimaryID: c.ID, ProjectID: projectID, CorrelationID: c.CorrelationID, OccurredAt: c.OccurredAt, Payload: map[string]any{"status": "active"}})
+		payload := map[string]any{"status": "active"}
+		if c.Kind == "component.create" {
+			payload = map[string]any{"lifecycle": "active"}
+		}
+		if c.Kind == "environment.create" {
+			payload["classification"] = "staging"
+		}
+		err = insertEvent(ctx, tx, eventRecord{ID: c.EventID, Type: result.Object.Kind + ".created", WorkspaceID: c.Principal.WorkspaceID, ActorKind: "user", ActorID: c.Principal.ID, SourceKind: c.SourceKind, PrimaryType: result.Object.Kind, PrimaryID: c.ID, ProjectID: projectID, CorrelationID: c.CorrelationID, OccurredAt: c.OccurredAt, Payload: payload})
 		if err != nil {
 			return result, err
 		}

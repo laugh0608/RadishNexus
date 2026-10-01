@@ -8,6 +8,7 @@ import {
 } from "../collaboration/api";
 import { deploymentNexusViewPagePath } from "../nexus-view/api";
 import type { DiscoveryClient } from "./api";
+import { DeliveryConfigurationPanel } from "./DeliveryConfigurationPanel";
 import { ProjectBrowser } from "./ProjectBrowser";
 import { FoundationCreate } from "./ConfigurationPanel";
 import type { ConfigurationObject } from "./configuration-api";
@@ -130,6 +131,20 @@ export function WorkspaceHome({
                 onSessionExpired={onSessionExpired}
               />
             ) : null}
+            <DeliveryConfigurationPanel
+              key={`delivery:${workspaceID}`}
+              workspaceID={workspaceID}
+              workspaceName={
+                session.workspaces.find((w) => w.id === workspaceID)?.name ??
+                workspaceID
+              }
+              userID={session.user.id}
+              isOwner={
+                session.workspaces.find((w) => w.id === workspaceID)?.role ===
+                "owner"
+              }
+              onSessionExpired={onSessionExpired}
+            />
             <ProjectBrowser
               key={`${workspaceID}:${createdProject?.generation ?? 0}`}
               workspaceID={workspaceID}

@@ -4,6 +4,8 @@
 
 日期：2026-09-26
 
+[ADR-0032](../adr/0032-component-environment-configuration-and-authorization.md) 冻结 Component / Environment 创建、发现与 owner 环境授权管理：同环境 / 用户至多一条 active 授权，重新授予追加不可变代次，历史 Deployment 保留原授权 ID。命令沿用配置 receipt / Audit 与严格 Session 边界，expected ID / 状态防止旧页面覆盖；Component / Environment 创建事件同事务投影到主要对象，授权明细不进入普通 Activity。
+
 ## 目的
 
 本文件定义 Golden Path 开始实现前必须共享的最小技术契约：稳定实体引用如何表示和解析，跨对象关系如何复用原对象权限，领域事件如何进入 Transactional Outbox，以及 Activity 如何从权威事实投影并在读取时过滤。
@@ -268,7 +270,7 @@ safe_facts
 
 ### 正常更新与协作对象反向发现
 
-[ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md) 将首批五类 Activity 事件接入同一业务事务；投影完成与业务提交一致，失败整单回滚。显式重建先取得投影表写入排他锁，再读取新的源事件快照，保留完整版本并避免覆盖并发提交。后续基础配置与 Document 扩展事件映射；当前投影版本为 2，包含 `document.created` 与 `document.revised`，恢复历史通过 revised 事件记录来源版本。旧数据仍由显式重建补齐，不随启动自动执行。
+[ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md) 将首批五类 Activity 事件接入同一业务事务；投影完成与业务提交一致，失败整单回滚。显式重建先取得投影表写入排他锁，再读取新的源事件快照，保留完整版本并避免覆盖并发提交。后续基础配置与 Document 扩展事件映射；当前投影版本为 3，包含 `document.created` 与 `document.revised`，以及 ADR-0032 的 `component.created` / `environment.created`；恢复历史通过 revised 事件记录来源版本。授权管理明细只进入配置 Audit，不进入普通 Activity。旧数据仍由显式重建补齐，不随启动自动执行。
 
 Thread ← Decision、Decision ← Ticket 从同一权威 EntityLink 反向读取，不复制镜像关系。协作 readable relation 明确 `direction`，不可读反向目标完全隐藏；原 evidence restricted 占位不携带方向或目标信息。结果排序、全量读取成本和 Go / Web 同步升级边界见 ADR-0022。Timeline 仍投影到原事件主要对象，不自动向所有关系端点传播。
 

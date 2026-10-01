@@ -158,6 +158,8 @@ CI Run 成功只表达构建事实，不能自动创建 Deployment。Repository�
 
 M0 读取以 Component 为授权边界：同一 Workspace 的活跃成员可以读取 Component 及其 CI Run；非成员、暂停成员和跨 Workspace 主体不可发现。`owner_team_id` 只表示责任，不形成私密访问组；Jenkins source 和 plugin actor 也不授予用户权限。CI Run 的 Nexus View 只投影受控状态、时间与当前 Component，不暴露来源标识和 receipt。详见 [ADR-0007](adr/0007-component-scoped-ci-run-read.md)。
 
+Component 与 Environment 的创建、发现和环境授权管理按 [ADR-0032](adr/0032-component-environment-configuration-and-authorization.md) 冻结：active Workspace owner 可创建最小 active Component / staging Environment，创建不附带记录权。环境授权必须显式授予，撤销后重新授予生成新 ID 与递增代次，旧记录和历史 Deployment 引用不可改写；普通读取不暴露授权管理明细。
+
 ### Environment
 
 一个稳定部署目标，例如 `development`、`staging` 或 `production`。Environment 承载部署保护策略、审批要求和 Secrets 引用，但不保存 Secrets 明文。

@@ -37,7 +37,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0029](0029-session-scoped-ci-run-nexus-view.md) | 已接受 | Session 作用域下的 CI Run Nexus View |
 | [ADR-0030](0030-authenticated-jenkins-delivery-adapter.md) | 已接受 | 受控 Jenkins 终态 delivery adapter |
 | [ADR-0031](0031-session-scoped-staging-deployment-recording.md) | 已接受 | Session 作用域下的 staging Deployment 显式记录 |
-| [ADR-0032](0032-component-environment-configuration-and-authorization.md) | 提议 | Component、Environment 最小配置与环境授权管理 |
+| [ADR-0032](0032-component-environment-configuration-and-authorization.md) | 已接受 | Component、Environment 最小配置与环境授权管理 |
 
 ## 新建规则
 

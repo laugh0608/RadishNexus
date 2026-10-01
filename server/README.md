@@ -41,7 +41,7 @@ CI Run 的 M0 用户读取由所属 Component 控制：同一 Workspace 的活�
 
 staging Deployment 只记录外部已经完成的终态事实，不执行部署。目标必须是 active staging Environment，来源必须是 succeeded CI Run，调用者必须是 active Workspace 用户并持有该 Environment 的显式授权；Project 角色、owner Team 和 CI source 不隐式授予部署能力。Deployment、`deploys` 关系、`deployment.recorded` 和 Outbox 同事务提交。
 
-Deployment 的 M0 读取与写授权分离：同一 Workspace 的 active 成员只有同时能读取目标 Environment 与来源 CI Run 时才可读取；非成员、暂停成员和跨 Workspace 主体得到 not-found，Environment 归档不隐藏既有历史。Current 只返回终态、受控时间、Environment 与来源 CI Run；Relations 和 Timeline 复用当前权限，不返回 authorization ID、调用 source、Jenkins receipt、digest、Secret、原始 payload 或外部 URL。该 query 已通过独立公共 DTO 开放为第一个只读业务端点；授权管理入口、production、审批、回滚和执行引擎均未建立。
+Deployment 的 M0 读取与写授权分离：同一 Workspace 的 active 成员只有同时能读取目标 Environment 与来源 CI Run 时才可读取；非成员、暂停成员和跨 Workspace 主体得到 not-found，Environment 归档不隐藏既有历史。Current 只返回终态、受控时间、Environment 与来源 CI Run；Relations 和 Timeline 复用当前权限，不返回 authorization ID、调用 source、Jenkins receipt、digest、Secret、原始 payload 或外部 URL。该 query 已通过独立公共 DTO 开放为第一个只读业务端点；环境授权管理入口已按 ADR-0032 接通；production、审批、回滚和执行引擎仍未建立。
 
 本地认证以规范化私有邮箱、Argon2id verifier、5 次失败后 15 分钟账号锁定和 24 小时绝对有效的服务端 Session 为基线。数据库只保存 Session / CSRF token 的 SHA-256 digest；Session 不固定 Workspace，业务调用必须以当前 active membership 解析 `VerifiedUser`。登录 transport 另按客户端 IP 每分钟限制 5 次尝试、每进程最多并发 4 个密码校验并有界跟踪 4096 个客户端；多副本或公网部署仍必须在 reverse proxy / gateway 增加全局限流。成员准入使用一次性邀请；OIDC 状态与外部绑定事务已实现，真实 provider adapter 按当前计划延后，Radish 登录保持关闭。密码重置与 MFA 尚未建立。不可读资源由 application service 返回 `not found`，Deployment handler 还会把不可用 membership 收敛为同形 `not_found`。
 
@@ -277,4 +277,15 @@ POST 精确字段、确认及重试语义按 ADR。相同 operation ID / canonic
 
 migration 011 扩展既有协作 receipt 的 CHECK，保留 revision 合同。receipt、Deployment、`deploys`、领域事件、Outbox 和 Activity 同事务提交。显式迁移后才能使用匹配版本服务；不通过删除 migration history 回退。备份保留 receipt，恢复后精确重试返回原 Deployment。
 
-本入口记录外部已结束事实，不执行部署、调用 Jenkins、读取 Secrets 或授予环境权限。Environment / Component 配置和环境授权管理仍未提供产品入口。
+本入口记录外部已结束事实，不执行部署、调用 Jenkins、读取 Secrets 或授予环境权限。Environment / Component 配置与独立环境授权管理见下节。
+
+
+## Component / Environment 配置与环境授权
+
+[ADR-0032](../docs/adr/0032-component-environment-configuration-and-authorization.md) 扩展既有 `ConfigurationService`、配置 Audit / receipt 与 Session 路由。active Workspace owner 可创建 active Component 和 active staging Environment；所有 active Workspace 成员可分页发现既有对象与读取配置。创建只表达责任 Team，不自动赋予部署记录权，也不生成 Repository / CI source / 交付关系。
+
+公共路径统一以 `/api/v1/workspaces/{workspace_id}` 为前缀：`GET / POST /components`、`GET / POST /environments`、各对象的 `GET /configuration`；owner 通过环境的 `GET /deployment-authorizations` 和 `GET / PUT / DELETE /deployment-authorizations/{user_id}` 管理授权。严格字段、分页、状态码和 DTO 以 ADR 为准。PUT / DELETE 必填 `expected_authorization` 与显式确认；成功只表示原请求已经处理，客户端须重新读取当前状态。
+
+migration 012 保留 revoked 授权，重新授予追加新 ID 与 generation，并保持每个环境 / 用户至多一条 active 记录。历史 Deployment 始终关联原授权；旧授予或撤销 receipt 不重新改变权限。事务按账户、membership、Environment、授权记录的顺序加锁；Deployment 同步重查账户状态。撤销允许清理 archived staging 与失效成员，production 不开放管理写入。
+
+创建对象、Audit、receipt、领域事件、Outbox 和 Activity 同事务提交；授权只进入窄 Audit。当前 Activity projection 为 3，新增 `component.created` / `environment.created`，migration 将现有 v2 投影标为 v3，重建与恢复继续从领域事件生成。不补造历史对象创建事件。全代次授权、成功 Audit / receipt 与旧 Deployment 引用属于既有备份权威表；升级必须显式迁移，旧二进制拒绝新 schema，不能删历史授权降级。

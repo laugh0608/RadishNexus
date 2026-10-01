@@ -213,4 +213,5 @@ func TestFoundationConfigurationFromBootstrap(t *testing.T) {
 	if e = pool.QueryRow(ctx, `SELECT count(*) FROM radishnexus.activity_items WHERE activity_type IN ('project.created','channel.created')`).Scan(&after); e != nil || before != 2 || after != before {
 		t.Fatal("rebuild drift", before, after, e)
 	}
+	assertDeliveryConfigurationFromBootstrap(t, ctx, pool, owner, member, team.Object.ID)
 }

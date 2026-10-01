@@ -6,6 +6,8 @@
 
 本文件用于防止后续讨论静默改变当前方向。修改“已确认”事项时，必须同时记录修改日期、原因、影响和迁移方式。
 
+2026-10-01 已确认 [ADR-0032](adr/0032-component-environment-configuration-and-authorization.md)：Workspace owner 管理最小 Component / staging Environment 和显式环境授权（包括单独确认给本人授权）；撤销后新增授权代次，保留旧来源。migration 012 扩展授权唯一性与配置 Audit / receipt，新增有限 Session 发现和管理 API；不新增依赖或外部执行能力。
+
 ## 已确认
 
 ### D-001 项目名称

@@ -230,6 +230,10 @@ func seedAuthenticatedWebBrowserData(
 ) authenticatedWebFixture {
 	t.Helper()
 	seedGoldenPath(t, ctx, pool)
+	accountCreatedAt := time.Now().UTC().Add(-time.Minute)
+	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_contributor', 'active', $1), ('usr_decider', 'active', $1)`, accountCreatedAt); err != nil {
+		t.Fatalf("seed identity accounts: %v", err)
+	}
 	seedDeploymentTargets(t, ctx, pool)
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO radishnexus.components (
@@ -319,10 +323,7 @@ func seedAuthenticatedWebBrowserData(
 	if err != nil {
 		t.Fatalf("hash browser fixture password: %v", err)
 	}
-	accountCreatedAt := time.Now().UTC().Add(-time.Minute)
-	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_contributor', 'active', $1), ('usr_decider', 'active', $1)`, accountCreatedAt); err != nil {
-		t.Fatalf("seed identity accounts: %v", err)
-	}
+
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO radishnexus.local_credentials (
 			user_id, email, password_hash, created_at, password_changed_at

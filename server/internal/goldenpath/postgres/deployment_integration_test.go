@@ -38,6 +38,9 @@ func assertStagingDeploymentSlice(
 ) {
 	t.Helper()
 	seedDeploymentTargets(t, ctx, pool)
+	if _, e := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts(user_id,status,created_at) VALUES ('usr_reader','active',now()),('usr_contributor','active',now())`); e != nil {
+		t.Fatal(e)
+	}
 
 	startedAt := time.Date(2026, 8, 28, 11, 56, 0, 0, time.UTC)
 	completedAt := time.Date(2026, 8, 28, 11, 59, 0, 0, time.UTC)
@@ -287,7 +290,7 @@ func assertDeploymentNexusViewHTTP(
 	csrfToken := deploymentHTTPToken(8)
 	tokenDigest := sha256.Sum256([]byte(sessionToken))
 	csrfDigest := sha256.Sum256([]byte(csrfToken))
-	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_reader', 'active', $1)`, now); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_reader', 'active', $1) ON CONFLICT(user_id) DO NOTHING`, now); err != nil {
 		t.Fatalf("seed identity accounts: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `

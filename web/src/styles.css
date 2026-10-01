@@ -2306,6 +2306,14 @@ code {
   align-items: flex-start;
   gap: 0.5rem;
 }
+.configuration-panel .configuration-checkbox input {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  flex: 0 0 18px;
+  margin: 2px 0 0;
+  padding: 0;
+}
 .configuration-actions {
   display: flex;
   flex-wrap: wrap;

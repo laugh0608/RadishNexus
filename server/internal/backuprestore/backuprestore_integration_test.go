@@ -43,9 +43,6 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	sourcePool := connectIntegrationPool(t, ctx, sourceURL)
 	defer sourcePool.Close()
 	seedBackupGoldenPath(t, ctx, sourcePool)
-	if _, err := sourcePool.Exec(ctx, `INSERT INTO radishnexus.user_accounts(user_id,status,created_at) VALUES ('usr_contributor','active',now())`); err != nil {
-		t.Fatal(err)
-	}
 	var ticketID string
 	if err := sourcePool.QueryRow(ctx, `SELECT id FROM radishnexus.tickets WHERE workspace_id='wrk_backup'`).Scan(&ticketID); err != nil {
 		t.Fatal(err)
@@ -71,6 +68,7 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	regrantBackupAuthorization(t, ctx, sourcePool, "dpa_backup", 2)
 	if got := snapshotTable(t, ctx, sourcePool, "radishnexus.user_sessions"); got == "[]" {
 		t.Fatal("source user session fixture is empty")
 	}
@@ -234,6 +232,35 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if !reflect.DeepEqual(afterConflict, beforeConflict) {
 		t.Fatalf("non-empty target changed after rejected restore")
 	}
+	var activeAuthorization string
+	if err := targetPool.QueryRow(ctx, `SELECT id FROM radishnexus.environment_deployment_authorizations WHERE environment_id='env_backup_staging' AND status='active'`).Scan(&activeAuthorization); err != nil {
+		t.Fatal(err)
+	}
+	regrantBackupAuthorization(t, ctx, targetPool, activeAuthorization, 3)
+	var historicalAuthorization string
+	if err := targetPool.QueryRow(ctx, `SELECT authorization_id FROM radishnexus.deployments WHERE id=$1`, deploymentID).Scan(&historicalAuthorization); err != nil || historicalAuthorization != "dpa_backup" {
+		t.Fatal("restored Deployment history changed", err)
+	}
+}
+
+func regrantBackupAuthorization(t *testing.T, ctx context.Context, pool *pgxpool.Pool, previous string, wantGeneration int) {
+	t.Helper()
+	service := goldenpath.NewConfigurationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	inv := goldenpath.Invocation{Principal: authz.Principal{Kind: authz.PrincipalUser, ID: "usr_admin", WorkspaceID: "wrk_backup"}, SourceKind: "web", CorrelationID: "backup-authorization"}
+	input := goldenpath.ConfigurationInput{Kind: "environment.authorization.revoke", ScopeID: "env_backup_staging", UserID: "usr_contributor", ClientOperationID: fmt.Sprintf("revoke-%d", wantGeneration), Delivery: &goldenpath.DeliveryConfigurationInput{Confirmed: true, ExpectedAuthorization: &goldenpath.ConfigurationAuthorization{ID: previous, Status: "active"}}}
+	if _, err := service.Configure(ctx, inv, input); err != nil {
+		t.Fatal(err)
+	}
+	input.Kind = "environment.authorization.grant"
+	input.ClientOperationID = fmt.Sprintf("grant-%d", wantGeneration)
+	input.Delivery.ExpectedAuthorization.Status = "revoked"
+	if _, err := service.Configure(ctx, inv, input); err != nil {
+		t.Fatal(err)
+	}
+	var generation int
+	if err := pool.QueryRow(ctx, `SELECT generation FROM radishnexus.environment_deployment_authorizations WHERE environment_id='env_backup_staging' AND status='active'`).Scan(&generation); err != nil || generation != wantGeneration {
+		t.Fatal("restored generation", generation, err)
+	}
 }
 
 type deterministicIDs struct {
@@ -327,7 +354,7 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	if err != nil {
 		t.Fatalf("seed backup base data: %v", err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_admin', 'active', '2026-08-30T01:00:00Z')`); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_admin', 'active', '2026-08-30T01:00:00Z'), ('usr_contributor', 'active', '2026-08-30T01:00:00Z')`); err != nil {
 		t.Fatalf("seed identity accounts: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `

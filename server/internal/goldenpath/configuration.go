@@ -32,6 +32,7 @@ type ConfigurationInput struct {
 	Role               string
 	ExpectedRole       *string
 	ExpectedMember     bool
+	Delivery           *DeliveryConfigurationInput `json:",omitempty"`
 }
 
 type ConfigurationCommand struct {
@@ -39,11 +40,14 @@ type ConfigurationCommand struct {
 	ConfigurationInput
 	ID, AuditID, EventID, PayloadSHA256 string
 	OccurredAt                          time.Time
+	AuthorizationID                     string
 }
 
 type ConfigurationObject struct {
 	ID, Kind, Name, Key, ProjectID, Visibility, Status string
 	CanManage                                          bool
+	OwnerTeamID, Type, Classification                  string
+	CanGrant, CanRevoke                                bool
 }
 type ConfigurationResult struct {
 	Object  ConfigurationObject
@@ -53,14 +57,17 @@ type ConfigurationResult struct {
 type ConfigurationMember struct {
 	ID, Name, Role string
 	Eligible       bool
+	Authorization  *ConfigurationAuthorization
 }
 type ConfigurationPage struct {
 	Members []ConfigurationMember
 	Teams   []ConfigurationObject
+	Objects []ConfigurationObject
 	NextID  string
 }
 type ConfigurationQuery struct {
 	Kind, ScopeID, AfterID string
+	UserID                 string
 	Limit                  int
 }
 type ConfigurationStore interface {
@@ -78,7 +85,7 @@ func NewConfigurationService(store ConfigurationStore, ids IDGenerator, clock Cl
 	return &ConfigurationService{store: store, ids: ids, clock: clock}
 }
 
-var configurationID = regexp.MustCompile(`^(wrk|usr|tem|prj|chn)_[A-Za-z0-9_-]+$`)
+var configurationID = regexp.MustCompile(`^(wrk|usr|tem|prj|chn|cmp|env|dpa)_[A-Za-z0-9_-]+$`)
 var projectKey = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
 func ValidConfigurationID(id, prefix string) bool {
@@ -95,7 +102,16 @@ func (s *ConfigurationService) Configure(ctx context.Context, invocation Invocat
 		return invalid()
 	}
 	prefix := ""
+	if !IsDeliveryConfiguration(input.Kind) && input.Delivery != nil {
+		return invalid()
+	}
 	switch input.Kind {
+	case "component.create", "environment.create", "environment.authorization.grant", "environment.authorization.revoke":
+		var valid bool
+		prefix, valid = validateDeliveryConfiguration(input, invocation.Principal.WorkspaceID)
+		if !valid {
+			return invalid()
+		}
 	case "team.create", "project.create":
 		if input.ScopeID != invocation.Principal.WorkspaceID {
 			return invalid()
@@ -164,8 +180,14 @@ func (s *ConfigurationService) Configure(ctx context.Context, invocation Invocat
 			return ConfigurationResult{}, err
 		}
 	}
-	if prefix == "prj_" || prefix == "chn_" {
+	if prefix == "prj_" || prefix == "chn_" || prefix == "cmp_" || prefix == "env_" {
 		command.EventID, err = s.ids.NewID("evt_")
+		if err != nil {
+			return ConfigurationResult{}, err
+		}
+	}
+	if input.Kind == "environment.authorization.grant" {
+		command.AuthorizationID, err = s.ids.NewID("dpa_")
 		if err != nil {
 			return ConfigurationResult{}, err
 		}
@@ -179,6 +201,10 @@ func (s *ConfigurationService) ReadConfiguration(ctx context.Context, p authz.Pr
 	prefix := "prj_"
 	if kind == "channel" {
 		prefix = "chn_"
+	} else if kind == "component" {
+		prefix = "cmp_"
+	} else if kind == "environment" {
+		prefix = "env_"
 	} else if kind != "project" {
 		return ConfigurationObject{}, authz.ErrInvalid
 	}
@@ -193,6 +219,18 @@ func (s *ConfigurationService) ListConfiguration(ctx context.Context, p authz.Pr
 	}
 	prefix := "usr_"
 	switch q.Kind {
+	case "components", "environments":
+		prefix = "cmp_"
+		if q.Kind == "environments" {
+			prefix = "env_"
+		}
+		if q.ScopeID != p.WorkspaceID {
+			return ConfigurationPage{}, authz.ErrInvalid
+		}
+	case "environment-authorizations", "environment-authorization":
+		if !ValidConfigurationID(q.ScopeID, "env_") || (q.Kind == "environment-authorization" && !ValidConfigurationID(q.UserID, "usr_")) {
+			return ConfigurationPage{}, authz.ErrInvalid
+		}
 	case "teams":
 		prefix = "tem_"
 		if q.ScopeID != p.WorkspaceID {

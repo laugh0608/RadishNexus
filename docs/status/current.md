@@ -19,7 +19,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | Project / Channel 发现 | 当前权限过滤、归档可读、稳定 ID 分页、当前成员复核 | 首页 Workspace → Project → Channel 导航；ID 工具保留为次级入口 | 服务端、真实数据库、Web 交互与隔离浏览器验收通过，含分页、撤权刷新、Workspace 切换及桌面 / 手机布局；基础配置已有独立切片证据，见下一行 |
 | 基础对象与首批成员配置 | migration 009、明确初始 admin、普通角色 / 受限成员、配置 Audit / receipt、撤权清理、备份恢复 | owner 创建 Team / Project，Project admin 创建 Channel 与配置成员 | 从正式 bootstrap 的空业务工作区，经 Web 创建、邀请新账户、双层授权、成员发消息与撤权已验收；首次访问 Web 初始化已有独立证据，管理员交接仍缺 |
 | 单 Channel Message 实时 | 单进程 SSE、当前权限、有界回放、撤权与关闭 | canonical Channel 已接入 ready → history → 增量 | 有技术验收；没有目标团队规模与持续使用的容量证据 |
-| CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment、精确重试 receipt | CI Run / Deployment 正式读取；成功构建可选择已授权 staging 环境并确认记录外部部署结果 | 真实 Jenkins 三态采集、Deployment 写入自动化与隔离浏览器已通过；Environment / Component 独立配置、授权管理、交付关系和持续采集仍缺 |
+| CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment、精确重试 receipt | CI Run / Deployment 正式读取；成功构建可选择已授权 staging 环境并确认记录外部部署结果 | 真实 Jenkins 三态采集、Deployment 写入自动化与隔离浏览器已通过；Component / staging Environment 创建、发现与显式授权管理已接通，真实数据库、恢复及隔离浏览器已有证据；交付关系和持续采集仍缺 |
 | EntityLink / Activity | 带来源关系、权限过滤 query、同事务 Activity 更新与版本化全量重建 | Nexus View 可读 Current / 出向与首批入向 Relations / 正常更新的 Timeline | 正常写入与双向发现已通过真实 PostgreSQL / HTTP 和浏览器；未完成持续使用观察 |
 | 自部署与恢复 | 显式 migration、只读 schema readiness、PostgreSQL 17 同 major 空目标恢复 | 健康端点拒绝 migration 缺失 / 漂移 / 版本不匹配；固定工件 Compose 开发拓扑与 HTTPS 演练已有记录 | 新探针已有真实数据库证据；本轮未重跑 Compose，升级失败恢复、运维与生产容量尚未完成 |
 | Document | migration 010、不可变版本、精确 receipt、当前 Project 权限、单一受限 Markdown parser、备份恢复 | Ticket 创建、Project 文档列表、阅读 / 编辑 / 预览、显式冲突重新应用、历史恢复 | 真实数据库及隔离 HTTPS 双标签页、恢复、手机布局、撤权已有证据；原生中文 IME、普通成员独立持续使用仍待验收 |
@@ -41,20 +41,21 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 | 顺序 | 下一切片 | 交付与退出判据 |
 | --- | --- | --- |
-| 1 | Environment / Component 最小配置与环境授权管理范围 | [ADR-0032 提案](../adr/0032-component-environment-configuration-and-authorization.md)已完成源码核对与范围设计，待所有者确认；覆盖最小创建 / 发现、显式授予 / 撤销 / 重新授予、配置 Audit / receipt 与验收。确认权限、migration 和公共 API 范围后再实施，不让 owner Team 或 Project 角色隐式获得部署权 |
-| 2 | 交付链剩余关系与持续采集 | 在已完成的 CI Run 读取、Jenkins 隔离三态采集和 staging 显式记录之上，分别推进 Repository 映射、Ticket / Component / 交付关系和持续采集；逐段移除对预置配置的依赖 |
+| 1 | 交付链剩余关系与持续采集 | 在已完成的 CI Run 读取、Jenkins 隔离三态采集和 staging 显式记录之上，分别推进 Repository 映射、Ticket / Component / 交付关系和持续采集；逐段移除对预置配置的依赖 |
 | 暂缓 | 最小 Markdown Document 人工验收 | 正式实现和隔离浏览器已验证；待所有者恢复人工验收时补 macOS 原生中文 IME，见[实施记录](reviews/2026-09-26-markdown-document.md)，不阻塞上述切片 |
-| 3 | 小团队场景试用 | 满足评估授权与必要运维条件后，以真实需求连续使用并记录追溯、重复录入和人工干预；按 Golden Path 验收决定下一批功能，不把一次演示当作持续使用完成 |
+| 2 | 小团队场景试用 | 满足评估授权与必要运维条件后，以真实需求连续使用并记录追溯、重复录入和人工干预；按 Golden Path 验收决定下一批功能，不把一次演示当作持续使用完成 |
 
 免费书面授权与评估说明应在邀请外部团队前准备，不能等到完整聊天或 CRDT 完成；版本化结构化导出与全新实例导入仍是 M1 的独立退出条件。账号恢复、安全审计、数据生命周期、数据库最小权限与升级演练按[路线图](../roadmap.md)的试用和生产边界推进，不因本表只列近期切片而取消。
 
-### 当前推进：最小配置与环境授权
+### 本轮完成：最小配置与环境授权
 
-2026-10-01 已核对 `dev`，工作区起始干净；本地 `dev`、`master` 与 `origin/dev`、`origin/master` 跟踪引用均指向 `efa002b`（PR #12 合并），本轮未 fetch 或核验远端设置。以下 9 月 26 日完成记录中的“未 push”保留当时的历史含义，不代表本轮 Git 状态。
+2026-10-01 从 `efa002b`（PR #12 合并）开始，本地 `dev` / `master` 与远程跟踪引用当时一致，本轮未 fetch 或核验远端设置。所有者要求提交提案并批准实施，提案已提交为 `a206be5`。以下 9 月 26 日记录中的“未 push”保留当时含义。
 
-[ADR-0032](../adr/0032-component-environment-configuration-and-authorization.md) 处于提议状态，尚未实施。关键待确认范围是 active Workspace owner 的配置与授权管理能力、显式自授权、撤销后新增授权代次，以及 migration 012 和有限 Session API。源码核对确认现有全量唯一约束与 revoked 不可变规则会阻止重新授予，提案保留旧授权和 Deployment 外键，通过新代次解决，而不复活旧记录。
+[ADR-0032](../adr/0032-component-environment-configuration-and-authorization.md) 已接受并实现：owner 正式创建 Component / staging Environment，成员发现对象，owner 显式授予、撤销、重新授予记录权。migration 012 保存不可变授权代次和旧 Deployment 来源；配置成功 Audit / receipt、创建事件与 Activity v3 同步落地。创建对象、owner Team 和 Project 角色均不隐式授予部署权。
 
-下一步为所有者审阅具体提案；确认后按其中顺序实现并验证正式配置 → staging 记录接续。Repository 映射、交付关系和持续采集仍按表中后续切片推进。原生 IME 人工验收继续暂缓，真实团队试用仍受评估授权与运维退出条件约束；本次提案不构成服务启动、业务 migration 或远程操作授权。
+Go、真实 PostgreSQL、升级、备份恢复和 Web 检查通过；HTTPS 浏览器从正式 bootstrap 空业务工作区验证 Team / Component / Environment 创建、自授权、撤销、重新授予、桌面 / 手机和键盘。正式配置对象接续 CI Run / staging 记录由数据库自动化证明；本轮没有重跑真实 Jenkins，也没有验证新配置对象从 Jenkins 到浏览器记录的整链。具体证据、修复与未覆盖项见[实施记录](reviews/2026-10-01-delivery-configuration.md)。临时验收服务已清理，未应用业务实例 migration、push 或部署。
+
+下一步沿近期顺序设计 Repository 映射、交付关系与持续采集；它们不包含在本轮授权中。原生 IME 人工验收继续暂缓，真实团队试用仍受评估授权与运维退出条件约束。
 
 ### 本轮完成：CI Run、Jenkins 与 staging 记录
 
@@ -113,6 +114,8 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
 
 ## 证据与历史
+
+- [2026-10-01 组件、环境与授权管理](reviews/2026-10-01-delivery-configuration.md)：migration 012、不可变授权代次、正式配置、并发 / 恢复与浏览器证据。
 
 - [2026-09-26 提交回顾与文档收尾](reviews/2026-09-26-daily-closeout.md)：当日八笔实现 / 设计提交、文档漂移修正与次日接续入口。
 

@@ -29,7 +29,7 @@ export interface ConfigurationPage<T> {
 
 const error = () =>
   new AuthRequestError("配置服务响应不符合当前契约，请刷新或联系管理员。");
-function text(value: unknown): string {
+export function text(value: unknown): string {
   if (typeof value !== "string" || !value.trim() || value.includes("\0"))
     throw error();
   return value;
@@ -78,7 +78,7 @@ function parseObject(
   }
   return result;
 }
-async function request(
+export async function request(
   workspace: string,
   suffix: string,
   method = "GET",
@@ -136,13 +136,13 @@ async function request(
   }
   return object(payload, ["data"]).data;
 }
-function query(after?: string) {
+export function query(after?: string) {
   if (after !== undefined && !validCursor(after)) throw error();
   const q = new URLSearchParams({ limit: "25" });
   if (after) q.set("after", after);
   return `?${q}`;
 }
-function parsePage<T extends { id: string }>(
+export function parsePage<T extends { id: string }>(
   value: unknown,
   parse: (value: unknown) => T,
   after?: string,

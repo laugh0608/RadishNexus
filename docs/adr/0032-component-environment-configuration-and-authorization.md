@@ -1,10 +1,10 @@
 # ADR-0032：Component、Environment 最小配置与环境授权管理
 
-状态：提议（待项目所有者确认，尚未实施）
+状态：已接受（2026-10-01，项目所有者已批准实施）
 
 日期：2026-10-01
 
-Supersedes（提议，接受后生效，部分）：[ADR-0009](0009-explicit-staging-deployment.md) 中环境授权仅由种子数据或未来入口管理的限制，以及 [ADR-0031](0031-session-scoped-staging-deployment-recording.md) 中 Component / Environment 与授权管理不在交付范围的限制。保留显式授权、staging 记录、不可变 Deployment 与当前权限重查；不改变 [ADR-0007](0007-component-scoped-ci-run-read.md)、[ADR-0011](0011-workspace-scoped-deployment-read.md) 的读取语义。
+Supersedes（部分）：[ADR-0009](0009-explicit-staging-deployment.md) 中环境授权仅由种子数据或未来入口管理的限制，以及 [ADR-0031](0031-session-scoped-staging-deployment-recording.md) 中 Component / Environment 与授权管理不在交付范围的限制。保留显式授权、staging 记录、不可变 Deployment 与当前权限重查；不改变 [ADR-0007](0007-component-scoped-ci-run-read.md)、[ADR-0011](0011-workspace-scoped-deployment-read.md) 的读取语义。
 
 ## 背景与源码基线
 
@@ -17,7 +17,7 @@ Supersedes（提议，接受后生效，部分）：[ADR-0009](0009-explicit-sta
 - [配置事务](../../server/internal/goldenpath/postgres/configuration.go) 与 [migration 009](../../server/db/migrations/009_workspace_configuration.sql) 已提供成功 Audit、receipt、当前角色复核和原子写入模式，可以扩展白名单，不需要第二套权限框架或配置表。
 - [Deployment 写入](../../server/internal/goldenpath/postgres/deployment.go) 按当前 active 授权取 ID，并在处理 receipt 前重新授权；[关系读取](../../server/internal/goldenpath/postgres/relations.go) 对 Component / Environment 使用 active Workspace membership。新增管理能力不得改变这两项边界。
 
-## 待确认的决定与影响
+## 已确认的决定与影响
 
 | 决定 | 推荐范围 | 主要影响 |
 | --- | --- | --- |
@@ -28,7 +28,7 @@ Supersedes（提议，接受后生效，部分）：[ADR-0009](0009-explicit-sta
 | 旧页面与精确重试 | 新命令比较明确的授权 ID / 状态；旧 receipt 只证明原请求已处理，不重放权限变更 | 避免旧页面撤销新授权或旧授予请求在撤权后复权 |
 | 实施成本 | 新增 forward-only migration 012、有限 Session API、现有工作台内的配置交互 | 无新依赖、无外部部署调用；须同步 readiness、恢复、投影和 Go / Web 合同 |
 
-以下为推荐的具体合同，确认前均为提议。现有已接受 ADR 与运行代码仍是生效基线。
+项目所有者已确认下列合同；实现与验证按当前状态单独记录，接受本 ADR 不等于实现或验收完成。
 
 ## 对象与权限合同
 
@@ -157,7 +157,7 @@ receipt 命中时先检查当前操作者与环境管理边界，再比较 diges
 
 推荐实施顺序：
 
-1. 所有者确认上方权限、重新授权、迁移与公共 API 范围后，同步领域模型、决策基线和核心契约；本提案阶段不将这些真相源改成已接受。
+1. 按所有者已确认的权限、重新授权、迁移与公共 API 范围，同步领域模型、决策基线和核心契约。
 2. 完成 migration、配置事务 / receipt / Audit、授权代次与 Deployment 账户锁检查；先通过关键数据库竞争和恢复验证。
 3. 接通 Session 发现与管理 API、React 配置入口及 staging 接续，保持真实失败状态可见；运行 Go / Web 定向门禁与 `./scripts/check-repo.sh`。
 4. 更新当前状态与独立实施记录，区分自动化、真实数据库、浏览器和团队使用证据。原生 IME 人工验收仍暂缓；不把本切片完成写为 M0.5 / M1 退出。

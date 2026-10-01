@@ -13,10 +13,14 @@ func (s *Store) ReadConfiguration(ctx context.Context, p authz.Principal, kind, 
 		return o, err
 	}
 	defer rollback(ctx, tx, &err)
-	if _, err = configurationActor(ctx, tx, p); err != nil {
+	owner, actorErr := configurationActor(ctx, tx, p)
+	if actorErr != nil {
+		err = actorErr
 		return o, err
 	}
-	if kind == "project" {
+	if kind == "component" || kind == "environment" {
+		o, err = deliveryConfigurationObject(ctx, tx, p.WorkspaceID, kind, id, owner, false)
+	} else if kind == "project" {
 		o, err = configurationProject(ctx, tx, p, id, false)
 	} else {
 		o, err = configurationChannel(ctx, tx, p, id, false)
@@ -35,6 +39,14 @@ func (s *Store) ListConfiguration(ctx context.Context, p authz.Principal, q gold
 	defer rollback(ctx, tx, &err)
 	owner, err := configurationActor(ctx, tx, p)
 	if err != nil {
+		return page, err
+	}
+	if q.Kind == "components" || q.Kind == "environments" || q.Kind == "environment-authorizations" || q.Kind == "environment-authorization" {
+		page, err = listDeliveryConfiguration(ctx, tx, p, q, owner)
+		if err != nil {
+			return page, err
+		}
+		err = tx.Commit(ctx)
 		return page, err
 	}
 	switch q.Kind {

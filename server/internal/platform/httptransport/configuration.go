@@ -44,7 +44,7 @@ func RegisterConfigurationRoutes(mux *http.ServeMux, discovery, configuration ht
 	}))
 	mux.Handle(configurationBase+"/projects", combined)
 	mux.Handle(configurationBase+"/projects/{project_id}/channels", combined)
-	for _, suffix := range []string{"/teams", "/members", "/projects/{project_id}/configuration", "/projects/{project_id}/members", "/projects/{project_id}/members/{user_id}", "/channels/{channel_id}/configuration", "/channels/{channel_id}/members", "/channels/{channel_id}/members/{user_id}"} {
+	for _, suffix := range []string{"/components", "/components/{component_id}/configuration", "/environments", "/environments/{environment_id}/configuration", "/environments/{environment_id}/deployment-authorizations", "/environments/{environment_id}/deployment-authorizations/{user_id}", "/teams", "/members", "/projects/{project_id}/configuration", "/projects/{project_id}/members", "/projects/{project_id}/members/{user_id}", "/channels/{channel_id}/configuration", "/channels/{channel_id}/members", "/channels/{channel_id}/members/{user_id}"} {
 		mux.Handle(configurationBase+suffix, configuration)
 	}
 }
@@ -53,6 +53,12 @@ func NewConfigurationHandler(sessions MessagingSessionService, application Confi
 	h := &ConfigurationHandler{sessions, application, session, proxy}
 	mux := http.NewServeMux()
 	for _, route := range []struct{ path, methods, kind string }{
+		{"/components", "GET, POST", "components"},
+		{"/components/{component_id}/configuration", "GET", "component"},
+		{"/environments", "GET, POST", "environments"},
+		{"/environments/{environment_id}/configuration", "GET", "environment"},
+		{"/environments/{environment_id}/deployment-authorizations", "GET", "environment-authorizations"},
+		{"/environments/{environment_id}/deployment-authorizations/{user_id}", "GET, PUT, DELETE", "environment-authorization"},
 		{"/teams", "GET, POST", "teams"}, {"/members", "GET", "members"},
 		{"/projects", "POST", "project.create"},
 		{"/projects/{project_id}/configuration", "GET", "project"},
@@ -102,6 +108,15 @@ func (h *ConfigurationHandler) serve(w http.ResponseWriter, r *http.Request, kin
 			return
 		}
 	}
+	for field, prefix := range map[string]string{"component_id": "cmp_", "environment_id": "env_"} {
+		if id := r.PathValue(field); id != "" {
+			if !validScopedID(id, prefix) {
+				writeIdentityError(w, r, authz.ErrInvalid)
+				return
+			}
+			scope = id
+		}
+	}
 	if r.Method == "GET" {
 		h.read(w, r, p, kind, scope)
 		return
@@ -113,6 +128,22 @@ func (h *ConfigurationHandler) serve(w http.ResponseWriter, r *http.Request, kin
 	input := goldenpath.ConfigurationInput{Kind: kind, ScopeID: scope, UserID: r.PathValue("user_id")}
 	fields := []string{"client_operation_id"}
 	switch kind {
+	case "components", "environments":
+		input.Kind = strings.TrimSuffix(kind, "s") + ".create"
+		input.Delivery = &goldenpath.DeliveryConfigurationInput{}
+		fields = append(fields, "key", "name", "owner_team_id")
+		if kind == "components" {
+			fields = append(fields, "type")
+		} else {
+			fields = append(fields, "classification")
+		}
+	case "environment-authorization":
+		input.Kind = "environment.authorization.revoke"
+		if r.Method == "PUT" {
+			input.Kind = "environment.authorization.grant"
+		}
+		input.Delivery = &goldenpath.DeliveryConfigurationInput{}
+		fields = append(fields, "expected_authorization", "confirmed")
 	case "teams":
 		input.Kind = "team.create"
 		fields = append(fields, "name")
@@ -142,6 +173,20 @@ func (h *ConfigurationHandler) serve(w http.ResponseWriter, r *http.Request, kin
 	for key, value := range body {
 		var target any
 		switch key {
+		case "type":
+			target = &input.Delivery.Type
+		case "classification":
+			target = &input.Delivery.Classification
+		case "confirmed":
+			target = &input.Delivery.Confirmed
+		case "expected_authorization":
+			a, e := parseExpectedAuthorization(value)
+			if e != nil {
+				writeIdentityError(w, r, e)
+				return
+			}
+			input.Delivery.ExpectedAuthorization = a
+			continue
 		case "client_operation_id":
 			target = &input.ClientOperationID
 		case "name":
@@ -171,6 +216,10 @@ func (h *ConfigurationHandler) serve(w http.ResponseWriter, r *http.Request, kin
 			writeIdentityError(w, r, authz.ErrInvalid)
 			return
 		}
+	}
+	if kind == "environment-authorization" && !input.Delivery.Confirmed {
+		writeIdentityError(w, r, authz.ErrInvalid)
+		return
 	}
 	result, err := h.application.Configure(r.Context(), webInvocation(p, r), input)
 	if err != nil {
@@ -216,6 +265,9 @@ func configurationObjectDTO(o goldenpath.ConfigurationObject) (any, error) {
 	if !utf8.ValidString(o.Name) || strings.TrimSpace(o.Name) == "" || strings.ContainsRune(o.Name, '\x00') {
 		return nil, invalid
 	}
+	if o.Kind == "component" || o.Kind == "environment" {
+		return deliveryConfigurationDTO(o, true)
+	}
 	if o.Kind == "team" {
 		if !validScopedID(o.ID, "tem_") {
 			return nil, invalid
@@ -250,7 +302,11 @@ func configurationObjectDTO(o goldenpath.ConfigurationObject) (any, error) {
 }
 
 func (h *ConfigurationHandler) read(w http.ResponseWriter, r *http.Request, p authz.Principal, kind, scope string) {
-	if kind == "project" || kind == "channel" {
+	if kind == "environment-authorization" {
+		h.readAuthorization(w, r, p, scope)
+		return
+	}
+	if kind == "project" || kind == "channel" || kind == "component" || kind == "environment" {
 		if r.URL.RawQuery != "" {
 			writeIdentityError(w, r, authz.ErrInvalid)
 			return
@@ -288,7 +344,21 @@ func (h *ConfigurationHandler) read(w http.ResponseWriter, r *http.Request, p au
 	items := []any{}
 	last := input.AfterID
 	invalid := errors.New("invalid configuration list projection")
-	if kind == "teams" {
+	if kind == "components" || kind == "environments" {
+		for _, o := range page.Objects {
+			if o.Kind != strings.TrimSuffix(kind, "s") || o.ID <= last {
+				writeIdentityError(w, r, invalid)
+				return
+			}
+			dto, e := deliveryConfigurationDTO(o, false)
+			if e != nil {
+				writeIdentityError(w, r, e)
+				return
+			}
+			items = append(items, dto)
+			last = o.ID
+		}
+	} else if kind == "teams" {
 		for _, o := range page.Teams {
 			if o.Kind != "team" || o.ID <= last {
 				writeIdentityError(w, r, invalid)
@@ -309,7 +379,14 @@ func (h *ConfigurationHandler) read(w http.ResponseWriter, r *http.Request, p au
 				return
 			}
 			user := map[string]string{"id": m.ID, "display_name": m.Name}
-			if kind == "members" {
+			if kind == "environment-authorizations" {
+				dto, e := authorizationMemberDTO(m, false)
+				if e != nil {
+					writeIdentityError(w, r, e)
+					return
+				}
+				items = append(items, dto)
+			} else if kind == "members" {
 				items = append(items, user)
 			} else {
 				row := map[string]any{"user": user, "eligible": m.Eligible}

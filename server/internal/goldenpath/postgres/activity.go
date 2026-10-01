@@ -26,6 +26,8 @@ type activityEvent struct {
 }
 
 type activityEventPayload struct {
+	Lifecycle            string         `json:"lifecycle"`
+	Classification       string         `json:"classification"`
 	Revision             int            `json:"revision"`
 	RestoredFromRevision *int           `json:"restored_from_revision"`
 	Ticket               *entityref.Ref `json:"ticket"`
@@ -43,7 +45,7 @@ type activityRecord struct {
 	safeFacts map[string]string
 }
 
-// RebuildActivityProjection atomically replaces projection version 1 from
+// RebuildActivityProjection atomically replaces the current projection version from
 // immutable domain event facts. It deliberately does not read Outbox delivery
 // state, so delivery cleanup cannot remove the source needed for a rebuild.
 func (store *Store) RebuildActivityProjection(ctx context.Context) (projected int, err error) {
@@ -67,7 +69,7 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
 		FROM radishnexus.domain_events
 		WHERE event_type IN (
 			'decision.proposed', 'decision.accepted', 'ticket.created',
-			'ci-run.recorded', 'deployment.recorded', 'project.created', 'channel.created', 'document.created', 'document.revised'
+			'ci-run.recorded', 'deployment.recorded', 'project.created', 'channel.created', 'component.created', 'environment.created', 'document.created', 'document.revised'
 		)
 		ORDER BY occurred_at, event_id
 	`)
@@ -200,7 +202,7 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 	if err := json.Unmarshal(event.payload, &payload); err != nil {
 		return activityRecord{}, fmt.Errorf("decode Activity event %s payload: %w", event.eventID, err)
 	}
-	if payload.Status == "" && event.target.Type != "document" {
+	if payload.Status == "" && event.target.Type != "document" && event.eventType != "component.created" {
 		return activityRecord{}, fmt.Errorf("project Activity event %s: status is required", event.eventID)
 	}
 
@@ -210,6 +212,16 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		safeFacts:     map[string]string{"status": payload.Status},
 	}
 	switch event.eventType {
+	case "component.created":
+		if event.target.Type != "component" || payload.Lifecycle != "active" || event.actorKind != "user" || event.actorID == nil {
+			return activityRecord{}, fmt.Errorf("invalid Component creation %s", event.eventID)
+		}
+		record.safeFacts = map[string]string{"lifecycle": payload.Lifecycle}
+	case "environment.created":
+		if event.target.Type != "environment" || payload.Status != "active" || payload.Classification != "staging" || event.actorKind != "user" || event.actorID == nil {
+			return activityRecord{}, fmt.Errorf("invalid Environment creation %s", event.eventID)
+		}
+		record.safeFacts = map[string]string{"status": payload.Status, "classification": payload.Classification}
 	case "document.created", "document.revised":
 		if event.target.Type != "document" || payload.Revision < 1 || event.actorKind != "user" || event.actorID == nil {
 			return activityRecord{}, fmt.Errorf("invalid Document event %s", event.eventID)
