@@ -106,4 +106,4 @@ go run ./cmd/jenkins-delivery -config /run/config/jenkins-sender.json -input /ru
 
 没有 schema 变更。CI Run 与 receipt 按现有备份规则保留，来源配置与密钥不进入数据库或可移植导出；恢复后需重新建立来源授权。禁用配置并重启可以停止新写入，回退服务工件不删除历史记录。
 
-真实 Jenkins controller / agent 已完成成功、失败、取消构建以及 finalized 快照交付，证据与实验边界见[隔离联调记录](../docs/status/reviews/2026-09-26-real-jenkins-lab.md)和[实验操作说明](../experiments/jenkins-lab/README.md)。该批次使用临时接收端和测试数据，不代表持久来源配置或持续采集完成。staging 显式记录另由 [ADR-0031](../docs/adr/0031-session-scoped-staging-deployment-recording.md) 的 Session 入口提供，不是 adapter 的自动行为；Component / Environment 管理页面、授权管理、production 部署、通用插件配置 UI 和默认 Compose Jenkins 服务仍未提供。
+真实 Jenkins controller / agent 已完成成功、失败、取消构建以及 finalized 快照交付，证据与实验边界见[隔离联调记录](../docs/status/reviews/2026-09-26-real-jenkins-lab.md)和[实验操作说明](../experiments/jenkins-lab/README.md)。该批次使用临时接收端和测试数据，不代表持久来源配置或持续采集完成。staging 显式记录另由 [ADR-0031](../docs/adr/0031-session-scoped-staging-deployment-recording.md) 的 Session 入口提供，不是 adapter 的自动行为；Component / staging Environment 最小配置与显式授权管理已按 [ADR-0032](../docs/adr/0032-component-environment-configuration-and-authorization.md) 提供正式页面，创建对象不会自动生成 Jenkins source。production 部署、通用插件配置 UI、持久采集与默认 Compose Jenkins 服务仍未提供。

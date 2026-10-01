@@ -13,7 +13,7 @@
 - 与业务状态同事务写入的不可变领域事件与 Outbox 投递状态；
 - 正式 Component、CI Run 与不可变 inbound delivery receipt schema；
 - 正式 Environment、环境级部署授权与不可变 Deployment schema；
-- 在业务事务内正常更新、并可从领域事件原子重建的 Activity projection version 2；
+- 在业务事务内正常更新、并可从领域事件原子重建的 Activity projection version 3；
 - 为 Thread、Decision、Ticket、Document、CI Run 和 Deployment 返回 Current、Relations 和 Timeline 的权限过滤 Nexus View query；
 - 一次性本地管理员 bootstrap、Argon2id credential、账号锁定、opaque Session、CSRF digest 与当前 Workspace membership resolver；
 - 把已验证 Session 用户转换为 application `Principal` 的认证 adapter；
@@ -136,7 +136,7 @@ go run ./cmd/nexus-identity-migrate --mapping-stdin < /path/to/private-identity-
 
 正式 Web 页面为：
 
-- `/`：Session 检查、首次访问管理员初始化、邮箱登录、邀请兑换、Workspace 选择、Project / Channel 浏览、基础对象与首批成员配置、次级已知 ID 入口和 logout；
+- `/`：Session 检查、首次访问管理员初始化、邮箱登录、邀请兑换、Workspace 选择、Project / Channel 浏览、基础对象与首批成员配置、Component / Environment 配置与环境授权、次级已知 ID 入口和 logout；
 - `/account`：当前账户登录方式、owner 创建邀请码、当前用户接受邀请；
 - `/workspaces/{workspace_id}/ci-runs/{ci_run_id}`：读取正式 CI Run 安全 DTO，查看终态、Component 与完成活动；
 - `/workspaces/{workspace_id}/deployments/{deployment_id}`：先验证 Session，再消费正式 Deployment Nexus View DTO；
@@ -239,7 +239,7 @@ go run ./cmd/nexus-restore --input /path/to/completed-backup-directory
 
 ## 最小 Markdown Document
 
-[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实；Activity projection 升至版本 2，新增事件可全量重建，旧投影不改变原有语义。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。
+[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实；Document 切片将 Activity projection 升至版本 2；当前已由 ADR-0032 扩展为版本 3，新增事件可全量重建，旧投影不改变原有语义。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。
 
 所有端点在 `/api/v1/workspaces/{workspace_id}` 下，要求当前 Session 与 Workspace membership；POST 另要求同源 CSRF。查询返回 `private, no-store`，不能通过引用授予权限。
 

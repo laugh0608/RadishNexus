@@ -47,9 +47,18 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 免费书面授权与评估说明应在邀请外部团队前准备，不能等到完整聊天或 CRDT 完成；版本化结构化导出与全新实例导入仍是 M1 的独立退出条件。账号恢复、安全审计、数据生命周期、数据库最小权限与升级演练按[路线图](../roadmap.md)的试用和生产边界推进，不因本表只列近期切片而取消。
 
+### 明天事项（2026-10-02 接续）
+
+1. 从当前 `dev` 和本页恢复工作，先检查工作区与分支；本地已经包含 PR #12 的 `master` 晋级提交，后续实现为 `0f9d5cf`。本轮未 push，不把本地远程跟踪引用当作实时远端状态。
+2. 建议先提出 **Repository 最小映射与 Component 关联** 的下一窄切片：核对领域模型、实体注册、EntityLink 和 Jenkins source 绑定，明确外部稳定身份、URL 安全、默认分支、关联基数、当前权限、创建 / 发现入口与 Audit / receipt。先形成可审阅范围及迁移影响，不把 Repository 等同于 Jenkins source，也不自动进入完整 Git 托管或插件平台。
+3. 上述范围确认后再实施。Ticket ↔ Component / 交付关系、持久终态采集分别推进；保留“新配置对象 → 真实 Jenkins → 浏览器记录 staging → 撤权后阻止新记录 / 历史仍可读”的整链验收缺口，届时以明确授权的隔离实例和真实外部终态验证。
+4. 原生中文 IME 人工验收继续暂缓。业务迁移、服务启动、外部写入、依赖和远程操作沿当前任务授权执行；明天事项只记录建议，不创建自动任务或启动下一切片。
+
+当日提交回顾与文档审阅见[收尾记录](reviews/2026-10-01-daily-closeout.md)。
+
 ### 本轮完成：最小配置与环境授权
 
-2026-10-01 从 `efa002b`（PR #12 合并）开始，本地 `dev` / `master` 与远程跟踪引用当时一致，本轮未 fetch 或核验远端设置。所有者要求提交提案并批准实施，提案已提交为 `a206be5`。以下 9 月 26 日记录中的“未 push”保留当时含义。
+2026-10-01 从 `efa002b`（PR #12 合并）开始，本地 `dev` / `master` 与远程跟踪引用当时一致，本轮未 fetch 或核验远端设置。所有者要求提交提案并批准实施，提案已提交为 `a206be5`，实现已提交为 `0f9d5cf`。以下 9 月 26 日记录中的“未 push”保留当时含义。
 
 [ADR-0032](../adr/0032-component-environment-configuration-and-authorization.md) 已接受并实现：owner 正式创建 Component / staging Environment，成员发现对象，owner 显式授予、撤销、重新授予记录权。migration 012 保存不可变授权代次和旧 Deployment 来源；配置成功 Audit / receipt、创建事件与 Activity v3 同步落地。创建对象、owner Team 和 Project 角色均不隐式授予部署权。
 
@@ -114,6 +123,8 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
 
 ## 证据与历史
+
+- [2026-10-01 提交回顾与文档收尾](reviews/2026-10-01-daily-closeout.md)：当日四笔提交、源码对应文档修正与 10 月 2 日接续建议。
 
 - [2026-10-01 组件、环境与授权管理](reviews/2026-10-01-delivery-configuration.md)：migration 012、不可变授权代次、正式配置、并发 / 恢复与浏览器证据。
 
