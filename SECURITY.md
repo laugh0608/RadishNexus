@@ -10,7 +10,7 @@ GitHub 远端已经启用 Private vulnerability reporting。请优先通过以�
 
 https://github.com/laugh0608/RadishNexus/security/advisories/new
 
-若 GitHub 私密报告入口暂时不可用，可发送邮件至 `laugh0608@foxmail.com`，主题包含 `[RadishNexus Security]`。不要因为入口不可用而改用公开 Issue、Pull Request 或讨论披露漏洞细节。
+若 GitHub 私密报告入口暂时不可用，可发送邮件至 `luobo@radishx.com`，主题包含 `[RadishNexus Security]`。不要因为入口不可用而改用公开 Issue、Pull Request 或讨论披露漏洞细节。
 
 报告应尽量包含：
 
