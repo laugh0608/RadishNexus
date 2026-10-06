@@ -85,21 +85,23 @@ INSERT INTO radishnexus.workspace_configuration_audit(id,workspace_id,actor_id,c
 	if err = conn.QueryRow(ctx, `SELECT to_jsonb(a)::text FROM radishnexus.environment_deployment_authorizations a WHERE id='dpa_old'`).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	// First establish the exact previous release schema, then prove 012 -> 013
+	// First establish the exact previous release schema, then prove 013 -> 014
 	// preserves its authoritative configuration evidence and rejects old binaries.
-	if err = applyMigration(ctx, conn, migrations[11]); err != nil {
-		t.Fatal(err)
+	for _, m := range migrations[11:13] {
+		if err = applyMigration(ctx, conn, m); err != nil {
+			t.Fatal(err)
+		}
 	}
-	oldChecker := &ReadinessChecker{database: conn, expected: migrations[:12]}
+	oldChecker := &ReadinessChecker{database: conn, expected: migrations[:13]}
 	if err = oldChecker.CheckReady(ctx); err != nil {
-		t.Fatal("012 not ready", err)
+		t.Fatal("013 not ready", err)
 	}
 	newChecker, err := NewReadinessChecker(conn)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = newChecker.CheckReady(ctx); err == nil {
-		t.Fatal("new binary accepted 012")
+		t.Fatal("new binary accepted 013")
 	}
 	var oldAudit, oldReceipt, oldActivity string
 	if err = conn.QueryRow(ctx, `SELECT to_jsonb(a)::text FROM radishnexus.workspace_configuration_audit a WHERE id='cfa_old'`).Scan(&oldAudit); err != nil {
@@ -108,17 +110,17 @@ INSERT INTO radishnexus.workspace_configuration_audit(id,workspace_id,actor_id,c
 	if err = conn.QueryRow(ctx, `SELECT to_jsonb(r)::text FROM radishnexus.workspace_configuration_receipts r WHERE audit_id='cfa_old'`).Scan(&oldReceipt); err != nil {
 		t.Fatal(err)
 	}
-	if err = conn.QueryRow(ctx, `SELECT (to_jsonb(a)-'projection_version')::text FROM radishnexus.activity_items a WHERE event_id='evt_old' AND projection_version=3`).Scan(&oldActivity); err != nil {
+	if err = conn.QueryRow(ctx, `SELECT (to_jsonb(a)-'projection_version')::text FROM radishnexus.activity_items a WHERE event_id='evt_old' AND projection_version=4`).Scan(&oldActivity); err != nil {
 		t.Fatal(err)
 	}
 	if err = Migrate(ctx, conn); err != nil {
 		t.Fatal(err)
 	}
 	if err = newChecker.CheckReady(ctx); err != nil {
-		t.Fatal("013 not ready", err)
+		t.Fatal("014 not ready", err)
 	}
 	if err = oldChecker.CheckReady(ctx); err == nil {
-		t.Fatal("old binary accepted 013")
+		t.Fatal("old binary accepted 014")
 	}
 	for _, item := range []struct{ sql, want string }{
 		{`SELECT to_jsonb(a)::text FROM radishnexus.workspace_configuration_audit a WHERE id='cfa_old'`, oldAudit},
@@ -127,7 +129,7 @@ INSERT INTO radishnexus.workspace_configuration_audit(id,workspace_id,actor_id,c
 	} {
 		var got string
 		if err = conn.QueryRow(ctx, item.sql).Scan(&got); err != nil || got != item.want {
-			t.Fatal("013 rewrote legacy evidence", err)
+			t.Fatal("014 rewrote legacy evidence", err)
 		}
 	}
 	var mapped int

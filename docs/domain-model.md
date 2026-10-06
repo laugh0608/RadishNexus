@@ -132,6 +132,8 @@ M0 最小字段：
 
 首期只需维护最小元数据和引用，不建设完整内部开发者门户或复杂依赖拓扑。
 
+Ticket 与 Component 的 `affects` 关系按 [ADR-0034](adr/0034-ticket-component-relations.md) 表达人工确认的涉及范围。多对多关系要求 Ticket 当前 Project 的协作权限，owner 不越过该边界；反向发现逐 Ticket 授权。新关联允许 planned / active / deprecated，retired 只保留读取与解除。解除精确指向旧 EntityLink，重连追加新记录，关系变化不改 Ticket 状态或证明代码已交付。
+
 ### Repository
 
 外部 Git 代码库的受控映射。RadishNexus 不托管 Git。首批合同见 [ADR-0033](adr/0033-repository-mapping-and-component-relations.md)：`repository / rep_` 归属 Workspace，保存 name、provider、HTTPS provider origin、稳定外部 ID、同 origin 浏览 URL 和人工登记的默认分支。身份由 `(workspace, provider, provider_origin, external_id)` 唯一确定；首批不开放元数据修改或删除。凭据属于插件或集成 Secrets，不属于普通业务字段。
@@ -303,7 +305,7 @@ removal_reason
 - `source-repository`：Component 明确关联 Repository（ADR-0033 已实现）；
 - `built-from`：CI Run 来源于 Repository commit；
 - `deploys`：Deployment 发布某构建或制品；
-- `affects`：Incident 或 Ticket 影响某 Component；
+- `affects`：Ticket 人工确认涉及 Component（ADR-0034 已实现）；Incident 方向尚未实现；
 - `supersedes`：新 Decision 替代旧 Decision。
 
 关系必须保留来源和建立时间。插件推导的关系与用户明确建立的关系要能区分，避免自动化结果被误认为人工确认事实。

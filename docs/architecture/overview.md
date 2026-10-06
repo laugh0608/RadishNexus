@@ -148,7 +148,7 @@ entity://environment/env_002
 
 引用必须经过原对象权限检查。能够看到工单不表示自动获得关联私密频道或文档的读取权。
 
-类型注册、结构化表示、Workspace 解析和受限占位的 M0 基线见[核心实体、授权与事件契约](core-contracts.md)。Thread、Decision、Ticket 的首段 Project 作用域与物理 schema 已由 ADR-0004、ADR-0005 和正式 migration 落地；Component、CI Run 的来源与读取边界已由 ADR-0006、ADR-0007 和 migration 003 落地；Environment、显式 staging Deployment、环境级写授权与安全读取已由 ADR-0009、ADR-0011 和 migration 004 落地；Channel、Message 与 messaging-origin Thread 的最小身份、来源、权限和幂等边界已由 ADR-0017 与 migration 006 落地；Thread → Decision → Ticket 的 Session transport、人工确认和命令 receipt 已由 ADR-0019 与 migration 007 落地。Document 的 `document / doc_` 身份、Project 读取边界、不可变 Markdown revision 和公共读写合同已由 [ADR-0028](../adr/0028-minimal-markdown-document.md) 落实到正式注册表、migration 010、Go HTTP 与 React 页面，文档与不可变版本纳入权威备份。具体 ID 生成算法及 Repository 等其余对象 schema 仍未冻结。
+类型注册、结构化表示、Workspace 解析和受限占位的 M0 基线见[核心实体、授权与事件契约](core-contracts.md)。Thread、Decision、Ticket 的首段 Project 作用域与物理 schema 已由 ADR-0004、ADR-0005 和正式 migration 落地；Component、CI Run 的来源与读取边界已由 ADR-0006、ADR-0007 和 migration 003 落地；Environment、显式 staging Deployment、环境级写授权与安全读取已由 ADR-0009、ADR-0011 和 migration 004 落地；Channel、Message 与 messaging-origin Thread 的最小身份、来源、权限和幂等边界已由 ADR-0017 与 migration 006 落地；Thread → Decision → Ticket 的 Session transport、人工确认和命令 receipt 已由 ADR-0019 与 migration 007 落地。Document 的 `document / doc_` 身份、Project 读取边界、不可变 Markdown revision 和公共读写合同已由 [ADR-0028](../adr/0028-minimal-markdown-document.md) 落实到正式注册表、migration 010、Go HTTP 与 React 页面，文档与不可变版本纳入权威备份。Repository 映射由 ADR-0033 与 migration 013 冻结；具体 ID 生成算法及其余对象 schema 仍未冻结。
 
 CI Run 的 Session 公共读取合同见 [ADR-0029](../adr/0029-session-scoped-ci-run-nexus-view.md)，外部终态写入的受控来源、签名与重放边界见 [ADR-0030](../adr/0030-authenticated-jenkins-delivery-adapter.md)。Jenkins adapter 验证后调用既有 service，不承担 Deployment 确认或用户授权，也不要求 Nexus 默认自部署拓扑启动 Jenkins。成功 CI Run 的 staging 记录按 [ADR-0031](../adr/0031-session-scoped-staging-deployment-recording.md) 通过独立 Session 命令和显式环境授权完成；migration 011 扩展既有 receipt，精确重试与当前权限复核共用唯一业务事务。
 
@@ -283,3 +283,5 @@ RadishNexus/
 ```
 
 未来 SDK 和插件目录必须拥有独立许可证，不能因位于同一仓库而模糊授权边界；`deploy/` 只承载已经冻结且可复验的部署工件，不提前放置高可用、Kubernetes 或公网生产占位结构。
+
+Ticket 与 Component 已按 [ADR-0034](../adr/0034-ticket-component-relations.md) 接通人工 `affects` 关系、Project 权限与双向读取。独立关系 service 复用协作 receipt 和业务事务，migration 014 与 Activity v5 配套升级；组件页仅汇集当前可读关系，不从共属组件推导 Ticket 已交付。

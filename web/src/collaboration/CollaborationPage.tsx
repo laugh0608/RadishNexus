@@ -1,6 +1,8 @@
+import { TicketComponents } from "./TicketComponents";
+import { componentPagePath } from "./ticket-component-api";
 import { CreateDocument } from "../document/DocumentPage";
 import { documentPath } from "../document/api";
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { channelPagePath } from "../channel/api";
 import {
   CollaborationRequestError,
@@ -105,6 +107,17 @@ export function CollaborationPage({
     return () => controller.abort();
   }, [client, entityID, entityType, onSessionExpired, reloadKey, workspaceID]);
 
+  const relationChanged = useCallback(() => setReloadKey((k) => k + 1), []);
+  const relationUnavailable = useCallback(
+    () =>
+      setState({ status: "error", message: "当前权限已变化，请重新读取。" }),
+    [],
+  );
+  useEffect(() => {
+    const refresh = () => setReloadKey((k) => k + 1);
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, []);
   const revokeVisibleState = (error: unknown): boolean => {
     if (isExpiredSession(error)) {
       onSessionExpired();
@@ -354,6 +367,16 @@ export function CollaborationPage({
 
       <section className="collaboration-columns">
         <div className="collaboration-context">
+          {entityType === "ticket" ? (
+            <TicketComponents
+              workspaceID={workspaceID}
+              ticketID={entityID}
+              ticketTitle={"title" in current ? current.title : ""}
+              onSessionExpired={onSessionExpired}
+              onChanged={relationChanged}
+              onUnavailable={relationUnavailable}
+            />
+          ) : null}
           <section
             className="collaboration-panel"
             aria-labelledby="relations-title"
@@ -378,7 +401,7 @@ export function CollaborationPage({
               </div>
               <span className="panel-count">{timeline.length}</span>
             </div>
-            <TimelineList timeline={timeline} />
+            <TimelineList workspaceID={workspaceID} timeline={timeline} />
           </section>
         </div>
 
@@ -680,29 +703,35 @@ function RelationLink({
 }) {
   const target = relation.target.ref;
   const href =
-    target.type === "document"
-      ? documentPath(workspaceID, target.id)
-      : target.type === "channel"
-        ? channelPagePath(workspaceID, target.id)
-        : target.type === "thread" ||
-            target.type === "decision" ||
-            target.type === "ticket"
-          ? collaborationPagePath(workspaceID, target.type, target.id)
-          : null;
+    target.type === "component"
+      ? componentPagePath(workspaceID, target.id)
+      : target.type === "document"
+        ? documentPath(workspaceID, target.id)
+        : target.type === "channel"
+          ? channelPagePath(workspaceID, target.id)
+          : target.type === "thread" ||
+              target.type === "decision" ||
+              target.type === "ticket"
+            ? collaborationPagePath(workspaceID, target.type, target.id)
+            : null;
   return href === null ? null : (
     <a href={href}>
-      {target.type === "document"
-        ? "打开关联文档"
-        : relation.direction === "incoming"
-          ? "打开后续对象"
-          : "打开来源对象"}
+      {target.type === "component"
+        ? "打开关联组件"
+        : target.type === "document"
+          ? "打开关联文档"
+          : relation.direction === "incoming"
+            ? "打开后续对象"
+            : "打开来源对象"}
     </a>
   );
 }
 
 function TimelineList({
+  workspaceID,
   timeline,
 }: {
+  workspaceID: string;
   timeline: readonly CollaborationTimelineItem[];
 }) {
   if (timeline.length === 0) {
@@ -721,9 +750,25 @@ function TimelineList({
           </time>
           <strong>{item.activityType}</strong>
           <span>
-            {item.actor.id} · {item.status}
+            {item.actor.id} ·{" "}
+            {"relationState" in item
+              ? item.relationState === "active"
+                ? "已关联组件"
+                : "已解除组件关联"
+              : item.status}
           </span>
           <SubjectSummary subjects={item.subjects} />
+          {item.subjects.map((subject) =>
+            subject.visibility === "readable" &&
+            subject.entity.ref.type === "component" ? (
+              <a
+                key={subject.entity.ref.id}
+                href={componentPagePath(workspaceID, subject.entity.ref.id)}
+              >
+                打开组件 {subject.entity.title}
+              </a>
+            ) : null,
+          )}
         </li>
       ))}
     </ol>

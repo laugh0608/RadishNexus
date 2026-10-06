@@ -157,7 +157,7 @@ func run() error {
 	}
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler, setupHandler, documentHandler, httptransport.NewCIRunNexusViewHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), jenkinsHandler, httptransport.NewStagingDeploymentHandler(authService, nexusViewService, sessionPolicy, proxyPolicy)),
+		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler, setupHandler, documentHandler, httptransport.NewCIRunNexusViewHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), jenkinsHandler, httptransport.NewStagingDeploymentHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), httptransport.NewTicketComponentHandler(authService, goldenpath.NewTicketComponentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -235,6 +235,9 @@ func newHandler(
 	if len(identityHandler) >= 1 {
 		mux.Handle("/api/v1/workspaces/{workspace_id}/invitations", identityHandler[0])
 		mux.Handle("/auth/complete", identityHandler[0])
+	}
+	if len(identityHandler) >= 8 {
+		httptransport.RegisterTicketComponentRoutes(mux, identityHandler[7])
 	}
 	if len(identityHandler) >= 7 {
 		httptransport.RegisterStagingDeploymentRoutes(mux, identityHandler[6])

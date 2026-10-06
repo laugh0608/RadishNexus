@@ -13,7 +13,7 @@
 - 与业务状态同事务写入的不可变领域事件与 Outbox 投递状态；
 - 正式 Component、CI Run 与不可变 inbound delivery receipt schema；
 - 正式 Environment、环境级部署授权与不可变 Deployment schema；
-- 在业务事务内正常更新、并可从领域事件原子重建的 Activity projection version 4；
+- 在业务事务内正常更新、并可从领域事件原子重建的 Activity projection version 5；
 - 为 Thread、Decision、Ticket、Document、CI Run 和 Deployment 返回 Current、Relations 和 Timeline 的权限过滤 Nexus View query；
 - 一次性本地管理员 bootstrap、Argon2id credential、账号锁定、opaque Session、CSRF digest 与当前 Workspace membership resolver；
 - 把已验证 Session 用户转换为 application `Principal` 的认证 adapter；
@@ -239,7 +239,7 @@ go run ./cmd/nexus-restore --input /path/to/completed-backup-directory
 
 ## 最小 Markdown Document
 
-[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实；Document 切片将 Activity projection 升至版本 2；当前已由 ADR-0033 扩展为版本 4，新增事件可全量重建，旧投影不改变原有语义。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。
+[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实；Document 切片将 Activity projection 升至版本 2；当前已由 ADR-0034 扩展为版本 5，新增事件可全量重建，旧投影不改变原有语义。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。
 
 所有端点在 `/api/v1/workspaces/{workspace_id}` 下，要求当前 Session 与 Workspace membership；POST 另要求同源 CSRF。查询返回 `private, no-store`，不能通过引用授予权限。
 
@@ -305,3 +305,17 @@ Session API 位于 `/api/v1/workspaces/{workspace_id}`：
 请求复用严格 JSON、CSRF、当前权限与绑定作用域游标；失去可发现性返回 404，缺 owner 写权限为 403，身份 / active 关系 / receipt 冲突为 409。provider origin 与浏览 URL 使用同一规范化规则，拒绝凭据、query、fragment、歧义路径和非 HTTPS；服务端不访问 URL。共享 DTO 不包含 Audit、receipt 或 Secret。
 
 migration 013 新增 `repositories`、关系来源和唯一性约束、Audit / receipt 白名单及 provenance 校验；旧命令摘要保持不变。Activity v4 同事务记录创建、关联与解除，Repository 表纳入权威备份。升级须配套 Go / Web；只读 readiness 拒绝旧二进制 / schema 不匹配。验收覆盖 012 升级、并发撤权、事务故障、重建与全新目标恢复，具体见[实施记录](../docs/status/reviews/2026-10-06-repository-mapping.md)。
+
+## Ticket 与 Component 人工关联
+
+[ADR-0034](../docs/adr/0034-ticket-component-relations.md) 由独立 `TicketComponentService` 复用 EntityLink、协作 receipt、事件与 Outbox。Ticket 所属 active Project 的 contributor / decider / admin 可关联或精确解除；Workspace owner 不绕过 Project。新关联拒绝 retired Component，解除允许所有生命周期；原请求重试重新检查当前权限，不能复活旧关系或解除重连后的新关系。
+
+Session API 位于 `/api/v1/workspaces/{workspace_id}`：
+
+- `GET /tickets/{ticket_id}/components` 与 `POST /tickets/{ticket_id}/components`；
+- `DELETE /tickets/{ticket_id}/component-links/{link_id}`；
+- `GET /components/{component_id}/tickets`。
+
+写入要求 `client_operation_id` 与 `confirmed=true`，关联另带 `component_id`；严格 JSON 上限 8 KiB。返回 `{link_id,applied:true}`，首次关联 201、重试及解除 200。关系列表默认 25、最大 50，按目标 ID 排序，反向先过滤当前不可读 Ticket，再占页配额和生成作用域游标；不返回隐藏目标或总数。Ticket 列表返回 `capabilities.can_link`，各项包含 `can_unlink`。
+
+migration 014 增加 `ticket --affects--> component`、来源约束、active 唯一 / 反向索引与精确协作 receipt 来源校验。Activity v5 只把两类关系事件投影到 Ticket，字段为 `relation_state`，不改 Ticket `status`、来源 Decision 或更新时间。关系、receipt、事件、Outbox、Activity 同事务；恢复权威表后显式重建投影。Go / schema / Web 配套升级，旧二进制 readiness 拒绝新 schema。

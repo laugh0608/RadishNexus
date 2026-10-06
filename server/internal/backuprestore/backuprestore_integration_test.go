@@ -23,6 +23,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
 
 func TestBackupRestoreGoldenPath(t *testing.T) {
@@ -70,6 +71,21 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	}
 	regrantBackupAuthorization(t, ctx, sourcePool, "dpa_backup", 2)
 	repositoryInputs, repositoryResults := seedBackupRepository(t, ctx, sourcePool, configurationInvocation)
+	tcService := goldenpath.NewTicketComponentService(goldenpostgres.New(sourcePool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	tcInputs := []goldenpath.TicketComponentInput{{TicketID: ticketID, ComponentID: "cmp_backup", ClientOperationID: "backup-tc-link", Confirmed: true}}
+	tcKinds := []string{"ticket.component.link", "ticket.component.unlink", "ticket.component.link"}
+	tcResults := []goldenpath.TicketComponentResult{}
+	for i, kind := range tcKinds {
+		r, e := tcService.WriteTicketComponent(ctx, documentInvocation, kind, tcInputs[i])
+		if e != nil {
+			t.Fatal(e)
+		}
+		tcResults = append(tcResults, r)
+		if i == 0 {
+			tcInputs = append(tcInputs, goldenpath.TicketComponentInput{TicketID: ticketID, LinkID: r.LinkID, ClientOperationID: "backup-tc-unlink", Confirmed: true}, goldenpath.TicketComponentInput{TicketID: ticketID, ComponentID: "cmp_backup", ClientOperationID: "backup-tc-relink", Confirmed: true})
+		}
+	}
+
 	if got := snapshotTable(t, ctx, sourcePool, "radishnexus.user_sessions"); got == "[]" {
 		t.Fatal("source user session fixture is empty")
 	}
@@ -78,8 +94,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rebuild source Activity projection: %v", err)
 	}
-	if projected != 12 {
-		t.Fatalf("source Activity rows = %d, want 12", projected)
+	if projected != 15 {
+		t.Fatalf("source Activity rows = %d, want 15", projected)
 	}
 	sourceSnapshot := snapshotIncludedTables(t, ctx, sourcePool)
 	sourceActivity := snapshotTable(t, ctx, sourcePool, "radishnexus.activity_items")
@@ -181,6 +197,17 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if e != nil || len(repositoryLinks.Links) != 1 || repositoryLinks.Links[0].ID != repositoryResults[3].LinkID {
 		t.Fatal("old restored receipts changed active relation", repositoryLinks, e)
 	}
+	restoredTC := goldenpath.NewTicketComponentService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	for i, kind := range tcKinds {
+		r, e := restoredTC.WriteTicketComponent(ctx, documentInvocation, kind, tcInputs[i])
+		if e != nil || r.Created || r.LinkID != tcResults[i].LinkID {
+			t.Fatal("restored Ticket Component receipt drift", i, r, e)
+		}
+	}
+	tcPage, e := restoredTC.ListTicketComponents(ctx, documentInvocation.Principal, entityref.Ref{Type: "ticket", ID: ticketID}, goldenpath.DiscoveryPageInput{Limit: 25})
+	if e != nil || len(tcPage.Links) != 1 || tcPage.Links[0].ID != tcResults[2].LinkID {
+		t.Fatal("restored old operation changed active relation", tcPage, e)
+	}
 	restoredSetup, err := authn.NewSetupService(nil, authpostgres.New(targetPool), "")
 	if err != nil {
 		t.Fatal(err)
@@ -228,8 +255,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rebuild target Activity projection: %v", err)
 	}
-	if projected != 12 {
-		t.Fatalf("target Activity rows = %d, want 12", projected)
+	if projected != 15 {
+		t.Fatalf("target Activity rows = %d, want 15", projected)
 	}
 	if targetActivity := snapshotTable(t, ctx, targetPool, "radishnexus.activity_items"); targetActivity != sourceActivity {
 		t.Fatalf("rebuilt Activity differs\nsource: %s\ntarget: %s", sourceActivity, targetActivity)

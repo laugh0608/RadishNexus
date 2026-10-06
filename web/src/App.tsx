@@ -1,6 +1,8 @@
 import { CIRunPage } from "./nexus-view/CIRunPage";
 import { ciRunLocation, ciRunPagePath } from "./nexus-view/ci-run-api";
 import { WorkbenchShell } from "./WorkbenchShell";
+import { ComponentPage } from "./workspace/ComponentPage";
+import { componentLocation } from "./collaboration/ticket-component-api";
 import { DocumentPage, DocumentList } from "./document/DocumentPage";
 import { documentLocation } from "./document/api";
 import { AppHeader } from "./AppHeader";
@@ -63,6 +65,7 @@ type AppRoute =
       documentID: string | null;
       projectID: string | null;
     }
+  | { kind: "component"; workspaceID: string; componentID: string }
   | { kind: "prototype" }
   | { kind: "ci-run"; workspaceID: string; ciRunID: string }
   | { kind: "deployment"; workspaceID: string; deploymentID: string }
@@ -152,6 +155,8 @@ function appRoute(pathname: string): AppRoute {
   if (pathname === "/prototype/nexus-view") {
     return { kind: "prototype" };
   }
+  const component = componentLocation(pathname);
+  if (component) return { kind: "component", ...component };
   const doc = documentLocation(pathname);
   if (doc) return { kind: "document", ...doc };
   const ciRun = ciRunLocation(pathname);
@@ -466,6 +471,16 @@ function SignedInShell({
           session={session}
           navigate={navigate}
           client={discoveryClient}
+          onSessionExpired={onSignedOut}
+        />
+      ) : route.kind === "component" ? (
+        <ComponentPage
+          key={`${route.workspaceID}/${route.componentID}`}
+          workspaceID={route.workspaceID}
+          componentID={route.componentID}
+          workspaceName={currentWorkspace?.name ?? route.workspaceID}
+          isOwner={currentWorkspace?.role === "owner"}
+          userID={session.user.id}
           onSessionExpired={onSignedOut}
         />
       ) : route.kind === "ci-run" ? (

@@ -85,7 +85,7 @@ Document 默认集中阅读，来源 Ticket 保留标题下入口；信息展开
 
 `nexus-view/ci-run-api.ts` 校验 [ADR-0029](../docs/adr/0029-session-scoped-ci-run-nexus-view.md) 的字段白名单、终态、受控时间和一致的 Component / Timeline，并消费同源无缓存 GET。`CIRunPage.tsx` 复用已登录工作台与 Nexus View 组件，提供主动重读、失败重试、焦点复权、401 退出与 404 清空；取消或迟到响应不能覆盖更新后的视图。空开始时间显示“未提供”。
 
-正式路径为 `/workspaces/{workspace_id}/ci-runs/{ci_run_id}`。首页次级 ID 工具支持 `cir_`，Deployment 页可跳转来源 CI Run；Component 本身尚无正式页面，不制造无效跳转。页面说明构建成功不代表已经部署，不公开 Jenkins 外部地址；成功构建的显式记录入口见下节，失败 / 取消构建不提供该动作。静态代表数据仍只服务原型和测试。
+正式路径为 `/workspaces/{workspace_id}/ci-runs/{ci_run_id}`。首页次级 ID 工具支持 `cir_`，Deployment 页可跳转来源 CI Run；Component 稳定详情入口见下方“Ticket 与组件关联”。页面说明构建成功不代表已经部署，不公开 Jenkins 外部地址；成功构建的显式记录入口见下节，失败 / 取消构建不提供该动作。静态代表数据仍只服务原型和测试。
 
 ## staging 部署结果记录
 
@@ -108,3 +108,9 @@ Document 默认集中阅读，来源 Ticket 保留标题下入口；信息展开
 `RepositoryConfigurationPanel.tsx` 在既有配置区提供 owner 创建映射、Component 选择分页仓库、两端跳转与明确解除。`repository-configuration-api.ts` 严格校验安全 DTO、同源 HTTPS 外链及关系 ID；外链仅在用户点击时打开，使用 `noopener noreferrer` 和 `no-referrer`。
 
 写结果未知时保留原 payload 与 operation，冻结输入供精确重试；焦点刷新不会丢弃待确认关联或把旧解除请求改指新关系。成功后重新读取权威状态。Workspace / 对象切换和失权清理相应状态，迟到响应被丢弃。成员仅共享读取元数据，不获得配置或外部仓库访问权。合同见 [ADR-0033](../docs/adr/0033-repository-mapping-and-component-relations.md)，验证见[实施记录](../docs/status/reviews/2026-10-06-repository-mapping.md)。
+
+## Ticket 与组件关联
+
+`collaboration/TicketComponents.tsx` 在 Ticket 页提供涉及组件、分页候选与人工确认的关联 / 精确解除；`ticket-component-api.ts` 严格校验关系、能力、摘要与原请求结果。关系事件以独立 `relationState` 展示，不借用 Ticket 状态。成功刷新原 Relations 和 Timeline，网络结果未知时保留同一 payload / operation 供显式重试。
+
+组件地址为 `/workspaces/{workspace_id}/components/{component_id}`，由 `workspace/ComponentPage.tsx` 复用现有配置详情、Repository 关系和反向 Ticket 分页；首页及 Ticket 关系使用稳定链接，反向 Ticket 只显示当前可读项。新关联禁选 retired Component；失去 Project 写权限后关闭表单但保留可读上下文，失去端点读取权则清空。待解除关系独立保留旧 link ID，并在焦点恢复时复核当前 Ticket 能力，不把旧请求改指新一代关系。合同见 [ADR-0034](../docs/adr/0034-ticket-component-relations.md)。

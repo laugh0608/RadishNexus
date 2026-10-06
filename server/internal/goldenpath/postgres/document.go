@@ -33,7 +33,7 @@ func documentProject(ctx context.Context, tx pgx.Tx, p authz.Principal, project 
 	}
 	return nil
 }
-func documentScope(ctx context.Context, tx pgx.Tx, p authz.Principal, kind, id string) (string, error) {
+func projectEntityScope(ctx context.Context, tx pgx.Tx, p authz.Principal, kind, id string) (string, error) {
 	table := "radishnexus.documents"
 	if kind == "ticket" {
 		table = "radishnexus.tickets"
@@ -59,7 +59,7 @@ func (s *Store) WriteDocument(ctx context.Context, c goldenpath.DocumentCommand)
 	if c.Kind == "document.create" {
 		targetType = "ticket"
 	}
-	project, err := documentScope(ctx, tx, c.Principal, targetType, c.TargetID)
+	project, err := projectEntityScope(ctx, tx, c.Principal, targetType, c.TargetID)
 	if err != nil {
 		return result, err
 	}
@@ -162,7 +162,7 @@ func (s *Store) ReadDocument(ctx context.Context, p authz.Principal, id string, 
 		return view, err
 	}
 	defer rollback(ctx, tx, &err)
-	project, err := documentScope(ctx, tx, p, "document", id)
+	project, err := projectEntityScope(ctx, tx, p, "document", id)
 	if err != nil {
 		return view, err
 	}
@@ -253,7 +253,7 @@ func (s *Store) ListDocumentRevisions(ctx context.Context, p authz.Principal, id
 		return page, err
 	}
 	defer rollback(ctx, tx, &err)
-	project, err := documentScope(ctx, tx, p, "document", id)
+	project, err := projectEntityScope(ctx, tx, p, "document", id)
 	if err != nil {
 		return page, err
 	}

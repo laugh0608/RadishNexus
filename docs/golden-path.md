@@ -18,7 +18,7 @@ Golden Path 用最薄的可运行产品验证 RadishNexus 的核心价值，而�
 2. Thread 中形成结论，并创建一个 Proposed Decision；
 3. 决策人补充理由后将 Decision 标记为 Accepted；
 4. 从该 Decision 创建一个 Ticket，不复制原始讨论正文；
-5. Ticket 关联 `auth-service` Component 和设计 Document；
+5. Ticket 关联 `auth-service` Component 和设计 Document（人工组件关联已按 [ADR-0034](adr/0034-ticket-component-relations.md) 接通，不表示该 Ticket 已进入某次构建或部署）；
 6. Jenkins Webhook 写入一次 CI Run，并在原 Thread 与 Ticket 中显示状态；
 7. 成功构建后，持有目标 Environment 显式授权的成员通过受控操作记录一次到 `staging` 的 Deployment；
 8. 打开任意对象的 Nexus View，都能看到当前状态、关系和完整时间线；

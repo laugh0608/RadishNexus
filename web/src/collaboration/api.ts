@@ -63,7 +63,11 @@ export type CollaborationRelation =
       visibility: "readable";
       direction: "outgoing" | "incoming";
       relationType:
-        "started-from" | "derived-from" | "implements" | "relates-to";
+        | "started-from"
+        | "derived-from"
+        | "implements"
+        | "relates-to"
+        | "affects";
       target: VisibleEntity;
     };
 
@@ -71,14 +75,24 @@ export type CollaborationSubject =
   | { visibility: "restricted" }
   | { visibility: "readable"; entity: VisibleEntity };
 
-export interface CollaborationTimelineItem {
+interface TimelineBase {
   id: string;
-  activityType: "decision.proposed" | "decision.accepted" | "ticket.created";
   actor: UserActor;
   occurredAt: string;
-  status: "proposed" | "accepted" | "open";
   subjects: readonly CollaborationSubject[];
 }
+export type CollaborationTimelineItem = TimelineBase &
+  (
+    | {
+        activityType:
+          "decision.proposed" | "decision.accepted" | "ticket.created";
+        status: "proposed" | "accepted" | "open";
+      }
+    | {
+        activityType: "ticket.component-linked" | "ticket.component-unlinked";
+        relationState: "active" | "removed";
+      }
+  );
 
 export interface CollaborationView<
   T extends CollaborationCurrent = CollaborationCurrent,
@@ -175,6 +189,7 @@ const entityPrefixes: Readonly<Record<string, string>> = {
   decision: "dec_",
   ticket: "tkt_",
   document: "doc_",
+  component: "cmp_",
 };
 
 const pageSegments: Readonly<Record<CollaborationEntityType, string>> = {
@@ -615,6 +630,21 @@ function parseRelation(
       relationType: "relates-to",
       target: parseVisibleEntity(relation.target, `${path}.target`, "document"),
     };
+  if (
+    expectedType === "ticket" &&
+    direction === "outgoing" &&
+    relation.relation_type === "affects"
+  )
+    return {
+      visibility: "readable",
+      direction,
+      relationType: "affects",
+      target: parseVisibleEntity(
+        relation.target,
+        `${path}.target`,
+        "component",
+      ),
+    };
   const expectedRelation =
     direction === "incoming"
       ? expectedType === "thread"
@@ -656,6 +686,44 @@ function parseTimelineItem(
   expectedType: CollaborationEntityType,
 ): CollaborationTimelineItem {
   const path = `response.data.timeline[${index}]`;
+  const raw = record(value, path);
+  if (
+    raw.activity_type === "ticket.component-linked" ||
+    raw.activity_type === "ticket.component-unlinked"
+  ) {
+    const item = exactRecord(value, path, [
+      "id",
+      "activity_type",
+      "actor",
+      "occurred_at",
+      "relation_state",
+      "subjects",
+    ]);
+    const state =
+      raw.activity_type === "ticket.component-linked" ? "active" : "removed";
+    if (expectedType !== "ticket" || item.relation_state !== state)
+      throw new TypeError(`${path} relation state is invalid`);
+    const subjects = array(item.subjects, `${path}.subjects`).map(
+      (subject, index) => parseSubject(subject, `${path}.subjects[${index}]`),
+    );
+    if (
+      subjects.length !== 1 ||
+      subjects.some(
+        (subject) =>
+          subject.visibility === "readable" &&
+          subject.entity.ref.type !== "component",
+      )
+    )
+      throw new TypeError(`${path} relation subject is invalid`);
+    return {
+      id: scopedID(item.id, `${path}.id`, "evt_"),
+      activityType: raw.activity_type,
+      actor: parseActor(item.actor, `${path}.actor`),
+      occurredAt: timestamp(item.occurred_at, `${path}.occurred_at`),
+      relationState: state,
+      subjects,
+    };
+  }
   const item = exactRecord(value, path, [
     "id",
     "activity_type",
@@ -678,10 +746,11 @@ function parseTimelineItem(
   }
   return {
     id: scopedID(item.id, `${path}.id`, "evt_"),
-    activityType: activityType as CollaborationTimelineItem["activityType"],
+    activityType: activityType as
+      "decision.proposed" | "decision.accepted" | "ticket.created",
     actor: parseActor(item.actor, `${path}.actor`),
     occurredAt: timestamp(item.occurred_at, `${path}.occurred_at`),
-    status: status as CollaborationTimelineItem["status"],
+    status: status as "proposed" | "accepted" | "open",
     subjects: array(item.subjects, `${path}.subjects`).map(
       (subject, subjectIndex) =>
         parseSubject(subject, `${path}.subjects[${subjectIndex}]`),
@@ -727,7 +796,8 @@ function validateViewShape(
       (relation.visibility === "restricted" && current.ref.type !== "ticket") ||
       (relation.visibility === "readable" &&
         relation.direction === "outgoing" &&
-        relation.relationType !== "relates-to"),
+        relation.relationType !== "relates-to" &&
+        relation.relationType !== "affects"),
   );
   if (isThreadCurrent(current)) {
     if (timeline.length !== 0) {
@@ -762,7 +832,12 @@ function validateViewShape(
   }
   if (
     current.ref.type === "ticket" &&
-    timeline.some((item) => item.activityType !== "ticket.created")
+    timeline.some(
+      (item) =>
+        item.activityType !== "ticket.created" &&
+        item.activityType !== "ticket.component-linked" &&
+        item.activityType !== "ticket.component-unlinked",
+    )
   ) {
     throw new TypeError("Ticket Timeline contains an unexpected item");
   }

@@ -73,7 +73,7 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
 		WHERE event_type IN (
 			'decision.proposed', 'decision.accepted', 'ticket.created',
 			'ci-run.recorded', 'deployment.recorded', 'project.created', 'channel.created', 'component.created', 'environment.created', 'document.created', 'document.revised',
-			'repository.created', 'component.repository-linked', 'component.repository-unlinked'
+			'repository.created', 'component.repository-linked', 'component.repository-unlinked', 'ticket.component-linked', 'ticket.component-unlinked'
 		)
 		ORDER BY occurred_at, event_id
 	`)
@@ -207,7 +207,8 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		return activityRecord{}, fmt.Errorf("decode Activity event %s payload: %w", event.eventID, err)
 	}
 	repositoryEvent := event.eventType == "repository.created" || event.eventType == "component.repository-linked" || event.eventType == "component.repository-unlinked"
-	if payload.Status == "" && event.target.Type != "document" && event.eventType != "component.created" && !repositoryEvent {
+	ticketRelation := event.eventType == "ticket.component-linked" || event.eventType == "ticket.component-unlinked"
+	if payload.Status == "" && event.target.Type != "document" && event.eventType != "component.created" && !repositoryEvent && !ticketRelation {
 		return activityRecord{}, fmt.Errorf("project Activity event %s: status is required", event.eventID)
 	}
 
@@ -217,6 +218,16 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		safeFacts:     map[string]string{"status": payload.Status},
 	}
 	switch event.eventType {
+	case "ticket.component-linked", "ticket.component-unlinked":
+		state := "active"
+		if event.eventType == "ticket.component-unlinked" {
+			state = "removed"
+		}
+		if event.target.Type != "ticket" || event.actorKind != "user" || event.actorID == nil || payload.Component == nil || payload.Component.Type != "component" || !goldenpath.ValidConfigurationID(payload.LinkID, "lnk_") || payload.State != state {
+			return activityRecord{}, fmt.Errorf("invalid Ticket Component relation event %s", event.eventID)
+		}
+		record.subjects = []entityref.Ref{*payload.Component}
+		record.safeFacts = map[string]string{"relation_state": state}
 	case "repository.created":
 		if event.target.Type != "repository" || event.actorKind != "user" || event.actorID == nil || string(event.payload) != "{}" {
 			return activityRecord{}, fmt.Errorf("invalid Repository creation %s", event.eventID)

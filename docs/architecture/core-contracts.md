@@ -10,6 +10,8 @@
 
 ## 目的
 
+[ADR-0034](../adr/0034-ticket-component-relations.md) 增加 Ticket → Component 的人工 `affects`，复用协作 receipt；Ticket governing Project 的当前权限决定写入，反向列表先授权再分页。migration 014 的关系、receipt、事件、Outbox 与 Activity 同事务，两个关系事件只投影到 Ticket，安全事实为 `relation_state`，受控 subject 为 Component；旧来源和 Ticket 状态不变。
+
 本文件定义 Golden Path 开始实现前必须共享的最小技术契约：稳定实体引用如何表示和解析，跨对象关系如何复用原对象权限，领域事件如何进入 Transactional Outbox，以及 Activity 如何从权威事实投影并在读取时过滤。
 
 业务字段与状态含义以[领域模型](../domain-model.md)为准；总体模块和部署方向以[总体架构](overview.md)为准。本文件不选择 Go Web 框架、数据库访问库、HTTP 路由、ID 生成库或前端状态管理方案。
@@ -273,7 +275,7 @@ safe_facts
 
 ### 正常更新与协作对象反向发现
 
-[ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md) 将首批五类 Activity 事件接入同一业务事务；投影完成与业务提交一致，失败整单回滚。显式重建先取得投影表写入排他锁，再读取新的源事件快照，保留完整版本并避免覆盖并发提交。后续基础配置与 Document 扩展事件映射；当前投影版本为 4，包含 `document.created` 与 `document.revised`，以及 ADR-0032 的 `component.created` / `environment.created`；恢复历史通过 revised 事件记录来源版本。ADR-0033 增加 `repository.created`、`component.repository-linked` 与 `component.repository-unlinked`；创建投影到 Repository，关系事件的主要对象为 Component，Activity 只投影状态与受控对象引用，精确 link ID 保存在源事件中，不复制外部 URL / 身份。授权管理明细只进入配置 Audit，不进入普通 Activity。旧数据仍由显式重建补齐，不随启动自动执行。
+[ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md) 将首批五类 Activity 事件接入同一业务事务；投影完成与业务提交一致，失败整单回滚。显式重建先取得投影表写入排他锁，再读取新的源事件快照，保留完整版本并避免覆盖并发提交。后续基础配置与 Document 扩展事件映射；当前投影版本为 5，包含 `document.created` 与 `document.revised`，以及 ADR-0032 的 `component.created` / `environment.created`；恢复历史通过 revised 事件记录来源版本。ADR-0033 增加 `repository.created`、`component.repository-linked` 与 `component.repository-unlinked`；创建投影到 Repository，关系事件的主要对象为 Component，Activity 只投影状态与受控对象引用，精确 link ID 保存在源事件中，不复制外部 URL / 身份。授权管理明细只进入配置 Audit，不进入普通 Activity。旧数据仍由显式重建补齐，不随启动自动执行。
 
 Thread ← Decision、Decision ← Ticket 从同一权威 EntityLink 反向读取，不复制镜像关系。协作 readable relation 明确 `direction`，不可读反向目标完全隐藏；原 evidence restricted 占位不携带方向或目标信息。结果排序、全量读取成本和 Go / Web 同步升级边界见 ADR-0022。Timeline 仍投影到原事件主要对象，不自动向所有关系端点传播。
 

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import { componentPagePath } from "../collaboration/ticket-component-api";
 import { AuthRequestError } from "../auth/api";
 import { configurationClient } from "./configuration-api";
 import {
@@ -81,7 +88,9 @@ function DeliveryBrowser(props: Context) {
           key={`${kind}:${selection.id ?? ""}`}
           {...props}
           initialID={selection.id}
-          onOpenComponent={(id) => setSelection({ kind: "component", id })}
+          onOpenComponent={(id) =>
+            window.location.assign(componentPagePath(props.workspaceID, id))
+          }
         />
       ) : (
         <ObjectBrowser
@@ -136,15 +145,21 @@ function ObjectBrowser(
         <ul className="configuration-members">
           {page.page.items.map((item) => (
             <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelected(item.id);
-                  setCreating(false);
-                }}
-              >
-                {item.name} · {item.key}
-              </button>
+              {kind === "component" ? (
+                <a href={componentPagePath(workspaceID, item.id)}>
+                  {item.name} · {item.key}
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelected(item.id);
+                    setCreating(false);
+                  }}
+                >
+                  {item.name} · {item.key}
+                </button>
+              )}
               <span>
                 {item.category} · {item.status}
               </span>
@@ -307,12 +322,13 @@ function CreateObject({
     </form>
   );
 }
-function ObjectDetail(
+export function ObjectDetail(
   props: Context & {
     kind: DeliveryKind;
     id: string;
     onUnavailable: () => void;
     onOpenRepository: (id: string) => void;
+    componentContent?: (value: DeliveryObject) => ReactNode;
   },
 ) {
   const { client, workspaceID, kind, id, onSessionExpired, onUnavailable } =
@@ -323,6 +339,11 @@ function ObjectDetail(
     revision: number;
   }>({ revision: -1 });
   const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRevision((r) => r + 1);
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     void client.read(workspaceID, kind, id, controller.signal).then(
@@ -355,7 +376,7 @@ function ObjectDetail(
     onSessionExpired,
     onUnavailable,
   ]);
-  const value = state.revision === revision ? state.value : undefined;
+  const value = state.value;
   const error = state.revision === revision ? state.error : undefined;
   if (!value)
     return (
@@ -386,7 +407,10 @@ function ObjectDetail(
           )}
         </>
       ) : (
-        <ComponentRepositories {...props} component={value} />
+        <>
+          <ComponentRepositories {...props} component={value} />
+          {props.componentContent?.(value)}
+        </>
       )}
     </section>
   );

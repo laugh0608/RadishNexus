@@ -111,12 +111,13 @@ type collaborationRelationDTO struct {
 }
 
 type collaborationTimelineDTO struct {
-	ID           string                    `json:"id"`
-	ActivityType string                    `json:"activity_type"`
-	Actor        deploymentActorDTO        `json:"actor"`
-	OccurredAt   string                    `json:"occurred_at"`
-	Status       string                    `json:"status"`
-	Subjects     []collaborationSubjectDTO `json:"subjects"`
+	ID            string                    `json:"id"`
+	ActivityType  string                    `json:"activity_type"`
+	Actor         deploymentActorDTO        `json:"actor"`
+	OccurredAt    string                    `json:"occurred_at"`
+	Status        string                    `json:"status,omitempty"`
+	RelationState string                    `json:"relation_state,omitempty"`
+	Subjects      []collaborationSubjectDTO `json:"subjects"`
 }
 
 type collaborationSubjectDTO struct {
@@ -554,7 +555,7 @@ func publicTicketProjection(
 		return ticketCurrentDTO{}, errors.New("invalid Ticket Nexus View")
 	}
 	for _, item := range timeline {
-		if item.ActivityType != "ticket.created" {
+		if item.ActivityType != "ticket.created" && item.ActivityType != "ticket.component-linked" && item.ActivityType != "ticket.component-unlinked" {
 			return ticketCurrentDTO{}, errors.New("unexpected Ticket Timeline item")
 		}
 	}
@@ -653,9 +654,9 @@ func collaborationSourceRelations(entityType string, relations []goldenpath.Rela
 		if entityType == "ticket" && relation.State == goldenpath.ProjectionRestricted {
 			continue
 		}
-		if entityType == "ticket" && relation.Direction == "outgoing" && relation.State == goldenpath.ProjectionVisible && relation.RelationType == "relates-to" && relation.Target.Type == "document" {
+		if entityType == "ticket" && relation.Direction == "outgoing" && relation.State == goldenpath.ProjectionVisible && ((relation.RelationType == "relates-to" && relation.Target.Type == "document") || (relation.RelationType == "affects" && relation.Target.Type == "component")) {
 			if seen[relation.Target] {
-				return nil, errors.New("duplicate Document relation")
+				return nil, errors.New("duplicate Ticket context relation")
 			}
 			seen[relation.Target] = true
 			continue
@@ -696,7 +697,7 @@ func publicCollaborationRelations(relations []goldenpath.RelationProjection) ([]
 				return nil, err
 			}
 			if relation.RelationType != "started-from" && relation.RelationType != "derived-from" &&
-				relation.RelationType != "implements" && relation.RelationType != "relates-to" {
+				relation.RelationType != "implements" && relation.RelationType != "relates-to" && relation.RelationType != "affects" {
 				return nil, fmt.Errorf("unsupported collaboration relation %q", relation.RelationType)
 			}
 			dto = append(dto, collaborationRelationDTO{
@@ -717,21 +718,35 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 	for _, item := range items {
 		if !validScopedID(item.EventID, "evt_") || item.Actor.Kind != "user" ||
 			!validScopedID(item.Actor.ID, "usr_") || item.OccurredAt.IsZero() ||
-			item.ProjectionVersion != goldenpath.ActivityProjectionVersion || len(item.SafeFacts) != 1 ||
-			item.SafeFacts["status"] == "" {
+			item.ProjectionVersion != goldenpath.ActivityProjectionVersion || len(item.SafeFacts) != 1 {
 			return nil, errors.New("invalid collaboration Timeline item")
 		}
-		if item.ActivityType != "decision.proposed" && item.ActivityType != "decision.accepted" &&
-			item.ActivityType != "ticket.created" {
+		expectedStatus, subjectType, relationState := "", "", ""
+		switch item.ActivityType {
+		case "decision.proposed":
+			expectedStatus, subjectType = "proposed", "thread"
+		case "decision.accepted":
+			expectedStatus = "accepted"
+		case "ticket.created":
+			expectedStatus, subjectType = "open", "decision"
+		case "ticket.component-linked":
+			relationState, subjectType = "active", "component"
+		case "ticket.component-unlinked":
+			relationState, subjectType = "removed", "component"
+		default:
 			return nil, fmt.Errorf("unsupported collaboration Activity type %q", item.ActivityType)
 		}
+		if item.SafeFacts["status"] != expectedStatus || item.SafeFacts["relation_state"] != relationState || (subjectType == "" && len(item.Subjects) != 0) || (subjectType != "" && len(item.Subjects) != 1) {
+			return nil, errors.New("invalid collaboration Timeline facts")
+		}
 		entry := collaborationTimelineDTO{
-			ID:           item.EventID,
-			ActivityType: item.ActivityType,
-			Actor:        deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID},
-			OccurredAt:   publicTime(item.OccurredAt),
-			Status:       item.SafeFacts["status"],
-			Subjects:     make([]collaborationSubjectDTO, 0, len(item.Subjects)),
+			ID:            item.EventID,
+			ActivityType:  item.ActivityType,
+			Actor:         deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID},
+			OccurredAt:    publicTime(item.OccurredAt),
+			Status:        item.SafeFacts["status"],
+			RelationState: item.SafeFacts["relation_state"],
+			Subjects:      make([]collaborationSubjectDTO, 0, len(item.Subjects)),
 		}
 		for _, subject := range item.Subjects {
 			switch subject.State {
@@ -741,7 +756,7 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 				}
 				entry.Subjects = append(entry.Subjects, collaborationSubjectDTO{Visibility: "restricted"})
 			case goldenpath.ProjectionVisible:
-				entity, err := requiredVisibleEntity(subject, "")
+				entity, err := requiredVisibleEntity(subject, subjectType)
 				if err != nil {
 					return nil, err
 				}

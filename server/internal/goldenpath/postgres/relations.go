@@ -72,7 +72,8 @@ func listRelationProjections(
 				AND (($2 = 'thread' AND from_type = 'decision' AND relation_type = 'derived-from')
 					OR ($2 = 'decision' AND from_type = 'ticket' AND relation_type = 'implements')
  OR ($2 = 'document' AND from_type = 'ticket' AND relation_type = 'relates-to')
- OR ($2 = 'repository' AND from_type = 'component' AND relation_type = 'source-repository'))
+ OR ($2 = 'repository' AND from_type = 'component' AND relation_type = 'source-repository')
+ OR ($2 = 'component' AND from_type = 'ticket' AND relation_type = 'affects'))
 		) AS relations
 		ORDER BY CASE direction WHEN 'outgoing' THEN 0 ELSE 1 END, created_at, id
 	`, principal.WorkspaceID, source.Type, source.ID)
@@ -138,7 +139,7 @@ func entityAccess(
 ) (exists bool, canRead bool, err error) {
 	switch ref.Type {
 	case "document":
-		project, err := documentScope(ctx, tx, principal, "document", ref.ID)
+		project, err := projectEntityScope(ctx, tx, principal, "document", ref.ID)
 		if errors.Is(err, authz.ErrNotFound) {
 			return false, false, nil
 		}
