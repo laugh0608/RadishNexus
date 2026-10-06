@@ -32,7 +32,8 @@ type ConfigurationInput struct {
 	Role               string
 	ExpectedRole       *string
 	ExpectedMember     bool
-	Delivery           *DeliveryConfigurationInput `json:",omitempty"`
+	Delivery           *DeliveryConfigurationInput   `json:",omitempty"`
+	Repository         *RepositoryConfigurationInput `json:",omitempty"`
 }
 
 type ConfigurationCommand struct {
@@ -48,11 +49,14 @@ type ConfigurationObject struct {
 	CanManage                                          bool
 	OwnerTeamID, Type, Classification                  string
 	CanGrant, CanRevoke                                bool
+	CanLinkRepository                                  bool
+	Repository                                         *RepositoryMetadata
 }
 type ConfigurationResult struct {
 	Object  ConfigurationObject
 	UserID  string
 	Created bool
+	LinkID  string
 }
 type ConfigurationMember struct {
 	ID, Name, Role string
@@ -63,6 +67,7 @@ type ConfigurationPage struct {
 	Members []ConfigurationMember
 	Teams   []ConfigurationObject
 	Objects []ConfigurationObject
+	Links   []RepositoryLink
 	NextID  string
 }
 type ConfigurationQuery struct {
@@ -85,7 +90,7 @@ func NewConfigurationService(store ConfigurationStore, ids IDGenerator, clock Cl
 	return &ConfigurationService{store: store, ids: ids, clock: clock}
 }
 
-var configurationID = regexp.MustCompile(`^(wrk|usr|tem|prj|chn|cmp|env|dpa)_[A-Za-z0-9_-]+$`)
+var configurationID = regexp.MustCompile(`^(wrk|usr|tem|prj|chn|cmp|env|dpa|rep|lnk)_[A-Za-z0-9_-]+$`)
 var projectKey = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
 func ValidConfigurationID(id, prefix string) bool {
@@ -105,7 +110,16 @@ func (s *ConfigurationService) Configure(ctx context.Context, invocation Invocat
 	if !IsDeliveryConfiguration(input.Kind) && input.Delivery != nil {
 		return invalid()
 	}
+	if !IsRepositoryConfiguration(input.Kind) && input.Repository != nil {
+		return invalid()
+	}
 	switch input.Kind {
+	case "repository.create", "component.repository.link", "component.repository.unlink":
+		var valid bool
+		input, prefix, valid = validateRepositoryConfiguration(input, invocation.Principal.WorkspaceID)
+		if !valid {
+			return invalid()
+		}
 	case "component.create", "environment.create", "environment.authorization.grant", "environment.authorization.revoke":
 		var valid bool
 		prefix, valid = validateDeliveryConfiguration(input, invocation.Principal.WorkspaceID)
@@ -158,7 +172,7 @@ func (s *ConfigurationService) Configure(ctx context.Context, invocation Invocat
 	default:
 		return invalid()
 	}
-	if prefix != "" {
+	if prefix != "" && prefix != "lnk_" {
 		input.Name = strings.TrimSpace(input.Name)
 		if input.Name == "" || len(input.Name) > 480 || !utf8.ValidString(input.Name) || utf8.RuneCountInString(input.Name) > 120 || strings.ContainsFunc(input.Name, unicode.IsControl) {
 			return invalid()
@@ -180,7 +194,7 @@ func (s *ConfigurationService) Configure(ctx context.Context, invocation Invocat
 			return ConfigurationResult{}, err
 		}
 	}
-	if prefix == "prj_" || prefix == "chn_" || prefix == "cmp_" || prefix == "env_" {
+	if prefix == "prj_" || prefix == "chn_" || prefix == "cmp_" || prefix == "env_" || IsRepositoryConfiguration(input.Kind) {
 		command.EventID, err = s.ids.NewID("evt_")
 		if err != nil {
 			return ConfigurationResult{}, err
@@ -205,6 +219,8 @@ func (s *ConfigurationService) ReadConfiguration(ctx context.Context, p authz.Pr
 		prefix = "cmp_"
 	} else if kind == "environment" {
 		prefix = "env_"
+	} else if kind == "repository" {
+		prefix = "rep_"
 	} else if kind != "project" {
 		return ConfigurationObject{}, authz.ErrInvalid
 	}
@@ -219,6 +235,21 @@ func (s *ConfigurationService) ListConfiguration(ctx context.Context, p authz.Pr
 	}
 	prefix := "usr_"
 	switch q.Kind {
+	case "repositories":
+		prefix = "rep_"
+		if q.ScopeID != p.WorkspaceID {
+			return ConfigurationPage{}, authz.ErrInvalid
+		}
+	case "component-repositories":
+		prefix = "rep_"
+		if !ValidConfigurationID(q.ScopeID, "cmp_") {
+			return ConfigurationPage{}, authz.ErrInvalid
+		}
+	case "repository-components":
+		prefix = "cmp_"
+		if !ValidConfigurationID(q.ScopeID, "rep_") {
+			return ConfigurationPage{}, authz.ErrInvalid
+		}
 	case "components", "environments":
 		prefix = "cmp_"
 		if q.Kind == "environments" {

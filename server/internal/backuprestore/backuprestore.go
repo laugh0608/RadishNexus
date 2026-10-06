@@ -64,6 +64,7 @@ var (
 		"radishnexus.project_memberships",
 		"radishnexus.projects",
 		"radishnexus.relation_types",
+		"radishnexus.repositories",
 		"radishnexus.teams",
 		"radishnexus.thread_memberships",
 		"radishnexus.threads",

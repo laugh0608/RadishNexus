@@ -134,7 +134,9 @@ M0 最小字段：
 
 ### Repository
 
-外部 Git 代码库的受控映射。RadishNexus 不托管 Git，只保存 provider、稳定外部 ID、URL、默认分支和关联 Component。Repository 凭据属于插件或集成 Secrets，不属于普通业务字段。
+外部 Git 代码库的受控映射。RadishNexus 不托管 Git。首批合同见 [ADR-0033](adr/0033-repository-mapping-and-component-relations.md)：`repository / rep_` 归属 Workspace，保存 name、provider、HTTPS provider origin、稳定外部 ID、同 origin 浏览 URL 和人工登记的默认分支。身份由 `(workspace, provider, provider_origin, external_id)` 唯一确定；首批不开放元数据修改或删除。凭据属于插件或集成 Secrets，不属于普通业务字段。
+
+active Workspace owner 创建映射并明确确认 Component → Repository 的 `source-repository` 关系；所有 active Workspace 成员共享读取映射元数据，引用本身不授予任何外部代码访问权。多对多关系保留人工来源，同一对至多一条 active；新关联要求 Component active，解除允许非 active Component。解除只移除指定 EntityLink，重新关联生成新 ID；旧请求的精确重试不改变当前关系。映射不证明 provider 连接成功，不推导 CI Run / commit 来源。
 
 ### CI Run
 
@@ -298,6 +300,7 @@ removal_reason
 - `derived-from`：Decision 来源于 Thread；
 - `implements`：Ticket 实现某 Decision；
 - `documents`：Document 解释某 Component 或 Initiative；
+- `source-repository`：Component 明确关联 Repository（ADR-0033 已实现）；
 - `built-from`：CI Run 来源于 Repository commit；
 - `deploys`：Deployment 发布某构建或制品；
 - `affects`：Incident 或 Ticket 影响某 Component；

@@ -23,6 +23,7 @@ export interface DeliveryObject {
   canManage: boolean;
   canGrant: boolean;
   canRevoke: boolean;
+  canLinkRepository: boolean;
 }
 export interface AuthorizationState {
   id: string;
@@ -37,7 +38,7 @@ export interface AuthorizationMember {
 const invalid = () =>
   new AuthRequestError("交付配置响应不符合当前契约，请刷新或联系管理员。");
 
-function parseDeliveryObject(
+export function parseDeliveryObject(
   value: unknown,
   kind: DeliveryKind,
   detail: boolean,
@@ -77,15 +78,23 @@ function parseDeliveryObject(
     throw invalid();
   let canManage = false,
     canGrant = false,
-    canRevoke = false;
+    canRevoke = false,
+    canLinkRepository = false;
   if (detail) {
     const cap = object(
       row.capabilities,
       kind === "component"
-        ? []
+        ? ["can_link_repository"]
         : ["can_manage_authorizations", "can_grant", "can_revoke"],
     );
-    if (kind === "environment") {
+    if (kind === "component") {
+      if (
+        typeof cap.can_link_repository !== "boolean" ||
+        (cap.can_link_repository && status !== "active")
+      )
+        throw invalid();
+      canLinkRepository = cap.can_link_repository;
+    } else {
       if (
         [cap.can_manage_authorizations, cap.can_grant, cap.can_revoke].some(
           (v) => typeof v !== "boolean",
@@ -114,6 +123,7 @@ function parseDeliveryObject(
     canManage,
     canGrant,
     canRevoke,
+    canLinkRepository,
   };
 }
 function parseAuthorization(

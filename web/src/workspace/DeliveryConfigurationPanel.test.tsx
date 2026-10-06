@@ -23,6 +23,7 @@ const environment: DeliveryObject = {
   canManage: true,
   canGrant: true,
   canRevoke: true,
+  canLinkRepository: false,
 };
 function client() {
   return {
@@ -160,7 +161,7 @@ it("does not load privileged directories for ordinary members", async () => {
       onSessionExpired={vi.fn()}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "组件与环境" }));
+  fireEvent.click(screen.getByRole("button", { name: "组件、环境与代码库" }));
   fireEvent.change(screen.getByLabelText("交付配置类型"), {
     target: { value: "environment" },
   });

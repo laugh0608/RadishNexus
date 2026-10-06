@@ -11,6 +11,11 @@ import {
 import { usePage, useAction } from "./configuration-hooks";
 import { PageControls, Feedback, Field } from "./configuration-ui";
 import { EnvironmentAuthorizationEditor } from "./EnvironmentAuthorizationEditor";
+import {
+  ComponentRepositories,
+  RepositoryBrowser,
+} from "./RepositoryConfigurationPanel";
+import type { RepositoryConfigurationClient } from "./repository-configuration-api";
 
 interface Context {
   workspaceID: string;
@@ -19,6 +24,7 @@ interface Context {
   isOwner: boolean;
   onSessionExpired: () => void;
   client: DeliveryConfigurationClient;
+  repositoryClient?: RepositoryConfigurationClient;
 }
 
 export function DeliveryConfigurationPanel(
@@ -26,14 +32,17 @@ export function DeliveryConfigurationPanel(
 ) {
   const [open, setOpen] = useState(false);
   return (
-    <section className="foundation-configuration" aria-label="组件与环境">
+    <section
+      className="foundation-configuration"
+      aria-label="组件、环境与代码库"
+    >
       <button
         type="button"
         className="secondary-button"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        组件与环境
+        组件、环境与代码库
       </button>
       {open ? (
         <DeliveryBrowser
@@ -46,23 +55,53 @@ export function DeliveryConfigurationPanel(
 }
 
 function DeliveryBrowser(props: Context) {
-  const [kind, setKind] = useState<DeliveryKind>("component");
+  const [selection, setSelection] = useState<{
+    kind: DeliveryKind | "repository";
+    id?: string;
+  }>({ kind: "component" });
+  const { kind } = selection;
   return (
     <div className="configuration-panel">
       <Field label="交付配置类型">
         <select
           value={kind}
-          onChange={(e) => setKind(e.target.value as DeliveryKind)}
+          onChange={(e) =>
+            setSelection({
+              kind: e.target.value as DeliveryKind | "repository",
+            })
+          }
         >
           <option value="component">Component · 软件组件</option>
           <option value="environment">Environment · 部署环境</option>
+          <option value="repository">Repository · 代码库</option>
         </select>
       </Field>
-      <ObjectBrowser key={kind} {...props} kind={kind} />
+      {kind === "repository" ? (
+        <RepositoryBrowser
+          key={`${kind}:${selection.id ?? ""}`}
+          {...props}
+          initialID={selection.id}
+          onOpenComponent={(id) => setSelection({ kind: "component", id })}
+        />
+      ) : (
+        <ObjectBrowser
+          key={`${kind}:${selection.id ?? ""}`}
+          {...props}
+          kind={kind}
+          initialID={selection.id}
+          onOpenRepository={(id) => setSelection({ kind: "repository", id })}
+        />
+      )}
     </div>
   );
 }
-function ObjectBrowser(props: Context & { kind: DeliveryKind }) {
+function ObjectBrowser(
+  props: Context & {
+    kind: DeliveryKind;
+    initialID?: string;
+    onOpenRepository: (id: string) => void;
+  },
+) {
   const { client, workspaceID, kind, onSessionExpired, isOwner } = props;
   const load = useCallback(
     (after: string | undefined, signal: AbortSignal) =>
@@ -70,7 +109,9 @@ function ObjectBrowser(props: Context & { kind: DeliveryKind }) {
     [client, workspaceID, kind],
   );
   const page = usePage(load, onSessionExpired);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(
+    props.initialID ?? null,
+  );
   const [creating, setCreating] = useState(false);
   const refreshObjects = page.refresh;
   const unavailable = useCallback(() => {
@@ -271,6 +312,7 @@ function ObjectDetail(
     kind: DeliveryKind;
     id: string;
     onUnavailable: () => void;
+    onOpenRepository: (id: string) => void;
   },
 ) {
   const { client, workspaceID, kind, id, onSessionExpired, onUnavailable } =
@@ -344,7 +386,7 @@ function ObjectDetail(
           )}
         </>
       ) : (
-        <p>Repository、构建来源与交付关系由后续配置接入。</p>
+        <ComponentRepositories {...props} component={value} />
       )}
     </section>
   );

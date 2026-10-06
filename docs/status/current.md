@@ -1,6 +1,6 @@
 # RadishNexus 当前状态
 
-状态日期：2026-10-01
+状态日期：2026-10-06
 
 ## 当前阶段
 
@@ -20,6 +20,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | 基础对象与首批成员配置 | migration 009、明确初始 admin、普通角色 / 受限成员、配置 Audit / receipt、撤权清理、备份恢复 | owner 创建 Team / Project，Project admin 创建 Channel 与配置成员 | 从正式 bootstrap 的空业务工作区，经 Web 创建、邀请新账户、双层授权、成员发消息与撤权已验收；首次访问 Web 初始化已有独立证据，管理员交接仍缺 |
 | 单 Channel Message 实时 | 单进程 SSE、当前权限、有界回放、撤权与关闭 | canonical Channel 已接入 ready → history → 增量 | 有技术验收；没有目标团队规模与持续使用的容量证据 |
 | CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment、精确重试 receipt | CI Run / Deployment 正式读取；成功构建可选择已授权 staging 环境并确认记录外部部署结果 | 真实 Jenkins 三态采集、Deployment 写入自动化与隔离浏览器已通过；Component / staging Environment 创建、发现与显式授权管理已接通，真实数据库、恢复及隔离浏览器已有证据；交付关系和持续采集仍缺 |
+| Repository 映射与 Component 关联 | migration 013、稳定外部身份、人工来源多对多关系、精确解除 / 重新关联、配置 Audit / receipt、Activity v4 | owner 创建映射与关联，成员分页发现及双向跳转 | 从正式 bootstrap 空业务工作区完成页面创建、关联、解除 / 重连、桌面 / 手机 / 键盘、成员只读及失权清空；数据库升级、并发、回滚与恢复通过；无 provider 连接或 CI 来源推导 |
 | EntityLink / Activity | 带来源关系、权限过滤 query、同事务 Activity 更新与版本化全量重建 | Nexus View 可读 Current / 出向与首批入向 Relations / 正常更新的 Timeline | 正常写入与双向发现已通过真实 PostgreSQL / HTTP 和浏览器；未完成持续使用观察 |
 | 自部署与恢复 | 显式 migration、只读 schema readiness、PostgreSQL 17 同 major 空目标恢复 | 健康端点拒绝 migration 缺失 / 漂移 / 版本不匹配；固定工件 Compose 开发拓扑与 HTTPS 演练已有记录 | 新探针已有真实数据库证据；本轮未重跑 Compose，升级失败恢复、运维与生产容量尚未完成 |
 | Document | migration 010、不可变版本、精确 receipt、当前 Project 权限、单一受限 Markdown parser、备份恢复 | Ticket 创建、Project 文档列表、阅读 / 编辑 / 预览、显式冲突重新应用、历史恢复 | 真实数据库及隔离 HTTPS 双标签页、恢复、手机布局、撤权已有证据；原生中文 IME、普通成员独立持续使用仍待验收 |
@@ -32,7 +33,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 1. **升级运维**：只读 schema readiness 已按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 完成；跨 schema 兼容窗口、升级失败恢复与生产编排仍待建立。
 2. **使用入口**：首页已可直接浏览可读 Project / Channel；Team / Project / Channel 创建与首批成员配置已接通；部署后首次访问创建管理员已接通；管理权交接和其他对象列表仍缺。Document 的原生 IME 复核和真实外部交付链仍独立推进。
-3. **关系与时间线范围**：当前关系全量读取，没有分页或反向索引；Timeline 保留事件主要对象语义，Thread 不展示后续对象 Activity，交付反向关系尚未开放。
+3. **关系与时间线范围**：核心 Nexus 关系仍全量读取，未建立通用分页；Repository / Component 配置已有专用双向分页和 active 反向索引。Timeline 保留事件主要对象语义，Thread 不展示后续对象 Activity，其余交付反向关系尚未开放。
 4. **证据边界**：自动化、真实数据库与本轮浏览器验收证明讨论到执行的局部闭环；Document 的剩余人工复核、真实交付链、完整 Golden Path 和真实团队持续使用仍分别验收。
 
 ## 近期执行顺序
@@ -41,20 +42,21 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 | 顺序 | 下一切片 | 交付与退出判据 |
 | --- | --- | --- |
-| 1 | 交付链剩余关系与持续采集 | 在已完成的 CI Run 读取、Jenkins 隔离三态采集和 staging 显式记录之上，分别推进 Repository 映射、Ticket / Component / 交付关系和持续采集；逐段移除对预置配置的依赖 |
+| 1 | 交付链剩余关系与持续采集 | 在已完成的 CI Run 读取、Jenkins 隔离三态采集和 staging 显式记录之上，在已完成 Repository 映射与 Component 关联的基础上，推进 Ticket / Component / 交付关系和持续采集；逐段移除对预置配置的依赖 |
 | 暂缓 | 最小 Markdown Document 人工验收 | 正式实现和隔离浏览器已验证；待所有者恢复人工验收时补 macOS 原生中文 IME，见[实施记录](reviews/2026-09-26-markdown-document.md)，不阻塞上述切片 |
 | 2 | 小团队场景试用 | 满足评估授权与必要运维条件后，以真实需求连续使用并记录追溯、重复录入和人工干预；按 Golden Path 验收决定下一批功能，不把一次演示当作持续使用完成 |
 
 免费书面授权与评估说明应在邀请外部团队前准备，不能等到完整聊天或 CRDT 完成；版本化结构化导出与全新实例导入仍是 M1 的独立退出条件。账号恢复、安全审计、数据生命周期、数据库最小权限与升级演练按[路线图](../roadmap.md)的试用和生产边界推进，不因本表只列近期切片而取消。
 
-### 明天事项（2026-10-02 接续）
+### 本轮完成：Repository 映射与 Component 关联
 
-1. 从当前 `dev` 和本页恢复工作，先检查工作区与分支；本地已经包含 PR #12 的 `master` 晋级提交，后续实现为 `0f9d5cf`。本轮未 push，不把本地远程跟踪引用当作实时远端状态。
-2. 建议先提出 **Repository 最小映射与 Component 关联** 的下一窄切片：核对领域模型、实体注册、EntityLink 和 Jenkins source 绑定，明确外部稳定身份、URL 安全、默认分支、关联基数、当前权限、创建 / 发现入口与 Audit / receipt。先形成可审阅范围及迁移影响，不把 Repository 等同于 Jenkins source，也不自动进入完整 Git 托管或插件平台。
-3. 上述范围确认后再实施。Ticket ↔ Component / 交付关系、持久终态采集分别推进；保留“新配置对象 → 真实 Jenkins → 浏览器记录 staging → 撤权后阻止新记录 / 历史仍可读”的整链验收缺口，届时以明确授权的隔离实例和真实外部终态验证。
-4. 原生中文 IME 人工验收继续暂缓。业务迁移、服务启动、外部写入、依赖和远程操作沿当前任务授权执行；明天事项只记录建议，不创建自动任务或启动下一切片。
+2026-10-06 已核对本地 `dev`，起始 HEAD 为 `5abc6a9`，工作区干净，相对本地 `origin/dev` 领先一笔联系邮箱更新提交；未 fetch 或核验实时远端。PR #12 的 `master` 晋级已包含在当前历史中，Component / Environment 配置实现仍为 `0f9d5cf`。
 
-当日提交回顾与文档审阅见[收尾记录](reviews/2026-10-01-daily-closeout.md)。
+所有者已确认 [ADR-0033](../adr/0033-repository-mapping-and-component-relations.md)，现已实现：外部稳定身份、URL 与默认分支边界、Workspace 当前权限、多对多 EntityLink、正式创建 / 双向发现 / 解除、Audit / receipt、migration 013 和 Activity v4。Go、真实 PostgreSQL、012 升级、备份恢复、Web 全量及隔离 HTTPS 浏览器验收通过。未知结果重试不会复活旧关系或误删新关系，成员只读与撤权清空已验证；范围与证据见[实施记录](reviews/2026-10-06-repository-mapping.md)。临时服务已清理；改动尚未提交，未应用业务实例迁移。
+
+下一步分别设计 Ticket ↔ Component / 交付关系与持久终态采集。保留“新配置对象 → 真实 Jenkins → 浏览器记录 staging → 撤权后阻止新记录 / 历史仍可读”的整链验收缺口。原生中文 IME 人工验收继续暂缓；业务迁移、服务启动、依赖和外部 / 远程操作按当前任务授权执行，本节不创建自动任务。
+
+此前提交回顾与文档审阅见 [10 月 1 日收尾记录](reviews/2026-10-01-daily-closeout.md)。
 
 ### 本轮完成：最小配置与环境授权
 
@@ -64,7 +66,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 Go、真实 PostgreSQL、升级、备份恢复和 Web 检查通过；HTTPS 浏览器从正式 bootstrap 空业务工作区验证 Team / Component / Environment 创建、自授权、撤销、重新授予、桌面 / 手机和键盘。正式配置对象接续 CI Run / staging 记录由数据库自动化证明；本轮没有重跑真实 Jenkins，也没有验证新配置对象从 Jenkins 到浏览器记录的整链。具体证据、修复与未覆盖项见[实施记录](reviews/2026-10-01-delivery-configuration.md)。临时验收服务已清理，未应用业务实例 migration、push 或部署。
 
-下一步沿近期顺序设计 Repository 映射、交付关系与持续采集；它们不包含在本轮授权中。原生 IME 人工验收继续暂缓，真实团队试用仍受评估授权与运维退出条件约束。
+Repository 映射已在 10 月 6 日按独立确认的 ADR-0033 完成；其余交付关系与持续采集沿近期顺序推进。原生 IME 人工验收继续暂缓，真实团队试用仍受评估授权与运维退出条件约束。
 
 ### 本轮完成：CI Run、Jenkins 与 staging 记录
 
@@ -76,7 +78,7 @@ Jenkins adapter 已提交为 `0001a82`，未 push。所有者确认本机 Docker
 
 真实 Jenkins 联调已提交为 `be780b7`，未 push。所有者随后确认 [ADR-0031](../adr/0031-session-scoped-staging-deployment-recording.md)，现已接通成功 CI Run → 已授权 staging 环境 → 显式确认外部部署终态 → Deployment 回读。新增两个 Session 端点与 migration 011，复用唯一 Deployment 事务和既有 receipt，精确重试不重复生成事实。Go、真实 PostgreSQL、备份恢复、Web 和隔离 HTTPS 浏览器验收通过；桌面 / 手机、失败结果与成功构建分离、撤权后禁止记录及历史仍可读已有证据，见[实施记录](reviews/2026-09-26-staging-deployment-recording.md)。本轮临时服务和测试数据已清理，未启动 Jenkins 或部署到业务实例。
 
-staging 记录切片已提交为 `486a330`，未 push。下一步统一按上方近期顺序与明天事项推进；当日提交和文档核对见[收尾记录](reviews/2026-09-26-daily-closeout.md)。
+staging 记录切片已提交为 `486a330`，未 push。下一步统一按上方近期顺序与当前接续推进；当日提交和文档核对见[收尾记录](reviews/2026-09-26-daily-closeout.md)。
 
 ### 本轮完成：最小 Markdown Document
 
@@ -115,7 +117,7 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - 关系分页、反向索引、查询容量与跨对象 Timeline；事务内 Activity 更新、重建并发及首批 direction 合同已由 ADR-0022 冻结；
 - 管理员交接、其他协作对象发现、账号恢复与应急入口；基础配置和首访 owner 初始化已由 ADR-0026 / ADR-0027 冻结；
 - Document 正式页面原生中文 IME 与持续使用证据；正式富文本与 CRDT、受控脱敏和可移植导出仍未完成；
-- Jenkins 持续终态采集与业务实例配置、持久来源管理 / 安全审计、Repository 映射与交付关系；
+- Jenkins 持续终态采集与业务实例配置、持久来源管理 / 安全审计、Repository 与 CI Run 的来源关系及其余交付关系；
 - PostgreSQL 支持矩阵、schema 兼容窗口、forward repair、数据库权限拆分和容量基线；
 - Decision 拒绝、替代、复核与 Ticket 基础执行状态的交互；
 - 安全 Audit、消息 / 事件 / receipt 的保留和受控脱敏边界；
@@ -123,6 +125,8 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
 
 ## 证据与历史
+
+- [2026-10-06 Repository 映射与 Component 关联](reviews/2026-10-06-repository-mapping.md)：migration 013、关系历史、当前权限、升级 / 恢复与浏览器证据。
 
 - [2026-10-01 提交回顾与文档收尾](reviews/2026-10-01-daily-closeout.md)：当日四笔提交、源码对应文档修正与 10 月 2 日接续建议。
 

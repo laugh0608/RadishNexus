@@ -95,11 +95,16 @@ Document 默认集中阅读，来源 Ticket 保留标题下入口；信息展开
 
 隔离浏览器 fixture 可在仓库根设置 `RADISHNEXUS_BROWSER_STAGING=1` 后运行 `scripts/run-authenticated-web-browser-fixture.sh`：通过正式 service 准备成功 CI Run，跳过预置 Deployment，返回 `ci_run_path` 供页面真实记录验收。需要事先授权启动测试服务；fixture 的 Go 后端与 HTTPS 入口仅绑定 loopback，结束后按 stop 文件清理。
 
-
 ## 组件与环境
 
-首页“组件与环境”由 `workspace/DeliveryConfigurationPanel.tsx` 承载，使用当前 Workspace 发现既有 Component / Environment，并展示配置详情。owner 使用现有 Team 选择器创建 active Component 或 staging Environment；普通成员不读取 owner 专用目录。对象创建不自动授权任何人。
+首页“组件、环境与代码库”由 `workspace/DeliveryConfigurationPanel.tsx` 承载，使用当前 Workspace 发现既有 Component / Environment，并展示配置详情。owner 使用现有 Team 选择器创建 active Component 或 staging Environment；普通成员不读取 owner 专用目录。对象创建不自动授权任何人。
 
 `EnvironmentAuthorizationEditor.tsx` 使用同 Workspace 成员选择器和最新授权 ID / 状态进行显式授予、撤销与重新授予；给本人授权也必须确认。归档 staging 仅允许撤销，非 staging 只展示已有授权。失权或切换作用域清空管理视图，迟到请求被丢弃。网络结果不明时冻结原 payload / operation ID，用户可精确重试或放弃本地待确认请求后刷新；成功不乐观推断当前权限。合同见 [ADR-0032](../docs/adr/0032-component-environment-configuration-and-authorization.md)。
 
 分页、反馈与基础创建请求复用 `configuration-hooks.ts` / `configuration-ui.tsx`，API 运行时校验集中在 `delivery-configuration-api.ts`。配置样式复用工作台，在手机保持可读并提供键盘确认。未增加依赖、浏览器持久化、完整 Component / Environment Nexus View 或构建来源配置入口；staging 记录仍从成功 CI Run 页面进入。
+
+## Repository 映射与关联
+
+`RepositoryConfigurationPanel.tsx` 在既有配置区提供 owner 创建映射、Component 选择分页仓库、两端跳转与明确解除。`repository-configuration-api.ts` 严格校验安全 DTO、同源 HTTPS 外链及关系 ID；外链仅在用户点击时打开，使用 `noopener noreferrer` 和 `no-referrer`。
+
+写结果未知时保留原 payload 与 operation，冻结输入供精确重试；焦点刷新不会丢弃待确认关联或把旧解除请求改指新关系。成功后重新读取权威状态。Workspace / 对象切换和失权清理相应状态，迟到响应被丢弃。成员仅共享读取元数据，不获得配置或外部仓库访问权。合同见 [ADR-0033](../docs/adr/0033-repository-mapping-and-component-relations.md)，验证见[实施记录](../docs/status/reviews/2026-10-06-repository-mapping.md)。

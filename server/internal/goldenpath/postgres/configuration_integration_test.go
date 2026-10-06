@@ -214,4 +214,5 @@ func TestFoundationConfigurationFromBootstrap(t *testing.T) {
 		t.Fatal("rebuild drift", before, after, e)
 	}
 	assertDeliveryConfigurationFromBootstrap(t, ctx, pool, owner, member, team.Object.ID)
+	assertRepositoryConfigurationFromBootstrap(t, ctx, pool, owner, member, team.Object.ID)
 }

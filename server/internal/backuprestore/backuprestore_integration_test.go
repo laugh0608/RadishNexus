@@ -69,6 +69,7 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	regrantBackupAuthorization(t, ctx, sourcePool, "dpa_backup", 2)
+	repositoryInputs, repositoryResults := seedBackupRepository(t, ctx, sourcePool, configurationInvocation)
 	if got := snapshotTable(t, ctx, sourcePool, "radishnexus.user_sessions"); got == "[]" {
 		t.Fatal("source user session fixture is empty")
 	}
@@ -77,8 +78,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rebuild source Activity projection: %v", err)
 	}
-	if projected != 8 {
-		t.Fatalf("source Activity rows = %d, want 8", projected)
+	if projected != 12 {
+		t.Fatalf("source Activity rows = %d, want 12", projected)
 	}
 	sourceSnapshot := snapshotIncludedTables(t, ctx, sourcePool)
 	sourceActivity := snapshotTable(t, ctx, sourcePool, "radishnexus.activity_items")
@@ -169,6 +170,17 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil || replayed.Created || replayed.Object.ID != configured.Object.ID {
 		t.Fatal("restored receipt did not preserve idempotency", replayed, err)
 	}
+	restoredConfiguration := goldenpath.NewConfigurationService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	for i, in := range repositoryInputs {
+		r, e := restoredConfiguration.Configure(ctx, configurationInvocation, in)
+		if e != nil || r.Created || r.Object.ID != repositoryResults[i].Object.ID || r.LinkID != repositoryResults[i].LinkID {
+			t.Fatal("restored Repository receipt drift", i, r, e)
+		}
+	}
+	repositoryLinks, e := restoredConfiguration.ListConfiguration(ctx, configurationInvocation.Principal, goldenpath.ConfigurationQuery{Kind: "component-repositories", ScopeID: "cmp_backup", Limit: 25})
+	if e != nil || len(repositoryLinks.Links) != 1 || repositoryLinks.Links[0].ID != repositoryResults[3].LinkID {
+		t.Fatal("old restored receipts changed active relation", repositoryLinks, e)
+	}
 	restoredSetup, err := authn.NewSetupService(nil, authpostgres.New(targetPool), "")
 	if err != nil {
 		t.Fatal(err)
@@ -216,8 +228,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rebuild target Activity projection: %v", err)
 	}
-	if projected != 8 {
-		t.Fatalf("target Activity rows = %d, want 8", projected)
+	if projected != 12 {
+		t.Fatalf("target Activity rows = %d, want 12", projected)
 	}
 	if targetActivity := snapshotTable(t, ctx, targetPool, "radishnexus.activity_items"); targetActivity != sourceActivity {
 		t.Fatalf("rebuilt Activity differs\nsource: %s\ntarget: %s", sourceActivity, targetActivity)
@@ -241,6 +253,30 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err := targetPool.QueryRow(ctx, `SELECT authorization_id FROM radishnexus.deployments WHERE id=$1`, deploymentID).Scan(&historicalAuthorization); err != nil || historicalAuthorization != "dpa_backup" {
 		t.Fatal("restored Deployment history changed", err)
 	}
+}
+
+func seedBackupRepository(t *testing.T, ctx context.Context, pool *pgxpool.Pool, inv goldenpath.Invocation) ([]goldenpath.ConfigurationInput, []goldenpath.ConfigurationResult) {
+	t.Helper()
+	s := goldenpath.NewConfigurationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	inputs := []goldenpath.ConfigurationInput{}
+	results := []goldenpath.ConfigurationResult{}
+	call := func(in goldenpath.ConfigurationInput) goldenpath.ConfigurationResult {
+		t.Helper()
+		r, e := s.Configure(ctx, inv, in)
+		if e != nil {
+			t.Fatal(e)
+		}
+		inputs = append(inputs, in)
+		results = append(results, r)
+		return r
+	}
+	repo := call(goldenpath.ConfigurationInput{Kind: "repository.create", ScopeID: "wrk_backup", ClientOperationID: "backup-repo", Name: "Backup source", Repository: &goldenpath.RepositoryConfigurationInput{RepositoryMetadata: goldenpath.RepositoryMetadata{Provider: "gitea", ProviderOrigin: "https://git.example.test", ExternalID: "backup-123", WebURL: "https://git.example.test/team/service", DefaultBranch: "main"}}})
+	link := goldenpath.ConfigurationInput{Kind: "component.repository.link", ScopeID: "cmp_backup", ClientOperationID: "backup-link", Repository: &goldenpath.RepositoryConfigurationInput{RepositoryID: repo.Object.ID, Confirmed: true}}
+	first := call(link)
+	call(goldenpath.ConfigurationInput{Kind: "component.repository.unlink", ScopeID: "cmp_backup", ClientOperationID: "backup-unlink", Repository: &goldenpath.RepositoryConfigurationInput{LinkID: first.LinkID, Confirmed: true}})
+	link.ClientOperationID = "backup-relink"
+	call(link)
+	return inputs, results
 }
 
 func regrantBackupAuthorization(t *testing.T, ctx context.Context, pool *pgxpool.Pool, previous string, wantGeneration int) {

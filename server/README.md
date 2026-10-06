@@ -13,7 +13,7 @@
 - 与业务状态同事务写入的不可变领域事件与 Outbox 投递状态；
 - 正式 Component、CI Run 与不可变 inbound delivery receipt schema；
 - 正式 Environment、环境级部署授权与不可变 Deployment schema；
-- 在业务事务内正常更新、并可从领域事件原子重建的 Activity projection version 3；
+- 在业务事务内正常更新、并可从领域事件原子重建的 Activity projection version 4；
 - 为 Thread、Decision、Ticket、Document、CI Run 和 Deployment 返回 Current、Relations 和 Timeline 的权限过滤 Nexus View query；
 - 一次性本地管理员 bootstrap、Argon2id credential、账号锁定、opaque Session、CSRF digest 与当前 Workspace membership resolver；
 - 把已验证 Session 用户转换为 application `Principal` 的认证 adapter；
@@ -239,7 +239,7 @@ go run ./cmd/nexus-restore --input /path/to/completed-backup-directory
 
 ## 最小 Markdown Document
 
-[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实；Document 切片将 Activity projection 升至版本 2；当前已由 ADR-0032 扩展为版本 3，新增事件可全量重建，旧投影不改变原有语义。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。
+[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实；Document 切片将 Activity projection 升至版本 2；当前已由 ADR-0033 扩展为版本 4，新增事件可全量重建，旧投影不改变原有语义。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。
 
 所有端点在 `/api/v1/workspaces/{workspace_id}` 下，要求当前 Session 与 Workspace membership；POST 另要求同源 CSRF。查询返回 `private, no-store`，不能通过引用授予权限。
 
@@ -289,3 +289,19 @@ migration 011 扩展既有协作 receipt 的 CHECK，保留 revision 合同。re
 migration 012 保留 revoked 授权，重新授予追加新 ID 与 generation，并保持每个环境 / 用户至多一条 active 记录。历史 Deployment 始终关联原授权；旧授予或撤销 receipt 不重新改变权限。事务按账户、membership、Environment、授权记录的顺序加锁；Deployment 同步重查账户状态。撤销允许清理 archived staging 与失效成员，production 不开放管理写入。
 
 创建对象、Audit、receipt、领域事件、Outbox 和 Activity 同事务提交；授权只进入窄 Audit。当前 Activity projection 为 3，新增 `component.created` / `environment.created`，migration 将现有 v2 投影标为 v3，重建与恢复继续从领域事件生成。不补造历史对象创建事件。全代次授权、成功 Audit / receipt 与旧 Deployment 引用属于既有备份权威表；升级必须显式迁移，旧二进制拒绝新 schema，不能删历史授权降级。
+
+
+## Repository 映射与 Component 关联
+
+[ADR-0033](../docs/adr/0033-repository-mapping-and-component-relations.md) 沿用 `ConfigurationService` 与 `ConfigurationHandler`。Workspace owner 创建不可变映射，成员共享读取元数据；owner 明确关联 active Component，或按精确 link ID 解除既有关系。多对多 `source-repository` 保留来源、active 唯一与 removed 历史，重新关联生成新 ID。旧 receipt 返回原处理结果后，客户端必须刷新当前关系。
+
+Session API 位于 `/api/v1/workspaces/{workspace_id}`：
+
+- `GET /repositories`、`POST /repositories`、`GET /repositories/{repository_id}/configuration`；
+- `GET /repositories/{repository_id}/components`；
+- `GET /components/{component_id}/repositories`、`POST /components/{component_id}/repositories`；
+- `DELETE /components/{component_id}/repository-links/{link_id}`。
+
+请求复用严格 JSON、CSRF、当前权限与绑定作用域游标；失去可发现性返回 404，缺 owner 写权限为 403，身份 / active 关系 / receipt 冲突为 409。provider origin 与浏览 URL 使用同一规范化规则，拒绝凭据、query、fragment、歧义路径和非 HTTPS；服务端不访问 URL。共享 DTO 不包含 Audit、receipt 或 Secret。
+
+migration 013 新增 `repositories`、关系来源和唯一性约束、Audit / receipt 白名单及 provenance 校验；旧命令摘要保持不变。Activity v4 同事务记录创建、关联与解除，Repository 表纳入权威备份。升级须配套 Go / Web；只读 readiness 拒绝旧二进制 / schema 不匹配。验收覆盖 012 升级、并发撤权、事务故障、重建与全新目标恢复，具体见[实施记录](../docs/status/reviews/2026-10-06-repository-mapping.md)。

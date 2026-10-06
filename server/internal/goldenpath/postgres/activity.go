@@ -37,6 +37,9 @@ type activityEventPayload struct {
 	Component            *entityref.Ref `json:"component"`
 	Environment          *entityref.Ref `json:"environment"`
 	CIRun                *entityref.Ref `json:"ci_run"`
+	Repository           *entityref.Ref `json:"repository"`
+	LinkID               string         `json:"link_id"`
+	State                string         `json:"state"`
 }
 
 type activityRecord struct {
@@ -69,7 +72,8 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
 		FROM radishnexus.domain_events
 		WHERE event_type IN (
 			'decision.proposed', 'decision.accepted', 'ticket.created',
-			'ci-run.recorded', 'deployment.recorded', 'project.created', 'channel.created', 'component.created', 'environment.created', 'document.created', 'document.revised'
+			'ci-run.recorded', 'deployment.recorded', 'project.created', 'channel.created', 'component.created', 'environment.created', 'document.created', 'document.revised',
+			'repository.created', 'component.repository-linked', 'component.repository-unlinked'
 		)
 		ORDER BY occurred_at, event_id
 	`)
@@ -202,7 +206,8 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 	if err := json.Unmarshal(event.payload, &payload); err != nil {
 		return activityRecord{}, fmt.Errorf("decode Activity event %s payload: %w", event.eventID, err)
 	}
-	if payload.Status == "" && event.target.Type != "document" && event.eventType != "component.created" {
+	repositoryEvent := event.eventType == "repository.created" || event.eventType == "component.repository-linked" || event.eventType == "component.repository-unlinked"
+	if payload.Status == "" && event.target.Type != "document" && event.eventType != "component.created" && !repositoryEvent {
 		return activityRecord{}, fmt.Errorf("project Activity event %s: status is required", event.eventID)
 	}
 
@@ -212,6 +217,21 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		safeFacts:     map[string]string{"status": payload.Status},
 	}
 	switch event.eventType {
+	case "repository.created":
+		if event.target.Type != "repository" || event.actorKind != "user" || event.actorID == nil || string(event.payload) != "{}" {
+			return activityRecord{}, fmt.Errorf("invalid Repository creation %s", event.eventID)
+		}
+		record.safeFacts = map[string]string{}
+	case "component.repository-linked", "component.repository-unlinked":
+		state := "active"
+		if event.eventType == "component.repository-unlinked" {
+			state = "removed"
+		}
+		if event.target.Type != "component" || event.actorKind != "user" || event.actorID == nil || payload.Repository == nil || payload.Repository.Type != "repository" || !goldenpath.ValidConfigurationID(payload.LinkID, "lnk_") || payload.State != state {
+			return activityRecord{}, fmt.Errorf("invalid Repository relation event %s", event.eventID)
+		}
+		record.subjects = []entityref.Ref{*payload.Repository}
+		record.safeFacts = map[string]string{"state": state}
 	case "component.created":
 		if event.target.Type != "component" || payload.Lifecycle != "active" || event.actorKind != "user" || event.actorID == nil {
 			return activityRecord{}, fmt.Errorf("invalid Component creation %s", event.eventID)

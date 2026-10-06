@@ -56,6 +56,7 @@ func deliveryConfigurationObject(ctx context.Context, tx pgx.Tx, workspace, kind
 	}
 	if kind == "component" {
 		err = tx.QueryRow(ctx, `SELECT key,name,type,lifecycle,COALESCE(owner_team_id,'') FROM radishnexus.components WHERE workspace_id=$1 AND id=$2 `+lock, workspace, id).Scan(&o.Key, &o.Name, &o.Type, &o.Status, &o.OwnerTeamID)
+		o.CanLinkRepository = owner && o.Status == "active"
 	} else {
 		err = tx.QueryRow(ctx, `SELECT key,name,classification,status,owner_team_id FROM radishnexus.environments WHERE workspace_id=$1 AND id=$2 `+lock, workspace, id).Scan(&o.Key, &o.Name, &o.Classification, &o.Status, &o.OwnerTeamID)
 		o.CanManage = owner && o.Classification == "staging"

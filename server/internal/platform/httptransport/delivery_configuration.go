@@ -45,7 +45,10 @@ func deliveryConfigurationDTO(o goldenpath.ConfigurationObject, detail bool) (an
 		}
 		data["type"], data["lifecycle"] = o.Type, o.Status
 		if detail {
-			data["capabilities"] = map[string]bool{}
+			if o.CanLinkRepository && o.Status != "active" {
+				return nil, invalid
+			}
+			data["capabilities"] = map[string]bool{"can_link_repository": o.CanLinkRepository}
 		}
 	} else if o.Kind == "environment" {
 		if !validScopedID(o.ID, "env_") || owner == nil || (o.Status != "active" && o.Status != "archived") || (o.Classification != "development" && o.Classification != "staging" && o.Classification != "production" && o.Classification != "other") {

@@ -71,7 +71,8 @@ func listRelationProjections(
 			WHERE workspace_id = $1 AND to_type = $2 AND to_id = $3 AND state = 'active'
 				AND (($2 = 'thread' AND from_type = 'decision' AND relation_type = 'derived-from')
 					OR ($2 = 'decision' AND from_type = 'ticket' AND relation_type = 'implements')
- OR ($2 = 'document' AND from_type = 'ticket' AND relation_type = 'relates-to'))
+ OR ($2 = 'document' AND from_type = 'ticket' AND relation_type = 'relates-to')
+ OR ($2 = 'repository' AND from_type = 'component' AND relation_type = 'source-repository'))
 		) AS relations
 		ORDER BY CASE direction WHEN 'outgoing' THEN 0 ELSE 1 END, created_at, id
 	`, principal.WorkspaceID, source.Type, source.ID)
@@ -235,6 +236,16 @@ func entityAccess(
 			)
 		`, principal.WorkspaceID, ref.ID).Scan(&exists)
 		return exists, readable, err
+	case "repository":
+		exists, err := entityExists(ctx, tx, "radishnexus.repositories", principal.WorkspaceID, ref.ID)
+		if err != nil || !exists {
+			return exists, false, err
+		}
+		_, err = configurationActor(ctx, tx, principal)
+		if errors.Is(err, authz.ErrNotFound) {
+			return true, false, nil
+		}
+		return true, err == nil, err
 	case "component":
 		var exists bool
 		err := tx.QueryRow(ctx, `
@@ -367,6 +378,8 @@ func entityTitle(ctx context.Context, tx pgx.Tx, workspaceID string, ref entityr
 		return "Message", nil
 	case "component":
 		query = "SELECT name FROM radishnexus.components WHERE workspace_id = $1 AND id = $2"
+	case "repository":
+		query = "SELECT name FROM radishnexus.repositories WHERE workspace_id = $1 AND id = $2"
 	case "environment":
 		query = "SELECT name FROM radishnexus.environments WHERE workspace_id = $1 AND id = $2"
 	case "ci-run":

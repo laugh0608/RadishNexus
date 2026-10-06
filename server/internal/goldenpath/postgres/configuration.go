@@ -116,7 +116,13 @@ func (s *Store) Configure(ctx context.Context, c goldenpath.ConfigurationCommand
 		return result, err
 	}
 	projectID := ""
-	if c.Kind == "team.create" || c.Kind == "project.create" || c.Kind == "component.create" || c.Kind == "environment.create" {
+	var repositoryID, repositoryLinkState string
+	if goldenpath.IsRepositoryConfiguration(c.Kind) {
+		repositoryID, repositoryLinkState, err = lockRepositoryConfiguration(ctx, tx, c, owner)
+		if err != nil {
+			return result, err
+		}
+	} else if c.Kind == "team.create" || c.Kind == "project.create" || c.Kind == "component.create" || c.Kind == "environment.create" {
 		if !owner {
 			return result, authz.ErrForbidden
 		}
@@ -158,12 +164,16 @@ func (s *Store) Configure(ctx context.Context, c goldenpath.ConfigurationCommand
 		}
 	}
 	var digest, resultID string
-	err = tx.QueryRow(ctx, `SELECT r.payload_sha256,a.result_id FROM radishnexus.workspace_configuration_receipts r JOIN radishnexus.workspace_configuration_audit a ON a.workspace_id=r.workspace_id AND a.id=r.audit_id WHERE r.workspace_id=$1 AND r.actor_id=$2 AND r.command_kind=$3 AND r.scope_id=$4 AND r.subject_id=$5 AND r.client_operation_id=$6`, c.Principal.WorkspaceID, c.Principal.ID, c.Kind, c.ScopeID, c.UserID, c.ClientOperationID).Scan(&digest, &resultID)
+	err = tx.QueryRow(ctx, `SELECT r.payload_sha256,a.result_id FROM radishnexus.workspace_configuration_receipts r JOIN radishnexus.workspace_configuration_audit a ON a.workspace_id=r.workspace_id AND a.id=r.audit_id WHERE r.workspace_id=$1 AND r.actor_id=$2 AND r.command_kind=$3 AND r.scope_id=$4 AND r.subject_id=$5 AND r.client_operation_id=$6`, c.Principal.WorkspaceID, c.Principal.ID, c.Kind, c.ScopeID, c.SubjectID(), c.ClientOperationID).Scan(&digest, &resultID)
 	if err == nil {
 		if digest != c.PayloadSHA256 {
 			return result, authz.ErrConflict
 		}
 		switch c.Kind {
+		case "repository.create":
+			result.Object, err = repositoryConfigurationObject(ctx, tx, c.Principal, resultID)
+		case "component.repository.link", "component.repository.unlink":
+			result.LinkID = resultID
 		case "team.create":
 			result.Object = goldenpath.ConfigurationObject{ID: resultID, Kind: "team"}
 			err = tx.QueryRow(ctx, `SELECT name FROM radishnexus.teams WHERE workspace_id=$1 AND id=$2`, c.Principal.WorkspaceID, resultID).Scan(&result.Object.Name)
@@ -194,6 +204,10 @@ func (s *Store) Configure(ctx context.Context, c goldenpath.ConfigurationCommand
 	grantedUsers := []string{}
 	authorizationID := ""
 	switch c.Kind {
+	case "repository.create":
+		result.Object, err = createRepositoryConfiguration(ctx, tx, c)
+	case "component.repository.link", "component.repository.unlink":
+		result.LinkID, before, after, err = changeRepositoryLink(ctx, tx, c, repositoryID, repositoryLinkState)
 	case "component.create", "environment.create":
 		result.Object, err = createDeliveryConfiguration(ctx, tx, c)
 	case "environment.authorization.grant", "environment.authorization.revoke":
@@ -245,14 +259,17 @@ func (s *Store) Configure(ctx context.Context, c goldenpath.ConfigurationCommand
 		return result, mapDatabaseError("configure workspace", err)
 	}
 	resultID = c.ID
+	if result.LinkID != "" {
+		resultID = result.LinkID
+	}
 	if resultID == "" {
 		resultID = c.UserID
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO radishnexus.workspace_configuration_audit(id,workspace_id,actor_id,command_kind,scope_id,subject_id,result_id,before_state,after_state,changed,removed_channel_ids,removed_thread_ids,request_id,occurred_at,granted_user_ids,authorization_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`, c.AuditID, c.Principal.WorkspaceID, c.Principal.ID, c.Kind, c.ScopeID, c.UserID, resultID, before, after, changed, removedChannels, removedThreads, c.CorrelationID, c.OccurredAt, grantedUsers, nullable(authorizationID))
+	_, err = tx.Exec(ctx, `INSERT INTO radishnexus.workspace_configuration_audit(id,workspace_id,actor_id,command_kind,scope_id,subject_id,result_id,before_state,after_state,changed,removed_channel_ids,removed_thread_ids,request_id,occurred_at,granted_user_ids,authorization_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`, c.AuditID, c.Principal.WorkspaceID, c.Principal.ID, c.Kind, c.ScopeID, c.SubjectID(), resultID, before, after, changed, removedChannels, removedThreads, c.CorrelationID, c.OccurredAt, grantedUsers, nullable(authorizationID))
 	if err != nil {
 		return result, fmt.Errorf("record configuration audit: %w", err)
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO radishnexus.workspace_configuration_receipts(workspace_id,actor_id,command_kind,scope_id,subject_id,client_operation_id,payload_sha256,audit_id,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, c.Principal.WorkspaceID, c.Principal.ID, c.Kind, c.ScopeID, c.UserID, c.ClientOperationID, c.PayloadSHA256, c.AuditID, c.OccurredAt)
+	_, err = tx.Exec(ctx, `INSERT INTO radishnexus.workspace_configuration_receipts(workspace_id,actor_id,command_kind,scope_id,subject_id,client_operation_id,payload_sha256,audit_id,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, c.Principal.WorkspaceID, c.Principal.ID, c.Kind, c.ScopeID, c.SubjectID(), c.ClientOperationID, c.PayloadSHA256, c.AuditID, c.OccurredAt)
 	if err != nil {
 		return result, fmt.Errorf("record configuration receipt: %w", err)
 	}
@@ -264,7 +281,18 @@ func (s *Store) Configure(ctx context.Context, c goldenpath.ConfigurationCommand
 		if c.Kind == "environment.create" {
 			payload["classification"] = "staging"
 		}
-		err = insertEvent(ctx, tx, eventRecord{ID: c.EventID, Type: result.Object.Kind + ".created", WorkspaceID: c.Principal.WorkspaceID, ActorKind: "user", ActorID: c.Principal.ID, SourceKind: c.SourceKind, PrimaryType: result.Object.Kind, PrimaryID: c.ID, ProjectID: projectID, CorrelationID: c.CorrelationID, OccurredAt: c.OccurredAt, Payload: payload})
+		event := eventRecord{ID: c.EventID, Type: result.Object.Kind + ".created", WorkspaceID: c.Principal.WorkspaceID, ActorKind: "user", ActorID: c.Principal.ID, SourceKind: c.SourceKind, PrimaryType: result.Object.Kind, PrimaryID: c.ID, ProjectID: projectID, CorrelationID: c.CorrelationID, OccurredAt: c.OccurredAt, Payload: payload}
+		if c.Kind == "repository.create" {
+			event.Payload = map[string]any{}
+		} else if result.LinkID != "" {
+			event.PrimaryType, event.PrimaryID = "component", c.ScopeID
+			event.Type = "component.repository-linked"
+			if c.Kind == "component.repository.unlink" {
+				event.Type = "component.repository-unlinked"
+			}
+			event.Payload = map[string]any{"repository": map[string]string{"type": "repository", "id": repositoryID}, "link_id": result.LinkID, "state": after}
+		}
+		err = insertEvent(ctx, tx, event)
 		if err != nil {
 			return result, err
 		}

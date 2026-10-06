@@ -8,6 +8,7 @@ export function useAction(
 ) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [uncertain, setUncertain] = useState(false);
   const pending = useRef(false);
   const alive = useRef(true);
   const retry = useRef<{ signature: string; id: string } | null>(null);
@@ -37,11 +38,19 @@ export function useAction(
       });
       retry.current = null;
       if (alive.current) {
+        setUncertain(false);
         setMessage("已保存。");
         done(result);
       }
     } catch (error) {
       if (!alive.current) return;
+      setUncertain(
+        !(
+          error instanceof AuthRequestError &&
+          error.status !== undefined &&
+          error.status < 500
+        ),
+      );
       if (error instanceof AuthRequestError && error.status === 401) {
         onSessionExpired();
         return;
@@ -65,7 +74,7 @@ export function useAction(
       if (alive.current) setBusy(false);
     }
   };
-  return { busy, message, run };
+  return { busy, message, uncertain, run };
 }
 export function usePage<T>(
   load: (
