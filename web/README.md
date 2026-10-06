@@ -1,6 +1,6 @@
 # RadishNexus Web
 
-`web/` 是 RadishNexus 第一正式产品形态的 React + TypeScript 入口。当前根路径已经建立最小 authenticated Web Shell，消费正式 login / session / logout transport，允许从当前 Session context 选择 Workspace、分页浏览可读 Project 并打开可读 Channel；Deployment、CI Run、Thread、Decision 与 Ticket 的已知 ID 工具保留在次级入口。Deployment / CI Run 页面安全读取 Nexus View，成功 CI Run 可显式记录外部 staging 部署结果；Ticket 可创建 Markdown Document，Project 提供文档列表，Document 页面提供编辑与历史恢复；Channel 页面通过类型化 adapter 分页读取 Message、幂等发送并从 Message 发起 Thread；Thread → Proposed Decision → 人工 Accepted Decision → Ticket 继续使用权限过滤后的 canonical Nexus View 和幂等短请求。原 Decision、CI Run 与 Deployment 代表原型移动到显式 `/prototype/nexus-view`，不参与真实失败 fallback。
+`web/` 是 RadishNexus 第一正式产品形态的 React + TypeScript 入口。当前根路径已经建立最小 authenticated Web Shell，消费正式 login / session / logout transport，允许从当前 Session context 选择 Workspace、分页浏览可读 Project 并打开可读 Channel；Deployment、CI Run、Thread、Decision 与 Ticket 的已知 ID 工具保留在次级入口。Deployment / CI Run 页面安全读取 Nexus View，成功 CI Run 可显式记录外部 staging 部署结果；Ticket 可创建 Markdown Document、人工关联软件组件，并通过稳定组件详情反查可读事项；首页还提供 Repository 映射及组件关联。Project 提供文档列表，Document 页面提供编辑与历史恢复；Channel 页面通过类型化 adapter 分页读取 Message、幂等发送并从 Message 发起 Thread；Thread → Proposed Decision → 人工 Accepted Decision → Ticket 继续使用权限过滤后的 canonical Nexus View 和幂等短请求。原 Decision、CI Run 与 Deployment 代表原型移动到显式 `/prototype/nexus-view`，不参与真实失败 fallback。
 
 ## 本地运行
 
@@ -113,4 +113,4 @@ Document 默认集中阅读，来源 Ticket 保留标题下入口；信息展开
 
 `collaboration/TicketComponents.tsx` 在 Ticket 页提供涉及组件、分页候选与人工确认的关联 / 精确解除；`ticket-component-api.ts` 严格校验关系、能力、摘要与原请求结果。关系事件以独立 `relationState` 展示，不借用 Ticket 状态。成功刷新原 Relations 和 Timeline，网络结果未知时保留同一 payload / operation 供显式重试。
 
-组件地址为 `/workspaces/{workspace_id}/components/{component_id}`，由 `workspace/ComponentPage.tsx` 复用现有配置详情、Repository 关系和反向 Ticket 分页；首页及 Ticket 关系使用稳定链接，反向 Ticket 只显示当前可读项。新关联禁选 retired Component；失去 Project 写权限后关闭表单但保留可读上下文，失去端点读取权则清空。待解除关系独立保留旧 link ID，并在焦点恢复时复核当前 Ticket 能力，不把旧请求改指新一代关系。合同见 [ADR-0034](../docs/adr/0034-ticket-component-relations.md)。
+组件地址为 `/workspaces/{workspace_id}/components/{component_id}`，由 `workspace/ComponentPage.tsx` 复用现有配置详情、Repository 关系和反向 Ticket 分页；首页及 Ticket 关系使用稳定链接，反向 Ticket 只显示当前可读项。新关联禁选 retired Component；失去 Project 写权限后关闭表单但保留可读上下文，失去端点读取权则清空。待解除关系独立保留旧 link ID，并在焦点恢复时复核当前 Ticket 能力，不把旧请求改指新一代关系。合同见 [ADR-0034](../docs/adr/0034-ticket-component-relations.md)，自动化与浏览器验收范围见[实施记录](../docs/status/reviews/2026-10-06-ticket-component.md)。

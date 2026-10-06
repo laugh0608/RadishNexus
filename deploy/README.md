@@ -165,6 +165,12 @@ docker compose -f deploy/compose.yaml down
 
 就绪成功不代表 bootstrap 或旧账户邮箱映射已完成，也不验证 migration 之外的手工 DDL；初始化与升级操作仍分别确认结果。当前不支持跨 schema 版本滚动兼容，探针只是即时判断，不代替升级窗口协调。详见[服务端健康检查](../server/README.md#存活与业务就绪)。
 
+## 当前 schema 与演练证据
+
+当前工件包含 migration 014 和 Activity v5。Repository 映射、两类组件人工关系、配置 / 协作 receipt 已纳入对应权威表备份，恢复后显式重建 Activity；Go、Web 与 schema 必须配套更新，仍不支持跨 schema 版本滚动兼容。具体升级与恢复证据见[Repository 记录](../docs/status/reviews/2026-10-06-repository-mapping.md)和[Ticket / Component 记录](../docs/status/reviews/2026-10-06-ticket-component.md)。
+
+这些隔离数据库与浏览器结果不代表业务实例已迁移，也不代替完整 Compose 镜像升级演练。已有完整 Compose 历史演练未覆盖 migration 008–014、后续业务入口与新就绪探针；当前版本的镜像、Secret 挂载及升级路径仍须单独验收。
+
 ## 仓库演练
 
 准备好配置中记录的五个固定基础镜像后，从仓库根运行：

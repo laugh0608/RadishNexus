@@ -152,7 +152,9 @@ entity://environment/env_002
 
 CI Run 的 Session 公共读取合同见 [ADR-0029](../adr/0029-session-scoped-ci-run-nexus-view.md)，外部终态写入的受控来源、签名与重放边界见 [ADR-0030](../adr/0030-authenticated-jenkins-delivery-adapter.md)。Jenkins adapter 验证后调用既有 service，不承担 Deployment 确认或用户授权，也不要求 Nexus 默认自部署拓扑启动 Jenkins。成功 CI Run 的 staging 记录按 [ADR-0031](../adr/0031-session-scoped-staging-deployment-recording.md) 通过独立 Session 命令和显式环境授权完成；migration 011 扩展既有 receipt，精确重试与当前权限复核共用唯一业务事务。
 
-Component / staging Environment 的最小创建、发现与显式授权管理已按 [ADR-0032](../adr/0032-component-environment-configuration-and-authorization.md) 接入既有配置 service、成功 Audit / receipt 与 Session API。migration 012 保留撤销授权并追加不可变代次，历史 Deployment 继续引用当时授权；owner 管理权不自动成为部署记录权。创建事件进入 Activity v3，授权明细只进入窄 Audit；Repository 映射、交付关系和持久来源配置仍是独立范围。
+Component / staging Environment 的最小创建、发现与显式授权管理已按 [ADR-0032](../adr/0032-component-environment-configuration-and-authorization.md) 接入既有配置 service、成功 Audit / receipt 与 Session API。migration 012 保留撤销授权并追加不可变代次，历史 Deployment 继续引用当时授权；owner 管理权不自动成为部署记录权。该切片的创建事件自 Activity v3 起纳入投影，授权明细只进入窄 Audit。Repository 最小映射与 Component 的人工 `source-repository` 已按 [ADR-0033](../adr/0033-repository-mapping-and-component-relations.md) 和 migration 013 接通，沿 Workspace owner 配置权管理，成员共享读取；外部 provider 连接、具体交付来源和持久来源配置仍是独立范围。
+
+Ticket 与 Component 已按 [ADR-0034](../adr/0034-ticket-component-relations.md) 接通人工 `affects` 关系、Project 权限与双向读取。独立关系 service 复用协作 receipt 和业务事务，migration 014 与 Activity v5 配套升级；组件页仅汇集当前可读关系，不从共属组件推导 Ticket 已交付。
 
 ## EntityLink 与 Nexus View
 
@@ -235,7 +237,7 @@ canonical Channel Web 对 SSE 使用“先建立连接并收到 `ready`、再读
 
 M0.5 已建立第一条可验证恢复路径：显式命令生成版本化 manifest 与 PostgreSQL custom archive，只在本地或受控私有连接的全新空 PostgreSQL 17 目标上以单事务恢复，随后执行正式 forward-only migration 校验并从不可变领域事件重建 Activity。当前工件是同 major 整库运维备份，不是 `.nexus` 开放导出，也不包含自动覆盖、TLS 工具桥接、跨大版本承诺、远程存储、加密或 Secret 备份。精确边界见 [ADR-0010](../adr/0010-verified-postgresql-backup-and-restore.md)。
 
-M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 Caddy 是唯一宿主 HTTPS 入口，Go server 同源交付 production Web build 与 API，PostgreSQL 只位于内部数据网络；migration、一次性 bootstrap、backup 和 restore 继续使用现有显式 CLI，数据库密码通过按 service 挂载的文件 Secret 输入。该拓扑已经从全新命名 volume 验证 PostgreSQL readiness、migration、一次 bootstrap、重复 bootstrap 拒绝、HTTPS login / Session / logout、转发 Header 清洗和非公开应用/数据库端口；它仍不是公网证书、高可用或跨 major 升级方案。Go 业务就绪探针现按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 只读核对完整 migration history，缺失、漂移或版本不匹配返回不可用。此前完整 Compose 演练不包含 migration 008–012、新业务就绪探针、网页首访初始化和后续 Document / 交付入口；setup overlay 只通过配置合并校验，当前版本镜像、Secret 实际挂载与升级路径仍需单独演练。拓扑边界见 [ADR-0016](../adr/0016-minimal-docker-compose-self-hosting.md) 和 [`deploy/README.md`](../../deploy/README.md)。
+M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 Caddy 是唯一宿主 HTTPS 入口，Go server 同源交付 production Web build 与 API，PostgreSQL 只位于内部数据网络；migration、一次性 bootstrap、backup 和 restore 继续使用现有显式 CLI，数据库密码通过按 service 挂载的文件 Secret 输入。该拓扑已经从全新命名 volume 验证 PostgreSQL readiness、migration、一次 bootstrap、重复 bootstrap 拒绝、HTTPS login / Session / logout、转发 Header 清洗和非公开应用/数据库端口；它仍不是公网证书、高可用或跨 major 升级方案。Go 业务就绪探针现按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 只读核对完整 migration history，缺失、漂移或版本不匹配返回不可用。此前完整 Compose 演练不包含 migration 008–014、新业务就绪探针、网页首访初始化和后续 Document / 交付入口；setup overlay 只通过配置合并校验，当前版本镜像、Secret 实际挂载与升级路径仍需单独演练。拓扑边界见 [ADR-0016](../adr/0016-minimal-docker-compose-self-hosting.md) 和 [`deploy/README.md`](../../deploy/README.md)。
 
 ### 可移植上下文包
 
@@ -283,5 +285,3 @@ RadishNexus/
 ```
 
 未来 SDK 和插件目录必须拥有独立许可证，不能因位于同一仓库而模糊授权边界；`deploy/` 只承载已经冻结且可复验的部署工件，不提前放置高可用、Kubernetes 或公网生产占位结构。
-
-Ticket 与 Component 已按 [ADR-0034](../adr/0034-ticket-component-relations.md) 接通人工 `affects` 关系、Project 权限与双向读取。独立关系 service 复用协作 receipt 和业务事务，migration 014 与 Activity v5 配套升级；组件页仅汇集当前可读关系，不从共属组件推导 Ticket 已交付。

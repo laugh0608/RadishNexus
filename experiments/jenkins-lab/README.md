@@ -16,7 +16,7 @@
 
 专用 Freestyle job 在独立 agent 上执行三个无外部副作用的探针：SUCCESS（退出 0）、FAILURE（退出 1）、ABORTED（等待期间由 controller 中断）。controller 的受控 `RunListener.onFinalized` 从已完成 Run 生成不可由 agent 改写的快照，宿主收集该文件，再通过现有 Go sender、真实 TLS 接口、一次性 PostgreSQL 和 Session GET 验证 CI Run / Activity。
 
-这验证真实 Jenkins 事实的采集与交付，不是长期插件、生产通知部署或普通用户独立配置能力。试验不克隆任何仓库，不执行 production / staging 部署。基础 Workspace / Component 与用户权限来自既有数据库测试 fixture；不会预置 CI Run 或 Activity。没有 Component 正式配置入口，不能将该基础 fixture 宣称为从空产品独立配置成功。
+这验证真实 Jenkins 事实的采集与交付，不是长期插件、生产通知部署或普通用户独立配置能力。试验不克隆任何仓库，不执行 production / staging 部署。基础 Workspace / Component 与用户权限来自既有数据库测试 fixture；不会预置 CI Run 或 Activity。当次联调尚无 Component 正式配置入口，不能将该基础 fixture 宣称为从空产品独立配置成功。此后 Component / Environment 配置、Repository 映射及 Ticket / Component 人工关联已分别接通，见[当前状态](../../docs/status/current.md)；尚未以新配置对象重跑这条真实 Jenkins 整链。
 
 ## 具体资源与授权范围
 

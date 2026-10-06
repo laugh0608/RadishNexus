@@ -53,13 +53,23 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 Ticket 与 Component 人工关联已按 ADR-0034 实现。下一段先设计持久终态采集的运行、来源配置、失败恢复和幂等边界，再明确 Ticket 与具体 CI Run / Deployment 的来源证据；同属一个 Component 不能推导已交付事实。真实 Jenkins → 新配置对象 → 浏览器记录 staging 的整链仍待验收。方案确认前不扩展公共协议、业务数据模型或外部运行状态。
 
+### 明天事项：2026-10-07 接续建议
+
+今天到此收尾，以下为下一次人工接续清单，不创建提醒或自动任务：
+
+1. **先补收尾验收**：在最终工件上补 Ticket / Component 浏览器后退、Project 写权 / 读权收回、反向列表与待确认表单清理，补最终布局截图。启动临时服务时重新明确本次资源与清理范围；沿用现有自动化结果，不能把上轮 fixture 超时写成通过。
+2. **主线先做设计**：核对 Jenkins finalized 快照、有限重试 sender 与受控 source 配置，提出持久终态采集最小方案，明确持久队列、重启恢复、去重 / 重放、失败可见性、凭据和生命周期。涉及新模型、协议、依赖或外部运行状态时先说明影响并确认范围，再实施。
+3. **另列交付来源与整链验收**：明确 Repository / commit / CI Run 的来源证据，再决定 Ticket 如何关联具体交付；不按 Component 共属自动推导。规划“正式新配置对象 → 真实 Jenkins → 浏览器记录 staging → 撤权阻止新记录且历史仍可读”的整链。原生中文 IME 保持暂缓，真实团队试用与生产门槛不变。
+
+今天的提交回顾与文档审阅见[10 月 6 日收尾记录](reviews/2026-10-06-daily-closeout.md)。
+
 ### 本轮完成：Ticket 与 Component 人工关联
 
 所有者确认 [ADR-0034](../adr/0034-ticket-component-relations.md) 后，基于 `f878090` 在本地 `dev` 实施。migration 014、Project contributor / decider / admin 写权限、人工 `affects` 关系、精确解除 / 重连、双向权限分页、Activity v5 与组件稳定详情入口已接通。原 Ticket 的 Decision 来源、Current 与内容时间不变。
 
 Go、真实 PostgreSQL、013→014 升级、备份恢复和 Web 全量检查通过；HTTPS 浏览器从正式空业务工作区完成 Message → Thread → Decision → Ticket、Component 创建、关联 / 解除 / 重连、双向跳转、稳定地址重载与桌面 / 手机 / 键盘操作。权限撤回和迟到响应由数据库及 Web 自动化验证；浏览器环境到达时限后清理，未完成浏览器权限撤回与后退专项，不将环境超时记为通过。具体证据见[实施记录](reviews/2026-10-06-ticket-component.md)。
 
-本切片尚未提交，未 push 或应用业务实例迁移。本轮临时服务与隔离浏览器已清理；不代表完整 Golden Path 或真实团队持续使用完成。
+本切片已提交为 `e156a5d`，未 push 或应用业务实例迁移。本轮临时服务与隔离浏览器已清理；不代表完整 Golden Path 或真实团队持续使用完成。
 
 ### 本轮完成：Repository 映射与 Component 关联
 
@@ -138,6 +148,8 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
 
 ## 证据与历史
+
+- [2026-10-06 提交回顾与文档收尾](reviews/2026-10-06-daily-closeout.md)：两笔实现提交、源码与文档核对及 10 月 7 日接续建议。
 
 - [2026-10-06 Ticket 与 Component 人工关联](reviews/2026-10-06-ticket-component.md)：migration 014、Project 权限、双向分页、关系代次、升级 / 恢复和浏览器证据边界。
 
