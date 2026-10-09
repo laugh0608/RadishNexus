@@ -39,6 +39,7 @@
 ## 状态与验证入口
 
 - [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
+- [2026-10-09 提交回顾与文档收尾](status/reviews/2026-10-09-daily-closeout.md)：持久发送、可信采集与双边清理的提交映射、文档核对和次日接续建议。
 - [2026-10-09 双边显式清理](status/reviews/2026-10-09-jenkins-cleanup.md)：双方确认、7 天保留、紧凑索引、进程中断与恢复；真实联调暂缓。
 - [2026-10-09 可信 collector 代码与离线验证](status/reviews/2026-10-09-jenkins-collector.md)：周期补采、历史缺口、故障与交接契约；真实联调暂缓。
 - [2026-10-09 浏览器补验与持久终态快照发送](status/reviews/2026-10-09-delivery-continuation.md)：Ticket / Component 撤权补验、ADR-0035 A 实现与恢复证据；B 后续见采集记录。

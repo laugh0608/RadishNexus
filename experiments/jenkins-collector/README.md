@@ -66,7 +66,7 @@
 4. worker 按自己的配置独立运行。Jenkins 回调只做有界本地操作，不等待 HTTPS sender。
 5. 显式停用 / 重载时，由可信管理员执行 `stop.groovy`，等待同步方法结束、取消 timer、保存 stopped 状态、释放锁并移除 listener。随后才能重新执行 `start.groovy`。重复注册或身份未知会被拒绝，不覆盖旧实例。
 
-JVM 退出由操作系统释放文件锁；再次启动沿已有 checkpoint 补采，不自动清空错误、历史或输入。发生写盘故障、输入冲突、确认冲突或来源漂移后，当前实例保持 paused，修复后必须显式停用并重启；不能通过修改 checkpoint 重置范围。原有 receiver 撤销与密钥轮换仍按 worker 说明操作；停止 collector 不撤销机器写权限。
+JVM 退出由操作系统释放文件锁；再次启动读取原 checkpoint，沿原编号范围补采，保留历史和输入。发生写盘故障、输入冲突、确认冲突或来源漂移后，当前实例保持 paused，修复后必须显式停用并重启；新实例成功完成一次回调或对账后清除 error 并记录 running，仍有问题则再次暂停。不能通过修改 checkpoint 重置范围。原有 receiver 撤销与密钥轮换仍按 worker 说明操作；停止 collector 不撤销机器写权限。
 
 ## 状态与容量
 
@@ -97,7 +97,7 @@ retired 与 published 都计入连续采集前缀。对账不会重建 retired �
 experiments/jenkins-collector/check.sh
 ```
 
-只使用本地已缓存镜像，`--network none`、只读根文件系统和源码、受限 tmpfs；不启动 Jenkins HTTP、agent 或 probe，不自动拉取镜像。镜像内真实 API 编译通过与真实 controller 运行是两类证据。
+本轮验证使用本地已缓存镜像，容器采用 `--network none`、只读根文件系统和源码、受限 tmpfs，不启动 Jenkins HTTP、agent 或 probe。运行前须确认上述固定镜像已缓存：当前脚本没有设置禁止拉取参数，镜像缺失时 Docker 仍可能默认拉取；容器禁网不限制 daemon 拉取行为，缺失镜像的下载须另行授权。镜像内真实 API 编译通过与真实 controller 运行是两类证据。
 
 需要核对 Groovy 到 Go 的实际字节时，先创建一个空的临时导出目录，再执行：
 

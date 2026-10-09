@@ -49,7 +49,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 免费书面授权与评估说明应在邀请外部团队前准备，不能等到完整聊天或 CRDT 完成；版本化结构化导出与全新实例导入仍是 M1 的独立退出条件。账号恢复、安全审计、数据生命周期、数据库最小权限与升级演练按[路线图](../roadmap.md)的试用和生产边界推进，不因本表只列近期切片而取消。
 
-### 当前接续：可信 controller 对账与交付来源
+### 当前接续：交付来源设计与真实采集验收
 
 Ticket 与 Component 人工关联已按 ADR-0034 实现，浏览器后退、显式刷新读 / 写权撤回及最终布局已补验。[ADR-0035 A](../adr/0035-durable-jenkins-terminal-delivery.md) 已获确认并实现：单 source / 单 worker 持久发送、不可变输入、重启预算、分类失败、精确恢复、只读状态与确认记录。没有业务 migration、公共 v1 协议或依赖变化；这不代表 controller 持续采集或漏采恢复完成。
 
@@ -59,21 +59,19 @@ Ticket 与 Component 人工关联已按 ADR-0034 实现，浏览器后退、显�
 2. **B：真实采集验收（暂缓）**：独立 controller 与双边清理已具备离线证据，但本机 Docker bind mount 实测为 FUSE，超出支持范围。所有者已明确暂缓真实联调，原生 Linux 环境下的真实重启 / 挂载验收尚未完成，恢复时另行明确资源与授权，见[采集记录](reviews/2026-10-09-jenkins-collector.md)和[清理记录](reviews/2026-10-09-jenkins-cleanup.md)。
 3. **真实整链验收**：正式新配置对象 → 真实 Jenkins → 浏览器记录已完成的外部 staging → 撤权阻止新记录且历史按当前权限可读。没有实际外部 staging 行为时只验收到 CI Run，不伪造 Deployment。
 
-### 本轮推进：双边显式安全清理
+### 明天事项（2026-10-10）：具体交付来源设计
 
-基于 `8a0634b` 的干净工作区，按所有者确认推进 collector retired 记录与 worker 紧凑索引。精确 build 的预览不修改数据；显式确认后先持久记录再删除 / 压缩，双方保留期均不少于 7 天，确认不一致、未交付、仍有输入或来源暂停均不执行。新程序读取 v1 / v2，只有显式清理产生 v2；索引继续占身份配额，恢复旧输入不会重发同一交付。
+1. 从既有 Repository 映射、Component 人工关系、`VerifiedJenkinsDelivery` 与当前 v1 快照出发，列出尚缺的来源事实和采集可信边界；不从 job 名、URL 或共享 Component 猜测仓库与提交。
+2. 形成独立提案：明确 Repository 稳定身份、完整 commit 标识、单仓库 / 多仓库、重跑 / 重建、来源缺失与冲突的处理，以及历史事实和当前权限如何共存。列明涉及的 payload、模型 / migration、EntityLink、事件、恢复与展示影响，交由所有者确认范围后再实施。
+3. 退出判据是可审阅的来源证据合同、失败场景和首个实现切片；Ticket 与具体构建 / 部署的关系留到来源合同明确后再冻结。今天不提前启动设计或修改公共协议。
 
-离线故障、进程中断、备份副本恢复、跨语言证明和 Linux CLI 验证见[清理记录](reviews/2026-10-09-jenkins-cleanup.md)。本次改动未提交；没有清理真实业务 / 旧实验数据、启动真实 Jenkins 或修改依赖、公共 HTTP v1、业务 schema。真实联调仍按所有者要求暂缓，ADR-0035 B 不标记完成。
+真实 Jenkins 联调和原生中文 IME 继续暂缓。恢复 Jenkins 验收需另行明确原生 Linux 持久目录、controller / worker / agent 资源与清理方式，不能以本机 FUSE bind mount 或合成测试替代。以上是次日接续清单，不是提醒、自动任务或外部操作授权。
 
-### 本轮推进：可信 collector 代码交付
+### 本日收尾：2026-10-09
 
-在 `47f2761` 后继续实现独立 controller 采集与对账，保留低编号缺口、不可变输入与交接摘要，增加独立心跳和显式卸载；固定镜像内编译及离线故障检查、Groovy / Go 交接契约通过。没有启动真实 Jenkins，没有修改旧实验或引入依赖。采集代码已提交为 `8a0634b`；真实联调已按所有者要求暂缓，后续显式清理见上方记录，不能标记 ADR-0035 B 完成。操作说明见[collector](../../experiments/jenkins-collector/README.md)，证据见[实施记录](reviews/2026-10-09-jenkins-collector.md)。
+今天三笔实现已提交：`47f2761` 持久发送与恢复、`8a0634b` 可信终态采集与漏采对账、`b457eb2` 双边显式清理与恢复。Ticket / Component 的后退、显式刷新撤权及布局补验通过；发送、采集与清理的测试范围分别见[发送记录](reviews/2026-10-09-delivery-continuation.md)、[采集记录](reviews/2026-10-09-jenkins-collector.md)和[清理记录](reviews/2026-10-09-jenkins-cleanup.md)。完整提交回顾与文档核对见[收尾记录](reviews/2026-10-09-daily-closeout.md)。
 
-### 本轮完成：2026-10-09 补验与持久发送
-
-基于 `c81d162` 在本地 `dev` 实施，已按所有者要求提交为 `47f2761`，未 push。Ticket / Component 浏览器补验通过；权限状态仅在一次性数据库定向注入，未将其称作管理员交接 UI 验收。Go 全量 race / vet、真实 PostgreSQL、Linux CLI / SIGTERM 与故障恢复通过，含 receiver 提交后杀进程、同身份重放得到原 CI Run、Activity 唯一且不创建 Deployment。配置与操作见 [worker 说明](../../server/jenkins-worker.md)，详细验证和局限见[本轮记录](reviews/2026-10-09-delivery-continuation.md)。
-
-临时浏览器、fixture 和测试容器已清理；未启动真实 Jenkins、应用业务数据库变更、部署或 push。原生中文 IME 保持暂缓，真实团队试用与生产门槛不变。此前[10 月 6 日收尾清单](reviews/2026-10-06-daily-closeout.md)保留历史含义，当前顺序以上述接续为准；没有创建提醒或自动任务。
+本日不增加依赖、业务 schema 或公共 HTTP v1 字段；未启动真实 Jenkins、清理真实业务 / 旧实验数据、应用业务实例迁移或 push。临时浏览器、fixture 和测试容器已退出。collector 真实持续运行、跨容器挂载与重启验收仍缺，ADR-0035 B 不标记完成；团队持续使用与生产门槛不变。此前[10 月 6 日收尾清单](reviews/2026-10-06-daily-closeout.md)保留历史含义，当前顺序以上述接续为准。
 
 ### 本轮完成：Ticket 与 Component 人工关联
 
@@ -160,6 +158,8 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
 
 ## 证据与历史
+
+- [2026-10-09 提交回顾与文档收尾](reviews/2026-10-09-daily-closeout.md)：三笔实现、源码与文档核对、次日接续与停止线。
 
 - [2026-10-09 双边显式清理](reviews/2026-10-09-jenkins-cleanup.md)：保留期、retired / compacted、精确确认、进程中断与恢复，真实联调暂缓。
 

@@ -8,6 +8,7 @@
 - 权限过滤、稳定 keyset 分页的 Project / Channel 发现和 canonical Channel Message application query；
 - Thread → Decision → Ticket 的幂等 application service 与 immutable command receipt；
 - 受控 Jenkins HMAC delivery → 完成态 CI Run 的 HTTP adapter、application service 与有限重试发送命令；
+- 独立 Jenkins 快照持久发送 worker、重启预算、精确恢复与双边确认后的显式 payload 清理；
 - 显式授权用户记录终态 staging Deployment 的 application service、Session 目标查询 / 写入与精确重试 receipt；
 - Project 角色、restricted Thread 和关系投影权限；
 - 与业务状态同事务写入的不可变领域事件与 Outbox 投递状态；
@@ -91,7 +92,9 @@ python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Emai
 
 ## Jenkins 来源接入
 
-默认关闭，通过 `RADISHNEXUS_JENKINS_SOURCES_FILE` 显式启用受控来源；文件 Secret、来源绑定、HMAC / 重放、终态映射和有限重试发送工具的使用见 [Jenkins 接入说明](jenkins.md)。复用既有 CI Run 事务，无数据库迁移或新依赖。自动化与真实 Jenkins 三态隔离联调已验证，见[联调记录](../docs/status/reviews/2026-09-26-real-jenkins-lab.md)；已落盘快照的持久发送 worker 已按 ADR-0035 A 实现，使用见 [worker 说明](jenkins-worker.md)；controller 持续采集与普通成员独立配置仍未完成。
+默认关闭，通过 `RADISHNEXUS_JENKINS_SOURCES_FILE` 显式启用受控来源；文件 Secret、来源绑定、HMAC / 重放、终态映射和有限重试发送工具的使用见 [Jenkins 接入说明](jenkins.md)。复用既有 CI Run 事务，无数据库迁移或新依赖。自动化与真实 Jenkins 三态隔离联调已验证，见[联调记录](../docs/status/reviews/2026-09-26-real-jenkins-lab.md)；已落盘快照的持久发送 worker 已按 ADR-0035 A 实现，使用见 [worker 说明](jenkins-worker.md)。独立 [controller collector](../experiments/jenkins-collector/README.md) 和双边显式清理已有代码与离线故障证据，真实持续采集、挂载 / 重启验收与普通成员独立配置仍未完成。
+
+`./scripts/check-server.sh` 覆盖 Go race / vet 与模块一致性，不执行 Groovy 编译或真实 Jenkins。collector 检查与跨语言导出验证按其说明单独运行；`TestCollectorWorkerContract` 未设置 `RADISHNEXUS_COLLECTOR_CONTRACT` 时跳过，Linux 专属 CLI 用例也不能从 macOS 测试通过推导。各类证据见[当日收尾记录](../docs/status/reviews/2026-10-09-daily-closeout.md)。
 
 ## 公共认证入口
 

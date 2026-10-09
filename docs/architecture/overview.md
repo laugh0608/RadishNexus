@@ -152,7 +152,9 @@ entity://environment/env_002
 
 CI Run 的 Session 公共读取合同见 [ADR-0029](../adr/0029-session-scoped-ci-run-nexus-view.md)，外部终态写入的受控来源、签名与重放边界见 [ADR-0030](../adr/0030-authenticated-jenkins-delivery-adapter.md)。Jenkins adapter 验证后调用既有 service，不承担 Deployment 确认或用户授权，也不要求 Nexus 默认自部署拓扑启动 Jenkins。成功 CI Run 的 staging 记录按 [ADR-0031](../adr/0031-session-scoped-staging-deployment-recording.md) 通过独立 Session 命令和显式环境授权完成；migration 011 扩展既有 receipt，精确重试与当前权限复核共用唯一业务事务。
 
-Component / staging Environment 的最小创建、发现与显式授权管理已按 [ADR-0032](../adr/0032-component-environment-configuration-and-authorization.md) 接入既有配置 service、成功 Audit / receipt 与 Session API。migration 012 保留撤销授权并追加不可变代次，历史 Deployment 继续引用当时授权；owner 管理权不自动成为部署记录权。该切片的创建事件自 Activity v3 起纳入投影，授权明细只进入窄 Audit。Repository 最小映射与 Component 的人工 `source-repository` 已按 [ADR-0033](../adr/0033-repository-mapping-and-component-relations.md) 和 migration 013 接通，沿 Workspace owner 配置权管理，成员共享读取；外部 provider 连接、具体交付来源和持久来源配置仍是独立范围。
+[ADR-0035](../adr/0035-durable-jenkins-terminal-delivery.md) 将可信 controller 快照采集与独立 Go 签名发送分开，用本地不可变输入、持久预算、确认记录和显式双边清理恢复交付；不扩展公共 v1 payload 或核心业务表。运行与验证边界见[插件系统](plugin-system.md)，操作与备份见 [worker 说明](../../server/jenkins-worker.md)。本地 spool manifest 不等于核心数据库中的来源注册或权限配置。
+
+Component / staging Environment 的最小创建、发现与显式授权管理已按 [ADR-0032](../adr/0032-component-environment-configuration-and-authorization.md) 接入既有配置 service、成功 Audit / receipt 与 Session API。migration 012 保留撤销授权并追加不可变代次，历史 Deployment 继续引用当时授权；owner 管理权不自动成为部署记录权。该切片的创建事件自 Activity v3 起纳入投影，授权明细只进入窄 Audit。Repository 最小映射与 Component 的人工 `source-repository` 已按 [ADR-0033](../adr/0033-repository-mapping-and-component-relations.md) 和 migration 013 接通，沿 Workspace owner 配置权管理，成员共享读取；外部 provider 连接、具体交付来源和核心侧持久来源配置仍是独立范围。
 
 Ticket 与 Component 已按 [ADR-0034](../adr/0034-ticket-component-relations.md) 接通人工 `affects` 关系、Project 权限与双向读取。独立关系 service 复用协作 receipt 和业务事务，migration 014 与 Activity v5 配套升级；组件页仅汇集当前可读关系，不从共属组件推导 Ticket 已交付。
 
