@@ -19,7 +19,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | Project / Channel 发现 | 当前权限过滤、归档可读、稳定 ID 分页、当前成员复核 | 首页 Workspace → Project → Channel 导航；ID 工具保留为次级入口 | 服务端、真实数据库、Web 交互与隔离浏览器验收通过，含分页、撤权刷新、Workspace 切换及桌面 / 手机布局；基础配置已有独立切片证据，见下一行 |
 | 基础对象与首批成员配置 | migration 009、明确初始 admin、普通角色 / 受限成员、配置 Audit / receipt、撤权清理、备份恢复 | owner 创建 Team / Project，Project admin 创建 Channel 与配置成员 | 从正式 bootstrap 的空业务工作区，经 Web 创建、邀请新账户、双层授权、成员发消息与撤权已验收；首次访问 Web 初始化已有独立证据，管理员交接仍缺 |
 | 单 Channel Message 实时 | 单进程 SSE、当前权限、有界回放、撤权与关闭 | canonical Channel 已接入 ready → history → 增量 | 有技术验收；没有目标团队规模与持续使用的容量证据 |
-| CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment、精确重试 receipt | CI Run / Deployment 正式读取；成功构建可选择已授权 staging 环境并确认记录外部部署结果 | 真实 Jenkins 三态采集、Deployment 写入自动化与隔离浏览器已通过；Component / staging Environment 创建、发现与显式授权管理已接通，真实数据库、恢复及隔离浏览器已有证据；已落盘快照持久发送按 ADR-0035 A 完成；交付关系和 controller 持续采集仍缺 |
+| CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment、精确重试 receipt | CI Run / Deployment 正式读取；成功构建可选择已授权 staging 环境并确认记录外部部署结果 | 真实 Jenkins 三态采集、Deployment 写入自动化与隔离浏览器已通过；Component / staging Environment 创建、发现与显式授权管理已接通，真实数据库、恢复及隔离浏览器已有证据；已落盘快照持久发送按 ADR-0035 A 完成；可信 collector 代码与离线验证已具备，真实持续采集、清理与交付关系仍缺 |
 | Repository 映射与 Component 关联 | migration 013、稳定外部身份、人工来源多对多关系、精确解除 / 重新关联、配置 Audit / receipt、Activity v4 | owner 创建映射与关联，成员分页发现及双向跳转 | 从正式 bootstrap 空业务工作区完成页面创建、关联、解除 / 重连、桌面 / 手机 / 键盘、成员只读及失权清空；数据库升级、并发、回滚与恢复通过；无 provider 连接或 CI 来源推导 |
 | Ticket 与 Component 人工关联 | migration 014、人工 `affects`、Project 写权限、精确解除 / 重连、协作 receipt、Activity v5 | Ticket 关联区、组件稳定详情与按权限过滤的反向分页 | Go / PostgreSQL / Web、013 升级与恢复通过；正式页面创建链、关联 / 解除 / 重连、桌面 / 手机与键盘通过；浏览器后退、显式刷新撤回读 / 写权及最终截图已补验，见[补验记录](reviews/2026-10-09-delivery-continuation.md) |
 | EntityLink / Activity | 带来源关系、权限过滤 query、同事务 Activity 更新与版本化全量重建 | Nexus View 可读 Current / 出向与首批入向 Relations / 正常更新的 Timeline | 正常写入与双向发现已通过真实 PostgreSQL / HTTP 和浏览器；未完成持续使用观察 |
@@ -55,13 +55,17 @@ Ticket 与 Component 人工关联已按 ADR-0034 实现，浏览器后退、显�
 
 接续顺序：
 
-1. **B：可信采集与对账**：沿 ADR-0035 设计独立 controller 脚本，完成 finalized 快速路径、启动 / 周期对账、历史缺口和心跳。真实 Jenkins 运行前具体说明目录、凭据、容器 / 挂载、故障注入与清理范围，再完成真实重启验收；不能直接把旧三探针引导改为常驻服务。
+1. **B：可信采集验收与清理**：独立 controller 的 finalized、启动 / 周期对账、历史缺口、心跳与生产者确认代码已通过离线检查。本机 Docker bind mount 实测为 FUSE，超出支持范围；所有者已明确暂缓真实联调，先交付代码。原生 Linux 环境下的真实重启 / 挂载验收及双边清理仍未完成，恢复时另行明确运行资源与授权，见[采集记录](reviews/2026-10-09-jenkins-collector.md)。
 2. **具体交付来源**：独立冻结 Repository / commit / CI Run 的来源证据，再决定 Ticket 与具体交付的关系；不按 Component 共属推导已交付。
 3. **真实整链验收**：正式新配置对象 → 真实 Jenkins → 浏览器记录已完成的外部 staging → 撤权阻止新记录且历史按当前权限可读。没有实际外部 staging 行为时只验收到 CI Run，不伪造 Deployment。
 
+### 本轮推进：可信 collector 代码交付
+
+在 `47f2761` 后继续实现独立 controller 采集与对账，保留低编号缺口、不可变输入与交接摘要，增加独立心跳和显式卸载；固定镜像内编译及离线故障检查、Groovy / Go 交接契约通过。没有启动真实 Jenkins，没有修改旧实验或引入依赖。本次交付范围为 B 采集代码与离线验证；真实联调已按所有者要求暂缓，显式清理尚未开放，不能标记 ADR-0035 B 完成。操作说明见[collector](../../experiments/jenkins-collector/README.md)，证据见[实施记录](reviews/2026-10-09-jenkins-collector.md)。
+
 ### 本轮完成：2026-10-09 补验与持久发送
 
-基于 `c81d162` 在本地 `dev` 实施，工作区改动尚未提交。Ticket / Component 浏览器补验通过；权限状态仅在一次性数据库定向注入，未将其称作管理员交接 UI 验收。Go 全量 race / vet、真实 PostgreSQL、Linux CLI / SIGTERM 与故障恢复通过，含 receiver 提交后杀进程、同身份重放得到原 CI Run、Activity 唯一且不创建 Deployment。配置与操作见 [worker 说明](../../server/jenkins-worker.md)，详细验证和局限见[本轮记录](reviews/2026-10-09-delivery-continuation.md)。
+基于 `c81d162` 在本地 `dev` 实施，已按所有者要求提交为 `47f2761`，未 push。Ticket / Component 浏览器补验通过；权限状态仅在一次性数据库定向注入，未将其称作管理员交接 UI 验收。Go 全量 race / vet、真实 PostgreSQL、Linux CLI / SIGTERM 与故障恢复通过，含 receiver 提交后杀进程、同身份重放得到原 CI Run、Activity 唯一且不创建 Deployment。配置与操作见 [worker 说明](../../server/jenkins-worker.md)，详细验证和局限见[本轮记录](reviews/2026-10-09-delivery-continuation.md)。
 
 临时浏览器、fixture 和测试容器已清理；未启动真实 Jenkins、应用业务数据库变更、部署或 push。原生中文 IME 保持暂缓，真实团队试用与生产门槛不变。此前[10 月 6 日收尾清单](reviews/2026-10-06-daily-closeout.md)保留历史含义，当前顺序以上述接续为准；没有创建提醒或自动任务。
 
@@ -151,7 +155,9 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 
 ## 证据与历史
 
-- [2026-10-09 浏览器补验与持久终态发送](reviews/2026-10-09-delivery-continuation.md)：Ticket / Component 补验、ADR-0035 A 实现和故障恢复；B 待实施。
+- [2026-10-09 可信 collector 代码与离线验证](reviews/2026-10-09-jenkins-collector.md)：分批补采、故障与交接契约；真实联调明确暂缓，双边清理未开放。
+
+- [2026-10-09 浏览器补验与持久终态发送](reviews/2026-10-09-delivery-continuation.md)：Ticket / Component 补验、ADR-0035 A 实现和故障恢复；后续 B 见上方记录。
 
 - [2026-10-06 提交回顾与文档收尾](reviews/2026-10-06-daily-closeout.md)：两笔实现提交、源码与文档核对及 10 月 7 日接续建议。
 

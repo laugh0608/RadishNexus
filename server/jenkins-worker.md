@@ -1,6 +1,6 @@
 # Jenkins 已落盘快照的持久发送
 
-按 [ADR-0035 A](../docs/adr/0035-durable-jenkins-terminal-delivery.md) 实现。`jenkins-worker` 为单 source、单 job、单实例的独立前台进程，复用[现有 sender 与 receiver](jenkins.md)。它只发送可信生产者已经可靠发布的终态快照，不连接 Jenkins、不恢复遗漏回调、不执行部署。controller 对账与真实重启联调属于尚未实施的 B。
+按 [ADR-0035 A](../docs/adr/0035-durable-jenkins-terminal-delivery.md) 实现。`jenkins-worker` 为单 source、单 job、单实例的独立前台进程，复用[现有 sender 与 receiver](jenkins.md)。它只发送可信生产者已经可靠发布的终态快照，不连接 Jenkins、不恢复遗漏回调、不执行部署。[B collector](../experiments/jenkins-collector/README.md) 已有对账代码和离线证据；真实重启 / 挂载联调经所有者要求暂缓，B 退出条件未完成。
 
 ## 部署条件
 
@@ -62,7 +62,7 @@ jenkins-worker cleanup-plan -config /run/config/jenkins-worker.json
 | `retry` | 先停止 worker，修复原因并核对来源，再对精确 blocked build 执行；重新检查 sender 配置和凭据，保留身份和字节，只重建预算并追加本地时间记录，最多 128 次 |
 | `cleanup-plan` | 与只读状态同源，报告交付满 7 天的候选数量，始终 `cleanup_enabled: false`；A 没有删除命令 |
 
-stdout 为受控 JSON，stderr 仅安全机器码；错误非零退出。暂停来源时 status 仍输出可用状态，再以非零退出。普通单条 blocked 不使整个 source 暂停，操作者必须检查计数，不能把进程仍运行理解为所有条目已送达。A 始终报告 `collector: not_implemented_in_slice_a`，无采集心跳或编号完整性结论。
+stdout 为受控 JSON，stderr 仅安全机器码；错误非零退出。暂停来源时 status 仍输出可用状态，再以非零退出。普通单条 blocked 不使整个 source 暂停，操作者必须检查计数，不能把进程仍运行理解为所有条目已送达。worker 报告 `collector: external_status_required`，必须独立检查 collector 的心跳、编号覆盖与缺口，不能从发送队列推导采集完整性。
 
 SIGTERM / SIGINT 取消当前等待或请求并释放锁。中断请求视为结果未知，已预扣的轮次不会还原；进程停止不等于 receiver 撤销授权。日志不含 payload、job、路径、签名、摘要或底层响应；本地重试时间记录不是防篡改安全 Audit。
 

@@ -107,7 +107,7 @@ func TestSpoolDurableImportAndSuccessRecovery(t *testing.T) {
 		t.Fatal("missing regenerated ack", e)
 	}
 	status, e := s.Status(42)
-	if e != nil || status.Counts["delivered"] != 1 || status.Item.CIRunID != "cir_test" || status.CleanupEnabled || status.Collector != "not_implemented_in_slice_a" {
+	if e != nil || status.Counts["delivered"] != 1 || status.Item.CIRunID != "cir_test" || status.CleanupEnabled || status.Collector != "external_status_required" {
 		t.Fatal(status, e)
 	}
 }

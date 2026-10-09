@@ -39,7 +39,8 @@
 ## 状态与验证入口
 
 - [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
-- [2026-10-09 浏览器补验与持久终态发送](status/reviews/2026-10-09-delivery-continuation.md)：Ticket / Component 撤权补验、ADR-0035 A 实现与恢复证据；B 仍待实施。
+- [2026-10-09 可信 collector 代码与离线验证](status/reviews/2026-10-09-jenkins-collector.md)：周期补采、历史缺口、故障与交接契约；真实联调暂缓。
+- [2026-10-09 浏览器补验与持久终态快照发送](status/reviews/2026-10-09-delivery-continuation.md)：Ticket / Component 撤权补验、ADR-0035 A 实现与恢复证据；B 后续见采集记录。
 - [2026-10-06 提交回顾与文档收尾](status/reviews/2026-10-06-daily-closeout.md)：Repository / Component 与 Ticket / Component 两段人工关联、文档核对及次日接续建议。
 - [2026-10-01 提交回顾与文档收尾](status/reviews/2026-10-01-daily-closeout.md)：依赖修复、阶段晋级、组件环境配置与授权管理，以及次日接续建议。
 - [2026-09-26 提交回顾与文档收尾](status/reviews/2026-09-26-daily-closeout.md)：Document、工作台视觉、CI Run、Jenkins 与 staging 记录的提交映射和文档核对。

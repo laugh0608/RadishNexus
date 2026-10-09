@@ -40,7 +40,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0032](0032-component-environment-configuration-and-authorization.md) | 已接受 | Component、Environment 最小配置与环境授权管理 |
 | [ADR-0033](0033-repository-mapping-and-component-relations.md) | 已接受 | Repository 最小映射与 Component 关联 |
 | [ADR-0034](0034-ticket-component-relations.md) | 已接受 | Ticket 与 Component 的人工关联 |
-| [ADR-0035](0035-durable-jenkins-terminal-delivery.md) | A 已接受，B 待实施 | Jenkins 终态快照的持久交付与漏采恢复 |
+| [ADR-0035](0035-durable-jenkins-terminal-delivery.md) | A 已实现，B 代码已具备、验收未完成 | Jenkins 终态快照的持久交付与漏采恢复 |
 
 ## 新建规则
 

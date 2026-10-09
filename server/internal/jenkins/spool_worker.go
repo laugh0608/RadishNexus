@@ -287,7 +287,7 @@ func (s *Spool) Status(number int64) (SpoolStatus, error) {
 		return SpoolStatus{}, e
 	}
 	now := s.now()
-	status := SpoolStatus{SourceID: s.config.Binding.SourceID, ObservedAt: now, Counts: map[string]int{"pending": 0, "in_flight": 0, "retry_wait": 0, "blocked": 0, "delivered": 0}, Bytes: size, RemainingBytes: MaxSpoolBytes - size, RemainingRecords: MaxSpoolEntries - s.slots, Collector: "not_implemented_in_slice_a"}
+	status := SpoolStatus{SourceID: s.config.Binding.SourceID, ObservedAt: now, Counts: map[string]int{"pending": 0, "in_flight": 0, "retry_wait": 0, "blocked": 0, "delivered": 0}, Bytes: size, RemainingBytes: MaxSpoolBytes - size, RemainingRecords: MaxSpoolEntries - s.slots, Collector: "external_status_required"}
 	for _, n := range numbers {
 		r, e := s.read(n)
 		if e != nil {
