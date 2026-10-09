@@ -91,7 +91,7 @@ python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Emai
 
 ## Jenkins 来源接入
 
-默认关闭，通过 `RADISHNEXUS_JENKINS_SOURCES_FILE` 显式启用受控来源；文件 Secret、来源绑定、HMAC / 重放、终态映射和有限重试发送工具的使用见 [Jenkins 接入说明](jenkins.md)。复用既有 CI Run 事务，无数据库迁移或新依赖。自动化与真实 Jenkins 三态隔离联调已验证，见[联调记录](../docs/status/reviews/2026-09-26-real-jenkins-lab.md)；持久采集与普通成员独立配置仍未完成。
+默认关闭，通过 `RADISHNEXUS_JENKINS_SOURCES_FILE` 显式启用受控来源；文件 Secret、来源绑定、HMAC / 重放、终态映射和有限重试发送工具的使用见 [Jenkins 接入说明](jenkins.md)。复用既有 CI Run 事务，无数据库迁移或新依赖。自动化与真实 Jenkins 三态隔离联调已验证，见[联调记录](../docs/status/reviews/2026-09-26-real-jenkins-lab.md)；已落盘快照的持久发送 worker 已按 ADR-0035 A 实现，使用见 [worker 说明](jenkins-worker.md)；controller 持续采集与普通成员独立配置仍未完成。
 
 ## 公共认证入口
 

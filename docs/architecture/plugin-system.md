@@ -57,7 +57,7 @@
 
 这些能力可以先由同仓库 Jenkins 集成调用，用于验证接口，而不是立即对外承诺稳定 SDK。
 
-[ADR-0030](../adr/0030-authenticated-jenkins-delivery-adapter.md) 将首个受控 Jenkins adapter 放在同仓库 Go 模块内：以部署文件显式绑定来源、通过独立 Secret 文件校验 HMAC，再调用窄 CI Run service。它不直接写核心业务表，不建立通用插件运行时或数据库 Secret 管理；机器写来源和用户读取权限分离。真实实例联调证据与当前进度见[当前状态](../status/current.md)。
+[ADR-0030](../adr/0030-authenticated-jenkins-delivery-adapter.md) 将首个受控 Jenkins adapter 放在同仓库 Go 模块内：以部署文件显式绑定来源、通过独立 Secret 文件校验 HMAC，再调用窄 CI Run service。它不直接写核心业务表，不建立通用插件运行时或数据库 Secret 管理；机器写来源和用户读取权限分离。[ADR-0035 A](../adr/0035-durable-jenkins-terminal-delivery.md) 增加独立持久发送进程，通过本地不可变快照与确认记录恢复交付，继续使用同一窄 HTTP 入口；controller 对账仍待实施。真实实例联调证据与当前进度见[当前状态](../status/current.md)。
 
 ### P1：首个可安装 Jenkins 插件
 

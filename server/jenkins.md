@@ -2,7 +2,7 @@
 
 状态：按 [ADR-0030](../docs/adr/0030-authenticated-jenkins-delivery-adapter.md) 实现；自动化与真实 Jenkins 三态隔离联调已验证，持续采集和业务实例配置仍待完成。
 
-这是 Nexus 自定义的受控机器写入口。接收端验证来源后调用已有 CI Run service，发送命令只发送一份可信终态快照；不会安装 Jenkins、触发构建、轮询 Jenkins 或创建 Deployment。构建完成到快照的可信采集由独立 Jenkins 实验验证，不能用手写 JSON 替代真实构建证据；持久运行的采集与转发仍需另行设计。
+这是 Nexus 自定义的受控机器写入口。接收端验证来源后调用已有 CI Run service，发送命令只发送一份可信终态快照；不会安装 Jenkins、触发构建、轮询 Jenkins 或创建 Deployment。构建完成到快照的可信采集由独立 Jenkins 实验验证，不能用手写 JSON 替代真实构建证据；已落盘快照的独立持久发送已由 [ADR-0035 A worker](jenkins-worker.md) 提供；controller 持续采集与漏采对账仍待 B。
 
 ## 接收端配置
 
@@ -83,9 +83,9 @@ go run ./cmd/jenkins-delivery -config /run/config/jenkins-sender.json -input /ru
 - POST `/api/v1/integrations/jenkins/{source_id}/deliveries`，仅 `application/json`，拒绝压缩、query、非规范路径及重复字段 / 签名 Header。
 - HMAC-SHA256 覆盖方法、路径、key ID、固定 `build-{number}` delivery ID、发送时刻和原始 body 的 SHA-256；精确字节格式见 ADR。时间窗口为前后 300 秒，每次重试重新签名。
 - receipt 使用规范化业务事实摘要；JSON 格式和 key 轮换不改变幂等身份，同 delivery 改结果或时间返回冲突。超过请求窗口的历史构建仍可由可信发送方重新签名补送。
-- 单进程最多 4 个在途 delivery，无等待队列；数据库命令最长 5 秒，复用 server 读写超时。达到容量返回 429；接入不增加后台 worker 或无限重试。
+- 单进程最多 4 个在途 delivery，无等待队列；数据库命令最长 5 秒，复用 server 读写超时。达到容量返回 429；接收端不内置后台发送 worker 或无限重试。
 - 发送最多 4 次，每次最长 10 秒，总预算 60 秒；只重试网络中断与 408 / 429 / 500 / 502 / 503 / 504。退避 1 / 2 / 4 秒，接受 1–10 秒的 `Retry-After` 且受总预算限制。
-- 其他 4xx 或响应格式错误立即失败。失败后保留可信原始快照供人工修复配置后重送，不修改 delivery ID 绕过 409；通知失败不改写 Jenkins 构建结果。
+- 其他 4xx 或响应格式错误在一次 sender 调用中立即失败；独立 worker 对未知成功结果执行持久有界重试，对认证 / TLS 等来源故障暂停发送。失败后保留可信原始快照供人工修复配置后重送，不修改 delivery ID 绕过 409；通知失败不改写 Jenkins 构建结果。
 
 | HTTP / 机器码 | 操作含义 |
 | --- | --- |

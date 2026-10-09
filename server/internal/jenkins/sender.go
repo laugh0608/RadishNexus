@@ -57,6 +57,7 @@ func send(ctx context.Context, c SenderConfig, body []byte, client *http.Client,
 	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
+	last := error(ErrDelivery)
 	for attempt := 0; attempt < 4; attempt++ {
 		if ctx.Err() != nil {
 			return SendResult{}, ErrDelivery
@@ -72,6 +73,12 @@ func send(ctx context.Context, c SenderConfig, body []byte, client *http.Client,
 		req.Header.Set("X-Nexus-Timestamp", timestamp)
 		req.Header.Set("X-Nexus-Signature", signature(c.secret, c.SourceID, c.KeyID, p.DeliveryID(), timestamp, body))
 		response, requestErr := httpClient.Do(req)
+		if requestErr != nil {
+			last = ErrDelivery
+		}
+		if certificateFailure(requestErr) {
+			return SendResult{}, &DeliveryFailure{Code: "tls_verification_failed", Disposition: PauseSource}
+		}
 		delay := time.Second * time.Duration(1<<attempt)
 		retry := requestErr != nil
 		if requestErr == nil {
@@ -90,8 +97,13 @@ func send(ctx context.Context, c SenderConfig, body []byte, client *http.Client,
 					retry = true
 				}
 				if !retry {
-					return SendResult{}, responseError(raw)
+					failure := &DeliveryFailure{HTTPStatus: response.StatusCode, Code: responseError(raw).Error(), Disposition: BlockDelivery}
+					if response.StatusCode == 401 || failure.Code == "source_binding_mismatch" {
+						failure.Disposition = PauseSource
+					}
+					return SendResult{}, failure
 				}
+				last = &DeliveryFailure{HTTPStatus: response.StatusCode, Code: "delivery_failed", Disposition: RetryDelivery}
 			}
 			if value := response.Header.Get("Retry-After"); value != "" {
 				if secs, e := strconv.Atoi(value); e == nil && strconv.Itoa(secs) == value && secs >= 1 && secs <= 10 {
@@ -100,7 +112,7 @@ func send(ctx context.Context, c SenderConfig, body []byte, client *http.Client,
 			}
 		}
 		if !retry || attempt == 3 {
-			return SendResult{}, ErrDelivery
+			return SendResult{}, last
 		}
 		if sleep(ctx, delay) != nil {
 			return SendResult{}, ErrDelivery

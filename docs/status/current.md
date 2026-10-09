@@ -1,6 +1,6 @@
 # RadishNexus 当前状态
 
-状态日期：2026-10-06
+状态日期：2026-10-09
 
 ## 当前阶段
 
@@ -19,9 +19,9 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | Project / Channel 发现 | 当前权限过滤、归档可读、稳定 ID 分页、当前成员复核 | 首页 Workspace → Project → Channel 导航；ID 工具保留为次级入口 | 服务端、真实数据库、Web 交互与隔离浏览器验收通过，含分页、撤权刷新、Workspace 切换及桌面 / 手机布局；基础配置已有独立切片证据，见下一行 |
 | 基础对象与首批成员配置 | migration 009、明确初始 admin、普通角色 / 受限成员、配置 Audit / receipt、撤权清理、备份恢复 | owner 创建 Team / Project，Project admin 创建 Channel 与配置成员 | 从正式 bootstrap 的空业务工作区，经 Web 创建、邀请新账户、双层授权、成员发消息与撤权已验收；首次访问 Web 初始化已有独立证据，管理员交接仍缺 |
 | 单 Channel Message 实时 | 单进程 SSE、当前权限、有界回放、撤权与关闭 | canonical Channel 已接入 ready → history → 增量 | 有技术验收；没有目标团队规模与持续使用的容量证据 |
-| CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment、精确重试 receipt | CI Run / Deployment 正式读取；成功构建可选择已授权 staging 环境并确认记录外部部署结果 | 真实 Jenkins 三态采集、Deployment 写入自动化与隔离浏览器已通过；Component / staging Environment 创建、发现与显式授权管理已接通，真实数据库、恢复及隔离浏览器已有证据；交付关系和持续采集仍缺 |
+| CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment、精确重试 receipt | CI Run / Deployment 正式读取；成功构建可选择已授权 staging 环境并确认记录外部部署结果 | 真实 Jenkins 三态采集、Deployment 写入自动化与隔离浏览器已通过；Component / staging Environment 创建、发现与显式授权管理已接通，真实数据库、恢复及隔离浏览器已有证据；已落盘快照持久发送按 ADR-0035 A 完成；交付关系和 controller 持续采集仍缺 |
 | Repository 映射与 Component 关联 | migration 013、稳定外部身份、人工来源多对多关系、精确解除 / 重新关联、配置 Audit / receipt、Activity v4 | owner 创建映射与关联，成员分页发现及双向跳转 | 从正式 bootstrap 空业务工作区完成页面创建、关联、解除 / 重连、桌面 / 手机 / 键盘、成员只读及失权清空；数据库升级、并发、回滚与恢复通过；无 provider 连接或 CI 来源推导 |
-| Ticket 与 Component 人工关联 | migration 014、人工 `affects`、Project 写权限、精确解除 / 重连、协作 receipt、Activity v5 | Ticket 关联区、组件稳定详情与按权限过滤的反向分页 | Go / PostgreSQL / Web、013 升级与恢复通过；正式页面创建链、关联 / 解除 / 重连、桌面 / 手机与键盘通过；浏览器权限撤回未完成，自动化已覆盖，见[实施记录](reviews/2026-10-06-ticket-component.md) |
+| Ticket 与 Component 人工关联 | migration 014、人工 `affects`、Project 写权限、精确解除 / 重连、协作 receipt、Activity v5 | Ticket 关联区、组件稳定详情与按权限过滤的反向分页 | Go / PostgreSQL / Web、013 升级与恢复通过；正式页面创建链、关联 / 解除 / 重连、桌面 / 手机与键盘通过；浏览器后退、显式刷新撤回读 / 写权及最终截图已补验，见[补验记录](reviews/2026-10-09-delivery-continuation.md) |
 | EntityLink / Activity | 带来源关系、权限过滤 query、同事务 Activity 更新与版本化全量重建 | Nexus View 可读 Current / 出向与首批入向 Relations / 正常更新的 Timeline | 正常写入与双向发现已通过真实 PostgreSQL / HTTP 和浏览器；未完成持续使用观察 |
 | 自部署与恢复 | 显式 migration、只读 schema readiness、PostgreSQL 17 同 major 空目标恢复 | 健康端点拒绝 migration 缺失 / 漂移 / 版本不匹配；固定工件 Compose 开发拓扑与 HTTPS 演练已有记录 | 新探针已有真实数据库证据；本轮未重跑 Compose，升级失败恢复、运维与生产容量尚未完成 |
 | Document | migration 010、不可变版本、精确 receipt、当前 Project 权限、单一受限 Markdown parser、备份恢复 | Ticket 创建、Project 文档列表、阅读 / 编辑 / 预览、显式冲突重新应用、历史恢复 | 真实数据库及隔离 HTTPS 双标签页、恢复、手机布局、撤权已有证据；原生中文 IME、普通成员独立持续使用仍待验收 |
@@ -49,25 +49,27 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 免费书面授权与评估说明应在邀请外部团队前准备，不能等到完整聊天或 CRDT 完成；版本化结构化导出与全新实例导入仍是 M1 的独立退出条件。账号恢复、安全审计、数据生命周期、数据库最小权限与升级演练按[路线图](../roadmap.md)的试用和生产边界推进，不因本表只列近期切片而取消。
 
-### 当前接续：交付来源与持续终态采集
+### 当前接续：可信 controller 对账与交付来源
 
-Ticket 与 Component 人工关联已按 ADR-0034 实现。下一段先设计持久终态采集的运行、来源配置、失败恢复和幂等边界，再明确 Ticket 与具体 CI Run / Deployment 的来源证据；同属一个 Component 不能推导已交付事实。真实 Jenkins → 新配置对象 → 浏览器记录 staging 的整链仍待验收。方案确认前不扩展公共协议、业务数据模型或外部运行状态。
+Ticket 与 Component 人工关联已按 ADR-0034 实现，浏览器后退、显式刷新读 / 写权撤回及最终布局已补验。[ADR-0035 A](../adr/0035-durable-jenkins-terminal-delivery.md) 已获确认并实现：单 source / 单 worker 持久发送、不可变输入、重启预算、分类失败、精确恢复、只读状态与确认记录。没有业务 migration、公共 v1 协议或依赖变化；这不代表 controller 持续采集或漏采恢复完成。
 
-### 明天事项：2026-10-07 接续建议
+接续顺序：
 
-今天到此收尾，以下为下一次人工接续清单，不创建提醒或自动任务：
+1. **B：可信采集与对账**：沿 ADR-0035 设计独立 controller 脚本，完成 finalized 快速路径、启动 / 周期对账、历史缺口和心跳。真实 Jenkins 运行前具体说明目录、凭据、容器 / 挂载、故障注入与清理范围，再完成真实重启验收；不能直接把旧三探针引导改为常驻服务。
+2. **具体交付来源**：独立冻结 Repository / commit / CI Run 的来源证据，再决定 Ticket 与具体交付的关系；不按 Component 共属推导已交付。
+3. **真实整链验收**：正式新配置对象 → 真实 Jenkins → 浏览器记录已完成的外部 staging → 撤权阻止新记录且历史按当前权限可读。没有实际外部 staging 行为时只验收到 CI Run，不伪造 Deployment。
 
-1. **先补收尾验收**：在最终工件上补 Ticket / Component 浏览器后退、Project 写权 / 读权收回、反向列表与待确认表单清理，补最终布局截图。启动临时服务时重新明确本次资源与清理范围；沿用现有自动化结果，不能把上轮 fixture 超时写成通过。
-2. **主线先做设计**：核对 Jenkins finalized 快照、有限重试 sender 与受控 source 配置，提出持久终态采集最小方案，明确持久队列、重启恢复、去重 / 重放、失败可见性、凭据和生命周期。涉及新模型、协议、依赖或外部运行状态时先说明影响并确认范围，再实施。
-3. **另列交付来源与整链验收**：明确 Repository / commit / CI Run 的来源证据，再决定 Ticket 如何关联具体交付；不按 Component 共属自动推导。规划“正式新配置对象 → 真实 Jenkins → 浏览器记录 staging → 撤权阻止新记录且历史仍可读”的整链。原生中文 IME 保持暂缓，真实团队试用与生产门槛不变。
+### 本轮完成：2026-10-09 补验与持久发送
 
-今天的提交回顾与文档审阅见[10 月 6 日收尾记录](reviews/2026-10-06-daily-closeout.md)。
+基于 `c81d162` 在本地 `dev` 实施，工作区改动尚未提交。Ticket / Component 浏览器补验通过；权限状态仅在一次性数据库定向注入，未将其称作管理员交接 UI 验收。Go 全量 race / vet、真实 PostgreSQL、Linux CLI / SIGTERM 与故障恢复通过，含 receiver 提交后杀进程、同身份重放得到原 CI Run、Activity 唯一且不创建 Deployment。配置与操作见 [worker 说明](../../server/jenkins-worker.md)，详细验证和局限见[本轮记录](reviews/2026-10-09-delivery-continuation.md)。
+
+临时浏览器、fixture 和测试容器已清理；未启动真实 Jenkins、应用业务数据库变更、部署或 push。原生中文 IME 保持暂缓，真实团队试用与生产门槛不变。此前[10 月 6 日收尾清单](reviews/2026-10-06-daily-closeout.md)保留历史含义，当前顺序以上述接续为准；没有创建提醒或自动任务。
 
 ### 本轮完成：Ticket 与 Component 人工关联
 
 所有者确认 [ADR-0034](../adr/0034-ticket-component-relations.md) 后，基于 `f878090` 在本地 `dev` 实施。migration 014、Project contributor / decider / admin 写权限、人工 `affects` 关系、精确解除 / 重连、双向权限分页、Activity v5 与组件稳定详情入口已接通。原 Ticket 的 Decision 来源、Current 与内容时间不变。
 
-Go、真实 PostgreSQL、013→014 升级、备份恢复和 Web 全量检查通过；HTTPS 浏览器从正式空业务工作区完成 Message → Thread → Decision → Ticket、Component 创建、关联 / 解除 / 重连、双向跳转、稳定地址重载与桌面 / 手机 / 键盘操作。权限撤回和迟到响应由数据库及 Web 自动化验证；浏览器环境到达时限后清理，未完成浏览器权限撤回与后退专项，不将环境超时记为通过。具体证据见[实施记录](reviews/2026-10-06-ticket-component.md)。
+Go、真实 PostgreSQL、013→014 升级、备份恢复和 Web 全量检查通过；HTTPS 浏览器从正式空业务工作区完成 Message → Thread → Decision → Ticket、Component 创建、关联 / 解除 / 重连、双向跳转、稳定地址重载与桌面 / 手机 / 键盘操作。权限撤回和迟到响应由数据库及 Web 自动化验证；10 月 6 日浏览器环境到达时限后清理，当时未完成权限撤回与后退专项；10 月 9 日已在新建隔离环境补验，见上方记录，不将此前环境超时记为通过。原切片证据见[实施记录](reviews/2026-10-06-ticket-component.md)。
 
 本切片已提交为 `e156a5d`，未 push 或应用业务实例迁移。本轮临时服务与隔离浏览器已清理；不代表完整 Golden Path 或真实团队持续使用完成。
 
@@ -148,6 +150,8 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
 
 ## 证据与历史
+
+- [2026-10-09 浏览器补验与持久终态发送](reviews/2026-10-09-delivery-continuation.md)：Ticket / Component 补验、ADR-0035 A 实现和故障恢复；B 待实施。
 
 - [2026-10-06 提交回顾与文档收尾](reviews/2026-10-06-daily-closeout.md)：两笔实现提交、源码与文档核对及 10 月 7 日接续建议。
 

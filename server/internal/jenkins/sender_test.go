@@ -53,7 +53,7 @@ func TestSenderRetryBudgetsAndStableIdentity(t *testing.T) {
 				clock = clock.Add(d)
 				return nil
 			})
-			if e != ErrDelivery || calls != 4 || fmt.Sprint(waits) != "[1s 2s 4s]" {
+			if !errors.Is(e, ErrDelivery) || ClassifyDelivery(e).Disposition != RetryDelivery || calls != 4 || fmt.Sprint(waits) != "[1s 2s 4s]" {
 				t.Fatal(e, calls, waits)
 			}
 		})
@@ -112,11 +112,11 @@ func TestSenderTLSRedirectAndCertificateVerification(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, target.URL, 307) }))
 	defer server.Close()
 	c := senderFixture(t, server.URL)
-	if _, e := send(context.Background(), c, []byte(testPayload), server.Client(), func() time.Time { return testNow }, wait); e != ErrDelivery || redirected != 0 {
+	if _, e := send(context.Background(), c, []byte(testPayload), server.Client(), func() time.Time { return testNow }, wait); !errors.Is(e, ErrDelivery) || ClassifyDelivery(e).Disposition != BlockDelivery || ClassifyDelivery(e).HTTPStatus != 307 || redirected != 0 {
 		t.Fatal(e, redirected)
 	}
 	calls := 0
-	if _, e := send(context.Background(), c, []byte(testPayload), &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: x509.NewCertPool()}}}, func() time.Time { return testNow }, func(context.Context, time.Duration) error { calls++; return nil }); e != ErrDelivery || calls != 3 {
+	if _, e := send(context.Background(), c, []byte(testPayload), &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: x509.NewCertPool()}}}, func() time.Time { return testNow }, func(context.Context, time.Duration) error { calls++; return nil }); !errors.Is(e, ErrDelivery) || ClassifyDelivery(e).Disposition != PauseSource || calls != 0 {
 		t.Fatal("untrusted cert accepted", e)
 	}
 	insecure := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
