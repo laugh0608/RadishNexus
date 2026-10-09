@@ -209,7 +209,7 @@ func (s *Spool) inventory() ([]int64, int64, error) {
 			}
 			if index == 2 {
 				r, e := s.read(n)
-				if e != nil || r.State != "delivered" {
+				if e != nil || (r.State != "delivered" && r.State != "compacted") {
 					return nil, 0, ErrSpoolState
 				}
 				want, _ := json.Marshal(spoolAck{1, s.config.Binding.SourceID, n, r.Digest})
@@ -233,6 +233,15 @@ func (s *Spool) read(number int64) (spoolRecord, error) {
 	raw, e := spoolRead(filepath.Join(s.config.StateDir, spoolName(number)), MaxSpoolRecord)
 	if e != nil {
 		return r, e
+	}
+	var envelope struct {
+		Version int `json:"version"`
+	}
+	if json.Unmarshal(raw, &envelope) != nil {
+		return r, ErrSpoolState
+	}
+	if envelope.Version == 2 {
+		return s.readCompact(raw, number)
 	}
 	if _, e = object(raw, "version", "binding_sha256", "build_number", "payload", "payload_sha256", "state", "reason", "disposition", "last_http_status", "rounds", "first_attempt", "next_attempt", "created_at", "updated_at", "delivered_at", "ci_run_id", "manual_retries"); e != nil || json.Unmarshal(raw, &r) != nil {
 		return r, ErrSpoolState
@@ -293,6 +302,9 @@ func safeSpoolReason(code string) bool {
 func (s *Spool) save(r spoolRecord) error {
 	if !s.writeable || s.lock == nil || s.failed {
 		return ErrSpool
+	}
+	if r.Version != 1 {
+		return ErrSpoolState
 	}
 	_, size, e := s.inventory()
 	if e != nil {

@@ -13,7 +13,13 @@ import (
 )
 
 func TestWorkerRejectsArgumentsWithoutLeakingValues(t *testing.T) {
-	for _, args := range [][]string{nil, {"unknown", "private"}, {"run", "-secret", "private"}, {"init", "-config", "private"}, {"retry", "-config", "/private-sensitive", "-build", "1"}, {"status", "-config", "/private-sensitive", "-confirmed"}, {"status", "-config", "/private-sensitive", "-build", "-1"}} {
+	for _, args := range [][]string{nil, {"unknown", "private"}, {"run", "-secret", "private"}, {"init", "-config", "private"}, {"retry", "-config", "/private-sensitive", "-build", "1"}, {"status", "-config", "/private-sensitive", "-confirmed"}, {"status", "-config", "/private-sensitive", "-build", "-1"},
+		{"cleanup", "-config", "/private-sensitive", "-build", "1", "-collector-state", "/private-proof"},
+		{"cleanup", "-config", "/private-sensitive", "-confirmed"},
+		{"cleanup-plan", "-config", "/private-sensitive", "-build", "1"},
+		{"cleanup-plan", "-config", "/private-sensitive", "-collector-state", "/private-proof"},
+		{"cleanup-plan", "-config", "/private-sensitive", "-build", "1", "-collector-state", "/private-proof", "-confirmed"},
+		{"run", "-config", "/private-sensitive", "-collector-state", "/private-proof"}} {
 		var out bytes.Buffer
 		e := run(context.Background(), args, &out)
 		if e == nil || out.Len() != 0 || strings.Contains(jenkins.SafeSpoolError(e), "private") {

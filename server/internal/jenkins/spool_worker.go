@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -115,7 +116,7 @@ func (s *Spool) tick(ctx context.Context, sendOne func(context.Context, []byte) 
 			s.failed = true
 			return false, e
 		}
-		if r.State == "delivered" {
+		if r.State == "delivered" || r.State == "compacted" {
 			if e = s.acknowledge(r); e != nil {
 				return false, e
 			}
@@ -263,6 +264,22 @@ type SpoolItem struct {
 	CIRunID       string    `json:"ci_run_id,omitempty"`
 	HTTPStatus    int       `json:"last_http_status"`
 }
+
+func (item SpoolItem) MarshalJSON() ([]byte, error) {
+	if item.State == "compacted" {
+		// Attempt history was intentionally reclaimed; zero values would falsely
+		// suggest no attempts and a scheduled retry at year one.
+		return json.Marshal(struct {
+			BuildNumber      int64  `json:"build_number"`
+			State            string `json:"state"`
+			CIRunID          string `json:"ci_run_id"`
+			HistoryCompacted bool   `json:"history_compacted"`
+		}{item.BuildNumber, item.State, item.CIRunID, true})
+	}
+	type fullItem SpoolItem
+	return json.Marshal(fullItem(item))
+}
+
 type SpoolStatus struct {
 	SourceID          string         `json:"source_id"`
 	ObservedAt        time.Time      `json:"observed_at"`
@@ -276,6 +293,7 @@ type SpoolStatus struct {
 	Collector         string         `json:"collector"`
 	CleanupCandidates int            `json:"cleanup_candidates"`
 	CleanupEnabled    bool           `json:"cleanup_enabled"`
+	CleanupMode       string         `json:"cleanup_mode"`
 	Item              *SpoolItem     `json:"item,omitempty"`
 }
 
@@ -287,7 +305,7 @@ func (s *Spool) Status(number int64) (SpoolStatus, error) {
 		return SpoolStatus{}, e
 	}
 	now := s.now()
-	status := SpoolStatus{SourceID: s.config.Binding.SourceID, ObservedAt: now, Counts: map[string]int{"pending": 0, "in_flight": 0, "retry_wait": 0, "blocked": 0, "delivered": 0}, Bytes: size, RemainingBytes: MaxSpoolBytes - size, RemainingRecords: MaxSpoolEntries - s.slots, Collector: "external_status_required"}
+	status := SpoolStatus{SourceID: s.config.Binding.SourceID, ObservedAt: now, Counts: map[string]int{"pending": 0, "in_flight": 0, "retry_wait": 0, "blocked": 0, "delivered": 0, "compacted": 0}, Bytes: size, RemainingBytes: MaxSpoolBytes - size, RemainingRecords: MaxSpoolEntries - s.slots, Collector: "external_status_required", CleanupMode: "explicit_build_only"}
 	for _, n := range numbers {
 		r, e := s.read(n)
 		if e != nil {
@@ -304,7 +322,7 @@ func (s *Spool) Status(number int64) (SpoolStatus, error) {
 		if r.State == "blocked" && r.Disposition == PauseSource {
 			status.SourcePaused = true
 		}
-		if r.State != "delivered" && (status.OldestPending == nil || r.Created.Before(*status.OldestPending)) {
+		if r.State != "delivered" && r.State != "compacted" && (status.OldestPending == nil || r.Created.Before(*status.OldestPending)) {
 			copy := r.Created
 			status.OldestPending = &copy
 		}
@@ -313,7 +331,7 @@ func (s *Spool) Status(number int64) (SpoolStatus, error) {
 				copy := *r.Delivered
 				status.LastDelivered = &copy
 			}
-			if !r.Delivered.Add(7 * 24 * time.Hour).After(now) {
+			if r.State == "delivered" && !r.Delivered.Add(cleanupRetention).After(now) {
 				status.CleanupCandidates++
 			}
 		}
@@ -329,7 +347,7 @@ func (s *Spool) Status(number int64) (SpoolStatus, error) {
 
 // SafeSpoolError deliberately excludes filesystem paths and secret references.
 func SafeSpoolError(err error) string {
-	for _, known := range []error{ErrConfiguration, ErrSpool, ErrSpoolState, ErrSpoolCapacity, ErrSpoolLocked, ErrSpoolBinding, ErrSpoolPaused, ErrSpoolConflict} {
+	for _, known := range []error{ErrConfiguration, ErrSpool, ErrSpoolState, ErrSpoolCapacity, ErrSpoolLocked, ErrSpoolBinding, ErrSpoolPaused, ErrSpoolConflict, ErrCleanup} {
 		if errors.Is(err, known) {
 			return known.Error()
 		}

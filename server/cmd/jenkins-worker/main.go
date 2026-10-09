@@ -35,25 +35,29 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	f := flag.NewFlagSet("jenkins-worker", flag.ContinueOnError)
 	f.SetOutput(io.Discard)
 	path := f.String("config", "", "absolute worker configuration file")
-	build := f.Int64("build", 0, "exact build number for status or retry")
-	confirmed := f.Bool("confirmed", false, "explicitly reset the selected blocked delivery budget")
+	build := f.Int64("build", 0, "exact build number for status, retry or cleanup")
+	collector := f.String("collector-state", "", "absolute read-only collector state directory for cleanup")
+	confirmed := f.Bool("confirmed", false, "explicitly apply the selected retry or cleanup")
 	if f.Parse(args[1:]) != nil || f.NArg() != 0 || *path == "" || *build < 0 || *build > 2147483647 {
 		return jenkins.ErrConfiguration
 	}
-	if command != "init" && command != "run" && command != "status" && command != "retry" && command != "cleanup-plan" {
+	if command != "init" && command != "run" && command != "status" && command != "retry" && command != "cleanup-plan" && command != "cleanup" {
 		return jenkins.ErrConfiguration
 	}
-	if command == "retry" && (*build == 0 || !*confirmed) {
+	if (command == "retry" || command == "cleanup") && (*build == 0 || !*confirmed) {
 		return jenkins.ErrConfiguration
 	}
-	if command != "retry" && *confirmed {
+	if command != "retry" && command != "cleanup" && *confirmed {
 		return jenkins.ErrConfiguration
 	}
-	if command != "retry" && command != "status" && *build != 0 {
+	if command != "retry" && command != "status" && command != "cleanup" && command != "cleanup-plan" && *build != 0 {
+		return jenkins.ErrConfiguration
+	}
+	if (*collector != "" && command != "cleanup" && command != "cleanup-plan") || (command == "cleanup" && *collector == "") || (command == "cleanup-plan" && ((*collector == "") != (*build == 0))) {
 		return jenkins.ErrConfiguration
 	}
 	// macOS runs filesystem unit tests but is not a supported deployed worker.
-	if command == "run" && runtime.GOOS != "linux" {
+	if (command == "run" || command == "cleanup") && runtime.GOOS != "linux" {
 		return jenkins.ErrConfiguration
 	}
 	raw, e := jenkins.ReadFile(*path, jenkins.MaxConfig)
@@ -86,6 +90,13 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	case "init":
 		return encode(map[string]string{"state": "initialized", "source_id": c.Binding.SourceID})
 	case "status", "cleanup-plan":
+		if command == "cleanup-plan" && *collector != "" {
+			plan, e := s.CleanupPlan(*build, *collector)
+			if e != nil {
+				return e
+			}
+			return encode(plan)
+		}
 		status, e := s.Status(*build)
 		if e != nil {
 			return e
@@ -97,6 +108,12 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 			return jenkins.ErrSpoolPaused
 		}
 		return nil
+	case "cleanup":
+		plan, e := s.Cleanup(*build, *collector)
+		if e != nil {
+			return e
+		}
+		return encode(map[string]any{"source_id": c.Binding.SourceID, "build_number": *build, "state": "compacted", "already_compacted": plan.AlreadyCompacted})
 	case "retry":
 		// Recheck current credentials and origin before re-enabling this source.
 		if _, e = c.Sender(); e != nil {

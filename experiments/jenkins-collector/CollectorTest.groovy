@@ -3,7 +3,7 @@ import java.nio.file.attribute.PosixFilePermissions
 import java.time.Instant
 
 def privateFile = PosixFilePermissions.asFileAttribute(Collector.PRIVATE_FILE)
-def fixture = {
+def fixture = { Closure clock = { Instant.now() } ->
     Path root = Files.createTempDirectory('collector-test-', PosixFilePermissions.asFileAttribute(Collector.PRIVATE_DIR))
     ['input', 'state', 'ack'].each { Files.createDirectory(root.resolve(it), PosixFilePermissions.asFileAttribute(Collector.PRIVATE_DIR)) }
     Map config = [version: 1, input_dir: root.resolve('input').toString(), state_dir: root.resolve('state').toString(),
@@ -12,7 +12,7 @@ def fixture = {
         job_full_name: 'collector-probe', first_build_number: 1]]
     Path file = Files.createFile(root.resolve('config.json'), privateFile)
     Files.write(file, Collector.encode(config))
-    new Collector(file, true).close()
+    new Collector(file, true, null, clock).close()
     [root: root, file: file, config: config]
 }
 def payload = { long n, String result = 'SUCCESS' ->
@@ -163,19 +163,117 @@ assert Arrays.equals(before, Collector.read(f.root.resolve('state/checkpoint.jso
 c.close(); assert statusCommand().code == 1
 Map checkpoint = StrictJson.parse(Collector.read(f.root.resolve('state/checkpoint.json'), Collector.STATE_LIMIT))
 checkpoint.lifecycle = 'running'; checkpoint.observed_at = '2020-01-01T00:00:00Z'
+checkpoint.last_sweep_at = checkpoint.observed_at
 Files.write(f.root.resolve('state/checkpoint.json'), Collector.encode(checkpoint))
 status = statusCommand()
 assert status.code == 1 && StrictJson.parse(status.output.getBytes('UTF-8')).stale
+
+// Retention and proof are checked without changing state; an explicit retire
+// keeps identity after deletion and suppresses historical regeneration.
+Instant cleanupTime = Instant.now().minusSeconds(9 * 86400L)
+Closure cleanupClock = { cleanupTime }
+def acknowledgeOne = { Map ff, long number ->
+    Path receipt = Files.createFile(ff.root.resolve("ack/build-${number}.json"), privateFile)
+    Files.write(receipt, Collector.encode([version: 1, source_id: ff.config.binding.source_id, build_number: number,
+        payload_sha256: Collector.digest(Collector.read(ff.root.resolve("input/build-${number}.json"), 16384))]))
+}
+f = fixture(cleanupClock); c = new Collector(f.file, false, null, cleanupClock)
+c.reconcile(2, { payload(it) }); acknowledgeOne(f, 1); c.reconcile(2, { payload(it) })
+before = Collector.read(f.root.resolve('state/checkpoint.json'), Collector.STATE_LIMIT)
+assert Collector.cleanupPlan(f.config, Collector.checkpoint(f.config), 1, cleanupTime).reason == 'retention_not_met'
+fails('collector_cleanup_not_eligible') { c.cleanup(1) }
+assert c.status().lifecycle == 'running'
+assert Arrays.equals(before, Collector.read(f.root.resolve('state/checkpoint.json'), Collector.STATE_LIMIT))
+cleanupTime = cleanupTime.plusSeconds(7 * 86400L).minusNanos(1)
+assert !Collector.cleanupPlan(f.config, Collector.checkpoint(f.config), 1, cleanupTime).eligible
+cleanupTime = cleanupTime.plusNanos(1)
+assert Collector.cleanupPlan(f.config, Collector.checkpoint(f.config), 1, cleanupTime).eligible
+assert !Collector.cleanupPlan(f.config, Collector.checkpoint(f.config), 2, cleanupTime).eligible
+byte[] savedInput = Collector.read(f.root.resolve('input/build-1.json'), 16384)
+c.cleanup(1)
+assert !Files.exists(f.root.resolve('input/build-1.json')) && Files.exists(f.root.resolve('input/build-2.json'))
+assert Collector.checkpoint(f.config).version == 2 && c.status().counts.retired == 1 && c.status().continuous_prefix == 2
+c.close(); c = new Collector(f.file, false, null, cleanupClock)
+c.reconcile(2, { throw new IOException('history already pruned') })
+c.finalized(1, 2, { payload(it) })
+assert !Files.exists(f.root.resolve('input/build-1.json'))
+Files.write(Files.createFile(f.root.resolve('input/build-1.json'), privateFile), savedInput)
+c.reconcile(2, { payload(it) })
+assert Files.exists(f.root.resolve('input/build-1.json')) // No automatic deletion on restore.
+assert c.cleanup(1).already_retired
+c.close()
+
+// Copy a stopped post-cleanup backup to a new private directory. Its retired
+// identity survives restore even if no Jenkins history remains at all.
+def restored = fixture(cleanupClock)
+['input', 'state', 'ack'].each { String part ->
+    Files.newDirectoryStream(f.root.resolve(part)).withCloseable { stream ->
+        for (Path source : stream) Files.copy(source, restored.root.resolve(part).resolve(source.fileName), StandardCopyOption.REPLACE_EXISTING)
+    }
+}
+c = new Collector(restored.file, false, null, cleanupClock)
+c.reconcile(2, { null }); assert c.status().counts.retired == 1 && !Files.exists(restored.root.resolve('input/build-1.json'))
+fails('collector_input_conflict') { c.finalized(1, 2, { payload(it, 'FAILURE') }) }; c.close()
+
+// Crash windows include intent publication, unlink and directory sync. Every
+// restart either preserves the original payload or sees a durable retired ID.
+['write', 'file_sync', 'rename', 'directory_sync', 'unlink', 'unlink_directory_sync'].each { String stage ->
+    cleanupTime = Instant.now().minusSeconds(9 * 86400L)
+    f = fixture(cleanupClock); c = new Collector(f.file, false, null, cleanupClock)
+    c.reconcile(1, { payload(it) }); acknowledgeOne(f, 1); c.reconcile(1, { payload(it) }); c.close()
+    cleanupTime = cleanupTime.plusSeconds(8 * 86400L)
+    c = new Collector(f.file, false, { String at -> if (at == stage) throw new IOException('synthetic') }, cleanupClock)
+    try { c.cleanup(1); assert false } catch (IOException expected) { }
+    c.close()
+    c = new Collector(f.file, false, null, cleanupClock)
+    c.cleanup(1); assert c.status().counts.retired == 1 && !Files.exists(f.root.resolve('input/build-1.json'))
+    c.close()
+}
+
+// Missing acknowledgment and conflicting input cannot be made eligible by age.
+cleanupTime = Instant.now().minusSeconds(9 * 86400L)
+f = fixture(cleanupClock); c = new Collector(f.file, false, null, cleanupClock)
+c.reconcile(1, { payload(it) }); acknowledgeOne(f, 1); c.reconcile(1, { payload(it) }); c.close()
+cleanupTime = cleanupTime.plusSeconds(8 * 86400L)
+Path cleanupCrash = Files.createFile(f.root.resolve('cleanup-crash.groovy'), privateFile)
+Files.write(cleanupCrash, '''
+def core = new Collector(java.nio.file.Paths.get(args[0]), false,
+    { String stage -> if (stage == 'unlink_directory_sync') Runtime.runtime.halt(24) },
+    { java.time.Instant.parse(args[1]) })
+core.cleanup(1)
+'''.getBytes('UTF-8'))
+def cleanupProcess = new ProcessBuilder('java', '-cp', System.getProperty('java.class.path'), 'groovy.ui.GroovyMain',
+    cleanupCrash.toString(), f.file.toString(), cleanupTime.toString()).inheritIO().start()
+assert cleanupProcess.waitFor(30, java.util.concurrent.TimeUnit.SECONDS) && cleanupProcess.exitValue() == 24
+c = new Collector(f.file, false, null, cleanupClock)
+assert c.cleanup(1).already_retired && !Files.exists(f.root.resolve('input/build-1.json')); c.close()
+
+// Missing acknowledgment and conflicting input cannot be made eligible by age.
+cleanupTime = Instant.now().minusSeconds(9 * 86400L)
+f = fixture(cleanupClock); c = new Collector(f.file, false, null, cleanupClock)
+c.reconcile(1, { payload(it) }); acknowledgeOne(f, 1); c.reconcile(1, { payload(it) })
+cleanupTime = cleanupTime.plusSeconds(8 * 86400L)
+Files.delete(f.root.resolve('ack/build-1.json'))
+assert Collector.cleanupPlan(f.config, Collector.checkpoint(f.config), 1, cleanupTime).reason == 'ack_required'
+acknowledgeOne(f, 1)
+Files.write(f.root.resolve('input/build-1.json'), Collector.encode(payload(1, 'FAILURE')))
+fails('collector_input_conflict') { c.cleanup(1) }
+assert Files.exists(f.root.resolve('input/build-1.json')); c.close()
 
 // Optional synthetic contract export. This directory is transport for tests,
 // never a supported durable spool (host Docker mounts may be FUSE).
 if (System.getenv('COLLECTOR_CONTRACT_EXPORT')) {
     Path destination = Paths.get(System.getenv('COLLECTOR_CONTRACT_EXPORT'))
-    f = fixture(); c = new Collector(f.file)
+    cleanupTime = Instant.now().minusSeconds(9 * 86400L)
+    f = fixture(cleanupClock); c = new Collector(f.file, false, null, cleanupClock)
     c.reconcile(5, { payload(it, ['SUCCESS','FAILURE','ABORTED','UNSTABLE','NOT_BUILT'][(int) it - 1]) })
-    c.close()
     for (int n = 1; n <= 5; n++) {
         Files.copy(f.root.resolve("input/build-${n}.json"), destination.resolve("build-${n}.json"))
     }
+    acknowledgeOne(f, 1); c.reconcile(5, { payload(it) })
+    cleanupTime = cleanupTime.plusSeconds(8 * 86400L)
+    c.cleanup(1); c.close()
+    Files.copy(f.root.resolve('state/manifest.json'), destination.resolve('collector-manifest.json'))
+    Files.copy(f.root.resolve('state/checkpoint.json'), destination.resolve('collector-checkpoint.json'))
 }
 println 'collector_checks_passed'

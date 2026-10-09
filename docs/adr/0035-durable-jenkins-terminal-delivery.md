@@ -1,6 +1,6 @@
 # ADR-0035：Jenkins 终态快照的持久交付与漏采恢复
 
-状态：A 已接受并实现；B 采集代码及离线验证已完成，真实联调经所有者要求暂缓，清理与退出验收未完成
+状态：A 已接受并实现；B 采集与显式双边清理代码已实现，真实联调经所有者要求暂缓，退出验收未完成
 
 日期：2026-10-09
 
@@ -92,9 +92,17 @@ worker 启动时持有操作系统释放的独占锁，第二实例拒绝启动�
 
 ## 容量、停用与生命周期
 
-首轮每个 source 最多 10,000 个未清理身份与临时文件、输入 / 状态 / 确认目录合计最多 512 MiB；同一 build 的三个文件只计一个身份，残留临时文件各占一个名额。单 payload 最多 16 KiB，单状态记录最多 32 KiB。计数包含 blocked 和待清理成功项；目录分批读取、每轮最多导入 100 个新快照，状态扫描受总容量上限约束。容量超限停止该来源并报告，写前还保留原子写入空间；不丢弃最老待办。B 的 callback 不能因此改变 Jenkins 构建结果，后续由历史对账恢复缺口。当前 collector 另有最多 4 MiB checkpoint、8 MiB 状态目录预算；该元数据目录不计入 A 的三个交接目录。未开放清理前，collector 从 first build 到已观察最大编号的区间跨度也限制为 10,000，历史缺口占范围，不自动跳过。
+首轮每个 source 最多 10,000 个保留身份（含紧凑索引）与临时文件、输入 / 状态 / 确认目录合计最多 512 MiB；同一 build 的三个文件只计一个身份，残留临时文件各占一个名额。单 payload 最多 16 KiB，单状态记录最多 32 KiB。计数包含 blocked 和待清理成功项；目录分批读取、每轮最多导入 100 个新快照，状态扫描受总容量上限约束。容量超限停止该来源并报告，写前还保留原子写入空间；不丢弃最老待办。B 的 callback 不能因此改变 Jenkins 构建结果，后续由历史对账恢复缺口。当前 collector 另有最多 4 MiB checkpoint、8 MiB 状态目录预算；该元数据目录不计入 A 的三个交接目录。清理后仍保留 retired 身份，collector 从 first build 到已观察最大编号的区间跨度也限制为 10,000，历史缺口占范围，不自动跳过。
 
-默认不自动删除未交付、blocked 或未解决缺口。A 的 `cleanup-plan` 只报告交付超过 7 天的候选数量与 `cleanup_enabled: false`，保留全部输入与状态；B 当前已持久化生产者确认，但双边清理与 worker 紧凑索引尚未实现，仍禁止删除。后续清理设计为：controller 读取匹配 worker 确认后，先持久保存同身份与摘要的交接记录，才允许清理超过 7 天的对应输入；worker 清理前必须核对该交接记录，并先保留紧凑 source / build / digest / CI Run 确认索引，再删除大 payload。任一侧缺少确认则不清理，不能仅因成功时间已过期删除。确认索引在 source 退役前保留，也计入容量；触顶需人工归档 / 停用，不承诺无限运行。
+默认不自动删除未交付、blocked 或未解决缺口。A 的 `cleanup-plan` 只报告交付超过 7 天的候选数量与 `cleanup_enabled: false`，保留全部输入与状态；B 后续已实现生产者确认、显式双边清理与 worker 紧凑索引；正常 run 仍不删除。清理合同为：controller 读取匹配 worker 确认后，先持久保存同身份与摘要的交接记录，才允许清理超过 7 天的对应输入；worker 清理前必须核对该交接记录，并先保留紧凑 source / build / digest / CI Run 确认索引，再删除大 payload。任一侧缺少确认则不清理，不能仅因成功时间已过期删除。确认索引在 source 退役前保留，也计入容量；触顶需人工归档 / 停用，不承诺无限运行。
+
+### 显式双边清理的本地合同
+
+清理按精确 source / build 分两步执行，普通 run、status 和预览不会删除数据。collector 持锁核对已发布输入、worker ack 与持久 handoff，handoff 保留满 7 天后，先把 checkpoint 升为 v2 并保存 `retired` 条目（保留 digest、handoff 时间、retired 时间），再删除该输入并同步目录。中断后同一命令可继续；对账遇到 retired 不从 Jenkins 历史重新生成输入，重复 finalized 仍校验原始摘要。
+
+worker 的显式 cleanup 读取独立只读挂载的 collector 状态，核对同一 binding、retired 摘要、两个保留时间和输入已移除，才将 v1 完整记录原子替换为 v2 紧凑索引。索引保留 binding / source / build / payload digest / CI Run / delivered 时间 / compacted 时间；原 ack 保留且可重建。索引仍占身份配额，既不重发相同旧输入，也不接受同身份异字节。清理不增加可用身份数量，只回收 payload 空间。
+
+v1 checkpoint 和 worker 记录继续可读，只有显式清理产生 v2；旧程序遇到 v2 必须拒绝，不能降级成空队列。已清理 payload 无法从索引还原；回滚旧程序前需恢复一份停止双方后取得的一致旧备份，并保留原 receiver receipt。分别混用不同恢复点不构成一致恢复，发生冲突或确认不匹配时停止。此处只定义本地磁盘交接，公共 HTTP v1、业务 schema、来源权限和凭据格式不变。
 
 停用先停止采集与 worker，保留 spool，再按 ADR-0030 撤销 receiver 来源 / key 并重启；停止 worker 本身不撤销外部写权限。已提交 CI Run / receipt 保留，已经在途请求可能已成功，重启必须按未知结果核对。重新启用同一身份可继续原积压，不自动重置采集起点。
 
@@ -136,7 +144,7 @@ Repository 来源与 Ticket 具体交付关系完成后，再验收原 Thread / 
 | 运维 | 停用、密钥轮换、只读状态、精确重试、dry-run / 显式清理、离线恢复与再次启用，日志 / 截图无敏感材料 |
 | 回归 | Go 定向与相关 PostgreSQL 测试、现有 sender CLI 合同、仓库检查；没有 Web 修改不机械重跑全部 Web |
 
-A 完成须证明已落盘输入可恢复；B 完成还须证明真实漏采可在历史保留条件下恢复。两段都必须清楚报告未恢复缺口，不用测试数量或一次成功发送替代完整性结论。A 已完成 Go race / vet、真实 PostgreSQL 提交后杀进程与重放、Linux CLI / SIGTERM、故障注入和离线副本检查，详见[实施记录](../status/reviews/2026-10-09-delivery-continuation.md)。后续 B 采集代码、固定镜像 API 编译、合成历史故障矩阵和 Groovy → Go 字节交接已通过，见[采集记录](../status/reviews/2026-10-09-jenkins-collector.md)。本机 Docker bind mount 为 FUSE，超出支持范围；所有者已选择先交付代码、暂缓真实联调。B 的真实 Jenkins / 挂载 / 重启与双边清理退出条件未满足，没有实测宿主断电或物理磁盘丢失。
+A 完成须证明已落盘输入可恢复；B 完成还须证明真实漏采可在历史保留条件下恢复。两段都必须清楚报告未恢复缺口，不用测试数量或一次成功发送替代完整性结论。A 已完成 Go race / vet、真实 PostgreSQL 提交后杀进程与重放、Linux CLI / SIGTERM、故障注入和离线副本检查，详见[实施记录](../status/reviews/2026-10-09-delivery-continuation.md)。后续 B 采集代码、固定镜像 API 编译、合成历史故障矩阵和 Groovy → Go 字节交接已通过，见[采集记录](../status/reviews/2026-10-09-jenkins-collector.md)。本机 Docker bind mount 为 FUSE，超出支持范围；所有者已选择先交付代码、暂缓真实联调。显式双边清理的离线恢复证据见[清理记录](../status/reviews/2026-10-09-jenkins-cleanup.md)。B 的真实 Jenkins / 挂载 / 重启退出条件未满足，没有实测宿主断电或物理磁盘丢失。
 
 ## 外部核验
 

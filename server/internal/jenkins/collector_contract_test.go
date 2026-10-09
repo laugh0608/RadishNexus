@@ -33,6 +33,27 @@ func TestCollectorWorkerContract(t *testing.T) {
 	}
 	c.InputDir, c.StateDir, c.AckDir = filepath.Join(base, "input"), filepath.Join(base, "state"), filepath.Join(base, "ack")
 	c.Binding.Job = "collector-probe"
+	manifest, err := ReadFile(filepath.Join(dir, "collector-manifest.json"), MaxConfig)
+	if err != nil {
+		t.Fatal("missing collector binding export", err)
+	}
+	c.Binding, err = parseBinding(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkpoint, err := ReadFile(filepath.Join(dir, "collector-checkpoint.json"), maxCollectorCheckpoint)
+	if err != nil {
+		t.Fatal("missing collector cleanup export", err)
+	}
+	var proof struct {
+		Entries map[string]struct {
+			Handoff time.Time `json:"handoff_at"`
+			Retired time.Time `json:"retired_at"`
+		} `json:"entries"`
+	}
+	if json.Unmarshal(checkpoint, &proof) != nil || proof.Entries["1"].Handoff.IsZero() || proof.Entries["1"].Retired.IsZero() {
+		t.Fatal("invalid cleanup clock export")
+	}
 	if err := os.Mkdir(c.InputDir, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -41,6 +62,7 @@ func TestCollectorWorkerContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
+	s.now = func() time.Time { return proof.Entries["1"].Handoff.Add(-time.Second) }
 	results := []string{"SUCCESS", "FAILURE", "ABORTED", "UNSTABLE", "NOT_BUILT"}
 	for index, result := range results {
 		n := int64(index + 1)
@@ -85,5 +107,28 @@ func TestCollectorWorkerContract(t *testing.T) {
 		if err != nil || json.Unmarshal(raw, &ack) != nil || ack.Digest != r.Digest || ack.Number != n || ack.SourceID != c.Binding.SourceID {
 			t.Fatal("collector handoff contract drift", n, err)
 		}
+	}
+	// Consume the actual Groovy v2 retirement proof after its input unlink.
+	collectorDir := filepath.Join(base, "collector")
+	if err = os.Mkdir(collectorDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(collectorDir, "manifest.json"), manifest, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(collectorDir, "checkpoint.json"), checkpoint, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(filepath.Join(c.InputDir, spoolName(1))); err != nil {
+		t.Fatal(err)
+	}
+	s.now = func() time.Time { return proof.Entries["1"].Retired.Add(time.Hour) }
+	plan, err := s.Cleanup(1, collectorDir)
+	if err != nil || !plan.Eligible {
+		t.Fatal("Groovy retirement / Go compaction contract drift", plan, err)
+	}
+	r := requireRecord(t, s, 1, "compacted", 0)
+	if r.CIRunID != "cir_collector1" {
+		t.Fatal("cleanup changed CI Run")
 	}
 }

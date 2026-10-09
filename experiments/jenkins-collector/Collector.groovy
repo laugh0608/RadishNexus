@@ -26,6 +26,7 @@ class Collector implements Closeable {
     private boolean failed = false
     private boolean closed = false
     private Closure fault
+    private Closure clock
 
     static void require(boolean valid, String code = 'collector_invalid_state') {
         if (!valid) throw new CollectorFailure(code)
@@ -90,10 +91,11 @@ class Collector implements Closeable {
         }
         c
     }
-    Collector(Path configPath, boolean initialize = false, Closure fault = null) {
+    Collector(Path configPath, boolean initialize = false, Closure fault = null, Closure clock = { Instant.now() }) {
         this.config = loadConfig(configPath)
         input = Paths.get(config.input_dir); stateDir = Paths.get(config.state_dir); ack = Paths.get(config.ack_dir)
         this.fault = fault
+        this.clock = clock
         Path lockPath = stateDir.resolve('.lock')
         lockChannel = FileChannel.open(lockPath, [StandardOpenOption.CREATE, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS] as Set,
             PosixFilePermissions.asFileAttribute(PRIVATE_FILE))
@@ -109,7 +111,7 @@ class Collector implements Closeable {
                 write(manifest, encode(config.binding))
                 long first = config.binding.first_build_number
                 state = [version: 1, binding: config.binding, prefix: first - 1, high: first - 1, scan_high: first - 1, cursor: first,
-                    observed_at: now(), last_sweep_at: null, lifecycle: 'stopped', error: '', entries: [:]]
+                    observed_at: clock().toString(), last_sweep_at: null, lifecycle: 'stopped', error: '', entries: [:]]
                 save()
             } else {
                 require(StrictJson.parse(read(manifest, 16384)) == config.binding, 'collector_binding_mismatch')
@@ -124,23 +126,30 @@ class Collector implements Closeable {
     }
     static void validateState(Map state, Map config) {
         keys(state, ['version', 'binding', 'prefix', 'high', 'scan_high', 'cursor', 'observed_at', 'last_sweep_at', 'lifecycle', 'error', 'entries'])
-        require(state.version == 1 && state.binding == config.binding, 'collector_binding_mismatch')
+        require(state.version in [1, 2] && integer(state.version) && state.binding == config.binding, 'collector_binding_mismatch')
         long first = config.binding.first_build_number
         require(integer(state.prefix) && integer(state.high) && integer(state.scan_high) && integer(state.cursor) && state.prefix >= first - 1 &&
             state.prefix <= state.high && state.high <= 2147483647 && state.high - first < LIMIT &&
             state.scan_high >= first - 1 && state.scan_high <= state.high && state.cursor >= first && state.cursor <= state.scan_high + 1)
         require(state.lifecycle in ['running', 'stopped', 'paused'] && state.error instanceof String &&
             (state.error == '' || state.error in CollectorFailure.CODES))
-        Instant.parse(state.observed_at as String)
-        if (state.last_sweep_at != null) Instant.parse(state.last_sweep_at as String)
+        Instant observed = Instant.parse(state.observed_at as String)
+        if (state.last_sweep_at != null) require(!Instant.parse(state.last_sweep_at as String).isAfter(observed))
         require(state.entries instanceof Map && state.entries.size() <= LIMIT)
         state.entries.each { String k, Object value ->
             require(k ==~ /[1-9][0-9]{0,9}/ && k.toLong() >= first && k.toLong() <= state.high)
-            keys(value, ['kind', 'digest', 'handoff_at'])
-            require(value.kind in ['published', 'running', 'missing', 'unreadable'])
-            require(value.kind == 'published' ? value.digest instanceof String && value.digest ==~ /[0-9a-f]{64}/ : value.digest == '')
+            require(value instanceof Map)
+            keys(value, value.kind == 'retired' && state.version == 2 ? ['kind', 'digest', 'handoff_at', 'retired_at'] : ['kind', 'digest', 'handoff_at'])
+            require(value.kind in ['published', 'running', 'missing', 'unreadable', 'retired'])
+            require(value.kind in ['published', 'retired'] ? value.digest instanceof String && value.digest ==~ /[0-9a-f]{64}/ : value.digest == '')
             if (value.handoff_at != null) {
-                require(value.kind == 'published'); Instant.parse(value.handoff_at as String)
+                require(value.kind in ['published', 'retired'])
+                require(!Instant.parse(value.handoff_at as String).isAfter(observed))
+            }
+            if (value.kind == 'retired') {
+                require(state.version == 2 && value.handoff_at != null && value.retired_at != null)
+                require(!Instant.parse(value.retired_at).isBefore(Instant.parse(value.handoff_at).plusSeconds(7 * 86400L)))
+                require(!Instant.parse(value.retired_at).isAfter(observed))
             }
         }
         require(state.prefix == prefix(state, config))
@@ -196,11 +205,12 @@ class Collector implements Closeable {
     }
     private static long prefix(Map state, Map config) {
         long n = config.binding.first_build_number
-        while (state.entries[Long.toString(n)]?.kind == 'published') n++
+        while (state.entries[Long.toString(n)]?.kind in ['published', 'retired']) n++
         n - 1
     }
     private void save() {
-        state.prefix = prefix(state, config); state.observed_at = now()
+        state.prefix = prefix(state, config); state.observed_at = clock().toString()
+        validateState(state, config)
         write(stateDir.resolve('checkpoint.json'), encode(state))
     }
     private void healthy() { require(!closed && !failed, 'collector_paused') }
@@ -220,6 +230,12 @@ class Collector implements Closeable {
         Path path = input.resolve(name(number))
         byte[] bytes = null
         if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) bytes = read(path, PAYLOAD_LIMIT)
+        if (previous?.kind == 'retired') {
+            require(bytes == null || digest(bytes) == previous.digest, 'collector_input_conflict')
+            if (verifyExisting) require(digest(snapshotBytes(number, lookup(number))) == previous.digest, 'collector_input_conflict')
+            acknowledge(number, previous)
+            return
+        }
         if (previous?.kind == 'published' && bytes != null && !verifyExisting) {
             require(digest(bytes) == previous.digest, 'collector_input_conflict')
             acknowledge(number, previous)
@@ -238,15 +254,7 @@ class Collector implements Closeable {
             state.entries[key] = [kind: snapshot == null ? 'missing' : 'running', digest: '', handoff_at: null]
             return
         }
-        keys(snapshot, ['version', 'job_full_name', 'build_number', 'building', 'in_progress', 'result', 'started_at', 'completed_at'])
-        require(snapshot.version == 1 && snapshot.job_full_name == config.binding.job_full_name && snapshot.build_number == number &&
-            snapshot.building == false && snapshot.in_progress == false && snapshot.result in ['SUCCESS', 'FAILURE', 'ABORTED', 'UNSTABLE', 'NOT_BUILT'],
-            'collector_invalid_snapshot')
-        Instant start = Instant.parse(snapshot.started_at as String), end = Instant.parse(snapshot.completed_at as String)
-        require(!start.isAfter(end) && start.toEpochMilli() > 0 && end.toEpochMilli() <= System.currentTimeMillis() + 300000,
-            'collector_invalid_snapshot')
-        byte[] generated = encode(snapshot)
-        require(generated.length <= PAYLOAD_LIMIT, 'collector_capacity')
+        byte[] generated = snapshotBytes(number, snapshot)
         String sha = digest(generated)
         require(previous?.kind != 'published' || sha == previous.digest, 'collector_input_conflict')
         require(bytes == null || Arrays.equals(bytes, generated), 'collector_input_conflict')
@@ -257,6 +265,18 @@ class Collector implements Closeable {
         state.entries[key] = [kind: 'published', digest: sha, handoff_at: previous?.handoff_at]
         acknowledge(number, state.entries[key])
     }
+    private byte[] snapshotBytes(long number, Object snapshot) {
+        keys(snapshot, ['version', 'job_full_name', 'build_number', 'building', 'in_progress', 'result', 'started_at', 'completed_at'])
+        require(snapshot.version == 1 && snapshot.job_full_name == config.binding.job_full_name && snapshot.build_number == number &&
+            snapshot.building == false && snapshot.in_progress == false && snapshot.result in ['SUCCESS', 'FAILURE', 'ABORTED', 'UNSTABLE', 'NOT_BUILT'],
+            'collector_invalid_snapshot')
+        Instant start = Instant.parse(snapshot.started_at as String), end = Instant.parse(snapshot.completed_at as String)
+        require(!start.isAfter(end) && start.toEpochMilli() > 0 && end.toEpochMilli() <= clock().toEpochMilli() + 300000,
+            'collector_invalid_snapshot')
+        byte[] generated = encode(snapshot)
+        require(generated.length <= PAYLOAD_LIMIT, 'collector_capacity')
+        generated
+    }
     private void acknowledge(long number, Map entry) {
         Path path = ack.resolve(name(number))
         if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return
@@ -264,7 +284,7 @@ class Collector implements Closeable {
         keys(a, ['version', 'source_id', 'build_number', 'payload_sha256'])
         require(a.version == 1 && a.source_id == config.binding.source_id && a.build_number == number &&
             a.payload_sha256 == entry.digest, 'collector_ack_conflict')
-        if (entry.handoff_at == null) entry.handoff_at = now()
+        if (entry.handoff_at == null) entry.handoff_at = clock().toString()
     }
     synchronized void finalized(long number, long high, Closure lookup) {
         healthy()
@@ -293,19 +313,77 @@ class Collector implements Closeable {
             }
             if (state.cursor > state.scan_high) {
                 state.cursor = config.binding.first_build_number
-                state.last_sweep_at = now()
+                state.last_sweep_at = clock().toString()
             }
             state.lifecycle = 'running'; state.error = ''; save()
         } catch (Throwable error) { pause(error); throw error }
     }
     synchronized Map status() {
-        Map counts = [published: 0, running: 0, missing: 0, unreadable: 0, acknowledged: 0]
+        Map counts = [published: 0, retired: 0, running: 0, missing: 0, unreadable: 0, acknowledged: 0]
         state.entries.values().each { counts[it.kind]++; if (it.handoff_at != null) counts.acknowledged++ }
         [version: 1, source_id: config.binding.source_id, observed_at: state.observed_at,
             last_sweep_at: state.last_sweep_at, lifecycle: state.lifecycle, error: state.error,
             continuous_prefix: state.prefix, captured_high: state.high, scan_high: state.scan_high, next_scan: state.cursor,
             unscanned: state.high - config.binding.first_build_number + 1 - state.entries.size(), counts: counts,
-            cleanup_enabled: false]
+            cleanup_enabled: false, cleanup_mode: 'explicit_build_only']
+    }
+    static Map checkpoint(Map config) {
+        Path dir = Paths.get(config.state_dir)
+        require(StrictJson.parse(read(dir.resolve('manifest.json'), 16384)) == config.binding, 'collector_binding_mismatch')
+        Map state = (Map) StrictJson.parse(read(dir.resolve('checkpoint.json'), STATE_LIMIT))
+        validateState(state, config)
+        state
+    }
+    // Preview uses a consistent atomic checkpoint and never takes the live lock
+    // or writes a handoff. Execution repeats every proof under the owner lock.
+    static Map cleanupPlan(Map config, Map state, long number, Instant at) {
+        validateState(state, config)
+        require(number >= config.binding.first_build_number && number <= 2147483647, 'collector_invalid_config')
+        require(!Instant.parse(state.observed_at).isAfter(at), 'collector_invalid_state')
+        Map plan = [version: 1, source_id: config.binding.source_id, build_number: number, eligible: false,
+            already_retired: false, input_present: false, reason: 'handoff_required', automatic_cleanup: false]
+        Map entry = state.entries[Long.toString(number)]
+        if (!(entry?.kind in ['published', 'retired']) || entry.handoff_at == null) return plan
+        plan.already_retired = entry.kind == 'retired'
+        require(state.error == '' || (plan.already_retired && state.error == 'collector_io_failed'), 'collector_paused')
+        Instant handoff = Instant.parse(entry.handoff_at)
+        if (at.isBefore(handoff.plusSeconds(7 * 86400L))) { plan.reason = 'retention_not_met'; return plan }
+        require(!plan.already_retired || !Instant.parse(entry.retired_at).isAfter(at), 'collector_invalid_state')
+        Path ack = Paths.get(config.ack_dir).resolve(name(number))
+        if (!Files.exists(ack, LinkOption.NOFOLLOW_LINKS)) { plan.reason = 'ack_required'; return plan }
+        Map receipt = (Map) StrictJson.parse(read(ack, 1024))
+        keys(receipt, ['version', 'source_id', 'build_number', 'payload_sha256'])
+        require(receipt.version == 1 && integer(receipt.version) && receipt.source_id == config.binding.source_id &&
+            integer(receipt.build_number) && receipt.build_number == number && receipt.payload_sha256 == entry.digest, 'collector_ack_conflict')
+        Path input = Paths.get(config.input_dir).resolve(name(number))
+        plan.input_present = Files.exists(input, LinkOption.NOFOLLOW_LINKS)
+        if (plan.input_present) require(digest(read(input, PAYLOAD_LIMIT)) == entry.digest, 'collector_input_conflict')
+        if (!plan.input_present && !plan.already_retired) { plan.reason = 'published_input_missing'; return plan }
+        plan.eligible = true; plan.reason = ''
+        plan
+    }
+    synchronized Map cleanup(long number) {
+        healthy()
+        inventory()
+        Instant at = clock()
+        Map plan = cleanupPlan(config, state, number, at)
+        require(plan.eligible, 'collector_cleanup_not_eligible')
+        try {
+            if (!plan.already_retired) {
+                Map entry = state.entries[Long.toString(number)]
+                state.version = 2
+                state.entries[Long.toString(number)] = [kind: 'retired', digest: entry.digest,
+                    handoff_at: entry.handoff_at, retired_at: at.toString()]
+                save() // Durable intent prevents regeneration even after an unlink crash.
+            }
+            fault?.call('unlink')
+            Files.deleteIfExists(input.resolve(name(number)))
+            fault?.call('unlink_directory_sync')
+            FileChannel directory = FileChannel.open(input, StandardOpenOption.READ)
+            try { directory.force(true) } finally { directory.close() }
+            state.lifecycle = 'stopped'; state.error = ''; save()
+            plan
+        } catch (Throwable error) { pause(error); throw error }
     }
     synchronized void close() {
         if (closed) return
@@ -323,6 +401,7 @@ class CollectorFailure extends IOException {
         'collector_unsupported_filesystem', 'collector_unsafe_file', 'collector_capacity', 'collector_locked',
         'collector_already_initialized', 'collector_refuses_adoption', 'collector_binding_mismatch', 'collector_paused',
         'collector_io_failed', 'collector_input_conflict', 'collector_published_input_missing', 'collector_untracked_input',
-        'collector_invalid_snapshot', 'collector_ack_conflict', 'collector_source_rewind', 'collector_job_unavailable'].toSet()
+        'collector_invalid_snapshot', 'collector_ack_conflict', 'collector_source_rewind', 'collector_job_unavailable',
+        'collector_cleanup_not_eligible'].toSet()
     CollectorFailure(String code) { super(code); if (!CODES.contains(code)) throw new IllegalArgumentException('invalid_code') }
 }

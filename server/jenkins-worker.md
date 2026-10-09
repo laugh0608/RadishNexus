@@ -4,7 +4,7 @@
 
 ## 部署条件
 
-- `run` 只支持 Linux；macOS 仅用于文件与状态测试、离线检查，不作为运行平台。
+- `run` 和显式 `cleanup` 只支持 Linux；macOS 仅用于文件与状态测试、离线检查，不作为运行平台。
 - 三个目录必须为绝对规范路径、互不嵌套，无 symlink，归 worker 当前 UID 所有且权限为 0700；目录内文件为 0600、普通文件且只有一个硬链接。父目录也必须由可信部署者控制，不允许运行中替换目录。
 - Linux 文件系统白名单为 ext4、XFS、Btrfs、tmpfs、overlay；NFS 和其他类型启动失败。tmpfs / 容器临时层仅可用于进程恢复测试，实际持久部署必须使用可保留的本地磁盘并核验挂载与备份。文件系统类型检查不证明存储硬件的断电耐久性。
 - 生产者只发布输入；worker 私有状态目录不能暴露给构建 agent 或仓库代码。未来 controller / worker 分容器时分别装配输入只读、确认只读等最小挂载；A 尚未验证该跨容器拓扑，也不支持放宽组权限。
@@ -39,7 +39,7 @@
 
 输入命名固定为 `build-42.json`，build number 必须与 payload 相同，且不小于首次编号。payload 使用已有 v1 格式，不含 Secret。可信生产者必须先在同目录写临时文件、同步文件、原子发布，再同步父目录；不得覆盖已发布身份，重复发布先比对字节。worker 忽略 `.pending-*` 和合法 `build-N.json.tmp` 临时内容，但将其计入配额。
 
-状态目录中的 `manifest.json` 冻结 binding；`build-N.json` 保存原始 payload 字节、摘要、状态、预算和成功 CI Run ID。确认目录中的同名文件仅含确认版本、source / build 和原始 payload 摘要。不要直接编辑这些文件。
+状态目录中的 `manifest.json` 冻结 binding；v1 `build-N.json` 保存原始 payload 字节、摘要、状态、预算和成功 CI Run ID。显式清理后同名文件成为 v2 `compacted` 索引，保留来源、摘要、CI Run、交付与压缩时间，不再含 payload。确认目录中的同名文件仅含确认版本、source / build 和原始 payload 摘要。不要直接编辑这些文件。
 
 ## 命令与退出
 
@@ -52,6 +52,8 @@ jenkins-worker status -config /run/config/jenkins-worker.json -build 42
 jenkins-worker run -config /run/config/jenkins-worker.json
 jenkins-worker retry -config /run/config/jenkins-worker.json -build 42 -confirmed
 jenkins-worker cleanup-plan -config /run/config/jenkins-worker.json
+jenkins-worker cleanup-plan -config /run/config/jenkins-worker.json -collector-state /read-only/collector -build 42
+jenkins-worker cleanup -config /run/config/jenkins-worker.json -collector-state /read-only/collector -build 42 -confirmed
 ```
 
 | 命令 | 行为 |
@@ -60,7 +62,8 @@ jenkins-worker cleanup-plan -config /run/config/jenkins-worker.json
 | `run` | 持有 state 内 OS 独占锁，逐条发送；空闲时每 5 秒重新发现输入，最多每轮导入 100 个新快照。第二实例拒绝运行 |
 | `status` | 不持锁、不读 Secret、不修改状态；显示已导入条目的状态数量、最老待办时间、最近成功时间、容量及可选精确 build 的原因 / HTTP 状态。运行中的读取不是跨文件事务快照 |
 | `retry` | 先停止 worker，修复原因并核对来源，再对精确 blocked build 执行；重新检查 sender 配置和凭据，保留身份和字节，只重建预算并追加本地时间记录，最多 128 次 |
-| `cleanup-plan` | 与只读状态同源，报告交付满 7 天的候选数量，始终 `cleanup_enabled: false`；A 没有删除命令 |
+| `cleanup-plan` | 不带 build 时保留年龄候选汇总；同时提供 `-collector-state` 和 `-build` 时核对双边证明，返回 eligible、受控原因和待移除 payload 字节数，不写文件 |
+| `cleanup` | Linux 离线显式执行，必须提供精确 build、collector 只读目录和 `-confirmed`；持 worker 锁复核后，将该条完整记录原子替换为紧凑索引，不读 Secret、不发请求、不修改 collector 文件 |
 
 stdout 为受控 JSON，stderr 仅安全机器码；错误非零退出。暂停来源时 status 仍输出可用状态，再以非零退出。普通单条 blocked 不使整个 source 暂停，操作者必须检查计数，不能把进程仍运行理解为所有条目已送达。worker 报告 `collector: external_status_required`，必须独立检查 collector 的心跳、编号覆盖与缺口，不能从发送队列推导采集完整性。
 
@@ -83,12 +86,25 @@ SIGTERM / SIGINT 取消当前等待或请求并释放锁。中断请求视为结
 
 只有严格成功响应之后才保存 `delivered`，随后写 ack。成功但本地状态未保存时重放；delivered 已保存但 ack 缺失时仅补 ack，不再发送。所有状态和 ack 更新采用临时文件 → 文件同步 → rename → 目录同步；任一步失败即停止。
 
-容量上限为 10,000 个不同 build 身份加残留临时文件、三个目录总计 512 MiB；单 payload 16 KiB、单记录 32 KiB。blocked、成功项和临时文件均不自动清理。容量接近上限应先停采集、离线备份并规划 B 的双向确认清理；A 不承诺无限运行，不允许按文件年龄直接删队列。
+容量上限为 10,000 个不同 build 身份加残留临时文件、三个目录总计 512 MiB；单 payload 16 KiB、单记录 32 KiB。blocked、成功项和临时文件均不自动清理。容量接近字节上限时先停双方、取得一致备份，再按下面的双边确认流程回收 payload。紧凑索引仍占身份数量，清理不会释放 build 名额；触及身份上限需另行归档 / 退役，不承诺无限运行，不允许按文件年龄直接删队列。
+
+## 显式双边安全清理
+
+先停止 collector 和 worker，并备份 input、worker state、ack、collector state 四个目录的一致副本。两个执行入口各自持有所有者 OS 锁，不能替仍在运行的同侧进程清理。正常运行和状态查询始终不自动清理；保留的 `cleanup_enabled: false` 表示自动行为关闭，`cleanup_mode: explicit_build_only` 表示只能按明确指定的构建执行。
+
+1. 在 collector 一侧使用 `offline.groovy cleanup-plan CONFIG 42` 预览；只有已发布、持久 handoff 满 7 天、当前 ack 和输入摘要一致的构建可选。确认后使用 `offline.groovy cleanup CONFIG 42 --confirmed`，先持久保存 v2 retired 记录，再删除输入并同步目录。操作入口的 Groovy classpath 见[collector 说明](../experiments/jenkins-collector/README.md)。
+2. 向 worker 的离线清理进程额外挂载 collector state **只读**，通过 `-collector-state` 明确指定。路径必须与 input / state / ack 分离、规范且私有；普通 run 不读取这个目录，无需向 controller 暴露 worker state 或 Secret。
+3. worker 的精确 `cleanup-plan` 核对两边 binding、retired digest、handoff 与 delivered 的顺序、双方 7 天保留期、时钟、collector 为 stopped 且无错误，以及 input 已移除。未完成、blocked、未退休、仍有输入或缺确认时给出不合格原因；状态损坏、异字节和绑定不符报错。年龄汇总中的 `cleanup_candidates` 不是可直接执行的清单。
+4. 核对预览后执行带 `-confirmed` 的精确 `cleanup`；它重做全部校验，将已交付记录原子压缩。确认文件和紧凑索引长期保留，缺失 ack 可从索引重建。重复执行返回 `already_compacted: true`，不会发起网络请求。精确 status 对 compacted 条目仅输出保留的身份与 `history_compacted: true`，不把已移除的重试历史显示成零。
+
+collector 删除或 worker 压缩中断后，修复存储并对**同一 build**重新预览 / 执行，不换 ID、不编辑记录。若 collector 的 retired 意图已保存但输入还在，worker 拒绝压缩，先完成 collector 步骤。恢复出来的同字节旧输入不会再次发送；不同字节仍报冲突。collector 也不会从历史自动再生成 retired 输入，已恢复的旧输入只在再次显式清理时移除。
+
+首次显式清理产生 v2 本地数据。新程序兼容未清理的 v1；旧程序会拒绝 v2，不存在安全的直接二进制降级。索引不能还原已删除 payload，需旧格式时恢复停止双方后取得的一致旧备份，并核对 receiver receipt；不要混用不同恢复点。清理不删除 Nexus 的 CI Run、receipt、事件或 Activity。验证与局限见[清理记录](../docs/status/reviews/2026-10-09-jenkins-cleanup.md)。
 
 ## 停用、轮换与离线副本
 
 停用顺序为停止可信生产者和 worker、保留 spool，再按接收端说明撤销来源或 key 并重启 receiver。历史 CI Run / receipt 保留。轮换只改变 key 引用：receiver 新旧 key 重叠 → 停 worker → 切换 sender 文件 → 重启核验 → 移除旧 key；binding 和 payload 不变。
 
-离线备份三个目录的同一时点副本，包括 manifest、状态、输入和确认，保持权限，不使用硬链接克隆；记录对应 Nexus 数据库恢复点，Secret 另行供应。恢复到受控新路径后只调整配置路径，先执行 `status`；恢复默认不联网，只有目标实例、source 和接收端 receipt 已核对并获得重新启用授权后才 `run`。旧备份的未知请求由原 receiver receipt 去重；没有覆盖的 Jenkins 历史不能从 spool 合成。
+只使用 worker 时离线备份其三个目录；启用 collector / 清理后必须同时备份四个目录，包括两侧 manifest、checkpoint / 索引、状态、输入和确认，保持权限，不使用硬链接克隆；记录对应 Nexus 数据库恢复点，Secret 另行供应。恢复到受控新路径后只调整配置路径，先执行 `status`；恢复默认不联网，只有目标实例、source 和接收端 receipt 已核对并获得重新启用授权后才 `run`。旧备份的未知请求由原 receiver receipt 去重；没有覆盖的 Jenkins 历史不能从 spool 合成。
 
 job / Jenkins / 接收实例 / Component / Workspace 变更或 build number 重用必须另建 source 与 spool；不能修改 manifest 冒充迁移。origin 迁移需要独立人工程序，当前不自动跟随重定向。验证范围与未覆盖事项见[本轮记录](../docs/status/reviews/2026-10-09-delivery-continuation.md)。
