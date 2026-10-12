@@ -86,6 +86,8 @@ Web App 应从一开始适配常见 PC 分辨率和移动浏览器，但移动 W
 
 Flutter 在 Web 产品闭环稳定后统一承载移动端和 PC 安装包。首期客户端应优先覆盖消息、通知、工单快速操作和文档阅读，再按真实需求增加完整编辑能力。
 
+同一官方 Flutter 安装包须在运行时选择官方端点或用户自部署的兼容实例，无需重新编译；实例与 Workspace 分离，凭据、缓存、realtime 与离线状态按实例隔离。该目标尚未实施，详细流程及 Web 同源边界见[客户端连接规划](client-server-connection-plan.md)和 [ADR-0036](../adr/0036-official-client-instance-connection.md)。
+
 Flutter 与 Web 共享：
 
 - HTTP/WebSocket 协议；

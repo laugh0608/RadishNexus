@@ -41,6 +41,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0033](0033-repository-mapping-and-component-relations.md) | 已接受 | Repository 最小映射与 Component 关联 |
 | [ADR-0034](0034-ticket-component-relations.md) | 已接受 | Ticket 与 Component 的人工关联 |
 | [ADR-0035](0035-durable-jenkins-terminal-delivery.md) | A 已实现；B 采集与显式清理代码已具备，真实验收未完成 | Jenkins 终态快照的持久交付与漏采恢复 |
+| [ADR-0036](0036-official-client-instance-connection.md) | 规划已接受；尚未实施 | 同一官方客户端连接官方与自部署实例 |
 
 ## 新建规则
 

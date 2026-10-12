@@ -20,6 +20,8 @@
 14. [视觉方向与页面参考](design/visual-direction.md)：Radish 家族视觉来源、AFFiNE / Mattermost / AppFlowy 参考分工及待评审的页面建议。
 15. [工作台与 Document 代表页设计](design/workbench-v1.md)：Pen 原生设计源、桌面 / 手机预览、状态映射及静态检查边界。
 
+客户端连接方向见[官方客户端与实例连接规划](architecture/client-server-connection-plan.md)及 [ADR-0036](adr/0036-official-client-instance-connection.md)：同一官方安装包运行时支持官方端点或用户自部署后端，无需重新编译，Web 保持各实例同源交付。
+
 ## 文档职责
 
 - 稳定产品定位只写在 `product-definition.md`。

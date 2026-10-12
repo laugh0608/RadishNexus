@@ -185,6 +185,14 @@
 - 基础对象创建与首批普通成员管理按 [ADR-0026](adr/0026-foundation-configuration-and-membership.md) 实施；创建 Project 必须明确初始 admin，受限 Channel 保留窄授权，撤权清理从属权限，Audit 与 receipt 不可变。管理员交接不由普通成员配置隐式完成。
 - 最小 Document 按 [ADR-0028](adr/0028-minimal-markdown-document.md) 冻结身份、Project 权限、权威 Markdown、不可变版本、显式保存 / 冲突 / 恢复与 Ticket 来源关系；正式实现已接通，验收成熟度由[当前状态](status/current.md)维护。后续结构化编辑与 CRDT 仍按 ADR-0021 分阶段推进。
 
+### D-023 同一官方客户端连接官方与自部署实例
+
+2026-10-12 确认，依据 [ADR-0036](adr/0036-official-client-instance-connection.md)。原因是此前自部署拓扑与 Flutter 路线没有说明同一安装包的服务器选择；影响是新增运行时选择、兼容检查、实例隔离及双目标交付验收，当前无需代码或数据迁移。
+
+- 官方端点纳入正式交付目标，同一官方 Flutter 安装包支持运行时选择官方或用户自部署后端，无需重新编译。
+- Web 继续按各实例同源入口交付相同官方构建产物，自部署核心路径不依赖官方云，也不引入席位限制。
+- 详细连接与迁移边界见[客户端连接规划](architecture/client-server-connection-plan.md)；实现仍按 M7 门槛和当前状态推进，官方服务尚未交付。
+
 ## 尚未冻结
 
 以下事项仍需在实现前通过原型或 ADR 决定：
@@ -201,6 +209,8 @@
 - 是否以及何时引入 AI 能力。
 
 ## 变更记录
+
+- 2026-10-12：新增 D-023 / ADR-0036，确认官方客户端运行时连接官方端点与自部署实例，无需重新编译。仅更新产品与客户端规划，当前无代码 / 数据迁移；Web-first、同源 transport、权限与许可证边界不变。
 
 - 2026-09-26：按已确认 ADR-0029 / 0030 / 0031 同步 CI Run 公共读取、Jenkins 受控来源与 staging 显式记录及精确重试合同，修正最小 Document 实施状态。实现包含 migration 010 / 011 与已授权 goldmark 依赖，具体迁移和回退见对应 ADR；本次收尾不新增权限、公共协议或依赖决策。
 

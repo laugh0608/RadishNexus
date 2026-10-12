@@ -2,6 +2,10 @@
 
 状态日期：2026-10-09
 
+## 已确认待实施的客户端方向
+
+2026-10-12 已确认[客户端连接规划](../architecture/client-server-connection-plan.md)与 [ADR-0036](../adr/0036-official-client-instance-connection.md)：同一官方安装包运行时选择官方端点或用户自部署后端，无需重新编译。本轮仅更新文档；官方端点与 Flutter 选择能力尚未交付，当前 Web Golden Path / M1 和已有停止线继续有效。
+
 ## 当前阶段
 
 M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 React Web 已建立若干真实业务切片，尚未完成可由普通成员独立操作、持续使用的完整 Golden Path。
