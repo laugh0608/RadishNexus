@@ -1,5 +1,6 @@
 import { TicketComponents } from "./TicketComponents";
 import { componentPagePath } from "./ticket-component-api";
+import { projectTicketsPath } from "../workspace/project-tickets-api";
 import { CreateDocument } from "../document/DocumentPage";
 import { documentPath } from "../document/api";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
@@ -338,6 +339,11 @@ export function CollaborationPage({
             <dt>Project</dt>
             <dd>
               <code>{current.project.id}</code>
+              {entityType === "ticket" ? (
+                <a href={projectTicketsPath(workspaceID, current.project.id)}>
+                  查看项目工单
+                </a>
+              ) : null}
             </dd>
           </div>
           <div>

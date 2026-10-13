@@ -43,7 +43,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0035](0035-durable-jenkins-terminal-delivery.md) | A 已实现；B 采集与显式清理代码已具备，真实验收未完成 | Jenkins 终态快照的持久交付与漏采恢复 |
 | [ADR-0036](0036-official-client-instance-connection.md) | 规划已接受；尚未实施 | 同一官方客户端连接官方与自部署实例 |
 | [ADR-0037](0037-ci-run-repository-checkout-provenance.md) | 已接受；A 已实施，B 暂缓 | CI Run 的 Repository 与 checkout commit 来源 |
-| [ADR-0038](0038-project-ticket-discovery.md) | 提议；未实施 | Project 下的 Ticket 只读发现 |
+| [ADR-0038](0038-project-ticket-discovery.md) | 已接受 | Project 下的 Ticket 只读发现 |
 
 ## 新建规则
 

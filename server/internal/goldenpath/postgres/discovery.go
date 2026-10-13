@@ -93,6 +93,42 @@ func (store *Store) ListProjectChannels(ctx context.Context, principal authz.Pri
 	return page, nil
 }
 
+func (store *Store) ListProjectTickets(ctx context.Context, principal authz.Principal, projectID string, input goldenpath.DiscoveryPageInput) (page goldenpath.DiscoveryPage, err error) {
+	if err := principal.ValidateUser(); err != nil {
+		return page, err
+	}
+	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return page, fmt.Errorf("begin Ticket discovery: %w", err)
+	}
+	defer rollback(ctx, tx, &err)
+	// Ticket access is its governing Project access, independent of evidence
+	// Thread permissions. Keep this equivalent to entityAccess's Ticket branch.
+	_, readable, err := readProjectAccess(ctx, tx, principal, projectID)
+	if err != nil {
+		return page, err
+	}
+	if !readable {
+		return page, authz.ErrNotFound
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT id, title, status FROM radishnexus.tickets
+		WHERE workspace_id = $1 AND governing_project_id = $2 AND id > $3
+		ORDER BY id LIMIT $4
+	`, principal.WorkspaceID, projectID, input.AfterID, input.Limit+1)
+	if err != nil {
+		return page, fmt.Errorf("query readable Tickets: %w", err)
+	}
+	page, err = scanDiscoveryPage(rows, "ticket", input.Limit)
+	if err != nil {
+		return page, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return page, fmt.Errorf("commit Ticket discovery: %w", err)
+	}
+	return page, nil
+}
+
 func scanDiscoveryPage(rows pgx.Rows, kind string, limit int) (goldenpath.DiscoveryPage, error) {
 	defer rows.Close()
 	page := goldenpath.DiscoveryPage{Items: make([]goldenpath.DiscoveryItem, 0, limit+1)}

@@ -168,6 +168,12 @@ Deployment Nexus View 只读路由为：
 
 每次查询复核 active Workspace membership；restricted Project 和 Channel 需要对应显式成员关系，owner / admin 不穿透。归档对象仍可读；无权限与不存在使用同形 `404`，Session 失效为 `401`，响应 `private, no-store`、`Vary: Cookie`。完整协议、分页变化与升级边界见 [ADR-0025](../docs/adr/0025-project-and-channel-discovery.md)。
 
+## Project 工单只读发现
+
+[ADR-0038](../docs/adr/0038-project-ticket-discovery.md) 增加 `GET /api/v1/workspaces/{workspace_id}/projects/{project_id}/tickets`，复用 `DiscoveryService`、repeatable-read 查询与同源 Session 边界。按 Ticket 的 governing Project 当前权限发现，来源 Thread 权限不决定 Ticket 可读性；restricted Project 不允许 owner 绕过 membership，归档仍可读。
+
+响应为 `data.items[{ref,title,status}] / next_cursor`，只支持 `open`，不展开来源或返回总数。仅接受 `limit`（默认 25、最大 50）与作用域绑定的 `after`，稳定 Ticket ID 升序、排他边界；不与 Component 反向列表共享 cursor。非法状态或数据拒绝整页，不静默筛除。不可读为 404、失效 Session 为 401，所有响应沿用 `private, no-store` 与 `Vary: Cookie`。现有索引满足本轮代表性查询，无新增 migration、依赖或写命令；查询与验收证据见[实施记录](../docs/status/reviews/2026-10-13-project-ticket-discovery.md)。
+
 ## Channel Message 短请求
 
 当前公共消息路由为：

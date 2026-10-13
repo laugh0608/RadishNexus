@@ -1,10 +1,10 @@
 # ADR-0038：Project 下的 Ticket 只读发现
 
-状态：提议（待项目所有者确认；未实施）
+状态：已接受（2026-10-13 所有者确认实施；实际完成线见当前状态）
 
 日期：2026-10-13
 
-关联：[ADR-0004](0004-project-scoped-collaboration-permissions.md)、[ADR-0019](0019-session-scoped-thread-decision-ticket-transport.md)、[ADR-0025](0025-project-and-channel-discovery.md)、[Golden Path](../golden-path.md)。本提案增量扩展只读发现，不替代既有权限与 Ticket 创建合同。
+关联：[ADR-0004](0004-project-scoped-collaboration-permissions.md)、[ADR-0019](0019-session-scoped-thread-decision-ticket-transport.md)、[ADR-0025](0025-project-and-channel-discovery.md)、[Golden Path](../golden-path.md)。本 ADR 增量扩展只读发现，不替代既有权限与 Ticket 创建合同。
 
 ## 背景与源码基线
 
@@ -18,7 +18,7 @@
 
 目标是让普通成员从 Project 找回已创建的 Ticket，并继续使用既有上下文；不依赖 Jenkins、外部 provider 或维护者提供对象 ID。真实 Jenkins 的 ADR-0035 / ADR-0037 B 继续暂缓，具体 Ticket ↔ CI Run 关系仍按 ADR-0037 的后续前提推进。
 
-## 提议决定
+## 决定
 
 ### 1. 对象归属与权限
 
@@ -45,7 +45,7 @@ Ticket 本身没有独立 restricted membership；此处复用既有 Ticket 详�
 
 `GET /api/v1/workspaces/{workspace_id}/projects/{project_id}/tickets`
 
-仅接受 `limit` 与 `after`。成功响应示例仅说明形状，不代表已有实现：
+仅接受 `limit` 与 `after`。成功响应示例：
 
 ```json
 {
@@ -110,7 +110,7 @@ Ticket 本身没有独立 restricted membership；此处复用既有 Ticket 详�
 | 同时建立 Ticket / Decision / Thread 通用列表、搜索与看板 | 扩大对象合同和状态管理，首片只解决工单发现 |
 | 按更新时间排序并加入状态筛选 | 会增加可变排序边界与筛选合同；当前仅 open 的正式流程没有相应收益 |
 | 依赖前端角色过滤或从关联对象继承权限 | 不能保护 API、分页和直接地址，违反当前权限语义 |
-| 列表先支持四状态，详情以后再补 | 会产生列表可见但无法打开的对象，本提案保持现有公共合同一致 |
+| 列表先支持四状态，详情以后再补 | 会产生列表可见但无法打开的对象，本 ADR 保持现有公共合同一致 |
 
 代价是增加一个 GET 合同和列表页面，并继续明确非 open 状态尚未开放。收益是成员可以独立找回执行对象，不要求提前扩充工作流或恢复真实 Jenkins 联调。
 
@@ -120,11 +120,11 @@ Ticket 本身没有独立 restricted membership；此处复用既有 Ticket 详�
 
 默认无需业务数据迁移、Activity 重建或备份格式调整。若只增加查询索引，须验证从当前 migration 015 升级、readiness 版本匹配及新实例恢复后查询；索引 migration 一旦应用，旧二进制会按既有精确 schema readiness 拒绝服务，回退遵循已记录的恢复 / forward repair 方案，不删除 migration history 伪造兼容。
 
-接受并实施后同步 server / Web 说明、必要公共合同、当前状态和带证据边界的实施记录。本提议阶段只新增本 ADR、索引条目并调整当前顺序，不提前改写已接受的领域状态或实现说明。
+server / Web 说明、公共合同与当前状态随实现同步；实际验证、无新增索引的依据和剩余边界见[实施记录](../status/reviews/2026-10-13-project-ticket-discovery.md)。
 
 ## 验收范围与退出判据
 
-以下均为未来实施要求，本轮文档不构成执行证据：
+以下为本切片验收要求；实际执行证据以实施记录为准：
 
 1. **真实 PostgreSQL 权限**：覆盖 workspace / restricted Project、普通无写角色成员、viewer / contributor / decider / admin、无 membership 的 owner、暂停 / 移除成员、跨 Workspace、归档及不存在 Project；列表与逐对象详情的可读性一致。区分公开 Project 角色移除后仍可读，与 restricted membership / Workspace 访问撤回后不可读。
 2. **分页与最小数据**：覆盖 0、25、26 和多页，limit 1 / 50、边界不存在、并发插入、页间撤权与恢复读取；固定集合完整无重复。确认响应、cursor 和错误不含来源摘要、隐藏数量及权限内部信息。使用既有正式命令创建业务测试对象；专门的损坏数据测试验证非 open 等漂移拒绝，不当作支持新状态的证据。
@@ -135,6 +135,6 @@ Ticket 本身没有独立 restricted membership；此处复用既有 Ticket 详�
 
 退出结论限定为“成员通过正式 Project 入口独立找回已有 Ticket，当前权限、分页和页面恢复通过验证”。不表示工单状态流转、完整 Golden Path、真实团队持续使用或 Jenkins SCM 采集完成。实施验收资源与清理仍按当次授权准备。
 
-## 待所有者确认
+## 所有者确认范围
 
-建议确认此只读切片的权限不变量、稳定 ID 分页与 open 状态边界、Project 工单入口及验收范围后，再实施 Go / Web。后续顺位为 Ticket 最小状态流转、Decision 只读发现、试用所需身份与运维能力；各项单独冻结范围，不因本提案获得实施授权。真实 Jenkins B 继续暂缓。
+2026-10-13 所有者确认本 ADR，授权提交工作区文档提案、实施此只读切片、完成必要验证并同步文档。Ticket 状态流转不纳入本次，真实 Jenkins B 继续暂缓。后续顺位仍为 Ticket 最小状态流转、Decision 只读发现、试用所需身份与运维能力；各项单独冻结范围，本次不授权 push、业务实例迁移或外部操作。

@@ -12,6 +12,8 @@
 
 CI Run 公共 Current 的 `checkout` 是封闭联合：readable 的 not_collected、observed（Repository + revision）、unavailable（Repository + 受控 reason），或只有 visibility 的 restricted。Relations / Timeline 必须与之保持一致。`GET /api/v1/workspaces/{workspace_id}/repositories/{repository_id}/ci-runs` 按同源 Session 和当前对象权限返回稳定 ID 分页，不输出隐藏数量；cursor 绑定 Workspace / Repository。客户端与服务端同步升级。
 
+[ADR-0038](../adr/0038-project-ticket-discovery.md) 增加 Project 下 Ticket 只读分页：按 `governing_project_id` 与当前 Project 权限读取，引用来源不授予或削减 Ticket 权限。公共列表只返回 `ref / title / status`，与正式详情一致仅接受 `open`；异常状态拒绝整页，不通过过滤掩盖漂移。稳定 ID cursor 绑定 Workspace / Project / 列表种类，不是授权或固定结果快照。该读取不改变领域状态、事件、Activity 或 receipt。
+
 ## 目的
 
 [ADR-0034](../adr/0034-ticket-component-relations.md) 增加 Ticket → Component 的人工 `affects`，复用协作 receipt；Ticket governing Project 的当前权限决定写入，反向列表先授权再分页。migration 014 的关系、receipt、事件、Outbox 与 Activity 同事务，两个关系事件只投影到 Ticket，安全事实为 `relation_state`，受控 subject 为 Component；旧来源和 Ticket 状态不变。

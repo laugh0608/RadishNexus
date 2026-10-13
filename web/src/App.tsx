@@ -1,4 +1,6 @@
 import { RepositoryPage } from "./workspace/RepositoryPage";
+import { ProjectTicketsPage } from "./workspace/ProjectTicketsPage";
+import { projectTicketsLocation } from "./workspace/project-tickets-api";
 import { repositoryLocation } from "./workspace/repository-ci-runs-api";
 import { CIRunPage } from "./nexus-view/CIRunPage";
 import { ciRunLocation, ciRunPagePath } from "./nexus-view/ci-run-api";
@@ -68,6 +70,7 @@ type AppRoute =
       projectID: string | null;
     }
   | { kind: "repository"; workspaceID: string; repositoryID: string }
+  | { kind: "project-tickets"; workspaceID: string; projectID: string }
   | { kind: "component"; workspaceID: string; componentID: string }
   | { kind: "prototype" }
   | { kind: "ci-run"; workspaceID: string; ciRunID: string }
@@ -159,6 +162,8 @@ function appRoute(pathname: string): AppRoute {
     return { kind: "prototype" };
   }
   const repository = repositoryLocation(pathname);
+  const projectTickets = projectTicketsLocation(pathname);
+  if (projectTickets) return { kind: "project-tickets", ...projectTickets };
   if (repository) return { kind: "repository", ...repository };
   const component = componentLocation(pathname);
   if (component) return { kind: "component", ...component };
@@ -425,6 +430,7 @@ function SignedInShell({
     route.kind === "deployment" ||
     route.kind === "component" ||
     route.kind === "repository" ||
+    route.kind === "project-tickets" ||
     route.kind === "ci-run" ||
     route.kind === "document" ||
     route.kind === "channel" ||
@@ -478,6 +484,12 @@ function SignedInShell({
           session={session}
           navigate={navigate}
           client={discoveryClient}
+          onSessionExpired={onSignedOut}
+        />
+      ) : route.kind === "project-tickets" ? (
+        <ProjectTicketsPage
+          workspaceID={route.workspaceID}
+          projectID={route.projectID}
           onSessionExpired={onSignedOut}
         />
       ) : route.kind === "repository" ? (

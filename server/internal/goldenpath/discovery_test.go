@@ -19,6 +19,11 @@ func (store *discoveryStoreStub) ListProjectChannels(context.Context, authz.Prin
 	return DiscoveryPage{}, nil
 }
 
+func (store *discoveryStoreStub) ListProjectTickets(context.Context, authz.Principal, string, DiscoveryPageInput) (DiscoveryPage, error) {
+	store.calls++
+	return DiscoveryPage{}, nil
+}
+
 func TestDiscoveryValidatesBeforeReading(t *testing.T) {
 	principal := authz.Principal{Kind: authz.PrincipalUser, ID: "usr_reader", WorkspaceID: "wrk_main"}
 	store := &discoveryStoreStub{}
@@ -39,5 +44,19 @@ func TestDiscoveryValidatesBeforeReading(t *testing.T) {
 	}
 	if store.calls != 0 {
 		t.Fatal("invalid request reached store")
+	}
+	for _, input := range []DiscoveryPageInput{{Limit: 0}, {Limit: 51}, {Limit: 25, AfterID: "chn_other"}} {
+		if _, err := service.ListProjectTickets(context.Background(), principal, "prj_main", input); !errors.Is(err, authz.ErrInvalid) {
+			t.Fatal(err)
+		}
+	}
+	if _, err := service.ListProjectTickets(context.Background(), principal, "tkt_wrong", DiscoveryPageInput{Limit: 25}); !errors.Is(err, authz.ErrInvalid) {
+		t.Fatal(err)
+	}
+	if _, err := service.ListProjectTickets(context.Background(), authz.Principal{}, "prj_main", DiscoveryPageInput{Limit: 25}); !errors.Is(err, authz.ErrUnauthenticated) {
+		t.Fatal(err)
+	}
+	if store.calls != 0 {
+		t.Fatal("invalid Ticket request reached store")
 	}
 }

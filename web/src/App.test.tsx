@@ -2,6 +2,7 @@ import type { SetupClient } from "./auth/setup-api";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { projectTicketsClient } from "./workspace/project-tickets-api";
 import {
   AuthRequestError,
   type AuthClient,
@@ -65,6 +66,61 @@ describe("App prototype state controls", () => {
 });
 
 describe("authenticated Web Shell", () => {
+  it("resumes a canonical Project Ticket list after login with Workspace context", async () => {
+    const project = vi
+      .spyOn(projectTicketsClient, "project")
+      .mockResolvedValue({
+        id: "prj_main",
+        kind: "project",
+        name: "Ticket project",
+        visibility: "workspace",
+        status: "active",
+        canManage: false,
+      });
+    const tickets = vi
+      .spyOn(projectTicketsClient, "tickets")
+      .mockResolvedValue({
+        items: [{ id: "tkt_work", title: "Existing work", status: "open" }],
+        nextCursor: null,
+      });
+    try {
+      render(
+        <App
+          pathname="/workspaces/wrk_main/projects/prj_main/tickets"
+          setupClient={establishedSetupClient}
+          authClient={testAuthClient({
+            resolveSession: vi
+              .fn()
+              .mockRejectedValue(
+                new AuthRequestError("expired", { status: 401 }),
+              ),
+          })}
+        />,
+      );
+      await screen.findByRole("heading", { name: "登录 RadishNexus" });
+      fireEvent.change(screen.getByLabelText("邮箱"), {
+        target: { value: "admin@example.test" },
+      });
+      fireEvent.change(screen.getByLabelText("密码"), {
+        target: { value: "synthetic test password" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "登录" }));
+      expect(
+        (
+          await screen.findByRole("link", { name: "Existing work" })
+        ).getAttribute("href"),
+      ).toBe("/workspaces/wrk_main/tickets/tkt_work");
+      expect(screen.getAllByText("Main Workspace").length).toBeGreaterThan(0);
+      expect(project).toHaveBeenCalledWith(
+        "wrk_main",
+        "prj_main",
+        expect.any(AbortSignal),
+      );
+    } finally {
+      project.mockRestore();
+      tickets.mockRestore();
+    }
+  });
   it("shows login for an unauthenticated Session and enters the selected Workspace", async () => {
     const navigate = vi.fn();
     const auth = testAuthClient({

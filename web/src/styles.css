@@ -2403,3 +2403,21 @@ code {
   min-height: 40px;
   margin: 0.25rem;
 }
+
+.project-tickets {
+  min-width: 0;
+}
+.project-tickets .configuration-list {
+  list-style: none;
+  padding: 0;
+}
+.project-tickets .configuration-list li {
+  padding-block: 1rem;
+  border-bottom: 1px solid var(--border, #d4d4d8);
+}
+.project-tickets .configuration-list a {
+  font-weight: 600;
+}
+.project-tickets .configuration-list p {
+  margin-block: 0.5rem 0;
+}

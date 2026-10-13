@@ -62,6 +62,9 @@ describe("Workspace discovery", () => {
       />,
     );
     fireEvent.click(await screen.findByRole("button", { name: "研发项目" }));
+    expect(
+      screen.getByRole("link", { name: "查看项目工单" }).getAttribute("href"),
+    ).toBe("/workspaces/wrk_main/projects/prj_main/tickets");
     fireEvent.click(
       await screen.findByRole("button", { name: /日常讨论.*打开频道 →/u }),
     );
