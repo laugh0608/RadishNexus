@@ -1,6 +1,6 @@
 # RadishNexus 当前状态
 
-状态日期：2026-10-09
+状态日期：2026-10-13
 
 ## 已确认待实施的客户端方向
 
@@ -59,17 +59,15 @@ Ticket 与 Component 人工关联已按 ADR-0034 实现，浏览器后退、显�
 
 接续顺序：
 
-1. **具体交付来源设计**：双边显式清理代码与离线故障验证已补齐，下一段独立冻结 Repository / commit / CI Run 的来源证据，再决定 Ticket 与具体交付的关系；不按 Component 共属推导已交付，不在提案确认前改公共协议或业务模型。
-2. **B：真实采集验收（暂缓）**：独立 controller 与双边清理已具备离线证据，但本机 Docker bind mount 实测为 FUSE，超出支持范围。所有者已明确暂缓真实联调，原生 Linux 环境下的真实重启 / 挂载验收尚未完成，恢复时另行明确资源与授权，见[采集记录](reviews/2026-10-09-jenkins-collector.md)和[清理记录](reviews/2026-10-09-jenkins-cleanup.md)。
+1. **具体交付来源设计（待确认）**：双边显式清理代码与离线故障验证已补齐；[ADR-0037 来源提案](../adr/0037-ci-run-repository-checkout-provenance.md)已于 2026-10-13 写入，明确可信边界、失败场景和首个实现切片。下一步由所有者确认范围后再实施 A：来源接收、保存与双向发现。真实 checkout 采集为后续 B，Ticket 具体交付关系再单独冻结；不按 Component 共属推导已交付，不在提案确认前改公共协议或业务模型。
+2. **ADR-0035 B：真实终态采集验收（暂缓）**：独立 controller 与双边清理已具备离线证据，但本机 Docker bind mount 实测为 FUSE，超出支持范围。所有者已明确暂缓真实联调，原生 Linux 环境下的真实重启 / 挂载验收尚未完成，恢复时另行明确资源与授权，见[采集记录](reviews/2026-10-09-jenkins-collector.md)和[清理记录](reviews/2026-10-09-jenkins-cleanup.md)。ADR-0037 B 是新增 checkout 来源的后续提议，不与既有终态采集完成线混为一谈。
 3. **真实整链验收**：正式新配置对象 → 真实 Jenkins → 浏览器记录已完成的外部 staging → 撤权阻止新记录且历史按当前权限可读。没有实际外部 staging 行为时只验收到 CI Run，不伪造 Deployment。
 
-### 明天事项（2026-10-10）：具体交付来源设计
+### 来源设计提案：2026-10-13
 
-1. 从既有 Repository 映射、Component 人工关系、`VerifiedJenkinsDelivery` 与当前 v1 快照出发，列出尚缺的来源事实和采集可信边界；不从 job 名、URL 或共享 Component 猜测仓库与提交。
-2. 形成独立提案：明确 Repository 稳定身份、完整 commit 标识、单仓库 / 多仓库、重跑 / 重建、来源缺失与冲突的处理，以及历史事实和当前权限如何共存。列明涉及的 payload、模型 / migration、EntityLink、事件、恢复与展示影响，交由所有者确认范围后再实施。
-3. 退出判据是可审阅的来源证据合同、失败场景和首个实现切片；Ticket 与具体构建 / 部署的关系留到来源合同明确后再冻结。今天不提前启动设计或修改公共协议。
+[ADR-0037](../adr/0037-ci-run-repository-checkout-provenance.md)为提议状态，尚未接受或实施。提案区分管理员仓库绑定与 controller checkout 观察，列出单仓库 / 完整 commit、缺失与冲突、当前权限、版本兼容、关系 / 事件及恢复合同；首批范围和确认事项以 ADR 为准。本轮仅交付文档，不改写既有业务合同或把合成输入当作真实 SCM 证据。
 
-真实 Jenkins 联调和原生中文 IME 继续暂缓。恢复 Jenkins 验收需另行明确原生 Linux 持久目录、controller / worker / agent 资源与清理方式，不能以本机 FUSE bind mount 或合成测试替代。以上是次日接续清单，不是提醒、自动任务或外部操作授权。
+真实 Jenkins 联调和原生中文 IME 继续暂缓。恢复 Jenkins 验收需另行明确原生 Linux 持久目录、controller / worker / agent 资源、依赖和清理方式，不能以本机 FUSE bind mount 或合成测试替代。下一步是审阅并确认提案，没有自动任务或外部操作授权。
 
 ### 本日收尾：2026-10-09
 
