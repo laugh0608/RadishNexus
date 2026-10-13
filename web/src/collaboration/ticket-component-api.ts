@@ -1,3 +1,4 @@
+import { parseTicketStatus, type TicketStatus } from "./ticket-status";
 import { AuthRequestError } from "../auth/api";
 import { object, requireID } from "../workspace/api";
 import {
@@ -12,7 +13,7 @@ export interface TicketSummary {
   id: string;
   title: string;
   projectID: string;
-  status: "open";
+  status: TicketStatus;
 }
 export interface TicketComponentAssociation<T> {
   id: string;
@@ -40,17 +41,12 @@ function ticket(value: unknown): TicketSummary {
   const row = object(value, ["ref", "title", "project", "status"]),
     ref = object(row.ref, ["type", "id"]),
     project = object(row.project, ["type", "id"]);
-  if (
-    ref.type !== "ticket" ||
-    project.type !== "project" ||
-    row.status !== "open"
-  )
-    throw invalid();
+  if (ref.type !== "ticket" || project.type !== "project") throw invalid();
   return {
     id: requireID(ref.id, "tkt_"),
     title: text(row.title),
     projectID: requireID(project.id, "prj_"),
-    status: "open",
+    status: parseTicketStatus(row.status),
   };
 }
 function ticketPath(id: string) {

@@ -48,9 +48,7 @@ describe("Project Ticket API", () => {
   });
   it("rejects unsupported states, private metadata and invalid pagination", async () => {
     for (const data of [
-      { items: [{ ...ticket, status: "done" }], next_cursor: null },
-      { items: [{ ...ticket, status: "in-progress" }], next_cursor: null },
-      { items: [{ ...ticket, status: "canceled" }], next_cursor: null },
+      { items: [{ ...ticket, status: "unknown" }], next_cursor: null },
       {
         items: [{ ...ticket, ref: { type: "decision", id: "dec_one" } }],
         next_cursor: null,

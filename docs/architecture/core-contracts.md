@@ -12,7 +12,10 @@
 
 CI Run 公共 Current 的 `checkout` 是封闭联合：readable 的 not_collected、observed（Repository + revision）、unavailable（Repository + 受控 reason），或只有 visibility 的 restricted。Relations / Timeline 必须与之保持一致。`GET /api/v1/workspaces/{workspace_id}/repositories/{repository_id}/ci-runs` 按同源 Session 和当前对象权限返回稳定 ID 分页，不输出隐藏数量；cursor 绑定 Workspace / Repository。客户端与服务端同步升级。
 
-[ADR-0038](../adr/0038-project-ticket-discovery.md) 增加 Project 下 Ticket 只读分页：按 `governing_project_id` 与当前 Project 权限读取，引用来源不授予或削减 Ticket 权限。公共列表只返回 `ref / title / status`，与正式详情一致仅接受 `open`；异常状态拒绝整页，不通过过滤掩盖漂移。稳定 ID cursor 绑定 Workspace / Project / 列表种类，不是授权或固定结果快照。该读取不改变领域状态、事件、Activity 或 receipt。
+[ADR-0038](../adr/0038-project-ticket-discovery.md) 增加 Project 下 Ticket 只读分页：按 `governing_project_id` 与当前 Project 权限读取，引用来源不授予或削减 Ticket 权限。公共列表只返回 `ref / title / status`，与正式详情一致接受 ADR-0039 的四状态；异常状态拒绝整页，不通过过滤掩盖漂移。稳定 ID cursor 绑定 Workspace / Project / 列表种类，不是授权或固定结果快照。该读取不改变领域状态、事件、Activity 或 receipt。
+
+[ADR-0039](../adr/0039-ticket-status-transitions.md) 增加唯一 `ticket.status.change` 命令与 migration 016。Ticket 独立 `status_revision` 防止并发覆盖和重新打开后的旧请求；先按当前账户 / Workspace / Project 重新授权，再匹配 receipt，最后检查新转换。receipt 返回原 applied 状态与版本，Nexus View 同事务读取 Current 和 `capabilities.change_status`；客户端成功后重新读取当前事实。状态、receipt、schema 1 `ticket.status-changed`、Outbox 与 Activity 7 原子提交。新事件无 subject，只投影到 Ticket 并记录四个前后状态 / 版本字段；旧创建仍为 open，组件事件仍为 relation_state。创建首次 201 为 open / 1，200 精确重试返回原 Ticket 的真实当前状态 / 版本。Go、schema、Web 必须配套升级；旧非 open 基线拒绝迁移，备份恢复保留状态版本与 receipt 后显式重建投影。
+
 
 ## 目的
 

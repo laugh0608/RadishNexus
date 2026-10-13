@@ -180,6 +180,7 @@ describe("CollaborationPage", () => {
         project: { type: "project", id: "prj_main" },
         title: "Implement collaboration UI",
         status: "open",
+        statusRevision: 1,
         createdBy: { kind: "user", id: "usr_decider" },
         createdAt: now,
         updatedAt: now,
@@ -315,6 +316,7 @@ function testClient(
   overrides: Partial<CollaborationClient> = {},
 ): CollaborationClient {
   return {
+    changeTicketStatus: vi.fn(),
     loadView: vi.fn().mockResolvedValue(threadView),
     proposeDecision: vi.fn(),
     acceptDecision: vi.fn(),

@@ -140,10 +140,12 @@ it("adds relation-state events without accepting Ticket status or loosening orig
       project: { type: "project", id: "prj_main" },
       title: "Work",
       status: "open",
+      status_revision: 1,
       created_by: actor,
       created_at: now,
       updated_at: now,
     },
+    capabilities: { change_status: true },
     relations: [source, relation],
     timeline: [event],
   };

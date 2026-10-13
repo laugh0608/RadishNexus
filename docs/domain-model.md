@@ -225,7 +225,11 @@ M0 纵向切片继续冻结 `thread` / `thr_` 与 `ticket` / `tkt_` 的稳定引
 
 ### Ticket
 
-可执行工作的统一对象。需求、任务、缺陷、事故和改进项通过 type、workflow 和字段配置表达，不在首期拆成彼此无关的模型。
+可执行工作的统一对象。需求、任务、缺陷、事故和改进项的长期表达保持同一模型；type、workflow、负责人、优先级和看板尚未进入当前实现。
+
+[ADR-0039](adr/0039-ticket-status-transitions.md) 冻结最小四状态：open 待开始、in-progress 处理中、done 已完成、canceled 已取消。前两者可转向其他状态；两个终态只能显式重新打开为 open，不能直接互转。done 只表示人工完成执行事项，不证明 Decision、CI Run 或 Deployment 结果。
+
+Ticket 初始 `status_revision=1`，只随有效状态变化递增；当前 active Workspace 与 Project 的 contributor / decider / admin 基于所见版本显式提交，创建者和 owner 不绕过该边界，也不重新要求来源私密 Thread 的读取权。旧版本或同状态冲突；精确重试重新授权后确认原操作并读取当前状态。状态、版本、时间、不可变事件、receipt、Outbox 与 Activity 同事务，关系和原创建事实保持独立。
 
 ### Document
 

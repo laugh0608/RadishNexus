@@ -1,3 +1,4 @@
+import { ticketStatusLabels } from "../collaboration/ticket-status";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthRequestError } from "../auth/api";
 import { collaborationPagePath } from "../collaboration/api";
@@ -142,7 +143,7 @@ function ProjectTickets({
                   >
                     {ticket.title}
                   </a>
-                  <p>待开始</p>
+                  <p>{ticketStatusLabels[ticket.status]}</p>
                 </li>
               ))}
             </ul>

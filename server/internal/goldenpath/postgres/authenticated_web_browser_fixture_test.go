@@ -173,6 +173,7 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	mux.Handle("/api/v1/workspaces/{workspace_id}/threads/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/decisions/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/tickets/", collaborationHandler)
+	httptransport.RegisterTicketStatusRoutes(mux, httptransport.NewTicketStatusHandler(authService, goldenpath.NewTicketStatusService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
 	httptransport.RegisterTicketComponentRoutes(mux, httptransport.NewTicketComponentHandler(authService, goldenpath.NewTicketComponentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy))
 	httptransport.RegisterDocumentRoutes(mux, httptransport.NewDocumentHandler(authService, goldenpath.NewDocumentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy))
 	httptransport.RegisterStagingDeploymentRoutes(mux, httptransport.NewStagingDeploymentHandler(authService, viewService, sessionPolicy, proxyPolicy))

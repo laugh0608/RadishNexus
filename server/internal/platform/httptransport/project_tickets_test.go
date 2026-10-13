@@ -95,9 +95,7 @@ func TestProjectTicketsTransportAndSafeFailure(t *testing.T) {
 func TestProjectTicketsRejectsProjectionDriftWithoutPartialResults(t *testing.T) {
 	item := goldenpath.DiscoveryItem{Ref: entityref.Ref{Type: "ticket", ID: "tkt_one"}, Title: "Visible work", Status: "open"}
 	for _, change := range []func(*goldenpath.DiscoveryItem){
-		func(i *goldenpath.DiscoveryItem) { i.Status = "done" },
-		func(i *goldenpath.DiscoveryItem) { i.Status = "in-progress" },
-		func(i *goldenpath.DiscoveryItem) { i.Status = "canceled" },
+		func(i *goldenpath.DiscoveryItem) { i.Status = "unknown" },
 		func(i *goldenpath.DiscoveryItem) { i.Ref.Type = "decision" },
 		func(i *goldenpath.DiscoveryItem) { i.Ref.ID = "dec_wrong" },
 		func(i *goldenpath.DiscoveryItem) { i.Title = "\x00private" },

@@ -172,7 +172,7 @@ Deployment Nexus View 只读路由为：
 
 [ADR-0038](../docs/adr/0038-project-ticket-discovery.md) 增加 `GET /api/v1/workspaces/{workspace_id}/projects/{project_id}/tickets`，复用 `DiscoveryService`、repeatable-read 查询与同源 Session 边界。按 Ticket 的 governing Project 当前权限发现，来源 Thread 权限不决定 Ticket 可读性；restricted Project 不允许 owner 绕过 membership，归档仍可读。
 
-响应为 `data.items[{ref,title,status}] / next_cursor`，只支持 `open`，不展开来源或返回总数。仅接受 `limit`（默认 25、最大 50）与作用域绑定的 `after`，稳定 Ticket ID 升序、排他边界；不与 Component 反向列表共享 cursor。非法状态或数据拒绝整页，不静默筛除。不可读为 404、失效 Session 为 401，所有响应沿用 `private, no-store` 与 `Vary: Cookie`。现有索引满足本轮代表性查询，无新增 migration、依赖或写命令；查询与验收证据见[实施记录](../docs/status/reviews/2026-10-13-project-ticket-discovery.md)。
+响应为 `data.items[{ref,title,status}] / next_cursor`，接受 ADR-0039 的四状态，不展开来源或返回总数。仅接受 `limit`（默认 25、最大 50）与作用域绑定的 `after`，稳定 Ticket ID 升序、排他边界；不与 Component 反向列表共享 cursor。非法状态或数据拒绝整页，不静默筛除。不可读为 404、失效 Session 为 401，所有响应沿用 `private, no-store` 与 `Vary: Cookie`。现有索引满足本轮代表性查询，无新增 migration、依赖或写命令；查询与验收证据见[实施记录](../docs/status/reviews/2026-10-13-project-ticket-discovery.md)。
 
 ## Channel Message 短请求
 
@@ -210,6 +210,14 @@ Deployment Nexus View 只读路由为：
 三个 GET 每次重新检查当前 Workspace、Project、Channel 与 restricted Thread 权限；三个 POST 还要求精确 Origin、double-submit + 存储态 CSRF。写请求携带 printable ASCII `client_operation_id`；首次 Decision / Ticket 创建返回 `201`，精确重试返回 `200`，变化重放返回 `409`。acceptance 只允许 decider / admin、要求当前可读全部 evidence 和显式 `confirmed=true`，首次与精确重试均返回 `200`。
 
 Thread DTO 只通过结构化 ref 返回 origin Channel 和 `started-from` Message，不返回 Message 正文；Decision restricted evidence 只形成无类型、ID、关系名、标题和时间的占位；Ticket 通过 `implements` 保留 Source Decision。所有响应均为 `private, no-store`，不返回 receipt、digest、operation ID、角色、membership、事件或 Outbox。完整边界见 [ADR-0019](../docs/adr/0019-session-scoped-thread-decision-ticket-transport.md)。同源 Web Shell 已接入三个 canonical 页面与对应写动作；production Web handler 只开放精确协作路径，未知或多余嵌套路由继续 `404`。
+
+## Ticket 最小状态流转
+
+[ADR-0039](../docs/adr/0039-ticket-status-transitions.md) 由 `TicketStatusService` 与独立 HTTP handler 承载 `POST /api/v1/workspaces/{workspace_id}/tickets/{ticket_id}/status-transitions`。严格 JSON 只接受 `client_operation_id / base_status_revision / to_status / confirmed=true`，上限 8 KiB；复用 Session、Host、Origin、CSRF 与 no-store 边界。仅当前 active Workspace 与 active Project 的 contributor / decider / admin 可写，不依赖来源私密 Thread 授权。
+
+新状态命令与精确重试均返回 200 的 `data{ticket,applied:true,applied_status,applied_status_revision}`，表示原操作已应用，不是当前快照；旧 receipt 不覆盖后续状态。新请求版本不符、同状态、非法边或版本上限返回 409。Ticket Nexus View 新增必填 `current.status_revision` 与仅 Ticket 使用的 `data.capabilities.change_status`；详情、Project 列表、Component 反向列表接受四状态，未知值失败。创建 201 固定 open / 1，200 重试返回当前值。
+
+migration 016 只为合法旧 open 基线建立版本 1，不虚构事件；异常非 open 基线拒绝升级。状态 / 时间 / 版本、receipt、事件、Outbox 与 Activity 7 同事务；历史事件与 receipt 随权威备份保存，空目标恢复后显式重建。上线需要停写、升级前备份和 Go / schema / Web 配套更新，并让浏览器重新加载；迁移后不能直接回退旧二进制，应恢复升级前备份到新目标或独立 forward repair。不要在运行中的静态入口快照下替换构建资源；发布完整构建后重启应用。验收范围见[实施记录](../docs/status/reviews/2026-10-13-ticket-status-transitions.md)。
 
 ## 基础配置与成员管理
 
@@ -249,7 +257,7 @@ go run ./cmd/nexus-restore --input /path/to/completed-backup-directory
 
 ## 最小 Markdown Document
 
-[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实；Document 切片将 Activity projection 升至版本 2；当前已由 ADR-0034 扩展为版本 5，新增事件可全量重建，旧投影不改变原有语义。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。
+[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实；Document 切片将 Activity projection 升至版本 2；当前已由 ADR-0039 扩展为版本 7，新增事件可全量重建，旧投影不改变原有语义。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。
 
 所有端点在 `/api/v1/workspaces/{workspace_id}` 下，要求当前 Session 与 Workspace membership；POST 另要求同源 CSRF。查询返回 `private, no-store`，不能通过引用授予权限。
 

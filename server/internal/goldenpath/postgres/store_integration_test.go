@@ -71,6 +71,9 @@ func TestGoldenPathPermissionsAndAtomicity(t *testing.T) {
 	}
 	t.Cleanup(pool.Close)
 	seedGoldenPath(t, ctx, pool)
+	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts(user_id,status,created_at) SELECT id,'active',now() FROM radishnexus.users WHERE id IN ('usr_reader','usr_admin','usr_contributor','usr_decider') ON CONFLICT(user_id) DO NOTHING`); err != nil {
+		t.Fatal(err)
+	}
 
 	store := goldenpostgres.New(pool)
 	clock := fixedClock{now: time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)}

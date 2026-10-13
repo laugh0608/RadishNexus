@@ -426,6 +426,7 @@ func (store *Store) CreateTicketFromDecision(
 		GoverningProjectID: projectID,
 		Title:              command.Title,
 		Status:             "open",
+		StatusRevision:     1,
 		CreatedBy:          command.Principal.ID,
 		CreatedAt:          command.OccurredAt,
 		UpdatedAt:          command.OccurredAt,

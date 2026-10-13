@@ -38,7 +38,7 @@ func assertStagingDeploymentSlice(
 ) {
 	t.Helper()
 	seedDeploymentTargets(t, ctx, pool)
-	if _, e := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts(user_id,status,created_at) VALUES ('usr_reader','active',now()),('usr_contributor','active',now())`); e != nil {
+	if _, e := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts(user_id,status,created_at) VALUES ('usr_reader','active',now()),('usr_contributor','active',now()) ON CONFLICT(user_id) DO NOTHING`); e != nil {
 		t.Fatal(e)
 	}
 

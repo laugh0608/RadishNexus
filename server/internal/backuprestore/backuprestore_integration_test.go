@@ -93,6 +93,19 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 		}
 	}
 
+	statusInputs := []goldenpath.TicketStatusInput{}
+	statusResults := []goldenpath.TicketStatusResult{}
+	statusService := goldenpath.NewTicketStatusService(goldenpostgres.New(sourcePool), goldenpath.CryptoIDGenerator{})
+	for i, status := range []string{"in-progress", "done", "open", "canceled"} {
+		in := goldenpath.TicketStatusInput{TicketID: ticketID, ClientOperationID: fmt.Sprintf("backup-state-%d", i), BaseStatusRevision: i + 1, ToStatus: status, Confirmed: true}
+		result, e := statusService.ChangeTicketStatus(ctx, documentInvocation, in)
+		if e != nil {
+			t.Fatal(e)
+		}
+		statusInputs = append(statusInputs, in)
+		statusResults = append(statusResults, result)
+	}
+
 	if got := snapshotTable(t, ctx, sourcePool, "radishnexus.user_sessions"); got == "[]" {
 		t.Fatal("source user session fixture is empty")
 	}
@@ -101,8 +114,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rebuild source Activity projection: %v", err)
 	}
-	if projected != 16 {
-		t.Fatalf("source Activity rows = %d, want 16", projected)
+	if projected != 20 {
+		t.Fatalf("source Activity rows = %d, want 20", projected)
 	}
 	sourceSnapshot := snapshotIncludedTables(t, ctx, sourcePool)
 	sourceActivity := snapshotTable(t, ctx, sourcePool, "radishnexus.activity_items")
@@ -211,6 +224,13 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 			t.Fatal("restored Ticket Component receipt drift", i, r, e)
 		}
 	}
+	for i, in := range statusInputs {
+		result, e := goldenpath.NewTicketStatusService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}).ChangeTicketStatus(ctx, documentInvocation, in)
+		if e != nil || result != statusResults[i] {
+			t.Fatal("restored state receipt", result, e)
+		}
+	}
+
 	tcPage, e := restoredTC.ListTicketComponents(ctx, documentInvocation.Principal, entityref.Ref{Type: "ticket", ID: ticketID}, goldenpath.DiscoveryPageInput{Limit: 25})
 	if e != nil || len(tcPage.Links) != 1 || tcPage.Links[0].ID != tcResults[2].LinkID {
 		t.Fatal("restored old operation changed active relation", tcPage, e)
@@ -271,8 +291,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rebuild target Activity projection: %v", err)
 	}
-	if projected != 16 {
-		t.Fatalf("target Activity rows = %d, want 16", projected)
+	if projected != 20 {
+		t.Fatalf("target Activity rows = %d, want 20", projected)
 	}
 	if targetActivity := snapshotTable(t, ctx, targetPool, "radishnexus.activity_items"); targetActivity != sourceActivity {
 		t.Fatalf("rebuilt Activity differs\nsource: %s\ntarget: %s", sourceActivity, targetActivity)

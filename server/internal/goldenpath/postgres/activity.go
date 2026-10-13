@@ -73,7 +73,7 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
 			occurred_at, payload
 		FROM radishnexus.domain_events
 		WHERE event_type IN (
-			'decision.proposed', 'decision.accepted', 'ticket.created',
+			'decision.proposed', 'decision.accepted', 'ticket.created', 'ticket.status-changed',
 			'ci-run.recorded', 'deployment.recorded', 'project.created', 'channel.created', 'component.created', 'environment.created', 'document.created', 'document.revised',
 			'repository.created', 'component.repository-linked', 'component.repository-unlinked', 'ticket.component-linked', 'ticket.component-unlinked'
 		)
@@ -210,7 +210,7 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 	}
 	repositoryEvent := event.eventType == "repository.created" || event.eventType == "component.repository-linked" || event.eventType == "component.repository-unlinked"
 	ticketRelation := event.eventType == "ticket.component-linked" || event.eventType == "ticket.component-unlinked"
-	if payload.Status == "" && event.target.Type != "document" && event.eventType != "component.created" && !repositoryEvent && !ticketRelation {
+	if payload.Status == "" && event.target.Type != "document" && event.eventType != "component.created" && !repositoryEvent && !ticketRelation && event.eventType != "ticket.status-changed" {
 		return activityRecord{}, fmt.Errorf("project Activity event %s: status is required", event.eventID)
 	}
 
@@ -220,6 +220,13 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		safeFacts:     map[string]string{"status": payload.Status},
 	}
 	switch event.eventType {
+	case "ticket.status-changed":
+		transition, err := decodeTicketStatusTransition(event.payload)
+		if err != nil || event.target.Type != "ticket" || event.actorKind != "user" || event.actorID == nil {
+			return activityRecord{}, fmt.Errorf("invalid Ticket status event %s", event.eventID)
+		}
+		record.safeFacts = map[string]string{"from_status": transition.FromStatus, "to_status": transition.ToStatus,
+			"from_status_revision": strconv.Itoa(transition.FromRevision), "to_status_revision": strconv.Itoa(transition.ToRevision)}
 	case "ticket.component-linked", "ticket.component-unlinked":
 		state := "active"
 		if event.eventType == "ticket.component-unlinked" {

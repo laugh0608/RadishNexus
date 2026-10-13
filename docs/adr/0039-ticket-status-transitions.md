@@ -1,10 +1,10 @@
 # ADR-0039：Ticket 最小状态流转
 
-状态：提议（未接受、未实施）
+状态：已接受（2026-10-13 所有者确认实施；实际完成线见当前状态）
 
 日期：2026-10-13
 
-关联：[ADR-0004](0004-project-scoped-collaboration-permissions.md)、[ADR-0019](0019-session-scoped-thread-decision-ticket-transport.md)、[ADR-0022](0022-transactional-activity-and-incoming-relations.md)、[ADR-0034](0034-ticket-component-relations.md)、[ADR-0038](0038-project-ticket-discovery.md)。若接受，本 ADR 增量替代 ADR-0019 / ADR-0038 的 Ticket 公共读取仅支持 open 的限制；不改变创建来源、Project 权限或交付事实的边界。
+关联：[ADR-0004](0004-project-scoped-collaboration-permissions.md)、[ADR-0019](0019-session-scoped-thread-decision-ticket-transport.md)、[ADR-0022](0022-transactional-activity-and-incoming-relations.md)、[ADR-0034](0034-ticket-component-relations.md)、[ADR-0038](0038-project-ticket-discovery.md)。本 ADR 增量替代 ADR-0019 / ADR-0038 的 Ticket 公共读取仅支持 open 的限制；不改变创建来源、Project 权限或交付事实的边界。
 
 ## 背景与源码基线
 
@@ -18,9 +18,9 @@
 - [协作 receipt](../../server/internal/goldenpath/postgres/collaboration_receipts.go)已有 `result_revision`，目前用于 Document；命令 / target / result 的数据库约束须明确扩展，不能混用 Document revision 语义。
 - [Activity projector](../../server/internal/goldenpath/postgres/activity.go)和公共 Timeline 只认识 Ticket 创建、组件关联 / 解除；当前投影版本为 6，新增状态事件必须同时进入正常写入与全量重建。
 
-本轮只准备独立提案，不修改这些实现。真实 Jenkins 的 ADR-0035 / ADR-0037 B 继续暂缓。
+上述是提案时的源码基线；下文决定已获所有者确认并进入实施。真实 Jenkins 的 ADR-0035 / ADR-0037 B 继续暂缓。
 
-## 提议决定
+## 决定
 
 ### 1. 四状态与允许转换
 
@@ -59,11 +59,11 @@ done 表示用户将该执行事项标记完成，不表示 Decision 被再次�
 
 ### 4. 唯一状态命令与精确重试
 
-拟新增唯一业务端点：
+新增唯一业务端点：
 
 `POST /api/v1/workspaces/{workspace_id}/tickets/{ticket_id}/status-transitions`
 
-请求形状示例，不是当前可执行 API：
+请求形状示例：
 
 ```json
 {
@@ -90,7 +90,7 @@ done 表示用户将该执行事项标记完成，不表示 Decision 被再次�
 
 所有现有读取入口同时接受四状态，使用同一封闭枚举和中文标签；未知状态仍整页 / 整对象失败，不静默过滤、跳过或伪造 open。
 
-| 入口 | 拟调整 |
+| 入口 | 调整 |
 | --- | --- |
 | Ticket Nexus View 的 `data.current` | 四状态，新增必填 `status_revision`；其余字段和来源关系不变 |
 | Ticket Nexus View 的 `data.capabilities` | 新增仅 Ticket 使用的 `{change_status: boolean}`，与 Current 在同一读取事务按当前写角色、Project active 与版本上限计算；Thread / Decision 不新增该字段 |
@@ -118,7 +118,7 @@ Nexus View 的能力只决定是否展示操作，不是写入凭证；服务端
 
 四状态、合法转换与相邻版本必须校验；不复制标题、正文、来源、内部权限、operation ID 或 digest。Ticket 更新、receipt、不可变领域事件、Outbox 和 Activity 同事务提交；任一步失败全部回滚，普通状态动作不新增第二套 Audit 或状态历史表。
 
-Activity 投影版本拟从 6 升至 7，正常写入与显式重建使用同一 projector。新事件只投影到 Ticket，无 subject，安全事实仅为上述前后状态与版本。公共 Timeline 为此事件增加严格分支，保留 ID、actor、occurred_at、空 subjects 和上述四个字段；旧 ticket.created 继续记录 open，组件事件继续使用 relation_state，均不能被当前状态覆盖。前端显示“待开始 → 处理中”等文字及状态版本，以明确重新打开的独立轮次。
+Activity 投影版本从 6 升至 7，正常写入与显式重建使用同一 projector。新事件只投影到 Ticket，无 subject，安全事实仅为上述前后状态与版本。公共 Timeline 为此事件增加严格分支，保留 ID、actor、occurred_at、空 subjects 和上述四个字段；旧 ticket.created 继续记录 open，组件事件继续使用 relation_state，均不能被当前状态覆盖。前端显示“待开始 → 处理中”等文字及状态版本，以明确重新打开的独立轮次。
 
 不把状态事件扩散到 Decision、Thread、Component 或 Document Timeline，不建立通知、搜索投影或 Ticket ↔ CI Run 关系。历史事实按当前 Ticket 权限读取，来源对象权限不扩大；不从 Activity 反向更新权威 Ticket。
 
@@ -135,7 +135,7 @@ Activity 投影版本拟从 6 升至 7，正常写入与显式重建使用同一
 
 ### 8. 迁移、恢复与交付
 
-拟以当前 015 为基线新增 forward-only migration 016（实施前核对编号）：增加 Ticket status_revision 与约束，扩展 receipt 的 command / target / result_revision 约束及其原事件一致性校验，升级 Activity 版本；不修改已发布 migration。
+以 015 为基线新增 forward-only migration 016：增加 Ticket status_revision 与约束，扩展 receipt 的 command / target / result_revision 约束及其原事件一致性校验，升级 Activity 版本；不修改已发布 migration。
 
 旧实例所有正常 Ticket 应为 open。迁移前必须检查；发现非 open 的既存 Ticket 则拒绝迁移并报告需独立修复的异常，不默认补版本或虚构状态历史。正常旧 Ticket 以 open / 1 作为版本起点，不生成伪变更事件；未来新 Ticket 创建也为 open / 1，旧 ticket.created schema 1 保持原样。
 
@@ -156,9 +156,9 @@ Go、schema 和 Web 配套升级；旧二进制按精确 schema readiness 拒绝
 
 代价是一个窄版本字段、一条新命令及事件、一次 migration 和读取合同的同步升级。收益是普通成员可以安全记录执行进度、区分取消与完成，并在并发、撤权和响应丢失时保留可信历史。
 
-## 未来验收范围与退出判据
+## 验收范围与退出判据
 
-以下是接受后必须执行的验收，不构成本轮执行证据：
+以下定义验收范围；实际执行证据与限制见[实施记录](../status/reviews/2026-10-13-ticket-status-transitions.md)：
 
 1. **状态与权限**：覆盖完整允许 / 拒绝矩阵、同状态、未知状态、各角色、owner / 创建者不穿透、公开只读基线、restricted 失权、暂停 / 移除 Workspace 成员、归档及私密 evidence 独立性；人工 done 不产生 CI Run / Deployment。
 2. **真实 PostgreSQL 原子性**：不同操作同 base 并发只有一条成功、相同操作并发去重、回到相同状态后的旧版本冲突、版本上限；事务注入失败时状态 / 版本 / receipt / 事件 / Outbox / Activity 一并回滚，账户 / membership 撤回与状态命令的锁定边界可复验。
@@ -170,8 +170,6 @@ Go、schema 和 Web 配套升级；旧二进制按精确 schema readiness 拒绝
 
 退出结论限定为“当前权限下可显式流转四状态，版本冲突、精确重试与历史可追溯，现有读取和恢复合同一致”。不代表完整工单系统、真实团队持续使用或完整 Golden Path 通过。
 
-## 本轮授权与待确认范围
+## 所有者确认与实施边界
 
-所有者本轮只要求提交 ADR-0038 既有实现，并梳理此独立提案；本 ADR、索引和当前状态是全部新增文档范围。四状态转换表、写权限、版本 / 重试合同、公共字段与迁移均为建议，待所有者确认后才实施。当前正式实现仍只读展示 open。
-
-本轮不修改代码、schema、依赖、已接受领域合同或远程状态，不启动验收服务；不自动提交本提案，不 push、发布或部署。真实 Jenkins B 继续暂缓，后续 Decision 只读发现及试用准备仍按当前顺位独立推进。
+2026-10-13 所有者确认 ADR-0039，授权先提交提案，再按提案实施并完成必要验证与文档同步。提案提交为 `3a2e008`；实施完成线见[当前状态](../status/current.md)。负责人、优先级和看板不纳入，真实 Jenkins B 继续暂缓。本次不授权 push、业务实例迁移或部署。

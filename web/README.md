@@ -41,7 +41,7 @@ npm run dev
 - canonical Channel 页面用原生 EventSource 调用 ADR-0020 的同源 SSE，并继续用 ADR-0018 的三个短请求读写：先等待 `ready`，再读取 canonical history；history 期间的 `message.created` 先缓冲，完成后按 Message ID 去重合并。发送失败时为未修改正文保留同一 `client_operation_id`，`200` 精确重试不会追加重复 Message。
 - 浏览器自动重连沿用原生 `Last-Event-ID`；`resync-required` 关闭旧流、建立新边界并全量重读，断线错误链只允许一次 Session + canonical history 诊断，不做持续轮询。`access-revoked` 或诊断所得 `404` 会清空正文、草稿和 Thread 结果，Session `401` 回到登录态；事件顺序、cursor、空控制数据或 DTO 漂移均 fail closed。
 - Channel 的 `401` 回到登录态；任何后续 `404` 都立即移除已经渲染的 Message 正文和本地草稿。Thread 创建只发送 Source Message ref、标题和可见性，不复制 Message 正文。
-- canonical Thread、Decision 与 Ticket 页面只调用 ADR-0019 的六个同源短请求。Thread 创建 Proposed Decision；Decision 必须由有权主体勾选明确确认后人工 acceptance，接受后才能创建 Ticket；写入发生网络歧义且表单未变化时保留同一 `client_operation_id`。
+- canonical Thread、Decision 与 Ticket 页面使用 ADR-0019 的同源短请求；Ticket 状态命令按 ADR-0039 增量扩展。Thread 创建 Proposed Decision；Decision 必须由有权主体勾选明确确认后人工 acceptance，接受后才能创建 Ticket；写入发生网络歧义且表单未变化时保留同一 `client_operation_id`。
 - 协作页区分来源与后续结果，支持 Thread → Decision → Ticket 的双向 canonical 跳转；readable relation 必须携带 `direction`，Go 与 Web 成套升级和回退，见 [ADR-0022](../docs/adr/0022-transactional-activity-and-incoming-relations.md)。
 - 协作 adapter 对 Current、Relations、Timeline、结构化来源、状态与受控时间执行严格运行时校验；restricted evidence 不携带类型、ID、关系名、标题或时间。协作请求的 `401` 回到登录态，后续 `404` 会清除已渲染内容、草稿和成功结果。
 - `/prototype/nexus-view` fixture 是明确标注的静态代表数据，不作为 canonical 页面请求失败时的 fallback。
@@ -65,7 +65,13 @@ npm run dev
 
 `workspace/ProjectTicketsPage.tsx` 与 `project-tickets-api.ts` 实现 [ADR-0038](../docs/adr/0038-project-ticket-discovery.md)。首页选中 Project 后，“查看项目工单”与文档入口并列，进入 `/workspaces/{workspace_id}/projects/{project_id}/tickets`；列表打开原 Ticket 详情，详情的 Project 区可返回列表首页。直接地址、刷新与登录后恢复原路径已接入正式 Web Shell。
 
-项目名称 / 归档状态复用现有 configuration 读取，与只读工单列表按同一请求代次加载；任一失败、撤权或 Session 失效都清空旧标题与条目，取消和迟到响应不能恢复旧内容。分页 cursor 栈仅在页面内存，刷新、焦点 / 可见性恢复和浏览器后退重读首页。严格接受 `open` 并显示“待开始”；空态不推断隐藏对象，无状态修改、筛选或排序入口。桌面、手机长标题、键盘与撤权恢复证据见[实施记录](../docs/status/reviews/2026-10-13-project-ticket-discovery.md)。
+项目名称 / 归档状态复用现有 configuration 读取，与只读工单列表按同一请求代次加载；任一失败、撤权或 Session 失效都清空旧标题与条目，取消和迟到响应不能恢复旧内容。分页 cursor 栈仅在页面内存，刷新、焦点 / 可见性恢复和浏览器后退重读首页。按 ADR-0039 严格接受四状态并统一显示中文标签；空态不推断隐藏对象，无状态修改、筛选或排序入口。桌面、手机长标题、键盘与撤权恢复证据见[实施记录](../docs/status/reviews/2026-10-13-project-ticket-discovery.md)。
+
+## Ticket 状态操作
+
+`collaboration/TicketStatusActions.tsx` 在现有详情展示状态、版本和当前允许动作。完成、取消、重新打开二次确认，开始处理与返回待开始使用明确按钮；没有乐观修改。成功后读取完整 Nexus View，409 清理旧确认并重读；网络未知保留原 payload / operation ID，由用户精确重试，不能从当前状态相同推断操作成功。
+
+刷新、focus / 可见性恢复、后退恢复重新检查对象与能力；旧请求被取消，迟到结果不能恢复旧页面。仅内存保留未确认操作，导航到其他作用域或失去权限时清空；无写能力只展示状态历史。列表保持只读，无新依赖。严格 adapter、创建重试、历史与浏览器证据见 [ADR-0039](../docs/adr/0039-ticket-status-transitions.md) 和[实施记录](../docs/status/reviews/2026-10-13-ticket-status-transitions.md)。
 
 ## 基础对象与成员配置
 

@@ -1,3 +1,7 @@
+import {
+  parseTicketStatus,
+  type TicketStatus,
+} from "../collaboration/ticket-status";
 import { AuthRequestError } from "../auth/api";
 import { object, requireID } from "./api";
 import {
@@ -11,7 +15,7 @@ import {
 export interface ProjectTicket {
   id: string;
   title: string;
-  status: "open";
+  status: TicketStatus;
 }
 
 export function projectTicketsPath(workspaceID: string, projectID: string) {
@@ -56,12 +60,12 @@ export const projectTicketsClient = {
       (value) => {
         const row = object(value, ["ref", "title", "status"]);
         const ref = object(row.ref, ["type", "id"]);
-        if (ref.type !== "ticket" || row.status !== "open")
+        if (ref.type !== "ticket")
           throw new AuthRequestError("工单服务响应不符合当前契约。");
         return {
           id: requireID(ref.id, "tkt_"),
           title: text(row.title),
-          status: "open",
+          status: parseTicketStatus(row.status),
         };
       },
       after,

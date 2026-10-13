@@ -520,6 +520,7 @@ function testCollaborationClient(
   overrides: Partial<CollaborationClient> = {},
 ): CollaborationClient {
   return {
+    changeTicketStatus: vi.fn(),
     loadView: vi.fn().mockResolvedValue(threadView),
     proposeDecision: vi.fn(),
     acceptDecision: vi.fn(),

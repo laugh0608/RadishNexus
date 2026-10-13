@@ -56,6 +56,7 @@ type Ticket struct {
 	GoverningProjectID string
 	Title              string
 	Status             string
+	StatusRevision     int
 	CreatedBy          string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time

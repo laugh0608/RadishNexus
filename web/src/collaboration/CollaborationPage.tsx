@@ -1,9 +1,17 @@
+import { useTicketStatusActions } from "./TicketStatusActions";
+import { ticketStatusLabels } from "./ticket-status";
 import { TicketComponents } from "./TicketComponents";
 import { componentPagePath } from "./ticket-component-api";
 import { projectTicketsPath } from "../workspace/project-tickets-api";
 import { CreateDocument } from "../document/DocumentPage";
 import { documentPath } from "../document/api";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { channelPagePath } from "../channel/api";
 import {
   CollaborationRequestError,
@@ -51,7 +59,16 @@ interface PendingTicket {
   title: string;
 }
 
-export function CollaborationPage({
+export function CollaborationPage(props: CollaborationPageProps) {
+  return (
+    <CollaborationPageContent
+      key={`${props.workspaceID}/${props.entityType}/${props.entityID}`}
+      {...props}
+    />
+  );
+}
+
+function CollaborationPageContent({
   workspaceID,
   entityType,
   entityID,
@@ -84,8 +101,10 @@ export function CollaborationPage({
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
+  const activeRead = useRef<AbortController | null>(null);
   useEffect(() => {
     const controller = new AbortController();
+    activeRead.current = controller;
     void client
       .loadView(workspaceID, entityType, entityID, controller.signal)
       .then(
@@ -99,6 +118,7 @@ export function CollaborationPage({
             return;
           }
           if (isExpiredSession(error)) {
+            setState({ status: "error", message: "登录已失效，请重新登录。" });
             onSessionExpired();
             return;
           }
@@ -108,17 +128,53 @@ export function CollaborationPage({
     return () => controller.abort();
   }, [client, entityID, entityType, onSessionExpired, reloadKey, workspaceID]);
 
-  const relationChanged = useCallback(() => setReloadKey((k) => k + 1), []);
+  const relationChanged = useCallback(() => {
+    activeRead.current?.abort();
+    setState({ status: "loading" });
+    setReloadKey((k) => k + 1);
+  }, []);
   const relationUnavailable = useCallback(
     () =>
       setState({ status: "error", message: "当前权限已变化，请重新读取。" }),
     [],
   );
   useEffect(() => {
-    const refresh = () => setReloadKey((k) => k + 1);
-    window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
-  }, []);
+    const visible = () => {
+      if (document.visibilityState === "visible") relationChanged();
+    };
+    const restored = (event: PageTransitionEvent) => {
+      if (event.persisted) relationChanged();
+    };
+    window.addEventListener("focus", relationChanged);
+    document.addEventListener("visibilitychange", visible);
+    window.addEventListener("pageshow", restored);
+    window.addEventListener("popstate", relationChanged);
+    window.addEventListener("pagehide", relationChanged);
+    return () => {
+      window.removeEventListener("focus", relationChanged);
+      document.removeEventListener("visibilitychange", visible);
+      window.removeEventListener("pageshow", restored);
+      window.removeEventListener("popstate", relationChanged);
+      window.removeEventListener("pagehide", relationChanged);
+    };
+  }, [relationChanged]);
+  const ticketStatusActions = useTicketStatusActions({
+    workspaceID,
+    ticketID: entityID,
+    client,
+    createOperationID,
+    current:
+      state.status === "ready" && "statusRevision" in state.view.current
+        ? state.view.current
+        : undefined,
+    canChange:
+      state.status === "ready" &&
+      state.view.capabilities?.changeStatus === true,
+    unavailable: state.status === "error",
+    onRefresh: relationChanged,
+    onUnavailable: relationUnavailable,
+    onSessionExpired,
+  });
   const revokeVisibleState = (error: unknown): boolean => {
     if (isExpiredSession(error)) {
       onSessionExpired();
@@ -418,8 +474,9 @@ export function CollaborationPage({
           <p className="section-kicker">Authoritative action</p>
           <h2 id="actions-title">推进协作</h2>
           <p>
-            写入会由服务端重新检查当前角色与
-            evidence；网络失败可保持表单后安全重试。
+            {entityType === "ticket"
+              ? "状态操作会重新检查当前项目权限；结果未知时可重试原操作。"
+              : "写入会由服务端重新检查当前角色与 evidence；网络失败可保持表单后安全重试。"}
           </p>
           {isThreadCurrent(current) ? (
             <form onSubmit={(event) => void proposeDecision(event)}>
@@ -487,6 +544,7 @@ export function CollaborationPage({
           ) : (
             <div className="collaboration-complete">
               <strong>Ticket 已进入执行上下文</strong>
+              {ticketStatusActions}
               <CreateDocument
                 workspaceID={workspaceID}
                 ticketID={entityID}
@@ -499,9 +557,6 @@ export function CollaborationPage({
                   })
                 }
               />
-              <p>
-                当前切片只读展示 open Ticket；状态流转将在后续工作流合同中建立。
-              </p>
             </div>
           )}
           {actionError === null ? null : (
@@ -761,7 +816,9 @@ function TimelineList({
               ? item.relationState === "active"
                 ? "已关联组件"
                 : "已解除组件关联"
-              : item.status}
+              : "fromStatus" in item
+                ? `${ticketStatusLabels[item.fromStatus]} → ${ticketStatusLabels[item.toStatus]}（版本 ${item.fromRevision} → ${item.toRevision}）`
+                : item.status}
           </span>
           <SubjectSummary subjects={item.subjects} />
           {item.subjects.map((subject) =>
@@ -830,7 +887,11 @@ function currentTitle(current: CollaborationView["current"]): string {
 }
 
 function currentStatus(current: CollaborationView["current"]): string {
-  return isThreadCurrent(current) ? current.visibility : current.status;
+  return isThreadCurrent(current)
+    ? current.visibility
+    : "statusRevision" in current
+      ? ticketStatusLabels[current.status]
+      : current.status;
 }
 
 function currentActor(current: CollaborationView["current"]): string {

@@ -31,6 +31,11 @@ func (store *Store) GetNexusView(
 	}
 	defer rollback(ctx, tx, &err)
 
+	if target.Type == "ticket" {
+		if _, err = configurationActor(ctx, tx, principal); err != nil {
+			return view, err
+		}
+	}
 	exists, canRead, err := entityAccess(ctx, tx, principal, target)
 	if err != nil {
 		return view, err
@@ -42,6 +47,16 @@ func (store *Store) GetNexusView(
 	view.Current, err = loadCurrentProjection(ctx, tx, principal, target)
 	if err != nil {
 		return view, err
+	}
+	if target.Type == "ticket" {
+		access, readable, e := readProjectAccess(ctx, tx, principal, view.Current.GoverningProjectID)
+		if e != nil {
+			return view, e
+		}
+		if !readable {
+			return view, authz.ErrNotFound
+		}
+		view.TicketCapabilities = &goldenpath.TicketCapabilities{ChangeStatus: access.active && authz.RequireContribute(access.role) == nil && view.Current.StatusRevision < goldenpath.MaxTicketStatusRevision}
 	}
 	view.Relations, err = listRelationProjections(ctx, tx, principal, target)
 	if err != nil {
@@ -121,7 +136,7 @@ func loadCurrentProjection(
 	case "ticket":
 		err = tx.QueryRow(ctx, `
 			SELECT governing_project_id, title, status, created_by,
-				created_at, updated_at
+				created_at, updated_at, status_revision
 			FROM radishnexus.tickets
 			WHERE workspace_id = $1 AND id = $2
 		`, principal.WorkspaceID, target.ID).Scan(
@@ -131,6 +146,7 @@ func loadCurrentProjection(
 			&current.CreatedBy.ID,
 			&current.CreatedAt,
 			&current.UpdatedAt,
+			&current.StatusRevision,
 		)
 		if err == nil {
 			current.CreatedBy.Kind = "user"

@@ -19,9 +19,10 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | 能力 | 内部契约与实现 | 公共入口与交互 | 普通用户独立操作 / 持续使用 |
 | --- | --- | --- | --- |
 | 本地身份与 Session | 账户 / 密码拆分、邮箱 bootstrap、旧账户显式映射、Session、CSRF、邀请和外部身份事务 | 同源 HTTPS 邮箱登录、Workspace 选择、账户页和一次性邀请；真实 OIDC provider 尚未装配 | 本地与迁移自动化、邮箱登录与退出浏览器已有证据；新账户邀请兑换浏览器已有证据；Radish 联调、恢复入口、完整成员治理与团队使用仍待验收 |
-| Message → Thread → Decision → Ticket | migration 006 / 007、权限、来源、原子事件与幂等 receipt | canonical 页面和短请求；contributor / decider 浏览器验收已有记录 | 自动 Timeline 与首批双向关系已通过浏览器闭环；Project 工单只读发现已完成；其余协作对象列表与基础执行管理未闭环 |
+| Message → Thread → Decision → Ticket | migration 006 / 007、权限、来源、原子事件与幂等 receipt | canonical 页面和短请求；contributor / decider 浏览器验收已有记录 | 自动 Timeline 与首批双向关系已通过浏览器闭环；Project 工单只读发现已完成；Ticket 最小状态流转已完成；其余协作对象列表与更完整执行管理未闭环 |
 | Project / Channel 发现 | 当前权限过滤、归档可读、稳定 ID 分页、当前成员复核 | 首页 Workspace → Project → Channel 导航；ID 工具保留为次级入口 | 服务端、真实数据库、Web 交互与隔离浏览器验收通过，含分页、撤权刷新、Workspace 切换及桌面 / 手机布局；基础配置已有独立切片证据，见下一行 |
-| Project 工单发现 | governing Project 当前权限、稳定 ID 分页、严格 open DTO，无 schema / 依赖变化 | 首页项目入口、canonical 工单列表与详情返回入口，刷新 / 页面恢复重新授权 | 正式创建链、普通成员重新登录、25＋2 分页、来源 / 组件 / 文档跳转、桌面 / 手机及撤权刷新 / 后退已验收；状态流转与持续使用另验 |
+| Project 工单发现 | governing Project 当前权限、稳定 ID 分页；DTO 已随 ADR-0039 接受四状态 | 首页项目入口、canonical 工单列表与详情返回入口，刷新 / 页面恢复重新授权 | 正式创建链、普通成员重新登录、25＋2 分页、来源 / 组件 / 文档跳转、桌面 / 手机及撤权刷新 / 后退已验收；状态流转见下一行；持续使用另验 |
+| Ticket 最小状态流转 | migration 016、独立状态版本、当前权限、精确 receipt、原子事件 / Activity 7 | 详情四状态动作与二次确认、冲突重读、原操作重试；现有列表与创建重试同步 | Go / PostgreSQL / 015 升级 / 备份恢复、Web 与正式创建链 HTTPS 浏览器通过；双标签冲突、响应丢失、桌面 / 手机 / 键盘与撤权恢复见[记录](reviews/2026-10-13-ticket-status-transitions.md)，持续使用另验 |
 | 基础对象与首批成员配置 | migration 009、明确初始 admin、普通角色 / 受限成员、配置 Audit / receipt、撤权清理、备份恢复 | owner 创建 Team / Project，Project admin 创建 Channel 与配置成员 | 从正式 bootstrap 的空业务工作区，经 Web 创建、邀请新账户、双层授权、成员发消息与撤权已验收；首次访问 Web 初始化已有独立证据，管理员交接仍缺 |
 | 单 Channel Message 实时 | 单进程 SSE、当前权限、有界回放、撤权与关闭 | canonical Channel 已接入 ready → history → 增量 | 有技术验收；没有目标团队规模与持续使用的容量证据 |
 | CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment、精确重试 receipt | CI Run / Deployment 正式读取；成功构建可选择已授权 staging 环境并确认记录外部部署结果 | 真实 Jenkins 三态采集、Deployment 写入自动化与隔离浏览器已通过；Component / staging Environment 创建、发现与显式授权管理已接通，真实数据库、恢复及隔离浏览器已有证据；已落盘快照持久发送按 ADR-0035 A 完成；可信 collector 代码与离线验证已具备，显式双边清理已有离线证据，真实持续采集与交付关系仍缺 |
@@ -50,7 +51,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | 顺序 | 下一切片 | 交付与退出判据 |
 | --- | --- | --- |
 | 1 | Project 下的 Ticket 只读发现 | 已按 [ADR-0038](../adr/0038-project-ticket-discovery.md) 完成；成员可从 Project 列表找回已有 Ticket，当前权限、分页与恢复验收见[记录](reviews/2026-10-13-project-ticket-discovery.md) |
-| 2 | Ticket 最小状态流转 | [ADR-0039](../adr/0039-ticket-status-transitions.md)已提出、未接受 / 实施；审阅四状态转换、重新打开、独立状态版本、精确重试及历史，覆盖列表、详情和创建重试 |
+| 2 | Ticket 最小状态流转 | 已按 [ADR-0039](../adr/0039-ticket-status-transitions.md) 完成；四状态转换、独立版本、精确重试、读取兼容与恢复验收见[记录](reviews/2026-10-13-ticket-status-transitions.md) |
 | 3 | Project 下的 Decision 只读发现 | 找到待确认与已确认结论；拒绝、替代和复核另立写入切片 |
 | 4 | 试用所需身份与运维能力 | 分别设计账号恢复、管理员交接、支持范围与升级失败恢复；外部试用前准备评估授权和故障报告路径，必要设计可提前开展 |
 | 5 | 受控小团队场景试用 | 满足必要条件后观察讨论—决策—工单—文档的持续使用，记录追溯、重复录入与维护者干预；真实交付链未恢复时不宣称完整 Golden Path 通过 |
@@ -62,19 +63,19 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 本轮完成：Project 工单只读发现
 
-[ADR-0038](../adr/0038-project-ticket-discovery.md)已确认并实施：新增 Project 作用域的 Ticket GET 列表与 canonical 页面，首页项目导航和 Ticket 详情均可进入。复用 governing Project 当前权限与稳定 ID 分页；Project 标题和列表共同清理，刷新、重新登录及页面恢复重新读取。列表与现有详情只接受 open，不隐藏或伪造其它状态。
+[ADR-0038](../adr/0038-project-ticket-discovery.md)已确认并实施：新增 Project 作用域的 Ticket GET 列表与 canonical 页面，首页项目导航和 Ticket 详情均可进入。复用 governing Project 当前权限与稳定 ID 分页；Project 标题和列表共同清理，刷新、重新登录及页面恢复重新读取。该切片原先仅接受 open；当前已随 ADR-0039 扩展为四状态，未知状态仍拒绝。
 
 Go、真实 PostgreSQL、Web 与隔离 HTTPS 浏览器已通过；普通成员无需 ID 找回工单，并继续进入来源、组件和文档。查询证据支持本轮复用现有索引，未新增 migration、依赖、业务字段或写命令；详细证据和规模边界见[实施记录](reviews/2026-10-13-project-ticket-discovery.md)。临时验收资源已停止并清理，没有操作真实 Jenkins 或业务实例。
 
-ADR-0038 实现与验收文档已按所有者要求提交为 `7ace9b4`，未 push。当前接续为下方 Ticket 状态流转提案，正式实现仍只读展示 open。
+ADR-0038 实现与验收文档已提交为 `7ace9b4`；ADR-0039 提案已提交为 `3a2e008`，均未 push。
 
-### 当前接续：Ticket 最小状态流转提案
+### 本轮完成：Ticket 最小状态流转
 
-[ADR-0039](../adr/0039-ticket-status-transitions.md)为提议，未接受、未实施。建议保留 open / in-progress / done / canceled，显式开始、完成、取消与重新打开；仅当前活跃 Project 的 contributor / decider / admin 可写。独立 status_revision 防止旧页面覆盖重新打开后的工单，精确 receipt 重试确认原操作并重新读取当前状态。
+[ADR-0039](../adr/0039-ticket-status-transitions.md) 已由所有者确认并实施。仅当前 active Workspace 与 Project 的 contributor / decider / admin 可显式流转四状态，终态须先重新打开；独立 status_revision 防止旧页面覆盖后续轮次。精确重试确认原 applied 事实，随后读取当前状态；状态、receipt、事件、Outbox 与 Activity 7 原子提交。
 
-提案同步考虑详情、Project / Component 列表、创建重试与状态事件历史，拟新增一条状态命令和 forward-only migration；具体转换、字段、迁移与验收以 ADR 为准。当前仅新增提案并同步 ADR 索引和本页，没有修改业务实现或已接受合同。下一步审阅确认后再实施，不提前启动状态流转或后续 Decision 列表。
+详情、Project / Component 列表与创建重试同步支持四状态。Go、真实 PostgreSQL、015→016 正常与异常基线升级、权威备份 / 空目标恢复、Web 和隔离 HTTPS 浏览器已验证。普通 contributor 可在来源 Thread 受限时操作 Ticket；双标签冲突、已提交响应丢失后的原操作重试、手机 / 键盘、撤回写权与读权后恢复已验收。证据、首次失败修正及限制见[实施记录](reviews/2026-10-13-ticket-status-transitions.md)。临时资源已清理；本次实现保留工作区待审阅，未额外提交、push、迁移业务实例或部署。
 
-真实 Jenkins B 继续暂缓，后续顺位不自动授权实施、资源启动或外部操作。
+下一步按顺位梳理 Project 下 Decision 只读发现的独立范围；不自动开始实施。负责人、优先级、看板不在本轮范围，真实 Jenkins B 继续暂缓，后续顺位不自动授权资源启动或外部操作。
 
 ### 交付链保留完成线与恢复顺序
 

@@ -1,3 +1,4 @@
+import { ticketStatusLabels } from "./ticket-status";
 import { useCallback, useEffect, useState } from "react";
 import { AuthRequestError } from "../auth/api";
 import { useAction, usePage } from "../workspace/configuration-hooks";
@@ -393,7 +394,8 @@ export function ComponentTickets(
               </a>
               <span>
                 {" · "}
-                {link.target.status} · {link.target.projectID}{" "}
+                {ticketStatusLabels[link.target.status]} ·{" "}
+                {link.target.projectID}{" "}
               </span>
               {link.canUnlink ? (
                 <button type="button" onClick={() => setRemoving(link)}>

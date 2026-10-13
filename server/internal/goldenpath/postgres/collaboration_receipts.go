@@ -147,7 +147,7 @@ func loadTicket(
 ) (ticket goldenpath.Ticket, err error) {
 	err = tx.QueryRow(ctx, `
 		SELECT id, workspace_id, governing_project_id, title, status, created_by,
-			created_at, updated_at
+			created_at, updated_at, status_revision
 		FROM radishnexus.tickets
 		WHERE workspace_id = $1 AND id = $2
 	`, workspaceID, ticketID).Scan(
@@ -159,6 +159,7 @@ func loadTicket(
 		&ticket.CreatedBy,
 		&ticket.CreatedAt,
 		&ticket.UpdatedAt,
+		&ticket.StatusRevision,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return goldenpath.Ticket{}, errors.New("collaboration command receipt Ticket is missing")

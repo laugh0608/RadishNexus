@@ -178,11 +178,11 @@ func TestProjectTicketDiscoveryPermissionsPaginationAndScale(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	// Deliberate drift is a failure probe, never a supported status transition.
-	exec(`UPDATE radishnexus.tickets SET status='done' WHERE id=$1`, ids[0])
+	exec(`UPDATE radishnexus.tickets SET title='' WHERE id=$1`, ids[0])
 	if w := get(); w.Code != 500 || strings.Contains(w.Body.String(), "Work") {
 		t.Fatal("drift partially exposed", w.Code, w.Body.String())
 	}
-	exec(`UPDATE radishnexus.tickets SET status='open' WHERE id=$1`, ids[0])
+	exec(`UPDATE radishnexus.tickets SET title='Work restored' WHERE id=$1`, ids[0])
 	exec(`DELETE FROM radishnexus.project_memberships WHERE workspace_id='wrk_main' AND user_id='usr_reader'; DELETE FROM radishnexus.workspace_memberships WHERE workspace_id='wrk_main' AND user_id='usr_reader'`)
 	if w := get(); w.Code != 404 {
 		t.Fatal("removed member", w.Code)

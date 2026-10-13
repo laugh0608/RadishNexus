@@ -218,7 +218,7 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 	for _, item := range page.Items {
 		validStatus := item.Status == "active" || item.Status == "archived"
 		if scope.Kind == "ticket" {
-			validStatus = item.Status == "open"
+			validStatus = goldenpath.ValidTicketStatus(item.Status)
 		}
 		if item.Ref.Type != scope.Kind || !validScopedID(item.Ref.ID, discoveryPrefix(scope.Kind)) || seen[item.Ref.ID] || !utf8.ValidString(item.Title) || strings.TrimSpace(item.Title) == "" || strings.ContainsRune(item.Title, '\x00') || !validStatus || (scope.Kind == "ticket" && item.Ref.ID <= previousID) {
 			return dto, invalid

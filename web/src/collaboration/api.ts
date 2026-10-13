@@ -1,3 +1,10 @@
+import {
+  parseTicketStatus,
+  parseTicketStatusRevision,
+  ticketStatusTargets,
+  maxTicketStatusRevision,
+  type TicketStatus,
+} from "./ticket-status";
 import { csrfTokenFromCookie } from "../auth/api";
 
 export type CollaborationEntityType = "thread" | "decision" | "ticket";
@@ -48,7 +55,8 @@ export interface TicketCurrent {
   ref: EntityRef<"ticket">;
   project: EntityRef<"project">;
   title: string;
-  status: "open";
+  status: TicketStatus;
+  statusRevision: number;
   createdBy: UserActor;
   createdAt: string;
   updatedAt: string;
@@ -84,6 +92,13 @@ interface TimelineBase {
 export type CollaborationTimelineItem = TimelineBase &
   (
     | {
+        activityType: "ticket.status-changed";
+        fromStatus: TicketStatus;
+        toStatus: TicketStatus;
+        fromRevision: number;
+        toRevision: number;
+      }
+    | {
         activityType:
           "decision.proposed" | "decision.accepted" | "ticket.created";
         status: "proposed" | "accepted" | "open";
@@ -98,6 +113,7 @@ export interface CollaborationView<
   T extends CollaborationCurrent = CollaborationCurrent,
 > {
   current: T;
+  capabilities?: { changeStatus: boolean };
   relations: readonly CollaborationRelation[];
   timeline: readonly CollaborationTimelineItem[];
 }
@@ -131,7 +147,25 @@ export interface CreateTicketOutcome {
   created: boolean;
 }
 
+export interface ChangeTicketStatusInput {
+  clientOperationID: string;
+  baseStatusRevision: number;
+  toStatus: TicketStatus;
+  confirmed: true;
+}
+export interface TicketStatusOutcome {
+  ticket: EntityRef<"ticket">;
+  appliedStatus: TicketStatus;
+  appliedStatusRevision: number;
+}
 export interface CollaborationClient {
+  changeTicketStatus(
+    workspaceID: string,
+    ticketID: string,
+    input: ChangeTicketStatusInput,
+    signal?: AbortSignal,
+  ): Promise<TicketStatusOutcome>;
+
   loadView(
     workspaceID: string,
     entityType: CollaborationEntityType,
@@ -205,6 +239,7 @@ const segmentTypes: Readonly<Record<string, CollaborationEntityType>> = {
 };
 
 export const browserCollaborationClient: CollaborationClient = {
+  changeTicketStatus,
   loadView,
   proposeDecision,
   acceptDecision,
@@ -392,6 +427,65 @@ async function acceptDecision(
   }
 }
 
+async function changeTicketStatus(
+  workspaceID: string,
+  ticketID: string,
+  input: ChangeTicketStatusInput,
+  signal?: AbortSignal,
+): Promise<TicketStatusOutcome> {
+  requireLocation(workspaceID, "ticket", ticketID);
+  requireOperation(input.clientOperationID, input.toStatus, "目标状态");
+  parseTicketStatus(input.toStatus);
+  parseTicketStatusRevision(input.baseStatusRevision);
+  if (input.confirmed !== true)
+    throw new CollaborationRequestError("请明确确认状态操作。", {
+      status: 400,
+    });
+  const response = await collaborationFetch(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/tickets/${encodeURIComponent(ticketID)}/status-transitions`,
+    writeRequest(
+      {
+        client_operation_id: input.clientOperationID,
+        base_status_revision: input.baseStatusRevision,
+        to_status: input.toStatus,
+        confirmed: true,
+      },
+      signal,
+    ),
+  );
+  if (response.status !== 200)
+    throw contractError("状态服务返回了意外结果。", response.status);
+  const payload = await responseJSON(response, "Ticket 状态变更");
+  try {
+    const envelope = exactRecord(payload, "response", ["data"]);
+    const data = exactRecord(envelope.data, "response.data", [
+      "ticket",
+      "applied",
+      "applied_status",
+      "applied_status_revision",
+    ]);
+    const ticket = parseRef(data.ticket, "response.data.ticket", "ticket"),
+      appliedStatus = parseTicketStatus(data.applied_status),
+      appliedStatusRevision = parseTicketStatusRevision(
+        data.applied_status_revision,
+      );
+    if (
+      ticket.id !== ticketID ||
+      data.applied !== true ||
+      appliedStatus !== input.toStatus ||
+      appliedStatusRevision !== input.baseStatusRevision + 1
+    )
+      throw new TypeError("Ticket status result does not match request");
+    return { ticket, appliedStatus, appliedStatusRevision };
+  } catch (cause) {
+    throw contractError(
+      "状态结果不符合当前契约，请精确重试确认。",
+      response.status,
+      cause,
+    );
+  }
+}
+
 async function createTicket(
   workspaceID: string,
   decisionID: string,
@@ -426,7 +520,11 @@ async function createTicket(
       "response.data.source_decision",
       "decision",
     );
-    if (sourceDecision.id !== decisionID) {
+    if (
+      sourceDecision.id !== decisionID ||
+      (response.status === 201 &&
+        (ticket.status !== "open" || ticket.statusRevision !== 1))
+    ) {
       throw new TypeError("created Ticket source does not match Decision");
     }
     return { ticket, sourceDecision, created: response.status === 201 };
@@ -449,6 +547,7 @@ export function parseCollaborationView(
     "current",
     "relations",
     "timeline",
+    ...(expectedType === "ticket" ? ["capabilities"] : []),
   ]);
   const current = parseCurrent(data.current, expectedType);
   if (current.ref.id !== expectedID) {
@@ -461,6 +560,24 @@ export function parseCollaborationView(
     (item, index) => parseTimelineItem(item, index, expectedType),
   );
   validateViewShape(current, relations, timeline);
+  if (expectedType === "ticket") {
+    const cap = exactRecord(data.capabilities, "response.data.capabilities", [
+      "change_status",
+    ]);
+    if (
+      typeof cap.change_status !== "boolean" ||
+      (cap.change_status &&
+        "statusRevision" in current &&
+        current.statusRevision === maxTicketStatusRevision)
+    )
+      throw new TypeError("Invalid Ticket capability");
+    return {
+      current,
+      relations,
+      timeline,
+      capabilities: { changeStatus: cap.change_status },
+    };
+  }
   return { current, relations, timeline };
 }
 
@@ -571,18 +688,17 @@ function parseTicketCurrent(value: unknown, path: string): TicketCurrent {
     "project",
     "title",
     "status",
+    "status_revision",
     "created_by",
     "created_at",
     "updated_at",
   ]);
-  if (current.status !== "open") {
-    throw new TypeError(`${path}.status is invalid`);
-  }
   return {
     ref: parseRef(current.ref, `${path}.ref`, "ticket"),
     project: parseRef(current.project, `${path}.project`, "project"),
     title: nonEmptyText(current.title, `${path}.title`),
-    status: "open",
+    status: parseTicketStatus(current.status),
+    statusRevision: parseTicketStatusRevision(current.status_revision),
     createdBy: parseActor(current.created_by, `${path}.created_by`),
     createdAt: timestamp(current.created_at, `${path}.created_at`),
     updatedAt: timestamp(current.updated_at, `${path}.updated_at`),
@@ -687,6 +803,41 @@ function parseTimelineItem(
 ): CollaborationTimelineItem {
   const path = `response.data.timeline[${index}]`;
   const raw = record(value, path);
+  if (raw.activity_type === "ticket.status-changed") {
+    const item = exactRecord(value, path, [
+      "id",
+      "activity_type",
+      "actor",
+      "occurred_at",
+      "subjects",
+      "from_status",
+      "to_status",
+      "from_status_revision",
+      "to_status_revision",
+    ]);
+    const fromStatus = parseTicketStatus(item.from_status),
+      toStatus = parseTicketStatus(item.to_status);
+    const fromRevision = parseTicketStatusRevision(item.from_status_revision),
+      toRevision = parseTicketStatusRevision(item.to_status_revision);
+    if (
+      expectedType !== "ticket" ||
+      array(item.subjects, `${path}.subjects`).length !== 0 ||
+      toRevision !== fromRevision + 1 ||
+      !ticketStatusTargets[fromStatus].includes(toStatus)
+    )
+      throw new TypeError("Invalid Ticket transition timeline");
+    return {
+      id: scopedID(item.id, `${path}.id`, "evt_"),
+      activityType: "ticket.status-changed",
+      actor: parseActor(item.actor, `${path}.actor`),
+      occurredAt: timestamp(item.occurred_at, `${path}.occurred_at`),
+      subjects: [],
+      fromStatus,
+      toStatus,
+      fromRevision,
+      toRevision,
+    };
+  }
   if (
     raw.activity_type === "ticket.component-linked" ||
     raw.activity_type === "ticket.component-unlinked"
@@ -836,7 +987,8 @@ function validateViewShape(
       (item) =>
         item.activityType !== "ticket.created" &&
         item.activityType !== "ticket.component-linked" &&
-        item.activityType !== "ticket.component-unlinked",
+        item.activityType !== "ticket.component-unlinked" &&
+        item.activityType !== "ticket.status-changed",
     )
   ) {
     throw new TypeError("Ticket Timeline contains an unexpected item");
