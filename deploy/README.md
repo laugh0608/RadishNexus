@@ -167,9 +167,11 @@ docker compose -f deploy/compose.yaml down
 
 ## 当前 schema 与演练证据
 
-当前工件包含 migration 014 和 Activity v5。Repository 映射、两类组件人工关系、配置 / 协作 receipt 已纳入对应权威表备份，恢复后显式重建 Activity；Go、Web 与 schema 必须配套更新，仍不支持跨 schema 版本滚动兼容。具体升级与恢复证据见[Repository 记录](../docs/status/reviews/2026-10-06-repository-mapping.md)和[Ticket / Component 记录](../docs/status/reviews/2026-10-06-ticket-component.md)。
+当前源码构建的工件包含 migration 016 和 Activity v7。checkout binding / built-from、Ticket 状态版本与精确 receipt，以及既有对象和关系均纳入权威备份；恢复后显式重建 Activity。014→015 的混合来源恢复与 015→016 的状态升级证据分别见[checkout 来源记录](../docs/status/reviews/2026-10-13-checkout-provenance.md)和[Ticket 状态记录](../docs/status/reviews/2026-10-13-ticket-status-transitions.md)。
 
-这些隔离数据库与浏览器结果不代表业务实例已迁移，也不代替完整 Compose 镜像升级演练。已有完整 Compose 历史演练未覆盖 migration 008–014、后续业务入口与新就绪探针；当前版本的镜像、Secret 挂载及升级路径仍须单独验收。
+Go、Web 与 schema 必须配套更新，不支持跨 schema 版本滚动兼容。升级前停写并保留备份；016 只允许旧 Ticket 全为 open 的合法基线，异常状态须先调查，不手改状态绕过保护。升级后旧二进制不能直接回退，需要恢复升级前备份到全新目标或独立验证 forward repair，并明确备份点后的数据取舍。应用缓存启动时的静态入口，须发布完整匹配的 Web build 并重启应用，不能在运行中替换资源后继续沿用旧入口；浏览器须重新加载。
+
+这些隔离数据库与浏览器结果不代表业务实例已迁移，也不代替完整 Compose 镜像升级演练。已有完整 Compose 历史演练未覆盖 migration 008–016、后续业务入口与新就绪探针；当前版本的镜像、Secret 挂载及升级路径仍须单独验收。
 
 ## 仓库演练
 

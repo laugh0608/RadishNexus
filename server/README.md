@@ -92,7 +92,7 @@ python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Emai
 
 ## Jenkins 来源接入
 
-默认关闭，通过 `RADISHNEXUS_JENKINS_SOURCES_FILE` 显式启用受控来源；文件 Secret、来源绑定、HMAC / 重放、终态映射和有限重试发送工具的使用见 [Jenkins 接入说明](jenkins.md)。ADR-0037 A 增加 migration 015、sources / payload v2、不可变绑定与 built-from、schema 2 CI 事件和 Activity 6；未新增依赖。旧 v1 摘要与重试保持兼容，持久 collector / worker 仍只处理 v1，真实 checkout 采集 B 暂缓。自动化与真实 Jenkins 三态隔离联调已验证，见[联调记录](../docs/status/reviews/2026-09-26-real-jenkins-lab.md)；已落盘快照的持久发送 worker 已按 ADR-0035 A 实现，使用见 [worker 说明](jenkins-worker.md)。独立 [controller collector](../experiments/jenkins-collector/README.md) 和双边显式清理已有代码与离线故障证据，真实持续采集、挂载 / 重启验收与普通成员独立配置仍未完成。
+默认关闭，通过 `RADISHNEXUS_JENKINS_SOURCES_FILE` 显式启用受控来源；文件 Secret、来源绑定、HMAC / 重放、终态映射和有限重试发送工具的使用见 [Jenkins 接入说明](jenkins.md)。ADR-0037 A 增加 migration 015、sources / payload v2、不可变绑定与 built-from、schema 2 CI 事件和 Activity 6；未新增依赖。旧 v1 摘要与重试保持兼容，持久 collector / worker 仍只处理 v1，真实 checkout 采集 B 暂缓。既有 v1 终态接入已通过自动化与真实 Jenkins 三态隔离联调，见[联调记录](../docs/status/reviews/2026-09-26-real-jenkins-lab.md)；v2 checkout 目前仅有合成签名输入、真实数据库和浏览器的[接收与发现证据](../docs/status/reviews/2026-10-13-checkout-provenance.md)，不代表真实 SCM 采集；已落盘快照的持久发送 worker 已按 ADR-0035 A 实现，使用见 [worker 说明](jenkins-worker.md)。独立 [controller collector](../experiments/jenkins-collector/README.md) 和双边显式清理已有代码与离线故障证据，真实持续采集、挂载 / 重启验收与普通成员独立配置仍未完成。
 
 `./scripts/check-server.sh` 覆盖 Go race / vet 与模块一致性，不执行 Groovy 编译或真实 Jenkins。collector 检查与跨语言导出验证按其说明单独运行；`TestCollectorWorkerContract` 未设置 `RADISHNEXUS_COLLECTOR_CONTRACT` 时跳过，Linux 专属 CLI 用例也不能从 macOS 测试通过推导。各类证据见[当日收尾记录](../docs/status/reviews/2026-10-09-daily-closeout.md)。
 

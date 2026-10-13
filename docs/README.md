@@ -41,6 +41,10 @@
 ## 状态与验证入口
 
 - [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
+- [2026-10-13 提交回顾与文档收尾](status/reviews/2026-10-13-daily-closeout.md)：checkout 来源、工单发现与状态流转的提交映射、文档核对和接续建议。
+- [2026-10-13 Ticket 最小状态流转](status/reviews/2026-10-13-ticket-status-transitions.md)：四状态、精确重试、升级恢复与权限验收。
+- [2026-10-13 Project 工单只读发现](status/reviews/2026-10-13-project-ticket-discovery.md)：正式入口、分页、普通成员发现与撤权恢复。
+- [2026-10-13 checkout 来源 A](status/reviews/2026-10-13-checkout-provenance.md)：来源接收、不可变关系与双向发现；真实采集 B 暂缓。
 - [2026-10-09 提交回顾与文档收尾](status/reviews/2026-10-09-daily-closeout.md)：持久发送、可信采集与双边清理的提交映射、文档核对和次日接续建议。
 - [2026-10-09 双边显式清理](status/reviews/2026-10-09-jenkins-cleanup.md)：双方确认、7 天保留、紧凑索引、进程中断与恢复；真实联调暂缓。
 - [2026-10-09 可信 collector 代码与离线验证](status/reviews/2026-10-09-jenkins-collector.md)：周期补采、历史缺口、故障与交接契约；真实联调暂缓。

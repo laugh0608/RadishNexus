@@ -156,9 +156,13 @@ CI Run 的 Session 公共读取合同见 [ADR-0029](../adr/0029-session-scoped-c
 
 [ADR-0035](../adr/0035-durable-jenkins-terminal-delivery.md) 将可信 controller 快照采集与独立 Go 签名发送分开，用本地不可变输入、持久预算、确认记录和显式双边清理恢复交付；不扩展公共 v1 payload 或核心业务表。运行与验证边界见[插件系统](plugin-system.md)，操作与备份见 [worker 说明](../../server/jenkins-worker.md)。本地 spool manifest 不等于核心数据库中的来源注册或权限配置。
 
-Component / staging Environment 的最小创建、发现与显式授权管理已按 [ADR-0032](../adr/0032-component-environment-configuration-and-authorization.md) 接入既有配置 service、成功 Audit / receipt 与 Session API。migration 012 保留撤销授权并追加不可变代次，历史 Deployment 继续引用当时授权；owner 管理权不自动成为部署记录权。该切片的创建事件自 Activity v3 起纳入投影，授权明细只进入窄 Audit。Repository 最小映射与 Component 的人工 `source-repository` 已按 [ADR-0033](../adr/0033-repository-mapping-and-component-relations.md) 和 migration 013 接通，沿 Workspace owner 配置权管理，成员共享读取；外部 provider 连接、具体交付来源和核心侧持久来源配置仍是独立范围。
+Component / staging Environment 的最小创建、发现与显式授权管理已按 [ADR-0032](../adr/0032-component-environment-configuration-and-authorization.md) 接入既有配置 service、成功 Audit / receipt 与 Session API。migration 012 保留撤销授权并追加不可变代次，历史 Deployment 继续引用当时授权；owner 管理权不自动成为部署记录权。该切片的创建事件自 Activity v3 起纳入投影，授权明细只进入窄 Audit。Repository 最小映射与 Component 的人工 `source-repository` 已按 [ADR-0033](../adr/0033-repository-mapping-and-component-relations.md) 和 migration 013 接通，沿 Workspace owner 配置权管理，成员共享读取；外部 provider 连接与通用来源管理仍是独立范围；具体 checkout 来源由下方 ADR-0037 承载。
 
 Ticket 与 Component 已按 [ADR-0034](../adr/0034-ticket-component-relations.md) 接通人工 `affects` 关系、Project 权限与双向读取。独立关系 service 复用协作 receipt 和业务事务，migration 014 与 Activity v5 配套升级；组件页仅汇集当前可读关系，不从共属组件推导 Ticket 已交付。
+
+[ADR-0037](../adr/0037-ci-run-repository-checkout-provenance.md) 增加受控 checkout binding 与不可变 `built-from`，由 migration 015 保存来源事实；来源 capability 与人工组件关联独立。一次性 sender / receiver 支持 v2，持久 collector / worker 的来源升级属于后续 B；当前接收与发现证据不代表真实 Jenkins checkout 采集完成。
+
+Project 工单只读发现按 [ADR-0038](../adr/0038-project-ticket-discovery.md) 复用当前 Project 权限和稳定 ID 分页；[ADR-0039](../adr/0039-ticket-status-transitions.md) 以独立状态版本与精确 receipt 接通四状态流转。migration 016、Activity v7、HTTP 与 Web 配套升级，状态命令和原操作重试均重新授权；工单完成不触发 CI Run 或 Deployment。协议与投影细节见[核心契约](core-contracts.md)。
 
 ## EntityLink 与 Nexus View
 

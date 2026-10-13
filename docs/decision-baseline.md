@@ -129,6 +129,7 @@
 - Project 首批角色为 `viewer / contributor / decider / admin`；只有 `decider` 和 `admin` 可以 Accepted Decision。
 - restricted Thread 需要显式 Thread 成员权限，Project 角色不会自动穿透；无权限关系目标只显示不含标识和展示字段的通用占位。
 - 协作 application service 只接收认证 adapter 提供的显式 Principal；本地身份与 Session 协议由 D-019 单独冻结。
+- Ticket 最小状态流转按 [ADR-0039](adr/0039-ticket-status-transitions.md) 使用独立状态版本、当前 Project 写权限与原操作精确重试；终态只允许重新打开，done 不证明 Decision、构建或部署结果。四状态语义和转换以[领域模型](domain-model.md#ticket)为准，不扩展负责人、优先级或看板。
 
 ### D-016 PostgreSQL migration 基线
 
@@ -179,7 +180,7 @@
 - 浏览器页面、静态资源和 `/api/v1` 共享 ADR-0013 的唯一 HTTPS public origin；TLS reverse proxy 保持唯一公共入口，不开放 credentialed CORS 或第二个静态站点 origin。
 - Go server 只从必需的绝对 `RADISHNEXUS_WEB_ROOT` 交付 production build；HTML 路径显式 allowlist，未知路径不使用任意 SPA fallback。HTML `no-cache`、哈希资源 immutable cache，认证和业务 API 继续 `no-store`。
 - 根路径先检查正式 Session，未登录时读取初始化状态；新实例完成 ADR-0027 首访初始化后，再使用现有 login / logout transport。初始化码、密码和 Session token 不进入浏览器 storage。Workspace 选择不固定到 Session，业务请求仍按路径与 current membership 授权。
-- Project / Channel 按 [ADR-0025](adr/0025-project-and-channel-discovery.md) 通过当前权限过滤的只读列表进入 canonical 页面；尚无独立列表的 Deployment 与协作对象保留已知稳定 ID 入口。原代表检视器位于显式 `/prototype/nexus-view`，不参与真实失败 fallback。
+- Project / Channel 按 [ADR-0025](adr/0025-project-and-channel-discovery.md) 通过当前权限过滤的只读列表进入 canonical 页面；[ADR-0038](adr/0038-project-ticket-discovery.md) 增加 Project 工单发现，来源 Thread 权限独立，分页与恢复不授予旧权限。尚无独立列表的 Deployment、Thread 与 Decision 保留已知稳定 ID 入口。原代表检视器位于显式 `/prototype/nexus-view`，不参与真实失败 fallback。
 - 真实 PostgreSQL、正式 migration / application service、production Web build 和临时 HTTPS browser fixture 共同验证登录到 Deployment 再登出的完整链路。精确装配、页面、安全 Header 与验证边界以 [ADR-0015](adr/0015-same-origin-authenticated-web-shell.md) 为准。
 
 ### D-022 基础配置与最小 Document
@@ -211,6 +212,8 @@
 - 是否以及何时引入 AI 能力。
 
 ## 变更记录
+
+- 2026-10-13：按已接受 ADR-0037 / 0038 / 0039 同步 checkout 来源、Project 工单发现与最小状态流转。实现涉及 migration 015 / 016、配套 HTTP / Web 与备份恢复，具体升级边界见 ADR；本次收尾仅校正文档，不新增权限、协议或数据模型决定。真实 Jenkins B 继续暂缓。
 
 - 2026-10-12：新增 D-023 / ADR-0036，确认官方客户端运行时连接官方端点与自部署实例，无需重新编译。仅更新产品与客户端规划，当前无代码 / 数据迁移；Web-first、同源 transport、权限与许可证边界不变。
 
