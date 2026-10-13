@@ -228,6 +228,9 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 }
 
 func discoveryPrefix(kind string) string {
+	if kind == "repository-ci-runs" {
+		return "cir_"
+	}
 	if kind == "component-tickets" {
 		return "tkt_"
 	}

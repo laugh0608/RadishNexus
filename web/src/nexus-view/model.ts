@@ -1,5 +1,5 @@
 export type NexusEntityType =
-  "decision" | "thread" | "ticket" | "ci-run" | "environment";
+  "decision" | "thread" | "ticket" | "ci-run" | "environment" | "repository";
 
 export interface DecisionNexusCurrent {
   entityRef: string;
@@ -23,7 +23,32 @@ export interface CIRunComponent {
   name: string;
 }
 
+export interface GitRevision {
+  algorithm: "sha1";
+  oid: string;
+}
+export type CheckoutReason =
+  | "checkout_not_observed"
+  | "unsupported_checkout"
+  | "binding_changed_during_run";
+export type CICheckout =
+  | { visibility: "restricted" }
+  | { visibility: "readable"; state: "not_collected" }
+  | {
+      visibility: "readable";
+      state: "observed";
+      repository: { id: string; name: string };
+      revision: GitRevision;
+    }
+  | {
+      visibility: "readable";
+      state: "unavailable";
+      repository: { id: string; name: string };
+      reason: CheckoutReason;
+    };
+
 export interface CIRunNexusCurrent {
+  checkout: CICheckout;
   entityRef: string;
   entityType: "ci-run";
   eyebrow: string;

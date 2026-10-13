@@ -101,6 +101,7 @@ const statusPresentation: Record<
 
 const entityIDPrefixes: Readonly<Record<string, string>> = {
   component: "cmp_",
+  repository: "rep_",
   deployment: "dpl_",
   environment: "env_",
   "ci-run": "cir_",

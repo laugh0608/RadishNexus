@@ -8,6 +8,10 @@
 
 [ADR-0033](../adr/0033-repository-mapping-and-component-relations.md) 冻结 Repository 最小映射与 Component 关联：Workspace owner 写入、active 成员共享读取；`source-repository` 为有人工来源的多对多关系，解除精确指向 link ID，重新关联生成新 ID。三类命令复用配置 Audit / receipt，重试前重新检查当前账户、成员资格和两端权限，旧 receipt 不复活或移除后续关系。migration 013 扩展实体注册、约束和权威备份；无 provider 网络调用或 Secret。
 
+[ADR-0037](../adr/0037-ci-run-repository-checkout-provenance.md) 增加来源配置 / payload v2 与 migration 015。按 `effective_from_build` 严格划分旧 v1 与新 v2，v1 canonical digest 字节不变；首条 v2 的不可变 binding、CI Run、receipt、observed 的 built-from、schema 2 `ci-run.recorded`、Outbox 和 Activity 6 原子提交。Git OID 仅在关系 metadata；事件保存状态 / 原因、需重新授权的 Repository subject 与 nullable link ID。其他事件仍只接受既有 schema，恢复与正常写入共用投影器。
+
+CI Run 公共 Current 的 `checkout` 是封闭联合：readable 的 not_collected、observed（Repository + revision）、unavailable（Repository + 受控 reason），或只有 visibility 的 restricted。Relations / Timeline 必须与之保持一致。`GET /api/v1/workspaces/{workspace_id}/repositories/{repository_id}/ci-runs` 按同源 Session 和当前对象权限返回稳定 ID 分页，不输出隐藏数量；cursor 绑定 Workspace / Repository。客户端与服务端同步升级。
+
 ## 目的
 
 [ADR-0034](../adr/0034-ticket-component-relations.md) 增加 Ticket → Component 的人工 `affects`，复用协作 receipt；Ticket governing Project 的当前权限决定写入，反向列表先授权再分页。migration 014 的关系、receipt、事件、Outbox 与 Activity 同事务，两个关系事件只投影到 Ticket，安全事实为 `relation_state`，受控 subject 为 Component；旧来源和 Ticket 状态不变。

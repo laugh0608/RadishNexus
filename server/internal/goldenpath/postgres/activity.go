@@ -40,6 +40,8 @@ type activityEventPayload struct {
 	Repository           *entityref.Ref `json:"repository"`
 	LinkID               string         `json:"link_id"`
 	State                string         `json:"state"`
+	CheckoutState        string         `json:"checkout_state"`
+	CheckoutReason       *string        `json:"checkout_reason"`
 }
 
 type activityRecord struct {
@@ -190,7 +192,7 @@ func insertActivityRecord(ctx context.Context, tx pgx.Tx, record activityRecord)
 }
 
 func projectActivityEvent(event activityEvent) (activityRecord, error) {
-	if event.schemaVersion != 1 {
+	if event.schemaVersion != 1 && !(event.eventType == "ci-run.recorded" && event.schemaVersion == 2) {
 		return activityRecord{}, fmt.Errorf(
 			"project Activity event %s: unsupported %s schema version %d",
 			event.eventID,
@@ -296,6 +298,24 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid ci-run.recorded facts", event.eventID)
 		}
 		record.subjects = []entityref.Ref{*payload.Component}
+		if event.schemaVersion == 2 {
+			var shape map[string]json.RawMessage
+			if err := json.Unmarshal(event.payload, &shape); err != nil || len(shape) != 6 || shape["checkout_reason"] == nil || shape["link_id"] == nil || payload.Repository == nil || payload.Repository.Type != "repository" || payload.Component.Type != "component" {
+				return activityRecord{}, fmt.Errorf("invalid CI checkout event %s", event.eventID)
+			}
+			if (payload.CheckoutState == "observed" && (payload.CheckoutReason != nil || !goldenpath.ValidConfigurationID(payload.LinkID, "lnk_"))) ||
+				(payload.CheckoutState == "unavailable" && (payload.CheckoutReason == nil || !goldenpath.ValidCheckoutReason(*payload.CheckoutReason) || string(shape["link_id"]) != "null")) ||
+				(payload.CheckoutState != "observed" && payload.CheckoutState != "unavailable") {
+				return activityRecord{}, fmt.Errorf("invalid CI checkout state in event %s", event.eventID)
+			}
+			record.subjects = append(record.subjects, *payload.Repository)
+			record.safeFacts["checkout_state"] = payload.CheckoutState
+			if payload.CheckoutReason != nil {
+				record.safeFacts["checkout_reason"] = *payload.CheckoutReason
+			}
+		} else if payload.CheckoutState != "" || payload.CheckoutReason != nil || payload.Repository != nil || payload.LinkID != "" {
+			return activityRecord{}, fmt.Errorf("legacy CI Run contains checkout in event %s", event.eventID)
+		}
 	case "deployment.recorded":
 		if event.target.Type != "deployment" || event.actorKind != "user" || event.actorID == nil ||
 			!isTerminalDeploymentStatus(payload.Status) || payload.Environment == nil || payload.CIRun == nil {

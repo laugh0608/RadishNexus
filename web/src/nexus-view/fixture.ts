@@ -91,6 +91,7 @@ export const succeededCIRunNexusViewFixture = {
   current: {
     entityRef: "entity://ci-run/cir_01K3RADISHNEXUS",
     entityType: "ci-run",
+    checkout: { visibility: "readable", state: "not_collected" },
     eyebrow: "CI Run · Completed build fact",
     status: "succeeded",
     statusLabel: "构建成功",

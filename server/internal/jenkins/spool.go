@@ -284,7 +284,7 @@ func (s *Spool) read(number int64) (spoolRecord, error) {
 	}
 	if r.State != "blocked" {
 		p, e := ParsePayload(r.Payload, s.now())
-		if e != nil || p.Job != s.config.Binding.Job || p.Number != r.Number {
+		if e != nil || p.Version != 1 || p.Job != s.config.Binding.Job || p.Number != r.Number {
 			return r, ErrSpoolState
 		}
 	}

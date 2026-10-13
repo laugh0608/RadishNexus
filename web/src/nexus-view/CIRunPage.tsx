@@ -78,6 +78,7 @@ export function CIRunPage({
         onSessionExpired={onSessionExpired}
       />
       <NexusView
+        workspaceID={workspaceID}
         state={state}
         onRetry={() => setRequestKey((key) => key + 1)}
       />

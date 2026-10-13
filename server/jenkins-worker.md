@@ -2,6 +2,8 @@
 
 按 [ADR-0035 A](../docs/adr/0035-durable-jenkins-terminal-delivery.md) 实现。`jenkins-worker` 为单 source、单 job、单实例的独立前台进程，复用[现有 sender 与 receiver](jenkins.md)。它只发送可信生产者已经可靠发布的终态快照，不连接 Jenkins、不恢复遗漏回调、不执行部署。[B collector](../experiments/jenkins-collector/README.md) 已有对账代码和离线证据；真实重启 / 挂载联调经所有者要求暂缓，B 退出条件未完成。
 
+ADR-0037 A 的一次性 sender / receiver 已支持 checkout payload v2；本持久 worker 的 manifest 与输入合同仍为 v1。导入 v2 会保留原字节并标记 blocked / invalid_request，禁止发送；checkout binding、N 与观察文件的持久升级、清理和真实采集验收属于暂缓的 B，不能清空 spool 或剥离字段降级。
+
 ## 部署条件
 
 - `run` 和显式 `cleanup` 只支持 Linux；macOS 仅用于文件与状态测试、离线检查，不作为运行平台。

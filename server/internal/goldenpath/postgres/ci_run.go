@@ -20,6 +20,10 @@ func (store *Store) RecordCompletedCIRun(
 		return receipt, fmt.Errorf("begin record CI Run transaction: %w", err)
 	}
 	defer rollback(ctx, tx, &err)
+	// Serialize activation with all writes for this source, including v1.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('ci-source:'||$1||':'||$2,0))`, command.WorkspaceID, command.SourceID); err != nil {
+		return receipt, fmt.Errorf("lock CI source: %w", err)
+	}
 
 	// Lock the configured target through commit; missing/cross-workspace targets
 	// cannot claim a receipt, even on a duplicate delivery.
@@ -30,6 +34,10 @@ func (store *Store) RecordCompletedCIRun(
 			return receipt, authz.ErrNotFound
 		}
 		return receipt, fmt.Errorf("check CI Run Component: %w", err)
+	}
+
+	if err := checkCheckoutBinding(ctx, tx, command.WorkspaceID, command.ComponentID, command.SourceID, command.Job, command.CheckoutBinding, command.Checkout != nil, command.RecordedAt); err != nil {
+		return receipt, err
 	}
 
 	result, err := tx.Exec(ctx, `
@@ -76,19 +84,34 @@ func (store *Store) RecordCompletedCIRun(
 		return goldenpath.CIRunReceipt{CIRun: existing, Duplicate: true}, nil
 	}
 
+	checkoutState := "not_collected"
+	var checkoutReason, checkoutBinding any
+	if command.Checkout != nil {
+		checkoutState = command.Checkout.State
+		checkoutReason = command.Checkout.Reason
+		checkoutBinding = command.CheckoutBinding.BindingID
+	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO radishnexus.ci_runs (
 			id, workspace_id, component_id, source_kind, source_id,
 			external_run_key, status, started_at, completed_at,
-			created_at, updated_at
-		) VALUES ($1, $2, $3, 'jenkins', $4, $5, $6, $7, $8, $9, $9)
+			created_at, updated_at, checkout_state, checkout_reason, checkout_binding_id
+		) VALUES ($1, $2, $3, 'jenkins', $4, $5, $6, $7, $8, $9, $9, $10, $11, $12)
 	`, command.CIRunID, command.WorkspaceID, command.ComponentID, command.SourceID,
 		command.ExternalRunKey, command.Status, command.StartedAt, command.CompletedAt,
-		command.RecordedAt)
+		command.RecordedAt, checkoutState, checkoutReason, checkoutBinding)
 	if err != nil {
 		return receipt, mapDatabaseError("insert completed CI Run", err)
 	}
 
+	payload := map[string]any{"status": command.Status, "component": map[string]string{"type": "component", "id": command.ComponentID}}
+	schemaVersion := 1
+	if command.Checkout != nil {
+		schemaVersion = 2
+		payload["checkout_state"], payload["checkout_reason"] = checkoutState, checkoutReason
+		payload["repository"] = map[string]string{"type": "repository", "id": command.CheckoutBinding.RepositoryID}
+		payload["link_id"] = nullable(command.CheckoutLinkID)
+	}
 	if err := insertEvent(ctx, tx, eventRecord{
 		ID:            command.EventID,
 		Type:          "ci-run.recorded",
@@ -101,11 +124,12 @@ func (store *Store) RecordCompletedCIRun(
 		PrimaryID:     command.CIRunID,
 		CorrelationID: command.CorrelationID,
 		OccurredAt:    command.CompletedAt,
-		Payload: map[string]any{
-			"status":    command.Status,
-			"component": map[string]string{"type": "component", "id": command.ComponentID},
-		},
+		SchemaVersion: schemaVersion,
+		Payload:       payload,
 	}); err != nil {
+		return receipt, err
+	}
+	if err := insertCheckoutLink(ctx, tx, command); err != nil {
 		return receipt, err
 	}
 	if err := insertOutbox(ctx, tx, command.EventID); err != nil {
@@ -116,6 +140,10 @@ func (store *Store) RecordCompletedCIRun(
 	}
 
 	completedAt := command.CompletedAt
+	reason := ""
+	if command.Checkout != nil && command.Checkout.Reason != nil {
+		reason = *command.Checkout.Reason
+	}
 	return goldenpath.CIRunReceipt{CIRun: goldenpath.CIRun{
 		ID:             command.CIRunID,
 		WorkspaceID:    command.WorkspaceID,
@@ -128,6 +156,8 @@ func (store *Store) RecordCompletedCIRun(
 		CompletedAt:    &completedAt,
 		CreatedAt:      command.RecordedAt,
 		UpdatedAt:      command.RecordedAt,
+		CheckoutState:  checkoutState,
+		CheckoutReason: reason,
 	}}, nil
 }
 
@@ -139,7 +169,7 @@ func loadCIRun(
 ) (ciRun goldenpath.CIRun, err error) {
 	err = tx.QueryRow(ctx, `
 		SELECT id, workspace_id, component_id, source_kind, source_id,
-			external_run_key, status, started_at, completed_at, created_at, updated_at
+			external_run_key, status, started_at, completed_at, created_at, updated_at, checkout_state, COALESCE(checkout_reason,'')
 		FROM radishnexus.ci_runs
 		WHERE workspace_id = $1 AND id = $2
 	`, workspaceID, ciRunID).Scan(
@@ -154,6 +184,7 @@ func loadCIRun(
 		&ciRun.CompletedAt,
 		&ciRun.CreatedAt,
 		&ciRun.UpdatedAt,
+		&ciRun.CheckoutState, &ciRun.CheckoutReason,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ciRun, fmt.Errorf("load CI Run for delivery receipt: %w", authz.ErrConflict)

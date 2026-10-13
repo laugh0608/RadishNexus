@@ -158,9 +158,13 @@ active Workspace owner 创建映射并明确确认 Component → Repository 的 
 
 当前 application service 只记录完成终态，不定义 `queued / running` 的乱序更新、回退或重开语义。Jenkins delivery ID 是 receipt 的幂等身份，不是 CI Run ID；完全重复只返回既有 CI Run，相同 delivery 的 payload digest 改变则失败。receipt、CI Run、领域事件和 Outbox 原子提交，Secret 与原始 webhook body 不进入这些记录。精确边界见 [ADR-0006](adr/0006-verified-jenkins-delivery-and-ci-run.md)。
 
-CI Run 成功只表达构建事实，不能自动创建 Deployment。Repository、commit、Ticket 和其它上下文等待相应对象字段与关系方向冻结后再通过 EntityLink 表达。
+CI Run 成功只表达构建事实，不能自动创建 Deployment。Repository checkout 来源按 ADR-0037 通过不可变 `built-from` EntityLink 表达；Ticket 与具体构建的交付关系仍待独立冻结，不从 Component 共属推断。
 
-M0 读取以 Component 为授权边界：同一 Workspace 的活跃成员可以读取 Component 及其 CI Run；非成员、暂停成员和跨 Workspace 主体不可发现。`owner_team_id` 只表示责任，不形成私密访问组；Jenkins source 和 plugin actor 也不授予用户权限。CI Run 的 Nexus View 只投影受控状态、时间与当前 Component，不暴露来源标识和 receipt。详见 [ADR-0007](adr/0007-component-scoped-ci-run-read.md)。
+M0 读取以 Component 为授权边界：同一 Workspace 的活跃成员可以读取 Component 及其 CI Run；非成员、暂停成员和跨 Workspace 主体不可发现。`owner_team_id` 只表示责任，不形成私密访问组；Jenkins source 和 plugin actor 也不授予用户权限。CI Run 的 Nexus View 投影受控状态、时间、当前 Component 与按当前 Repository 权限过滤的 checkout 摘要，不暴露机器来源标识和 receipt。详见 [ADR-0007](adr/0007-component-scoped-ci-run-read.md)。
+
+[ADR-0037](adr/0037-ci-run-repository-checkout-provenance.md) 冻结来源状态 `not_collected / observed / unavailable`。v1 保持未采集；v2 由部署者绑定一个 Repository 稳定外部身份，首次成功提交后 binding、状态和原因不可变。observed 恰好有一条 `ci-run --built-from--> repository`，完整 SHA-1 Git OID 只保存于 EntityLink metadata；unavailable 保留有效构建终态和受控原因，不制造关系。该事实表达管理员仓库绑定与 controller checkout 观察，不证明完整构建输入、工单交付或部署。
+
+来源关系属于 source 的窄 capability，独立于 Component 的人工仓库关联；解除人工关系不撤销机器来源，停写须撤销 source / key 并重启。仓库不可读时来源摘要和关系仅返回无内容占位，不泄漏状态、原因或 commit。Repository 的反向构建列表只查询 built-from，并在分页前按当前 Component 权限过滤。真实 Jenkins checkout 采集仍待 ADR-0037 B 验收。
 
 Component 与 Environment 的创建、发现和环境授权管理按 [ADR-0032](adr/0032-component-environment-configuration-and-authorization.md) 冻结：active Workspace owner 可创建最小 active Component / staging Environment，创建不附带记录权。环境授权必须显式授予，撤销后重新授予生成新 ID 与递增代次，旧记录和历史 Deployment 引用不可改写；普通读取不暴露授权管理明细。
 

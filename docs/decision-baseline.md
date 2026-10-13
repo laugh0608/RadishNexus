@@ -12,6 +12,8 @@
 
 2026-10-01 已确认 [ADR-0032](adr/0032-component-environment-configuration-and-authorization.md)：Workspace owner 管理最小 Component / staging Environment 和显式环境授权（包括单独确认给本人授权）；撤销后新增授权代次，保留旧来源。migration 012 扩展授权唯一性与配置 Audit / receipt，新增有限 Session 发现和管理 API；不新增依赖或外部执行能力。
 
+2026-10-13 已确认 [ADR-0037](adr/0037-ci-run-repository-checkout-provenance.md)：先实施 A 的受控单仓库 checkout 接收、不可变来源与双向发现；保留管理员绑定与 controller 观察的证据区别。旧 v1 未采集，新 v2 缺少观察时保留终态并显式 unavailable；来源不能补写或覆盖。真实 Jenkins checkout 采集 B 继续暂缓，Ticket 具体交付关系另行冻结。
+
 ## 已确认
 
 ### D-001 项目名称

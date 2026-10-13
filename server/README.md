@@ -39,7 +39,7 @@ collaboration migration 007 以 `(workspace, actor, command, target, client_oper
 
 当前 Activity 白名单包含 `project.created`、`channel.created`、`decision.proposed`、`decision.accepted`、`ticket.created`、`ci-run.recorded`、`deployment.recorded`、`document.created`、`document.revised`、`component.created`、`environment.created`、`repository.created`、`component.repository-linked`、`component.repository-unlinked`、`ticket.component-linked` 和 `ticket.component-unlinked`。正常写入在同一事务投影，并将对应 `activity-projector` delivery 标记完成；命令成功返回后的重新读取立即可见，投影错误整单回滚。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，先锁定投影表再取得源事件快照，不依赖 Outbox 投递状态；当前不需要常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
 
-CI Run 的 M0 用户读取由所属 Component 控制：同一 Workspace 的活跃成员可读，非成员、暂停成员和跨 Workspace 主体得到 not-found；owner Team 和 Jenkins source 都不授予读取权。CI Run Current 只返回 status、受控时间与当前 Component，Timeline 隐藏 plugin/source ID，并且不返回 external run key、receipt、digest、Secret、原始 payload 或外部 URL。该 query 已按 ADR-0029 接入 Session 作用域的正式 HTTP DTO 与 Web 页面。
+CI Run 的 M0 用户读取由所属 Component 控制：同一 Workspace 的活跃成员可读，非成员、暂停成员和跨 Workspace 主体得到 not-found；owner Team 和 Jenkins source 都不授予读取权。CI Run Current 返回 status、受控时间、当前 Component 与按当前 Repository 权限过滤的 checkout 摘要，Timeline 隐藏 plugin/source ID，并且不返回 external run key、receipt、digest、Secret、原始 payload 或外部 URL。该 query 已按 ADR-0029 接入 Session 作用域的正式 HTTP DTO 与 Web 页面。
 
 staging Deployment 只记录外部已经完成的终态事实，不执行部署。目标必须是 active staging Environment，来源必须是 succeeded CI Run，调用者必须是 active Workspace 用户并持有该 Environment 的显式授权；Project 角色、owner Team 和 CI source 不隐式授予部署能力。Deployment、`deploys` 关系、`deployment.recorded` 和 Outbox 同事务提交。
 
@@ -92,7 +92,7 @@ python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Emai
 
 ## Jenkins 来源接入
 
-默认关闭，通过 `RADISHNEXUS_JENKINS_SOURCES_FILE` 显式启用受控来源；文件 Secret、来源绑定、HMAC / 重放、终态映射和有限重试发送工具的使用见 [Jenkins 接入说明](jenkins.md)。复用既有 CI Run 事务，无数据库迁移或新依赖。自动化与真实 Jenkins 三态隔离联调已验证，见[联调记录](../docs/status/reviews/2026-09-26-real-jenkins-lab.md)；已落盘快照的持久发送 worker 已按 ADR-0035 A 实现，使用见 [worker 说明](jenkins-worker.md)。独立 [controller collector](../experiments/jenkins-collector/README.md) 和双边显式清理已有代码与离线故障证据，真实持续采集、挂载 / 重启验收与普通成员独立配置仍未完成。
+默认关闭，通过 `RADISHNEXUS_JENKINS_SOURCES_FILE` 显式启用受控来源；文件 Secret、来源绑定、HMAC / 重放、终态映射和有限重试发送工具的使用见 [Jenkins 接入说明](jenkins.md)。ADR-0037 A 增加 migration 015、sources / payload v2、不可变绑定与 built-from、schema 2 CI 事件和 Activity 6；未新增依赖。旧 v1 摘要与重试保持兼容，持久 collector / worker 仍只处理 v1，真实 checkout 采集 B 暂缓。自动化与真实 Jenkins 三态隔离联调已验证，见[联调记录](../docs/status/reviews/2026-09-26-real-jenkins-lab.md)；已落盘快照的持久发送 worker 已按 ADR-0035 A 实现，使用见 [worker 说明](jenkins-worker.md)。独立 [controller collector](../experiments/jenkins-collector/README.md) 和双边显式清理已有代码与离线故障证据，真实持续采集、挂载 / 重启验收与普通成员独立配置仍未完成。
 
 `./scripts/check-server.sh` 覆盖 Go race / vet 与模块一致性，不执行 Groovy 编译或真实 Jenkins。collector 检查与跨语言导出验证按其说明单独运行；`TestCollectorWorkerContract` 未设置 `RADISHNEXUS_COLLECTOR_CONTRACT` 时跳过，Linux 专属 CLI 用例也不能从 macOS 测试通过推导。各类证据见[当日收尾记录](../docs/status/reviews/2026-10-09-daily-closeout.md)。
 

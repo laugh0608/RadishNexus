@@ -9,7 +9,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
 
-const ActivityProjectionVersion = 5
+const ActivityProjectionVersion = 6
 
 type CurrentProjection struct {
 	Ref                entityref.Ref
@@ -32,6 +32,7 @@ type CurrentProjection struct {
 	StartedAt          *time.Time
 	CompletedAt        *time.Time
 	RecordedAt         *time.Time
+	Checkout           *CICheckoutProjection
 }
 
 type ActorRef struct {

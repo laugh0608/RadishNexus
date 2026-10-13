@@ -1,3 +1,4 @@
+import { RepositoryCIRuns } from "./RepositoryCIRuns";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { AuthRequestError } from "../auth/api";
 import { useAction, usePage } from "./configuration-hooks";
@@ -220,7 +221,7 @@ function CreateRepository(
   );
 }
 
-function RepositoryDetail(
+export function RepositoryDetail(
   props: RepositoryContext & {
     id: string;
     client: RepositoryConfigurationClient;
@@ -264,7 +265,7 @@ function RepositoryDetail(
     );
     return () => controller.abort();
   }, [workspaceID, id, client, revision, onSessionExpired, onUnavailable]);
-  const value = state.value;
+  const value = state.revision === revision ? state.value : undefined;
   return (
     <section className="configuration-panel" aria-label="代码库详情">
       <button type="button" onClick={() => setRevision((r) => r + 1)}>
@@ -294,6 +295,11 @@ function RepositoryDetail(
             打开外部仓库 ↗
           </a>
           <RepositoryComponents {...props} repository={value} />
+          <RepositoryCIRuns
+            workspaceID={workspaceID}
+            repositoryID={value.id}
+            onSessionExpired={onSessionExpired}
+          />
         </>
       )}
     </section>

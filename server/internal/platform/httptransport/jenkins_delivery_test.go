@@ -255,3 +255,38 @@ func TestJenkinsRejectsNoncanonicalPathsWithoutRedirect(t *testing.T) {
 		}
 	}
 }
+
+func TestJenkinsV2SenderPreservesRawBodyAndSignature(t *testing.T) {
+	body := strings.TrimSuffix(strings.Replace(jenkinsBody, `"version":1`, `"version":2`, 1), "}") + `,"checkout":{"binding_id":"checkout_a","state":"observed","reason":null,"revision":{"algorithm":"sha1","oid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}}`
+	sources := jenkinsSources(t)
+	sources[0].CheckoutBinding = &goldenpath.CICheckoutBinding{BindingID: "checkout_a", RepositoryID: "rep_source", Provider: "gitea", ProviderOrigin: "https://git.example.test", ExternalID: "123", Profile: goldenpath.JenkinsCheckoutProfile, EffectiveFromBuild: 42}
+	calls := 0
+	service := jenkinsRecorderFunc(func(_ context.Context, d goldenpath.VerifiedJenkinsDelivery, in goldenpath.RecordCompletedCIRunInput) (goldenpath.CIRunReceipt, error) {
+		calls++
+		if d.CheckoutBinding == nil || in.Checkout == nil || in.Checkout.State != "observed" {
+			t.Fatal("missing v2 facts")
+		}
+		return goldenpath.CIRunReceipt{CIRun: goldenpath.CIRun{ID: "cir_v2"}}, nil
+	})
+	var handler http.Handler
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, e := io.ReadAll(r.Body)
+		if e != nil || string(raw) != body {
+			t.Error("sender changed raw v2 body", e)
+		}
+		r.Body = io.NopCloser(bytes.NewReader(raw))
+		handler.ServeHTTP(w, r)
+	}))
+	defer server.Close()
+	policy, _ := NewBrowserSessionPolicy(server.URL)
+	proxy, _ := NewTrustedProxyPolicy("127.0.0.1/32")
+	handler = WithRequestID(NewJenkinsDeliveryHandler(sources, service, policy, proxy, time.Now, func(JenkinsDeliveryLog) {}))
+	config, e := jenkins.LoadSender([]byte(fmt.Sprintf(`{"version":1,"origin":%q,"source_id":"source_a","key_id":"key_a","secret_file":"/synthetic/key"}`, server.URL)), func(string, int64) ([]byte, error) { return []byte(strings.Repeat("ab", 32)), nil })
+	if e != nil {
+		t.Fatal(e)
+	}
+	result, e := jenkins.Send(context.Background(), config, []byte(body), server.Client())
+	if e != nil || result.CIRunID != "cir_v2" || calls != 1 {
+		t.Fatal(result, e, calls)
+	}
+}

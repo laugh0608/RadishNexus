@@ -71,6 +71,13 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	}
 	regrantBackupAuthorization(t, ctx, sourcePool, "dpa_backup", 2)
 	repositoryInputs, repositoryResults := seedBackupRepository(t, ctx, sourcePool, configurationInvocation)
+	checkoutBinding := &goldenpath.CICheckoutBinding{BindingID: "backup_checkout", RepositoryID: repositoryResults[0].Object.ID, Provider: "gitea", ProviderOrigin: "https://git.example.test", ExternalID: "backup-123", Profile: goldenpath.JenkinsCheckoutProfile, EffectiveFromBuild: 1}
+	checkoutDelivery := goldenpath.VerifiedJenkinsDelivery{WorkspaceID: "wrk_backup", SourceID: "checkout_backup", Job: "backup/build", DeliveryID: "build-1", PayloadSHA256: strings.Repeat("c", 64), CheckoutBinding: checkoutBinding}
+	checkoutInput := goldenpath.RecordCompletedCIRunInput{ComponentID: "cmp_backup", ExternalRunKey: "1", Status: "succeeded", CompletedAt: time.Now().UTC().Truncate(time.Millisecond), Checkout: &goldenpath.CICheckout{BindingID: "backup_checkout", State: "observed", Revision: &goldenpath.GitRevision{Algorithm: "sha1", OID: strings.Repeat("a", 40)}}}
+	checkoutReceipt, err := goldenpath.NewService(goldenpostgres.New(sourcePool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}).RecordCompletedJenkinsRun(ctx, checkoutDelivery, checkoutInput)
+	if err != nil {
+		t.Fatal(err)
+	}
 	tcService := goldenpath.NewTicketComponentService(goldenpostgres.New(sourcePool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
 	tcInputs := []goldenpath.TicketComponentInput{{TicketID: ticketID, ComponentID: "cmp_backup", ClientOperationID: "backup-tc-link", Confirmed: true}}
 	tcKinds := []string{"ticket.component.link", "ticket.component.unlink", "ticket.component.link"}
@@ -94,8 +101,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rebuild source Activity projection: %v", err)
 	}
-	if projected != 15 {
-		t.Fatalf("source Activity rows = %d, want 15", projected)
+	if projected != 16 {
+		t.Fatalf("source Activity rows = %d, want 16", projected)
 	}
 	sourceSnapshot := snapshotIncludedTables(t, ctx, sourcePool)
 	sourceActivity := snapshotTable(t, ctx, sourcePool, "radishnexus.activity_items")
@@ -250,13 +257,22 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 		t.Fatal("restored Deployment receipt", restoredDeployment, err)
 	}
 
+	restoredCheckout := goldenpath.NewService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	retryCheckout, err := restoredCheckout.RecordCompletedJenkinsRun(ctx, checkoutDelivery, checkoutInput)
+	if err != nil || !retryCheckout.Duplicate || retryCheckout.CIRun.ID != checkoutReceipt.CIRun.ID {
+		t.Fatal("restored checkout retry", err)
+	}
+	checkoutView, err := restoredCheckout.GetNexusView(ctx, configurationInvocation.Principal, entityref.Ref{Type: "ci-run", ID: checkoutReceipt.CIRun.ID})
+	if err != nil || checkoutView.Current.Checkout.Revision.OID != strings.Repeat("a", 40) {
+		t.Fatal("restored checkout projection", err)
+	}
 	targetStore := goldenpostgres.New(targetPool)
 	projected, err = targetStore.RebuildActivityProjection(ctx)
 	if err != nil {
 		t.Fatalf("rebuild target Activity projection: %v", err)
 	}
-	if projected != 15 {
-		t.Fatalf("target Activity rows = %d, want 15", projected)
+	if projected != 16 {
+		t.Fatalf("target Activity rows = %d, want 16", projected)
 	}
 	if targetActivity := snapshotTable(t, ctx, targetPool, "radishnexus.activity_items"); targetActivity != sourceActivity {
 		t.Fatalf("rebuilt Activity differs\nsource: %s\ntarget: %s", sourceActivity, targetActivity)

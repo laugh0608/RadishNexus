@@ -150,6 +150,7 @@ type Store interface {
 	AcceptDecision(context.Context, AcceptDecisionCommand) (AcceptDecisionResult, error)
 	CreateTicketFromDecision(context.Context, CreateTicketCommand) (CreateTicketResult, error)
 	RecordCompletedCIRun(context.Context, RecordCompletedCIRunCommand) (CIRunReceipt, error)
+	ListRepositoryCIRuns(context.Context, authz.Principal, string, DiscoveryPageInput) (RepositoryCIRunPage, error)
 	ListStagingTargets(context.Context, authz.Principal, string, DiscoveryPageInput) (StagingTargetPage, error)
 	RecordStagingDeployment(context.Context, RecordStagingDeploymentCommand) (Deployment, error)
 	ListRelations(context.Context, authz.Principal, entityref.Ref) ([]RelationProjection, error)

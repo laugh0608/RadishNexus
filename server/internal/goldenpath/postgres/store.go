@@ -442,6 +442,7 @@ func rollback(ctx context.Context, tx pgx.Tx, returnedError *error) {
 }
 
 type eventRecord struct {
+	SchemaVersion int
 	ID            string
 	Type          string
 	WorkspaceID   string
@@ -459,6 +460,10 @@ type eventRecord struct {
 }
 
 func insertEvent(ctx context.Context, tx pgx.Tx, event eventRecord) error {
+	version := event.SchemaVersion
+	if version == 0 {
+		version = 1
+	}
 	payload, err := json.Marshal(event.Payload)
 	if err != nil {
 		return fmt.Errorf("encode %s event payload: %w", event.Type, err)
@@ -469,11 +474,11 @@ func insertEvent(ctx context.Context, tx pgx.Tx, event eventRecord) error {
 			actor_kind, actor_id, source_kind, source_id,
 			primary_entity_type, primary_entity_id, project_id,
 			correlation_id, causation_id, occurred_at, payload
-		) VALUES ($1, $2, 1, $3, $4, $5, $6, $7,
+		) VALUES ($1, $2, $15, $3, $4, $5, $6, $7,
 			$8, $9, $10, $11, $12, $13, $14)
 	`, event.ID, event.Type, event.WorkspaceID, event.ActorKind, nullable(event.ActorID),
 		event.SourceKind, nullable(event.SourceID), event.PrimaryType, event.PrimaryID,
-		nullable(event.ProjectID), event.CorrelationID, nullable(event.CausationID), event.OccurredAt, payload)
+		nullable(event.ProjectID), event.CorrelationID, nullable(event.CausationID), event.OccurredAt, payload, version)
 	if err != nil {
 		return mapDatabaseError("insert "+event.Type+" domain event", err)
 	}

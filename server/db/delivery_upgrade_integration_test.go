@@ -113,8 +113,27 @@ INSERT INTO radishnexus.workspace_configuration_audit(id,workspace_id,actor_id,c
 	if err = conn.QueryRow(ctx, `SELECT (to_jsonb(a)-'projection_version')::text FROM radishnexus.activity_items a WHERE event_id='evt_old' AND projection_version=4`).Scan(&oldActivity); err != nil {
 		t.Fatal(err)
 	}
+	// Establish the immediate previous version too: 014 facts must survive 015.
+	if err = applyMigration(ctx, conn, migrations[13]); err != nil {
+		t.Fatal(err)
+	}
+	checker014 := &ReadinessChecker{database: conn, expected: migrations[:14]}
+	if err = checker014.CheckReady(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var oldCI string
+	if err = conn.QueryRow(ctx, `SELECT to_jsonb(c)::text FROM radishnexus.ci_runs c WHERE id='cir_old'`).Scan(&oldCI); err != nil {
+		t.Fatal(err)
+	}
 	if err = Migrate(ctx, conn); err != nil {
 		t.Fatal(err)
+	}
+	if err = checker014.CheckReady(ctx); err == nil {
+		t.Fatal("014 binary accepted 015")
+	}
+	var newCI, checkoutState string
+	if err = conn.QueryRow(ctx, `SELECT (to_jsonb(c)-ARRAY['checkout_state','checkout_reason','checkout_binding_id'])::text,checkout_state FROM radishnexus.ci_runs c WHERE id='cir_old'`).Scan(&newCI, &checkoutState); err != nil || newCI != oldCI || checkoutState != "not_collected" {
+		t.Fatal("015 changed historical CI facts", err)
 	}
 	if err = newChecker.CheckReady(ctx); err != nil {
 		t.Fatal("014 not ready", err)

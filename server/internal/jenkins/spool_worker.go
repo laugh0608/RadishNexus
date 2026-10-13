@@ -63,6 +63,11 @@ func (s *Spool) Import() error {
 		now := s.now()
 		r := spoolRecord{Version: 1, Binding: s.binding, Number: n, Payload: body, Digest: digestBytes(body), State: "pending", Created: now, Updated: now, Next: now, Resets: []time.Time{}}
 		p, parseErr := ParsePayload(body, now)
+		// ADR-0037 A extends the one-shot sender only. The durable worker
+		// cannot accept v2 until its binding/manifest contract is implemented.
+		if p.Version == 2 {
+			parseErr = ErrInvalid
+		}
 		if parseErr != nil {
 			f := ClassifyDelivery(parseErr)
 			r.State = "blocked"

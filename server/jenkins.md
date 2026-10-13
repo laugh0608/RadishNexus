@@ -1,6 +1,6 @@
 # Jenkins 终态 delivery 接入
 
-状态：按 [ADR-0030](../docs/adr/0030-authenticated-jenkins-delivery-adapter.md) 实现；自动化与真实 Jenkins 三态隔离联调已验证，持续采集和业务实例配置仍待完成。
+状态：终态接入按 [ADR-0030](../docs/adr/0030-authenticated-jenkins-delivery-adapter.md) 实现；自动化与真实 Jenkins 三态隔离联调已验证，持续采集和业务实例配置仍待完成。
 
 这是 Nexus 自定义的受控机器写入口。接收端验证来源后调用已有 CI Run service，发送命令只发送一份可信终态快照；不会安装 Jenkins、触发构建、轮询 Jenkins 或创建 Deployment。构建完成到快照的可信采集由独立 Jenkins 实验验证，不能用手写 JSON 替代真实构建证据；已落盘快照的独立持久发送已由 [ADR-0035 A worker](jenkins-worker.md) 提供；[B collector](../experiments/jenkins-collector/README.md) 已有可信采集与漏采对账代码，真实联调明确暂缓，尚未满足持续采集退出条件。
 
@@ -37,6 +37,45 @@ RADISHNEXUS_JENKINS_SOURCES_FILE=/run/config/jenkins-sources.json
 
 来源是部署者授予机器的窄权限，Session / CSRF 不能代替其签名；签名持有者能够声明该 source 下的事实。密钥应留在受控通知程序中，不交给不可信仓库代码或其可修改的 Pipeline。
 
+## Checkout 来源 v2（ADR-0037 A）
+
+A 已实现接收与发现，使用合成签名输入验证；真实 Jenkins SCM 采集 B 仍暂缓。**真实来源的 observed 启用必须等待 B 支持 profile 验收**，不能把以下结构示例当成可声明的 SCM 事实。
+
+sources 文件 `version: 2` 的每条 source 在原字段之外必需一个 `checkout_binding`：
+
+```json
+{
+  "binding_id": "checkout_example",
+  "repository_id": "rep_example",
+  "provider": "gitea",
+  "provider_origin": "https://git.example.com",
+  "external_id": "123",
+  "profile": "jenkins-git-single-checkout-v1",
+  "effective_from_build": 42
+}
+```
+
+Workspace / Component / Repository 先通过正式配置建立。部署者核对 provider 稳定 ID、实际 clone 目标与 job；URL、默认分支或 Component 共属不构成绑定依据。首次成功 v2 delivery 原子保存不可变 binding，启动和每次请求都核对当前配置；变更或退回 v1 配置失败，撤销配置不删除历史。解除 Component 的人工 `source-repository` 关系不撤销机器写权限；停写应撤销 source / key 并重启。
+
+升级前停止采集并排空运行中的 job，核对 next build 与全部待送快照，确定 N。小于 N 的构建只接受原始 v1，大于等于 N 只接受 v2；已有 v1 编号不得落入新区间。精确 v1 digest 不变。若要改仓库、profile 或 N，使用新 source、新 spool 与不重叠起点；禁止复制旧历史规避冲突。
+
+payload v2 保留 v1 的全部字段并增加必需 `checkout`：
+
+```json
+{
+  "binding_id": "checkout_example",
+  "state": "unavailable",
+  "reason": "checkout_not_observed",
+  "revision": null
+}
+```
+
+`observed` 必须 `reason:null`，`revision` 为 `{algorithm:"sha1",oid:"40 位小写十六进制"}`，拒绝全零。`unavailable` 必须 `revision:null`，reason 限 `checkout_not_observed / unsupported_checkout / binding_changed_during_run`。不得用短 SHA、分支 HEAD、环境变量或自由文本代替本次观察。来源缺失不改变真实构建终态。
+
+HMAC 的 `v1=`、路径及签名域保持原样，签入原始 body（包括 version）。一次性 sender 可原样发送 v2；持久 worker / collector 仍仅支持 v1，v2 输入会保留并阻止发送，不能通过清空 spool 或删 checkout 字段升级。持久文件格式升级属于 B。
+
+同一 build 的 commit、state、reason 或 binding 变化均冲突；首次事实不能补写、覆盖或解除。错误来源当前只能停用来源并保留证据，正式撤回 / 更正机制尚未提供。绑定 ID 不匹配返回 `403 source_binding_mismatch`，N 版本不匹配返回 `400 invalid_request`，持久 binding 或 receipt 冲突返回 `409 conflict`。
+
 ## 发送端配置与输入
 
 发送配置文件不含密钥值：
@@ -68,7 +107,7 @@ origin 必须是无路径、userinfo、query 或 fragment 的精确 HTTPS origin
 }
 ```
 
-所有字段必需，只有 `started_at` 可空；时间必须为 UTC RFC3339，最多毫秒精度。开始时间指实际执行开始时间，不能用 Jenkins 排队时间代替；无法可靠取得时用 null。`SUCCESS / FAILURE / ABORTED` 分别记录 `succeeded / failed / canceled`；`UNSTABLE / NOT_BUILT` 等返回明确失败，不擅自归并。
+v1 所有字段必需，只有 `started_at` 可空；时间必须为 UTC RFC3339，最多毫秒精度。开始时间指实际执行开始时间，不能用 Jenkins 排队时间代替；无法可靠取得时用 null。`SUCCESS / FAILURE / ABORTED` 分别记录 `succeeded / failed / canceled`；`UNSTABLE / NOT_BUILT` 等返回明确失败，不擅自归并。
 
 在已构建的发送程序上执行以下命令会向配置的真实 origin 发送请求，必须先获得该目标的发送授权。源码方式从 `server/` 执行：
 
@@ -104,6 +143,6 @@ go run ./cmd/jenkins-delivery -config /run/config/jenkins-sender.json -input /ru
 
 `./scripts/check-server.sh` 覆盖协议、配置、HTTP 和发送命令的 race / vet 检查；`./scripts/check-server-postgres.sh` 使用固定镜像的一次性测试数据库，覆盖并发重复、冲突、事务失败、TLS 响应丢失重试和 Session 读取正常 Activity。实际证据见[实施记录](../docs/status/reviews/2026-09-26-jenkins-adapter.md)。
 
-没有 schema 变更。CI Run 与 receipt 按现有备份规则保留，来源配置与密钥不进入数据库或可移植导出；恢复后需重新建立来源授权。禁用配置并重启可以停止新写入，回退服务工件不删除历史记录。
+ADR-0037 A 使用 migration 015；升级须先做一致备份、停止写入并显式迁移，再同步更新 Go / Web 工件。旧 v1 行初始化为 not_collected，历史摘要和事件不改写。混合 v1 / v2 的 CI Run、receipt、不可变 binding、EntityLink 和事件进入运维备份，Activity 用同一 v6 投影器重建。来源密钥和可编辑部署配置不进入数据库；恢复后重新装配匹配原绑定的配置与 Secret，旧 Session 失效。readiness 要求精确迁移历史，旧二进制不支持 015；回退须将升级前备份恢复到全新目标，不能删除来源事实或回改 migration。
 
 真实 Jenkins controller / agent 已完成成功、失败、取消构建以及 finalized 快照交付，证据与实验边界见[隔离联调记录](../docs/status/reviews/2026-09-26-real-jenkins-lab.md)和[实验操作说明](../experiments/jenkins-lab/README.md)。该批次使用临时接收端和测试数据，不代表持久来源配置或持续采集完成。staging 显式记录另由 [ADR-0031](../docs/adr/0031-session-scoped-staging-deployment-recording.md) 的 Session 入口提供，不是 adapter 的自动行为；Component / staging Environment 最小配置与显式授权管理已按 [ADR-0032](../docs/adr/0032-component-environment-configuration-and-authorization.md) 提供正式页面，创建对象不会自动生成 Jenkins source。production 部署、通用插件配置 UI、已验收的持续采集和默认 Compose Jenkins 服务仍未提供。

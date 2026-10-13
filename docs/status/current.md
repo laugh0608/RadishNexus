@@ -26,6 +26,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment、精确重试 receipt | CI Run / Deployment 正式读取；成功构建可选择已授权 staging 环境并确认记录外部部署结果 | 真实 Jenkins 三态采集、Deployment 写入自动化与隔离浏览器已通过；Component / staging Environment 创建、发现与显式授权管理已接通，真实数据库、恢复及隔离浏览器已有证据；已落盘快照持久发送按 ADR-0035 A 完成；可信 collector 代码与离线验证已具备，显式双边清理已有离线证据，真实持续采集与交付关系仍缺 |
 | Repository 映射与 Component 关联 | migration 013、稳定外部身份、人工来源多对多关系、精确解除 / 重新关联、配置 Audit / receipt、Activity v4 | owner 创建映射与关联，成员分页发现及双向跳转 | 从正式 bootstrap 空业务工作区完成页面创建、关联、解除 / 重连、桌面 / 手机 / 键盘、成员只读及失权清空；数据库升级、并发、回滚与恢复通过；无 provider 连接或 CI 来源推导 |
 | Ticket 与 Component 人工关联 | migration 014、人工 `affects`、Project 写权限、精确解除 / 重连、协作 receipt、Activity v5 | Ticket 关联区、组件稳定详情与按权限过滤的反向分页 | Go / PostgreSQL / Web、013 升级与恢复通过；正式页面创建链、关联 / 解除 / 重连、桌面 / 手机与键盘通过；浏览器后退、显式刷新撤回读 / 写权及最终截图已补验，见[补验记录](reviews/2026-10-09-delivery-continuation.md) |
+| CI Run checkout 来源 A | migration 015、sources / payload v2、不可变 binding / built-from、schema 2 CI 事件与 Activity 6 | CI Run 来源详情、完整 OID 复制、Repository 稳定页面与反向分页 | 合成签名输入、真实 PostgreSQL、014 升级 / 混合恢复与隔离浏览器验证；真实 SCM 采集 B 暂缓，见[实施记录](reviews/2026-10-13-checkout-provenance.md) |
 | EntityLink / Activity | 带来源关系、权限过滤 query、同事务 Activity 更新与版本化全量重建 | Nexus View 可读 Current / 出向与首批入向 Relations / 正常更新的 Timeline | 正常写入与双向发现已通过真实 PostgreSQL / HTTP 和浏览器；未完成持续使用观察 |
 | 自部署与恢复 | 显式 migration、只读 schema readiness、PostgreSQL 17 同 major 空目标恢复 | 健康端点拒绝 migration 缺失 / 漂移 / 版本不匹配；固定工件 Compose 开发拓扑与 HTTPS 演练已有记录 | 新探针已有真实数据库证据；本轮未重跑 Compose，升级失败恢复、运维与生产容量尚未完成 |
 | Document | migration 010、不可变版本、精确 receipt、当前 Project 权限、单一受限 Markdown parser、备份恢复 | Ticket 创建、Project 文档列表、阅读 / 编辑 / 预览、显式冲突重新应用、历史恢复 | 真实数据库及隔离 HTTPS 双标签页、恢复、手机布局、撤权已有证据；原生中文 IME、普通成员独立持续使用仍待验收 |
@@ -59,15 +60,15 @@ Ticket 与 Component 人工关联已按 ADR-0034 实现，浏览器后退、显�
 
 接续顺序：
 
-1. **具体交付来源设计（待确认）**：双边显式清理代码与离线故障验证已补齐；[ADR-0037 来源提案](../adr/0037-ci-run-repository-checkout-provenance.md)已于 2026-10-13 写入，明确可信边界、失败场景和首个实现切片。下一步由所有者确认范围后再实施 A：来源接收、保存与双向发现。真实 checkout 采集为后续 B，Ticket 具体交付关系再单独冻结；不按 Component 共属推导已交付，不在提案确认前改公共协议或业务模型。
-2. **ADR-0035 B：真实终态采集验收（暂缓）**：独立 controller 与双边清理已具备离线证据，但本机 Docker bind mount 实测为 FUSE，超出支持范围。所有者已明确暂缓真实联调，原生 Linux 环境下的真实重启 / 挂载验收尚未完成，恢复时另行明确资源与授权，见[采集记录](reviews/2026-10-09-jenkins-collector.md)和[清理记录](reviews/2026-10-09-jenkins-cleanup.md)。ADR-0037 B 是新增 checkout 来源的后续提议，不与既有终态采集完成线混为一谈。
+1. **来源接收与发现**：[ADR-0037](../adr/0037-ci-run-repository-checkout-provenance.md)已于 2026-10-13 确认，A 的 sources / payload v2、不可变 binding、built-from、Activity 6、正式来源展示与双向发现已实施；验收证据见下方实施记录。真实 checkout 采集 B 继续暂缓，Ticket 具体交付关系再独立冻结；不按 Component 共属推导已交付。
+2. **ADR-0035 B：真实终态采集验收（暂缓）**：独立 controller 与双边清理已具备离线证据，但本机 Docker bind mount 实测为 FUSE，超出支持范围。所有者已明确暂缓真实联调，原生 Linux 环境下的真实重启 / 挂载验收尚未完成，恢复时另行明确资源与授权，见[采集记录](reviews/2026-10-09-jenkins-collector.md)和[清理记录](reviews/2026-10-09-jenkins-cleanup.md)。ADR-0037 B 是已确认来源方案中的后续切片，不与既有终态采集完成线混为一谈。
 3. **真实整链验收**：正式新配置对象 → 真实 Jenkins → 浏览器记录已完成的外部 staging → 撤权阻止新记录且历史按当前权限可读。没有实际外部 staging 行为时只验收到 CI Run，不伪造 Deployment。
 
-### 来源设计提案：2026-10-13
+### Checkout 来源切片 A：2026-10-13
 
-[ADR-0037](../adr/0037-ci-run-repository-checkout-provenance.md)为提议状态，尚未接受或实施。提案区分管理员仓库绑定与 controller checkout 观察，列出单仓库 / 完整 commit、缺失与冲突、当前权限、版本兼容、关系 / 事件及恢复合同；首批范围和确认事项以 ADR 为准。本轮仅交付文档，不改写既有业务合同或把合成输入当作真实 SCM 证据。
+所有者确认 [ADR-0037](../adr/0037-ci-run-repository-checkout-provenance.md) 后，先提交来源提案 `3c6fe24`，再在本地 dev 实施 A。migration 015 保存来源 capability、CI Run 状态与不可变 built-from；v1 摘要不变，按 N 严格切换 v2，事件 / Activity 与 receipt 同事务。正式 CI Run 显示完整 checkout revision 或明确未采集 / 不可用，Repository 提供来源构建反向分页；测试证据和具体限制见[实施记录](reviews/2026-10-13-checkout-provenance.md)。
 
-真实 Jenkins 联调和原生中文 IME 继续暂缓。恢复 Jenkins 验收需另行明确原生 Linux 持久目录、controller / worker / agent 资源、依赖和清理方式，不能以本机 FUSE bind mount 或合成测试替代。下一步是审阅并确认提案，没有自动任务或外部操作授权。
+真实 Jenkins checkout 采集、ADR-0035 B 原生 Linux 持续采集验收与中文 IME 继续暂缓；本批合成签名输入只证明接收与发现合同，不证明 Jenkins SCM 已采集。恢复真实验收须另行明确原生 Linux 持久目录、controller / worker / agent、固定插件依赖及清理范围，不能以本机 FUSE 替代。无 push、业务实例迁移或新增依赖。
 
 ### 本日收尾：2026-10-09
 
@@ -152,7 +153,7 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - 关系分页、反向索引、查询容量与跨对象 Timeline；事务内 Activity 更新、重建并发及首批 direction 合同已由 ADR-0022 冻结；
 - 管理员交接、其他协作对象发现、账号恢复与应急入口；基础配置和首访 owner 初始化已由 ADR-0026 / ADR-0027 冻结；
 - Document 正式页面原生中文 IME 与持续使用证据；正式富文本与 CRDT、受控脱敏和可移植导出仍未完成；
-- Jenkins 持续终态采集与业务实例配置、持久来源管理 / 安全审计、Repository 与 CI Run 的来源关系及其余交付关系；
+- Jenkins 持续终态采集与业务实例配置、持久来源管理 / 安全审计、真实 checkout 采集与其余具体交付关系；
 - PostgreSQL 支持矩阵、schema 兼容窗口、forward repair、数据库权限拆分和容量基线；
 - Decision 拒绝、替代、复核与 Ticket 基础执行状态的交互；
 - 安全 Audit、消息 / 事件 / receipt 的保留和受控脱敏边界；

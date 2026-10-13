@@ -657,3 +657,22 @@ func TestSpoolOfflineCopyPreservesBudgetAndRejectsRebinding(t *testing.T) {
 		t.Fatal("restored state rebound", e)
 	}
 }
+
+func TestSpoolKeepsCheckoutV2BlockedUntilManifestUpgrade(t *testing.T) {
+	c, s := spoolFixture(t)
+	putSpool(t, c, 42, checkoutPayload())
+	if e := s.Import(); e != nil {
+		t.Fatal(e)
+	}
+	r := requireRecord(t, s, 42, "blocked", 0)
+	if r.Reason != "invalid_request" || string(r.Payload) != checkoutPayload() {
+		t.Fatal("v2 was altered or accepted", r.Reason)
+	}
+	s = reopenSpool(t, c, s)
+	if _, e := s.tick(context.Background(), func(context.Context, []byte) (SendResult, error) {
+		t.Fatal("v2 sent by v1 worker")
+		return SendResult{}, nil
+	}); e != nil {
+		t.Fatal(e)
+	}
+}

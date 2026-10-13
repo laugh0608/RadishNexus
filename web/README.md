@@ -114,3 +114,7 @@ Document 默认集中阅读，来源 Ticket 保留标题下入口；信息展开
 `collaboration/TicketComponents.tsx` 在 Ticket 页提供涉及组件、分页候选与人工确认的关联 / 精确解除；`ticket-component-api.ts` 严格校验关系、能力、摘要与原请求结果。关系事件以独立 `relationState` 展示，不借用 Ticket 状态。成功刷新原 Relations 和 Timeline，网络结果未知时保留同一 payload / operation 供显式重试。
 
 组件地址为 `/workspaces/{workspace_id}/components/{component_id}`，由 `workspace/ComponentPage.tsx` 复用现有配置详情、Repository 关系和反向 Ticket 分页；首页及 Ticket 关系使用稳定链接，反向 Ticket 只显示当前可读项。新关联禁选 retired Component；失去 Project 写权限后关闭表单但保留可读上下文，失去端点读取权则清空。待解除关系独立保留旧 link ID，并在焦点恢复时复核当前 Ticket 能力，不把旧请求改指新一代关系。合同见 [ADR-0034](../docs/adr/0034-ticket-component-relations.md)，自动化与浏览器验收范围见[实施记录](../docs/status/reviews/2026-10-06-ticket-component.md)。
+
+## CI Run checkout 来源
+
+ADR-0037 A 在正式 CI Run 页面展示未采集、来源不可用、observed 的完整 SHA-1 checkout revision 或无内容受限占位；支持复制完整 OID，点击 Repository 进入 `/workspaces/:workspace/repositories/:repository`，再从权限过滤的来源构建列表返回 CI Run。详情和列表刷新清除旧结果，错误或撤权不保留来源证据。Current、Relations 与 Timeline 使用同一个封闭来源合同，不输出内部 source / binding / receipt。该页面不证明完整构建输入或 Ticket 已交付；真实 Jenkins SCM 采集仍待 B。

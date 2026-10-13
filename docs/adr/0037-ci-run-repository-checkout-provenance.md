@@ -1,12 +1,12 @@
 # ADR-0037：CI Run 的 Repository 与 checkout commit 来源
 
-状态：提议（待项目所有者确认；未实施）
+状态：已接受（2026-10-13 所有者确认实施切片 A；切片 B 继续暂缓）
 
 日期：2026-10-13
 
-关联：[ADR-0030](0030-authenticated-jenkins-delivery-adapter.md)、[ADR-0033](0033-repository-mapping-and-component-relations.md)、[ADR-0035](0035-durable-jenkins-terminal-delivery.md)、[Golden Path](../golden-path.md)。若接受，将部分扩展 ADR-0030 的 payload / 来源配置、ADR-0029 的 CI Run 读取白名单及 ADR-0035 的磁盘交接版本；旧版本身份、receipt、权限和构建 / 部署分离语义继续有效。
+关联：[ADR-0030](0030-authenticated-jenkins-delivery-adapter.md)、[ADR-0033](0033-repository-mapping-and-component-relations.md)、[ADR-0035](0035-durable-jenkins-terminal-delivery.md)、[Golden Path](../golden-path.md)。本决策部分扩展 ADR-0030 的 payload / 来源配置、ADR-0029 的 CI Run 读取白名单及 ADR-0035 的磁盘交接版本；旧版本身份、receipt、权限和构建 / 部署分离语义继续有效。
 
-本轮只编写设计。本文的字段、迁移、端点和采集 profile 均为建议合同，不表示已经交付。确认入口见文末；接受首个实现切片不自动授权后续真实采集、依赖安装或外部操作。
+项目所有者已确认本文并授权实施切片 A；实际完成线以当前状态及实施记录为准。切片 B 的采集 profile 仍待后续实现与真实验收，继续暂缓；本次确认不自动授权依赖安装或外部操作。
 
 ## 背景与源码基线
 
@@ -161,7 +161,7 @@ Web 覆盖 loading / empty / error、旧 v1、来源不可用、受限占位、�
 
 Nexus 数据库备份与 collector / worker 离线备份仍不是一个事务；分别记录恢复点和缺口，Secrets 均排除。绑定记录可以恢复，但不能据此重建凭据或自动开启 source。旧不可变 receipt 与新来源关系在恢复后继续抵御重复和冲突；整库恢复不等于 `.nexus` 导入验收。
 
-接受后需同步领域模型、核心契约、必要决策基线、server / Web / worker / collector 说明及验证记录。本轮提议阶段仅增加本 ADR、ADR 索引与当前状态，不提前改写已接受专题或现有实现说明。
+接受后需同步领域模型、核心契约、必要决策基线、server / Web / worker / collector 说明及验证记录。提议阶段只增加了本 ADR、ADR 索引与当前状态；接受后的 A 实施同步对应真相源。
 
 ## 首个实现切片与退出判据
 
@@ -198,16 +198,16 @@ B 继续要求原生 Linux 支持文件系统上的真实 controller / agent / w
 
 代价是新增 migration、事件版本、来源配置版本和一个受限采集 profile；收益是用户能看到可解释、可恢复的具体来源，同时不会把人工映射、签名、构建成功或 Component 关联误读为完整交付证明。
 
-## 待所有者确认
+## 所有者确认范围
 
-建议确认以下四点后才将状态改为已接受并实施 A：
+2026-10-13 所有者确认以下范围并授权实施 A：
 
 1. 接受“管理员绑定 Repository + controller 观察 checkout”的证据强度与 UI 表达，首批单仓库 / SHA-1 / 单 checkout，Commit 不独立实体化。
 2. 接受缺少证据时保留终态并显式 unavailable，来源首次写入不可补写 / 覆盖；旧 v1 保持 not_collected。
 3. 接受 A 涉及的 sources / payload v2、不可变 binding、migration、EntityLink、事件 / Activity 和只读 API / Web 范围。
 4. B 的真实采集、依赖和运行资源另行准备；Ticket 具体交付关系与真实 staging 不包含在 A 中。
 
-本轮未修改业务代码、迁移、公共协议实现、依赖或远程状态。文档完成不表示提案已接受；提交与 push 仍须明确要求。
+本次授权包括工作区提案提交、A 实施、必要验证和文档同步；不包括 push、业务实例迁移或 B 的真实 Jenkins 采集。
 
 ## 外部依据与核验局限
 

@@ -82,16 +82,11 @@ var repositoryHostLabel = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9
 // NormalizeRepositoryMetadata uses the same rules for input, digest and safe
 // projection. It never resolves a host, follows a URL or executes Git.
 func NormalizeRepositoryMetadata(m RepositoryMetadata) (RepositoryMetadata, bool) {
-	if m.Provider != "github" && m.Provider != "gitlab" && m.Provider != "gitea" {
-		return m, false
-	}
-	if len(m.ExternalID) < 1 || len(m.ExternalID) > 255 || !utf8.ValidString(m.ExternalID) || strings.ContainsFunc(m.ExternalID, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
-		return m, false
-	}
-	origin, ok := repositoryURL(m.ProviderOrigin, true)
+	originText, ok := NormalizeRepositoryIdentity(m.Provider, m.ProviderOrigin, m.ExternalID)
 	if !ok {
 		return m, false
 	}
+	origin, _ := url.Parse(originText)
 	web, ok := repositoryURL(m.WebURL, false)
 	if !ok || web.Host != origin.Host {
 		return m, false
@@ -106,6 +101,22 @@ func NormalizeRepositoryMetadata(m RepositoryMetadata) (RepositoryMetadata, bool
 	}
 	m.ProviderOrigin, m.WebURL = origin.String(), web.String()
 	return m, true
+}
+
+// NormalizeRepositoryIdentity is shared by owner registration and controlled CI
+// bindings. It validates syntax only and never contacts a provider.
+func NormalizeRepositoryIdentity(provider, origin, externalID string) (string, bool) {
+	if provider != "github" && provider != "gitlab" && provider != "gitea" {
+		return "", false
+	}
+	if len(externalID) < 1 || len(externalID) > 255 || !utf8.ValidString(externalID) || strings.ContainsFunc(externalID, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
+		return "", false
+	}
+	u, ok := repositoryURL(origin, true)
+	if !ok {
+		return "", false
+	}
+	return u.String(), true
 }
 
 func repositoryURL(raw string, origin bool) (*url.URL, bool) {
