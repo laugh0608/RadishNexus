@@ -50,7 +50,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | 顺序 | 下一切片 | 交付与退出判据 |
 | --- | --- | --- |
 | 1 | Project 下的 Ticket 只读发现 | 已按 [ADR-0038](../adr/0038-project-ticket-discovery.md) 完成；成员可从 Project 列表找回已有 Ticket，当前权限、分页与恢复验收见[记录](reviews/2026-10-13-project-ticket-discovery.md) |
-| 2 | Ticket 最小状态流转 | 独立冻结现有四状态的转换、重新打开、并发与事件历史；同步列表和详情，不顺带增加负责人等字段 |
+| 2 | Ticket 最小状态流转 | [ADR-0039](../adr/0039-ticket-status-transitions.md)已提出、未接受 / 实施；审阅四状态转换、重新打开、独立状态版本、精确重试及历史，覆盖列表、详情和创建重试 |
 | 3 | Project 下的 Decision 只读发现 | 找到待确认与已确认结论；拒绝、替代和复核另立写入切片 |
 | 4 | 试用所需身份与运维能力 | 分别设计账号恢复、管理员交接、支持范围与升级失败恢复；外部试用前准备评估授权和故障报告路径，必要设计可提前开展 |
 | 5 | 受控小团队场景试用 | 满足必要条件后观察讨论—决策—工单—文档的持续使用，记录追溯、重复录入与维护者干预；真实交付链未恢复时不宣称完整 Golden Path 通过 |
@@ -66,7 +66,15 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 Go、真实 PostgreSQL、Web 与隔离 HTTPS 浏览器已通过；普通成员无需 ID 找回工单，并继续进入来源、组件和文档。查询证据支持本轮复用现有索引，未新增 migration、依赖、业务字段或写命令；详细证据和规模边界见[实施记录](reviews/2026-10-13-project-ticket-discovery.md)。临时验收资源已停止并清理，没有操作真实 Jenkins 或业务实例。
 
-下一步先提出 Ticket 最小状态流转的独立合同，明确四状态转换、重新打开、并发、事件及列表 / 详情一致性；本次不实施状态流转。真实 Jenkins B 继续暂缓，后续顺位不自动授权实施、资源启动或外部操作。
+ADR-0038 实现与验收文档已按所有者要求提交为 `7ace9b4`，未 push。当前接续为下方 Ticket 状态流转提案，正式实现仍只读展示 open。
+
+### 当前接续：Ticket 最小状态流转提案
+
+[ADR-0039](../adr/0039-ticket-status-transitions.md)为提议，未接受、未实施。建议保留 open / in-progress / done / canceled，显式开始、完成、取消与重新打开；仅当前活跃 Project 的 contributor / decider / admin 可写。独立 status_revision 防止旧页面覆盖重新打开后的工单，精确 receipt 重试确认原操作并重新读取当前状态。
+
+提案同步考虑详情、Project / Component 列表、创建重试与状态事件历史，拟新增一条状态命令和 forward-only migration；具体转换、字段、迁移与验收以 ADR 为准。当前仅新增提案并同步 ADR 索引和本页，没有修改业务实现或已接受合同。下一步审阅确认后再实施，不提前启动状态流转或后续 Decision 列表。
+
+真实 Jenkins B 继续暂缓，后续顺位不自动授权实施、资源启动或外部操作。
 
 ### 交付链保留完成线与恢复顺序
 
