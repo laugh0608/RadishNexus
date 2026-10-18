@@ -113,19 +113,35 @@ export async function request(
     if (signal?.aborted) throw cause;
     throw new AuthRequestError("请求结果尚未确认，可保持原内容重试。");
   }
-  if (!response.ok)
+  if (!response.ok) {
+    let code: string | undefined;
+    try {
+      const payload: unknown = await response.json();
+      const failure = object(object(payload, ["error"]).error, [
+        "code",
+        "message",
+        "request_id",
+      ]);
+      if (typeof failure.code === "string" && /^[a-z_]+$/.test(failure.code))
+        code = failure.code;
+    } catch {
+      /* Status remains authoritative when an error body is unavailable. */
+    }
     throw new AuthRequestError(
-      response.status === 401
-        ? "会话已失效，请重新登录。"
-        : response.status === 403
-          ? "当前没有此项配置权限。"
-          : response.status === 404
-            ? "对象或成员已不可访问，请刷新。"
-            : response.status === 409
-              ? "配置已变化或请求存在冲突，请刷新后重新操作。"
-              : "配置未完成，请检查输入后重试。",
-      { status: response.status },
+      code === "recent_authentication_required"
+        ? "请退出并重新登录，再核对接收人并确认交接。"
+        : response.status === 401
+          ? "会话已失效，请重新登录。"
+          : response.status === 403
+            ? "当前没有此项配置权限。"
+            : response.status === 404
+              ? "对象或成员已不可访问，请刷新。"
+              : response.status === 409
+                ? "配置已变化或请求存在冲突，请刷新后重新操作。"
+                : "配置未完成，请检查输入后重试。",
+      { status: response.status, code },
     );
+  }
   if (!response.headers.get("Content-Type")?.includes("application/json"))
     throw error();
   let payload: unknown;

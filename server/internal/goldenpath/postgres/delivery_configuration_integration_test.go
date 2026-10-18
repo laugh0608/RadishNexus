@@ -221,7 +221,7 @@ func assertConcurrentOwnerAuthorizations(t *testing.T, ctx context.Context, pool
 		t.Fatal(err)
 	}
 	// A second owner is controlled test setup; this slice has no role promotion UI.
-	if _, err = pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role='owner' WHERE workspace_id=$1 AND user_id=$2`, owner.WorkspaceID, member.ID); err != nil {
+	if _, err = pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role_revision=role_revision+CASE WHEN role<>'owner' THEN 1 ELSE 0 END,role='owner' WHERE workspace_id=$1 AND user_id=$2`, owner.WorkspaceID, member.ID); err != nil {
 		t.Fatal(err)
 	}
 	input := func(user, op string) goldenpath.ConfigurationInput {
@@ -254,7 +254,7 @@ func assertConcurrentOwnerAuthorizations(t *testing.T, ctx context.Context, pool
 	if err = pool.QueryRow(ctx, `SELECT NOT changed AND authorization_id=$1 FROM radishnexus.workspace_configuration_audit WHERE scope_id=$2 AND actor_id=$3 AND subject_id=$3`, self.Delivery.ExpectedAuthorization.ID, r.Object.ID, owner.ID).Scan(&unchanged); err != nil || !unchanged {
 		t.Fatal("no-op rewrote provenance", unchanged, err)
 	}
-	if _, err = pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role='member' WHERE workspace_id=$1 AND user_id=$2`, owner.WorkspaceID, member.ID); err != nil {
+	if _, err = pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role_revision=role_revision+CASE WHEN role<>'member' THEN 1 ELSE 0 END,role='member' WHERE workspace_id=$1 AND user_id=$2`, owner.WorkspaceID, member.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = call(member, input(owner.ID, "mutual-grant")); !errors.Is(err, authz.ErrForbidden) {

@@ -1,3 +1,4 @@
+import { OwnerTransferPanel } from "./OwnerTransferPanel";
 import { ciRunPagePath } from "../nexus-view/ci-run-api";
 import { useState, type FormEvent } from "react";
 import type { SessionContext } from "../auth/api";
@@ -18,8 +19,10 @@ export function WorkspaceHome({
   navigate,
   client,
   onSessionExpired,
+  onSessionRefresh = async () => {},
 }: {
   client: DiscoveryClient;
+  onSessionRefresh?: () => Promise<void>;
   onSessionExpired: () => void;
   session: SessionContext;
   navigate: (path: string) => void;
@@ -114,6 +117,13 @@ export function WorkspaceHome({
           <p>你还没有加入工作区。请在“账户与邀请”中接受邀请。</p>
         ) : (
           <>
+            <OwnerTransferPanel
+              key={`owner:${session.user.id}:${workspaceID}`}
+              workspaceID={workspaceID}
+              userID={session.user.id}
+              onSessionExpired={onSessionExpired}
+              onChanged={onSessionRefresh}
+            />
             {session.workspaces.find(
               (workspace) => workspace.id === workspaceID,
             )?.role === "owner" ? (
@@ -132,7 +142,7 @@ export function WorkspaceHome({
               />
             ) : null}
             <DeliveryConfigurationPanel
-              key={`delivery:${workspaceID}`}
+              key={`delivery:${workspaceID}:${session.workspaces.find((w) => w.id === workspaceID)?.role}`}
               workspaceID={workspaceID}
               workspaceName={
                 session.workspaces.find((w) => w.id === workspaceID)?.name ??

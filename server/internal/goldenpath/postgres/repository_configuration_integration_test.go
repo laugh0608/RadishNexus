@@ -171,7 +171,7 @@ func assertRepositoryConfigurationFromBootstrap(t *testing.T, ctx context.Contex
 	}
 	// Different actors racing to map one identity or associate one pair must
 	// produce one success and one conflict, independent of receipt scope.
-	if _, e := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role='owner' WHERE workspace_id=$1 AND user_id=$2`, owner.WorkspaceID, member.ID); e != nil {
+	if _, e := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role_revision=role_revision+CASE WHEN role<>'owner' THEN 1 ELSE 0 END,role='owner' WHERE workspace_id=$1 AND user_id=$2`, owner.WorkspaceID, member.ID); e != nil {
 		t.Fatal(e)
 	}
 	concurrent := func(in goldenpath.ConfigurationInput) goldenpath.ConfigurationResult {
@@ -214,7 +214,7 @@ func assertRepositoryConfigurationFromBootstrap(t *testing.T, ctx context.Contex
 	other.ClientOperationID = "concurrent-link"
 	other.Repository = &goldenpath.RepositoryConfigurationInput{RepositoryID: concurrentRepo.ID, Confirmed: true}
 	concurrent(other)
-	if _, e := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role='member' WHERE workspace_id=$1 AND user_id=$2`, owner.WorkspaceID, member.ID); e != nil {
+	if _, e := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role_revision=role_revision+CASE WHEN role<>'member' THEN 1 ELSE 0 END,role='member' WHERE workspace_id=$1 AND user_id=$2`, owner.WorkspaceID, member.ID); e != nil {
 		t.Fatal(e)
 	}
 	// Same repository can be mapped to another Component without copying it.

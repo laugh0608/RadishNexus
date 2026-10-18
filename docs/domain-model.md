@@ -63,6 +63,8 @@ Project、Initiative、Component、Decision、Environment 和 EntityLink 共享�
 
 身份模型按 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 分离用户、账户状态、本地密码凭证与外部身份。正式本地凭证采用规范化邮箱，展示名独立；Radish OIDC 以 exact `(issuer, subject)` 关联本地用户，两种认证都进入 Nexus Session。旧登录名到邮箱使用管理员显式映射，不改变稳定用户 ID，不自动合并账户或继承上游权限。迁移与当前实现完成线分别见 ADR 和[当前状态](status/current.md)。
 
+Workspace owner 主动交接按 [ADR-0042](adr/0042-workspace-owner-handoff.md) 由近期认证的当前 owner 明确确认，向同 Workspace 已有 active member 原子移交：接收人升为 owner，操作者降为 member，各自 `role_revision` 加一；其他 owner 和全部对象级权限不变。代次检查防止角色回转后的旧请求复用，邀请绑定创建者任期，旧任期邀请不会因重新接任而复活。操作者仍是有效成员时可查询本人的最小历史成功；该例外不开放其他配置审计或恢复管理权。此能力不包含应急接管、成员停用或完整离职流程。
+
 首位管理员初始化按 [ADR-0027](adr/0027-first-visit-administrator-setup.md) 创建一个本地账户与 Workspace owner；网页凭部署者的一次性初始化码，CLI 使用既有运维入口，两者共享唯一事务锁。该流程不产生跨 Workspace 的超级权限，也不自动建立业务对象或 Session；任何账户已存在后不重新开放。
 
 ### Team
@@ -90,7 +92,7 @@ M0 最小字段：
 
 `workspace` 表示 Workspace 成员默认可发现，`restricted` 表示必须通过显式成员或角色授权。Project 的可见性只提供默认边界，不能自动放宽其中私密 Channel、Conversation、Document 或其它对象的权限。归档 Project 不级联删除其内容或关系。
 
-创建与首批成员配置遵循 [ADR-0026](adr/0026-foundation-configuration-and-membership.md)：owner 显式指定本人为新 Project 的初始 admin；现有 admin 只能配置其他成员的 viewer / contributor / decider，管理权交接独立延后。restricted Channel 配置同时要求 Project admin 与 Channel membership。撤销 Project 角色会清理该成员在其下的显式 Channel / Thread 授权，重新加入不恢复历史私密授权。工作区可见项目的只读基线仍保留。
+创建与首批成员配置遵循 [ADR-0026](adr/0026-foundation-configuration-and-membership.md)：owner 显式指定本人为新 Project 的初始 admin；现有 admin 只能配置其他成员的 viewer / contributor / decider，Project admin 交接独立延后。restricted Channel 配置同时要求 Project admin 与 Channel membership。撤销 Project 角色会清理该成员在其下的显式 Channel / Thread 授权，重新加入不恢复历史私密授权。工作区可见项目的只读基线仍保留。
 
 ### Initiative
 

@@ -52,6 +52,23 @@ env \
     GOCACHE="${run_dir}/go-cache" \
     go test -c -tags=integration -o "${run_dir}/backuprestore.test" ./internal/backuprestore
 
+# Optional real pre-handoff artifact check. Resolve only a local commit; this
+# never fetches, switches branches, edits the checkout, or rewrites history.
+legacy_artifact_dir=""
+if [[ -n "${RADISHNEXUS_OWNER_TRANSFER_LEGACY_REF:-}" ]]; then
+    legacy_commit="$(git -C "${repo_root}" rev-parse --verify "${RADISHNEXUS_OWNER_TRANSFER_LEGACY_REF}^{commit}")"
+    mkdir -p "${run_dir}/legacy-source" "${run_dir}/legacy-bin"
+    git -C "${repo_root}" archive "${legacy_commit}" server | tar -xf - -C "${run_dir}/legacy-source"
+    (
+        cd "${run_dir}/legacy-source/server"
+        for command in nexus-migrate nexus-bootstrap nexus-backup nexus-restore; do
+            env CGO_ENABLED=0 GOOS=linux GOARCH="${image_architecture}" GOCACHE="${run_dir}/go-cache" \
+                go build -o "${run_dir}/legacy-bin/${command}" "./cmd/${command}"
+        done
+    )
+    legacy_artifact_dir="/work/legacy-bin"
+fi
+
 docker network create "${network_name}" >/dev/null
 
 docker run \
@@ -115,8 +132,9 @@ target_database_url="postgres://${database_user}:${database_password}@${target_c
 
 docker exec \
     --env "SOURCE_DATABASE_URL=${source_database_url}" \
+    --env "RADISHNEXUS_OWNER_TRANSFER_LEGACY_BIN=${legacy_artifact_dir}" \
     --env "TARGET_DATABASE_URL=${target_database_url}" \
     "${source_container}" \
     /work/backuprestore.test \
     -test.v \
-    -test.run '^TestBackupRestore(GoldenPath|AccountRecovery)$'
+    -test.run '^TestBackupRestore(GoldenPath|AccountRecovery|OwnerTransfer|OwnerTransferLegacy)$'

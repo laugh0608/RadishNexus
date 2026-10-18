@@ -468,7 +468,7 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	}
 	if _, err := pool.Exec(ctx, `
         INSERT INTO radishnexus.external_identities(user_id,issuer,subject,created_at) VALUES ('usr_admin','https://radish.example.test','backup-fixture-subject',now());
-        INSERT INTO radishnexus.identity_invitations(id,token_digest,workspace_id,created_by,created_at,expires_at) VALUES ('inv_backup',decode(repeat('33',32),'hex'),'wrk_backup','usr_admin',now(),now()+interval '24 hours');
+        INSERT INTO radishnexus.identity_invitations(id,token_digest,workspace_id,created_by,created_at,expires_at,creator_role_revision) VALUES ('inv_backup',decode(repeat('33',32),'hex'),'wrk_backup','usr_admin',now(),now()+interval '24 hours',1);
         INSERT INTO radishnexus.oidc_transactions(state_digest,browser_digest,nonce_digest,provider_digest,created_at,expires_at) VALUES (decode(repeat('44',32),'hex'),decode(repeat('55',32),'hex'),decode(repeat('66',32),'hex'),decode(repeat('77',32),'hex'),now(),now()+interval '5 minutes');
     `); err != nil {
 		t.Fatalf("seed federated backup fixture: %v", err)

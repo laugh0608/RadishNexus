@@ -201,6 +201,9 @@ Activity 不是 Outbox 的副本。Outbox 用于可靠投递，Activity 是可�
 
 本地账户受控恢复按 [ADR-0041](../adr/0041-controlled-local-account-recovery.md) 由独立运维 CLI 执行：账户 → 凭证锁内复核版本与状态，密码更新、全账户旧 Session 撤销和 operator 成功审计原子提交。migration 017 扩展既有 `identity_audit`，保留旧 user actor，分离 operator / target、唯一 operation_id 与前后密码版本；恢复记录不可变并纳入权威备份。status 只证明历史提交，模糊提交不可当作回滚。失败登录按校验时的凭证版本匹配，恢复不改变授权、外部身份或业务 Activity；该能力依赖宿主 / 数据库运维授权，产品 owner 无对应 HTTP 权限。旧备份可能带回旧 verifier，必须在隔离目标重新核验和恢复。
 
+Workspace owner 主动交接按 [ADR-0042](../adr/0042-workspace-owner-handoff.md) 使用独立配置命令：排序锁定双方账户，再锁 Session、排序锁定双方 membership，最后锁 Workspace；全部等待后复核有效期、近期认证和预期代次。双角色 / revision、配置 Audit 和 receipt 原子提交，不获取邀请或业务对象锁。migration 018 增加角色代次、邀请任期绑定和交接审计形状；历史成功仅允许当前有效成员读取本人最小结果，其他配置命令仍按当前管理权检查。提交确认丢失通过原 operation ID 查询，不自动生成新操作；不新增 Activity / Outbox 或全局最后 owner 约束。
+
+
 当前白名单事件已在业务事务内同步投影，提交成功后重新读取即可看到对应对象的 Timeline；失败回滚整笔业务。显式全量重建与正常投影共用映射，并通过先锁定投影表、再取源事件快照避免丢失并发提交。Thread / Decision 的反向关系从同一 EntityLink 查询，继续复用当前权限；精确时效、方向、升级与运行成本见 [ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md)。
 
 M0 契约把不可变领域事件事实与可变投递状态作逻辑分离，避免已投递 Outbox 清理后无法重建 Activity 或验证备份；具体一表或分表由 PostgreSQL 原型决定。详见[核心实体、授权与事件契约](core-contracts.md)和 [ADR-0002](../adr/0002-stable-entity-reference-and-event-projection.md)。
@@ -247,7 +250,7 @@ canonical Channel Web 对 SSE 使用“先建立连接并收到 `ready`、再读
 
 M0.5 已建立第一条可验证恢复路径：显式命令生成版本化 manifest 与 PostgreSQL custom archive，只在本地或受控私有连接的全新空 PostgreSQL 17 目标上以单事务恢复，随后执行正式 forward-only migration 校验并从不可变领域事件重建 Activity。当前工件是同 major 整库运维备份，不是 `.nexus` 开放导出，也不包含自动覆盖、TLS 工具桥接、跨大版本承诺、远程存储、加密或 Secret 备份。精确边界见 [ADR-0010](../adr/0010-verified-postgresql-backup-and-restore.md)。
 
-M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 Caddy 是唯一宿主 HTTPS 入口，Go server 同源交付 production Web build 与 API，PostgreSQL 只位于内部数据网络；migration、一次性 bootstrap、account-recover、backup 和 restore 继续使用现有显式 CLI，数据库密码通过按 service 挂载的文件 Secret 输入。该拓扑已经从全新命名 volume 验证 PostgreSQL readiness、migration、一次 bootstrap、重复 bootstrap 拒绝、HTTPS login / Session / logout、转发 Header 清洗和非公开应用/数据库端口；它仍不是公网证书、高可用或跨 major 升级方案。Go 业务就绪探针现按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 只读核对完整 migration history，缺失、漂移或版本不匹配返回不可用。2026-10-18 已验证当前 migration 017 工件的全新 Compose 装配、Secret 实际挂载、就绪探针、恢复 CLI 与 HTTPS / SSE；旧 016 工件备份在隔离空目标恢复后显式升级亦已验证。网页 setup overlay、Document / 交付全链、生产带流量升级和通用升级中断恢复不由本轮替代，精确范围见[恢复实施记录](../status/reviews/2026-10-18-controlled-account-recovery.md)。拓扑边界见 [ADR-0016](../adr/0016-minimal-docker-compose-self-hosting.md) 和 [`deploy/README.md`](../../deploy/README.md)。
+M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 Caddy 是唯一宿主 HTTPS 入口，Go server 同源交付 production Web build 与 API，PostgreSQL 只位于内部数据网络；migration、一次性 bootstrap、account-recover、backup 和 restore 继续使用现有显式 CLI，数据库密码通过按 service 挂载的文件 Secret 输入。该拓扑已经从全新命名 volume 验证 PostgreSQL readiness、migration、一次 bootstrap、重复 bootstrap 拒绝、HTTPS login / Session / logout、转发 Header 清洗和非公开应用/数据库端口；它仍不是公网证书、高可用或跨 major 升级方案。Go 业务就绪探针现按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 只读核对完整 migration history，缺失、漂移或版本不匹配返回不可用。2026-10-18 已验证 migration 017 工件的全新 Compose 装配、Secret 实际挂载、就绪探针、恢复 CLI 与 HTTPS / SSE；旧 016 工件备份在隔离空目标恢复后显式升级亦已验证。网页 setup overlay、Document / 交付全链、生产带流量升级和通用升级中断恢复不由本轮替代，精确范围见[恢复实施记录](../status/reviews/2026-10-18-controlled-account-recovery.md)。后续 migration 018 工件的 Compose HTTPS、owner 交接和旧 017 工件恢复证据见[交接实施记录](../status/reviews/2026-10-18-workspace-owner-handoff.md)。拓扑边界见 [ADR-0016](../adr/0016-minimal-docker-compose-self-hosting.md) 和 [`deploy/README.md`](../../deploy/README.md)。
 
 ### 可移植上下文包
 
@@ -273,7 +276,7 @@ M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 
 
 ### Project / Channel 发现入口
 
-首页按 [ADR-0025](../adr/0025-project-and-channel-discovery.md) 提供 Workspace 内的 Project 与 Channel 只读发现。服务端在一致的当前权限快照中先过滤后分页，客户端只渲染安全条目并进入既有 canonical 页面；列表不增加角色能力，也不取代最终对象读取时的复权。[ADR-0026](../adr/0026-foundation-configuration-and-membership.md) 已接通 owner 创建 Team / Project、显式初始 admin、Project admin 创建 Channel 与配置普通成员；受限 Channel 管理仍要求明确成员资格。配置 Audit / receipt 随 migration 009 保留，撤权清理下属私密授权，精确重试不复权；管理员交接仍独立推进。
+首页按 [ADR-0025](../adr/0025-project-and-channel-discovery.md) 提供 Workspace 内的 Project 与 Channel 只读发现。服务端在一致的当前权限快照中先过滤后分页，客户端只渲染安全条目并进入既有 canonical 页面；列表不增加角色能力，也不取代最终对象读取时的复权。[ADR-0026](../adr/0026-foundation-configuration-and-membership.md) 已接通 owner 创建 Team / Project、显式初始 admin、Project admin 创建 Channel 与配置普通成员；受限 Channel 管理仍要求明确成员资格。配置 Audit / receipt 随 migration 009 保留，撤权清理下属私密授权，精确重试不复权；Workspace owner 主动交接已按 ADR-0042 接通；Project admin / 私密对象管理权交接仍独立推进。
 
 ## 当前仓库布局
 

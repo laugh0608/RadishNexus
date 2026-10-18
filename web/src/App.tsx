@@ -16,7 +16,13 @@ import { SetupGate } from "./auth/SetupGate";
 import { browserSetupClient, type SetupClient } from "./auth/setup-api";
 import { WorkspaceHome } from "./workspace/WorkspaceHome";
 import { browserDiscoveryClient, type DiscoveryClient } from "./workspace/api";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { IdentityLogin } from "./auth/IdentityLogin";
 import { IdentityPanel } from "./auth/IdentityPanel";
 import {
@@ -248,6 +254,10 @@ function AuthenticatedApp({
     setAuthentication({ status: "signed-out" });
   }, []);
 
+  const acceptSession = useCallback((session: SessionContext) => {
+    setAuthentication({ status: "signed-in", session });
+  }, []);
+
   if (authentication.status === "loading") {
     return (
       <ShellState
@@ -288,6 +298,7 @@ function AuthenticatedApp({
   }
   return (
     <SignedInShell
+      key={authentication.session.user.id}
       route={route}
       session={authentication.session}
       authClient={authClient}
@@ -299,9 +310,7 @@ function AuthenticatedApp({
       loadDeployment={loadDeployment}
       navigate={navigate}
       onSignedOut={requireLogin}
-      onSession={(session) =>
-        setAuthentication({ status: "signed-in", session })
-      }
+      onSession={acceptSession}
     />
   );
 }
@@ -432,6 +441,46 @@ function SignedInShell({
     },
     [authClient],
   );
+  const sessionRefresh = useRef({ generation: 0, active: true });
+  const refreshSession = useCallback(async () => {
+    const generation = ++sessionRefresh.current.generation;
+    try {
+      const next = await authClient.resolveSession();
+      if (
+        sessionRefresh.current.active &&
+        generation === sessionRefresh.current.generation
+      )
+        onSession(next);
+    } catch (error) {
+      if (
+        sessionRefresh.current.active &&
+        generation === sessionRefresh.current.generation
+      )
+        throw error;
+    }
+  }, [authClient, onSession]);
+  useEffect(() => {
+    sessionRefresh.current.active = true;
+    const refresh = () => {
+      void refreshSession().catch((error: unknown) => {
+        if (error instanceof AuthRequestError && error.status === 401)
+          onSignedOut();
+      });
+    };
+    const visible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("pageshow", refresh);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      sessionRefresh.current.active = false;
+      sessionRefresh.current.generation++;
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("pageshow", refresh);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [refreshSession, onSignedOut]);
   const currentWorkspace =
     route.kind === "deployment" ||
     route.kind === "component" ||
@@ -480,6 +529,7 @@ function SignedInShell({
     >
       {route.kind === "account" ? (
         <IdentityPanel
+          key={session.workspaces.map((w) => `${w.id}:${w.role}`).join(";")}
           client={identityClient}
           session={session}
           navigate={navigate}
@@ -488,6 +538,7 @@ function SignedInShell({
         />
       ) : route.kind === "home" ? (
         <WorkspaceHome
+          onSessionRefresh={refreshSession}
           session={session}
           navigate={navigate}
           client={discoveryClient}

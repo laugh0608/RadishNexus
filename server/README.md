@@ -94,7 +94,7 @@ python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Emai
 
 [ADR-0041](../docs/adr/0041-controlled-local-account-recovery.md) 的 `nexus-account-recover` 是显式部署运维命令，常驻 server 不装配恢复 HTTP / Web 路由。仅支持已有 active 账户及 active、已映射邮箱的本地凭证；disabled、OIDC-only、legacy 未映射、目标不存在或预期邮箱 / 密码版本不一致均拒绝。暂时锁定可在成功恢复时解除。操作者须拥有目标实例运维授权，独立核实账户归属，确认影响同一 user 的所有 Workspace；产品 owner 身份本身不提供这个权限。
 
-先部署匹配 migration 017 的服务与 operations 工件，显式迁移，再按 `inspect → apply → status` 使用。三个子命令均要求 `--request-stdin`，最多 8 KiB 的单个 UTF-8 JSON object；未知 / 重复字段、null、尾随 JSON、错误类型、未配对 surrogate 和不规范标识均拒绝。不得把邮箱或密码放进 shell 参数、环境变量、普通文件、历史或日志。Compose 的无回显操作示例见[部署说明](../deploy/README.md#本地账户受控恢复)。
+先部署匹配当前 migration 018（含 017 恢复审计）的服务与 operations 工件，显式迁移，再按 `inspect → apply → status` 使用。三个子命令均要求 `--request-stdin`，最多 8 KiB 的单个 UTF-8 JSON object；未知 / 重复字段、null、尾随 JSON、错误类型、未配对 surrogate 和不规范标识均拒绝。不得把邮箱或密码放进 shell 参数、环境变量、普通文件、历史或日志。Compose 的无回显操作示例见[部署说明](../deploy/README.md#本地账户受控恢复)。
 
 | 命令 | JSON 字段 | 返回 |
 | --- | --- | --- |
@@ -152,15 +152,32 @@ go run ./cmd/nexus-identity-migrate --mapping-stdin < /path/to/private-identity-
 
 命令只处理尚未映射的旧凭证；重复邮箱、重复用户、无效邮箱或未知 / 已映射用户使整批回滚。它不重置密码、不激活禁用账户、不改变业务关联，不在成功或失败输出中打印邮箱。妥善删除不再需要的私有输入材料，不将其提交或放入可移植导出。
 
-新成员由 owner 在 `/account` 创建邀请码，24 小时内单次兑换为 `member`；兑换时重查创建者当前 owner 权限。已有账户应先登录再接受邀请；未登录创建账户时，重复邮箱只返回冲突，不把请求登录为已有用户。无公开注册或自动授予 Project / Environment 权限。
+新成员由 owner 在 `/account` 创建邀请码，24 小时内单次兑换为 `member`；兑换时重查创建者当前 active 账户、owner membership 和邀请绑定的 role_revision，旧任期邀请不会因重新接任而复活。已有账户应先登录再接受邀请；未登录创建账户时，重复邮箱只返回冲突，不把请求登录为已有用户。无公开注册或自动授予 Project / Environment 权限。
 
 本地账户与邀请入口为 `GET /api/v1/auth/methods`、`GET /api/v1/auth/account`、`POST /api/v1/workspaces/{workspace_id}/invitations` 与 `POST /api/v1/auth/invitations/accept`；精确合同见 [ADR-0023](../docs/adr/0023-local-account-and-radish-oidc-login.md)。当前装配只开放本地方式，`methods` 的 `radish` 为 `false`；真实 OIDC provider 与 Radish 联调属于未来规划，当前不新增相关依赖；测试 provider 只验证内部事务边界。
+
+## Workspace owner 主动交接
+
+[ADR-0042](../docs/adr/0042-workspace-owner-handoff.md) 在 `/api/v1/workspaces/{workspace_id}` 下提供：
+
+| 接口 | 合同 |
+| --- | --- |
+| `GET /ownership` | 当前本人角色、十进制字符串代次、owner 能力与近期认证状态 |
+| `GET /owner-transfer-candidates` | owner 读取同工作区 active member 的稳定 ID、展示名与代次；默认 25、最大 50，cursor 绑定 Workspace / actor / kind |
+| `POST /owner-transfers` | 严格 8 KiB JSON：`client_operation_id`、`target_user_id`、双方 `expected_*_role_revision`、`confirmed=true` |
+| `GET /owner-transfers/{client_operation_id}` | 当前有效成员查询本人的 `applied` 历史事实或 `not_observed` |
+
+首次写入要求最近 10 分钟内认证的有效 owner Session，双方有效且代次匹配；在锁内原子交换 owner / member，递增代次并追加配置 Audit / receipt。不是通用角色编辑器；Project / Channel / Thread 与 Deployment 显式权限保持。完整 JSON、错误和不可发现性规则见 ADR。
+
+成功降级者仍可用原请求精确重试或查询自己的最小历史结果；其他配置命令不享有此例外。相同操作 ID 换目标或版本返回冲突。`503 result_unconfirmed`、网络中断或其他 5xx 后查询原 ID；`not_observed` 不能证明回滚，也不能排除在途提交。历史结果不代表现在角色，须重新读取 ownership / Session。
+
+migration 018 与 Go / Web 配套升级，旧 schema readiness 不通过。角色与代次、审计和 receipt 纳入权威备份，Session / 邀请 / OIDC 事务不恢复。旧备份可能带回交接前 owner，恢复后必须重新核对管理责任，不自动重放交接。实现与并发 / 恢复证据见[记录](../docs/status/reviews/2026-10-18-workspace-owner-handoff.md)。
 
 ## Authenticated Web Shell
 
 正式 Web 页面为：
 
-- `/`：Session 检查、首次访问管理员初始化、邮箱登录、邀请兑换、Workspace 选择、Project / Channel 浏览、基础对象与首批成员配置、Component / Environment 配置与环境授权、次级已知 ID 入口和 logout；
+- `/`：Session 检查、首次访问管理员初始化、邮箱登录、邀请兑换、Workspace 选择、Project / Channel 浏览、基础对象与首批成员配置、Workspace owner 主动交接及本人操作查询、Component / Environment 配置与环境授权、次级已知 ID 入口和 logout；
 - `/account`：当前账户登录方式、owner 创建邀请码、当前用户接受邀请；
 - `/workspaces/{workspace_id}/ci-runs/{ci_run_id}`：读取正式 CI Run 安全 DTO，查看终态、Component 与完成活动；
 - `/workspaces/{workspace_id}/deployments/{deployment_id}`：先验证 Session，再消费正式 Deployment Nexus View DTO；

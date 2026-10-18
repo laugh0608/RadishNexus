@@ -81,9 +81,17 @@ Project 名称 / 归档状态与列表共用请求代次；任一失败清空二
 
 ## 基础对象与成员配置
 
-`workspace/ConfigurationPanel.tsx` 提供 owner 的 Team / Project 创建、显式初始 admin 确认、Project 普通成员角色配置、Channel 创建与受限成员管理；`configuration-api.ts` 校验专用响应。成员选择使用稳定 ID 与展示名区分重名，不返回邮箱。界面说明撤权会清除从属私密授权；管理权交接尚未开放。
+`workspace/ConfigurationPanel.tsx` 提供 owner 的 Team / Project 创建、显式初始 admin 确认、Project 普通成员角色配置、Channel 创建与受限成员管理；`configuration-api.ts` 校验专用响应。成员选择使用稳定 ID 与展示名区分重名，不返回邮箱。界面说明撤权会清除从属私密授权；Project admin / 私密对象管理权交接尚未开放。
 
 写请求复用现有同源 Session / CSRF；连续点击被阻止，网络或 5xx 模糊失败保留原 operation ID，成功后重新读取当前列表。配置面板和分页在刷新、焦点复核与作用域切换时清理旧数据，取消或忽略迟到结果。普通配置能力由服务端返回，客户端显示不构成授权。首次访问通过 `auth/SetupGate.tsx` 与 `setup-api.ts` 实现 [ADR-0027](../docs/adr/0027-first-visit-administrator-setup.md)：Session 确认未登录后读取初始化状态，required 展示首位管理员表单，complete 进入正式登录，unavailable 提示部署者配置。状态读取失败可重试；提交后清理码与密码，模糊结果必须重新检查状态，不自动重放创建。
+
+## Workspace owner 主动交接
+
+首页 `workspace/OwnerTransferPanel.tsx` 与 `owner-transfer-api.ts` 实现 [ADR-0042](../docs/adr/0042-workspace-owner-handoff.md)。owner 从当前候选中按展示名和稳定 ID 选人，明确确认后提交双方角色代次；近期认证不足提示重新登录。界面说明原有 Project admin 和 Deployment 显式权限保留。普通成员仍可打开本人历史结果查询，不能读取候选或发起新交接。
+
+不确定结果保留原 operation ID 与原请求于页面内存，允许复制 ID、主动查询及原样重试；`not_observed` 不表示回滚。关闭面板保留在途结果，刷新或重登后可粘贴 ID 查询；丢失原请求后不使用当前代次重新构造。粘贴 ID 查询未观察到结果或失败时，在页面内保留未确认 ID 并禁用新交接；清空输入或查询另一笔成功不能解除原操作保护，对应历史成功确认后解除。换账户或 Workspace 清理原操作，不写 Web Storage。
+
+成功、focus、pageshow 与可见性恢复重新读取当前 ownership / Session；迟到 Session 响应不能覆盖新一轮状态。角色变化清理 owner 管理候选、配置和未交付的邀请码；保留仍有权读取的项目。历史结果只描述当时事实，不推断当前 owner。桌面、390px 手机、键盘、同名消歧和响应丢失证据见[实施记录](../docs/status/reviews/2026-10-18-workspace-owner-handoff.md)。
 
 ## 共享工作台
 

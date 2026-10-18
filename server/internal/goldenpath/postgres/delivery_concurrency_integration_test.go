@@ -19,7 +19,7 @@ func TestEnvironmentRevocationSerializesWithDeployment(t *testing.T) {
 			ctx, pool, core, build := stagingDatabase(t)
 			config := goldenpath.NewConfigurationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
 			input := stagingInput(build("succeeded"))
-			if _, err := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role='owner' WHERE workspace_id='wrk_main' AND user_id='usr_admin'`); err != nil {
+			if _, err := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role_revision=role_revision+CASE WHEN role<>'owner' THEN 1 ELSE 0 END,role='owner' WHERE workspace_id='wrk_main' AND user_id='usr_admin'`); err != nil {
 				t.Fatal(err)
 			}
 			// Pause the first formal command after it holds its permission locks.

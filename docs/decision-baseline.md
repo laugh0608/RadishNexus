@@ -186,6 +186,7 @@
 ### D-022 基础配置与最小 Document
 
 - 基础对象创建与首批普通成员管理按 [ADR-0026](adr/0026-foundation-configuration-and-membership.md) 实施；创建 Project 必须明确初始 admin，受限 Channel 保留窄授权，撤权清理从属权限，Audit 与 receipt 不可变。管理员交接不由普通成员配置隐式完成。
+- Workspace owner 主动交接按 [ADR-0042](adr/0042-workspace-owner-handoff.md) 由近期认证的当前 owner 明确确认，向已有 active member 原子移交，双角色代次与邀请任期绑定防止旧请求和旧邀请复活；全部对象级权限保持。当前有效成员仅可确认本人最小历史成功，不因此恢复管理权或读取其他配置审计；应急接管与 Project admin 交接仍独立设计。
 - 最小 Document 按 [ADR-0028](adr/0028-minimal-markdown-document.md) 冻结身份、Project 权限、权威 Markdown、不可变版本、显式保存 / 冲突 / 恢复与 Ticket 来源关系；正式实现已接通，验收成熟度由[当前状态](status/current.md)维护。后续结构化编辑与 CRDT 仍按 ADR-0021 分阶段推进。
 
 ### D-023 同一官方客户端连接官方与自部署实例

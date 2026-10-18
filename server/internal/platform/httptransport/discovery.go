@@ -40,6 +40,7 @@ type DiscoveryHandler struct {
 }
 
 type discoveryCursor struct {
+	ActorID     string `json:"actor_id,omitempty"`
 	CIRunID     string `json:"ci_run_id,omitempty"`
 	Version     int    `json:"v"`
 	WorkspaceID string `json:"workspace_id"`
@@ -253,6 +254,9 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 }
 
 func discoveryPrefix(kind string) string {
+	if kind == "owner-transfer-candidates" {
+		return "usr_"
+	}
 	if kind == "decision" {
 		return "dec_"
 	}

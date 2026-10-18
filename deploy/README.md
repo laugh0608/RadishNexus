@@ -167,17 +167,31 @@ docker compose -f deploy/compose.yaml down
 
 ## 当前 schema 与演练证据
 
-当前源码构建的工件包含 migration 016 和 Activity v7。checkout binding / built-from、Ticket 状态版本与精确 receipt，以及既有对象和关系均纳入权威备份；恢复后显式重建 Activity。014→015 的混合来源恢复与 015→016 的状态升级证据分别见[checkout 来源记录](../docs/status/reviews/2026-10-13-checkout-provenance.md)和[Ticket 状态记录](../docs/status/reviews/2026-10-13-ticket-status-transitions.md)。
+当前源码构建的工件包含 migration 018 和 Activity v7。checkout binding / built-from、Ticket 状态版本与精确 receipt，以及既有对象和关系均纳入权威备份；恢复后显式重建 Activity。014→015 的混合来源恢复与 015→016 的状态升级证据分别见[checkout 来源记录](../docs/status/reviews/2026-10-13-checkout-provenance.md)和[Ticket 状态记录](../docs/status/reviews/2026-10-13-ticket-status-transitions.md)。
 
 Go、Web 与 schema 必须配套更新，不支持跨 schema 版本滚动兼容。升级前停写并保留备份；016 只允许旧 Ticket 全为 open 的合法基线，异常状态须先调查，不手改状态绕过保护。升级后旧二进制不能直接回退，需要恢复升级前备份到全新目标或独立验证 forward repair，并明确备份点后的数据取舍。应用缓存启动时的静态入口，须发布完整匹配的 Web build 并重启应用，不能在运行中替换资源后继续沿用旧入口；浏览器须重新加载。
 
-这些隔离数据库与浏览器结果不代表业务实例已迁移，也不代替完整 Compose 镜像升级演练。2026-10-18 已验收当前 migration 017 工件的全新 Compose、文件 Secret、就绪探针与账号恢复；旧 016 工件空目标恢复后显式升级已有独立证据。后续业务全链、生产带流量升级和通用升级中断恢复仍须独立验收，见[本轮记录](../docs/status/reviews/2026-10-18-controlled-account-recovery.md)。
+这些隔离数据库与浏览器结果不代表业务实例已迁移，也不代替完整 Compose 镜像升级演练。2026-10-18 已验收 migration 017 工件的全新 Compose、文件 Secret、就绪探针与账号恢复；旧 016 工件空目标恢复后显式升级已有独立证据。后续业务全链、生产带流量升级和通用升级中断恢复仍须独立验收，见[本轮记录](../docs/status/reviews/2026-10-18-controlled-account-recovery.md)。
+
+## Workspace owner 主动交接与恢复
+
+当前 migration 018 为 Workspace membership 增加角色代次，为邀请绑定创建者任期，并扩展不可变配置审计 / receipt。与匹配的 Go / Web 一起升级；停写、使用旧工件备份、显式 migration、部署新工件后检查 readiness。既有 membership 从代次 1 开始，有效旧邀请绑定该代次，失效邀请不会恢复；迁移不修复零 owner 实例。交接使用 Web Session 权限，不提供运维强制 owner 接管入口，见 [ADR-0042](../docs/adr/0042-workspace-owner-handoff.md)。
+
+同版本备份保留角色、代次与交接历史；恢复不带回 Session、邀请或 OIDC 事务。恢复 017 旧备份会带回备份时的 owner，并可能缺少后来成功的交接 receipt；必须用匹配旧工件恢复到全新隔离目标，再显式升级、重新登录并核验实际管理责任，不从原实例操作 ID 自动重放交接，也不重新 bootstrap。
+
+本轮已用本地 `333c4ce` 旧工件验证该恢复链，见[实施记录](../docs/status/reviews/2026-10-18-workspace-owner-handoff.md)。复验命令从仓库根运行，需要另行授权隔离 Docker 资源：
+
+```bash
+RADISHNEXUS_OWNER_TRANSFER_LEGACY_REF=333c4ce ./scripts/check-server-backup-restore.sh
+```
+
+脚本只读取本地 Git 对象并在临时目录构建旧工具，不 fetch 或切换工作区；默认未指定旧 ref 时只验证同版本恢复，旧工件测试明确跳过。此证据不等同生产带流量升级或通用升级中断恢复。
 
 ## 本地账户受控恢复
 
 使用 [ADR-0041](../docs/adr/0041-controlled-local-account-recovery.md) 的独立 `account-recover` operations service。该 service 默认不运行，二进制不进入常驻 server 镜像。部署者须先独立核实恢复请求和账户归属，核对部署目录、Compose project、数据库 Secret 与目标实例；备份副本可能拥有相同 user ID，inspect 不构成实例身份认证。此入口能接管目标全局账户，需要宿主 / 数据库运维授权；Workspace owner 身份不能替代运维授权。
 
-升级窗口先停写，使用匹配的旧工件留存受控备份，再显式运行新 migration 017，并部署匹配的新 app / operations。不得与恢复命令并行迁移；readiness 会拒绝旧、漂移或较新的 schema，但不是升级锁。若要求没有任何已认证的在途操作，先摘流并等待 app 停止；恢复命令本身不停止服务。已有运行授权之外的生产升级、备份位置与保留策略须独立确定。
+升级窗口先停写，使用匹配的旧工件留存受控备份，再显式运行当前 migration 018（含 017 恢复审计），并部署匹配的新 app / operations。不得与恢复命令并行迁移；readiness 会拒绝旧、漂移或较新的 schema，但不是升级锁。若要求没有任何已认证的在途操作，先摘流并等待 app 停止；恢复命令本身不停止服务。已有运行授权之外的生产升级、备份位置与保留策略须独立确定。
 
 下列命令从仓库根执行，使用前面配置的 Compose 环境和文件 Secret。`getpass` 从终端无回显读取；不要用真实值替换成命令参数或环境变量，也不要保存密码 JSON。先 inspect：
 
@@ -227,6 +241,8 @@ python3 -c 'import getpass,json; print(json.dumps({"user_id":getpass.getpass("Or
 ./scripts/check-self-hosted-compose.sh
 ```
 
-脚本只使用本次生成的随机 Compose project、临时 Secret、随机 HTTPS 端口和全新命名 volumes。它验证静态配置、镜像构建、显式 migration、一次 bootstrap、重复 bootstrap 拒绝、Caddy CA、伪造转发 Header 清洗、login / Session / logout、正式 Message SSE 在连接保持打开时及时 flush `ready` / `message.created`，独立账户恢复 CLI、旧 Cookie / CSRF 拒绝、SSE 在恢复后通过 heartbeat / 发送复核关闭、代理敏感 Header 过滤，以及应用和数据库无宿主端口；退出时删除本次 project、临时网络、volumes 和 Secret，不删除用户实例或备份。SSE 仍由唯一 Caddy origin 转发，Caddy 2.11.4 对 `text/event-stream` 的流式识别已由该门禁固定验证；更换代理或版本必须重跑。
+脚本只使用本次生成的随机 Compose project、临时 Secret、随机 HTTPS 端口和全新命名 volumes。它验证静态配置、镜像构建、显式 migration、一次 bootstrap、重复 bootstrap 拒绝、Caddy CA、伪造转发 Header 清洗、login / Session / logout、正式 Message SSE 在连接保持打开时及时 flush `ready` / `message.created`，独立账户恢复 CLI、旧 Cookie / CSRF 拒绝、SSE 在恢复后通过 heartbeat / 发送复核关闭、代理敏感 Header 过滤、正式邀请 / 独立登录后的 owner 交接、旧邀请失效、本人历史精确重试与接任者配置，以及应用和数据库无宿主端口；退出时删除本次 project、临时网络、volumes 和 Secret，不删除用户实例或备份。SSE 仍由唯一 Caddy origin 转发，Caddy 2.11.4 对 `text/event-stream` 的流式识别已由该门禁固定验证；更换代理或版本必须重跑。
 
 需要配合真实浏览器人工复核时，可显式设置 `RADISHNEXUS_COMPOSE_BROWSER_REVIEW=true`。测试在恢复前后打印私有临时目录中的 `browser-*.json` 标记路径，完成该阶段浏览器操作后创建同名 `.done` 文件继续；每阶段最多等待十分钟，超时失败并按原范围清理。默认自动验收不暂停，不开启生产服务。
+
+Workspace owner 交接的浏览器复核可单独设置 `RADISHNEXUS_OWNER_TRANSFER_BROWSER_REVIEW=true`；脚本在正式创建同名候选后输出私有临时 JSON 与 `.done` 路径，最多等待 20 分钟。此阶段可验证交接、响应丢失后的历史查询及手机布局；继续前将初始管理员恢复为 owner，以便后续自动链使用预期的正式角色。全部角色变更均通过交接 API，不用 SQL 改角色；默认不暂停。该标记沿用同一次性 Compose project 和清理范围，不授权其他实例操作。

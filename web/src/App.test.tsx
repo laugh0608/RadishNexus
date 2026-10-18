@@ -1,6 +1,12 @@
 import { projectDecisionsClient } from "./workspace/project-decisions-api";
 import type { SetupClient } from "./auth/setup-api";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { projectTicketsClient } from "./workspace/project-tickets-api";
@@ -641,3 +647,48 @@ const establishedSetupClient: SetupClient = {
     throw new Error("unexpected setup");
   },
 };
+
+it("keeps the newest observed role when older focus refreshes resolve later", async () => {
+  let older!: (s: SessionContext) => void;
+  let newer!: (s: SessionContext) => void;
+  const resolve = vi
+    .fn()
+    .mockResolvedValueOnce(session)
+    .mockImplementationOnce(
+      () =>
+        new Promise<SessionContext>((r) => {
+          older = r;
+        }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise<SessionContext>((r) => {
+          newer = r;
+        }),
+    );
+  render(
+    <App
+      setupClient={establishedSetupClient}
+      pathname="/"
+      authClient={testAuthClient({ resolveSession: resolve })}
+    />,
+  );
+  await screen.findByRole("heading", { name: "欢迎回来，Radish Admin" });
+  fireEvent.focus(window);
+  fireEvent(window, new Event("pageshow"));
+  const memberSession: SessionContext = {
+    ...session,
+    workspaces: session.workspaces.map((w) => ({ ...w, role: "member" })),
+  };
+  await act(async () => newer(memberSession));
+  expect(
+    screen.getByRole("option", { name: "Main Workspace · member" }),
+  ).toBeTruthy();
+  await act(async () => older(session));
+  expect(
+    screen.queryByRole("option", { name: "Main Workspace · owner" }),
+  ).toBeNull();
+  expect(
+    screen.getByRole("option", { name: "Main Workspace · member" }),
+  ).toBeTruthy();
+});

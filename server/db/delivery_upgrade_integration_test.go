@@ -142,7 +142,7 @@ INSERT INTO radishnexus.workspace_configuration_audit(id,workspace_id,actor_id,c
 		t.Fatal("old binary accepted 014")
 	}
 	for _, item := range []struct{ sql, want string }{
-		{`SELECT to_jsonb(a)::text FROM radishnexus.workspace_configuration_audit a WHERE id='cfa_old'`, oldAudit},
+		{`SELECT (to_jsonb(a)-ARRAY['actor_before_role','actor_after_role','actor_before_role_revision','actor_after_role_revision','subject_before_role_revision','subject_after_role_revision'])::text FROM radishnexus.workspace_configuration_audit a WHERE id='cfa_old'`, oldAudit},
 		{`SELECT to_jsonb(r)::text FROM radishnexus.workspace_configuration_receipts r WHERE audit_id='cfa_old'`, oldReceipt},
 		{`SELECT (to_jsonb(a)-'projection_version')::text FROM radishnexus.activity_items a WHERE event_id='evt_old'`, oldActivity},
 	} {

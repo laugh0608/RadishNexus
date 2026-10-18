@@ -56,7 +56,7 @@ func componentTicket(t *testing.T, ctx context.Context, s *goldenpath.Service, c
 func ticketComponentFixture(t *testing.T) (context.Context, *pgxpool.Pool, *goldenpath.Service, *goldenpath.TicketComponentService, *goldenpath.ConfigurationService, func(string) string) {
 	t.Helper()
 	ctx, pool := documentDatabase(t)
-	if _, e := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role='owner' WHERE workspace_id='wrk_main' AND user_id='usr_admin'`); e != nil {
+	if _, e := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role_revision=role_revision+CASE WHEN role<>'owner' THEN 1 ELSE 0 END,role='owner' WHERE workspace_id='wrk_main' AND user_id='usr_admin'`); e != nil {
 		t.Fatal(e)
 	}
 	store := goldenpostgres.New(pool)

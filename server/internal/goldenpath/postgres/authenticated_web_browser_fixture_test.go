@@ -164,6 +164,7 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	discoveryHandler := httptransport.NewDiscoveryHandler(authService, goldenpath.NewDiscoveryService(goldenpostgres.New(pool)), sessionPolicy, proxyPolicy)
 	configurationHandler := httptransport.NewConfigurationHandler(authService, goldenpath.NewConfigurationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy)
 	httptransport.RegisterConfigurationRoutes(mux, discoveryHandler, configurationHandler)
+	httptransport.RegisterOwnerTransferRoutes(mux, httptransport.NewOwnerTransferHandler(authService, goldenpath.NewOwnerTransferService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
 	mux.Handle("/api/v1/workspaces/{workspace_id}/projects/", discoveryHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/invitations", identityHandler)
 	mux.Handle("/auth/complete", identityHandler)
@@ -299,7 +300,7 @@ func seedAuthenticatedWebBrowserData(
 	}
 
 	if os.Getenv("RADISHNEXUS_BROWSER_CHECKOUT") == "1" {
-		if _, e := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role='owner' WHERE workspace_id='wrk_main' AND user_id='usr_contributor'`); e != nil {
+		if _, e := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role_revision=role_revision+CASE WHEN role<>'owner' THEN 1 ELSE 0 END,role='owner' WHERE workspace_id='wrk_main' AND user_id='usr_contributor'`); e != nil {
 			t.Fatal(e)
 		}
 		cfg := goldenpath.NewConfigurationService(store, goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})

@@ -117,6 +117,10 @@ func (store *Store) CreateInvitation(ctx context.Context, digest []byte, workspa
 		if err := requireOwner(ctx, tx, userID, workspaceID); err != nil {
 			return err
 		}
+		var ownerRevision int64
+		if err := tx.QueryRow(ctx, `SELECT role_revision FROM radishnexus.workspace_memberships WHERE workspace_id=$1 AND user_id=$2`, workspaceID, userID).Scan(&ownerRevision); err != nil {
+			return storeError("read invitation creator revision", err)
+		}
 		// Bound outstanding admission capabilities per owner/workspace. Expired
 		// and consumed capabilities carry no audit authority and may be purged.
 		if _, err := tx.Exec(ctx, `DELETE FROM radishnexus.identity_invitations WHERE expires_at <= $1 OR consumed_at IS NOT NULL`, record.CreatedAt); err != nil {
@@ -129,7 +133,7 @@ func (store *Store) CreateInvitation(ctx context.Context, digest []byte, workspa
 		if count >= 20 {
 			return authz.ErrConflict
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO radishnexus.identity_invitations (id,token_digest,workspace_id,created_by,created_at,expires_at) VALUES ($1,$2,$3,$4,$5,$6)`, record.ID, record.TokenDigest, workspaceID, userID, record.CreatedAt, record.ExpiresAt); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO radishnexus.identity_invitations (id,token_digest,workspace_id,created_by,created_at,expires_at,creator_role_revision) VALUES ($1,$2,$3,$4,$5,$6,$7)`, record.ID, record.TokenDigest, workspaceID, userID, record.CreatedAt, record.ExpiresAt, ownerRevision); err != nil {
 			return storeError("create invitation", err)
 		}
 		return recordAudit(ctx, tx, record.AuditID, "invitation.created", userID, workspaceID, record.CreatedAt)
@@ -138,7 +142,8 @@ func (store *Store) CreateInvitation(ctx context.Context, digest []byte, workspa
 
 func invitationWorkspace(ctx context.Context, tx pgx.Tx, digest []byte, now time.Time) (string, error) {
 	var workspaceID, creatorID string
-	if err := tx.QueryRow(ctx, `SELECT workspace_id, created_by FROM radishnexus.identity_invitations WHERE token_digest = $1 AND consumed_at IS NULL AND expires_at > $2 AND created_at <= $2 FOR UPDATE`, digest, now).Scan(&workspaceID, &creatorID); err != nil {
+	var invitationRevision int64
+	if err := tx.QueryRow(ctx, `SELECT workspace_id, created_by, creator_role_revision FROM radishnexus.identity_invitations WHERE token_digest = $1 AND consumed_at IS NULL AND expires_at > $2 AND created_at <= $2 FOR UPDATE`, digest, now).Scan(&workspaceID, &creatorID, &invitationRevision); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", authn.ErrInvitationInvalid
 		}
@@ -156,6 +161,13 @@ func invitationWorkspace(ctx context.Context, tx pgx.Tx, digest []byte, now time
 			return "", authn.ErrInvitationInvalid
 		}
 		return "", err
+	}
+	var currentRevision int64
+	if err := tx.QueryRow(ctx, `SELECT role_revision FROM radishnexus.workspace_memberships WHERE workspace_id=$1 AND user_id=$2`, workspaceID, creatorID).Scan(&currentRevision); err != nil {
+		return "", storeError("check invitation creator revision", err)
+	}
+	if invitationRevision <= 0 || invitationRevision != currentRevision {
+		return "", authn.ErrInvitationInvalid
 	}
 	return workspaceID, nil
 }
