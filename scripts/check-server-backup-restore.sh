@@ -119,4 +119,4 @@ docker exec \
     "${source_container}" \
     /work/backuprestore.test \
     -test.v \
-    -test.run '^TestBackupRestoreGoldenPath$'
+    -test.run '^TestBackupRestore(GoldenPath|AccountRecovery)$'

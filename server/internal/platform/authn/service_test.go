@@ -78,7 +78,7 @@ func (store *recordingStore) FindLocalAccount(context.Context, string) (LocalAcc
 	return store.account, store.accountErr
 }
 
-func (store *recordingStore) RecordFailedLogin(context.Context, string, time.Time, time.Time, int) error {
+func (store *recordingStore) RecordFailedLogin(context.Context, LocalAccount, time.Time, time.Time, int) error {
 	store.failedLogins++
 	return nil
 }

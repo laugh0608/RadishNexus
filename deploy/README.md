@@ -171,7 +171,53 @@ docker compose -f deploy/compose.yaml down
 
 Go、Web 与 schema 必须配套更新，不支持跨 schema 版本滚动兼容。升级前停写并保留备份；016 只允许旧 Ticket 全为 open 的合法基线，异常状态须先调查，不手改状态绕过保护。升级后旧二进制不能直接回退，需要恢复升级前备份到全新目标或独立验证 forward repair，并明确备份点后的数据取舍。应用缓存启动时的静态入口，须发布完整匹配的 Web build 并重启应用，不能在运行中替换资源后继续沿用旧入口；浏览器须重新加载。
 
-这些隔离数据库与浏览器结果不代表业务实例已迁移，也不代替完整 Compose 镜像升级演练。已有完整 Compose 历史演练未覆盖 migration 008–016、后续业务入口与新就绪探针；当前版本的镜像、Secret 挂载及升级路径仍须单独验收。
+这些隔离数据库与浏览器结果不代表业务实例已迁移，也不代替完整 Compose 镜像升级演练。2026-10-18 已验收当前 migration 017 工件的全新 Compose、文件 Secret、就绪探针与账号恢复；旧 016 工件空目标恢复后显式升级已有独立证据。后续业务全链、生产带流量升级和通用升级中断恢复仍须独立验收，见[本轮记录](../docs/status/reviews/2026-10-18-controlled-account-recovery.md)。
+
+## 本地账户受控恢复
+
+使用 [ADR-0041](../docs/adr/0041-controlled-local-account-recovery.md) 的独立 `account-recover` operations service。该 service 默认不运行，二进制不进入常驻 server 镜像。部署者须先独立核实恢复请求和账户归属，核对部署目录、Compose project、数据库 Secret 与目标实例；备份副本可能拥有相同 user ID，inspect 不构成实例身份认证。此入口能接管目标全局账户，需要宿主 / 数据库运维授权；Workspace owner 身份不能替代运维授权。
+
+升级窗口先停写，使用匹配的旧工件留存受控备份，再显式运行新 migration 017，并部署匹配的新 app / operations。不得与恢复命令并行迁移；readiness 会拒绝旧、漂移或较新的 schema，但不是升级锁。若要求没有任何已认证的在途操作，先摘流并等待 app 停止；恢复命令本身不停止服务。已有运行授权之外的生产升级、备份位置与保留策略须独立确定。
+
+下列命令从仓库根执行，使用前面配置的 Compose 环境和文件 Secret。`getpass` 从终端无回显读取；不要用真实值替换成命令参数或环境变量，也不要保存密码 JSON。先 inspect：
+
+```text
+python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Verified email: ")}))' | \
+  docker compose -f deploy/compose.yaml run --rm --no-deps -T account-recover inspect --request-stdin
+```
+
+核对返回的 `user_id`、两个 status 和 `eligible`，保留原样的六位微秒 UTC `password_changed_at`。仅已有 active、邮箱已映射的本地凭证可恢复；临时登录锁可随成功操作清除，禁用账户 / 凭证、OIDC-only、未映射 legacy 不会被激活或补建。
+
+执行 apply 前生成并保存 operation_id，并在受控运维记录中关联人工核验、操作者与目标。下面辅助程序向 stderr 显示安全的 operation_id，邮箱和最终密码不回显；用户本人应在受控终端输入最终密码。没有临时密码自动过期或强制首次改密功能，运维者代设 / 转交密码的责任不能省略。
+
+```text
+python3 -c '
+import getpass,json,sys,uuid
+operation_id = str(uuid.uuid4())
+print("Record operation_id before continuing: " + operation_id, file=sys.stderr)
+user_id = getpass.getpass("Verified user_id: ")
+version = getpass.getpass("Exact inspected password_changed_at: ")
+operator_ref = getpass.getpass("Controlled operator_ref (ASCII token): ")
+email = getpass.getpass("Verified email: ")
+password = getpass.getpass("Final new password: ")
+if getpass.getpass("Type APPLY to revoke all old Sessions for this account: ") != "APPLY":
+    sys.exit(1)
+print(json.dumps({"user_id":user_id,"expected_email":email,"expected_password_changed_at":version,"operation_id":operation_id,"operator_ref":operator_ref,"reason_code":"lost_local_password","new_password":password,"confirmed":True}))
+' | docker compose -f deploy/compose.yaml run --rm --no-deps -T account-recover apply --request-stdin
+```
+
+发生 `result_unconfirmed`、stdout 丢失或无法判断提交时，保留原 ID；先查询 status：
+
+```text
+python3 -c 'import getpass,json; print(json.dumps({"user_id":getpass.getpass("Original user_id: "),"operation_id":getpass.getpass("Original operation_id: ")}))' | \
+  docker compose -f deploy/compose.yaml run --rm --no-deps -T account-recover status --request-stdin
+```
+
+`applied` 是该操作的历史成功证据，不证明密码仍未被后续操作更新；`not_observed` 只是当前快照未见记录，不能排除在途提交。待原进程结束并诊断连接后，用原 operation_id / 原版本处理重试；已记录操作会拒绝再次 apply，不自动生成新 ID、不验证本次输入密码。通过正式 HTTPS 登录确认最终密码。
+
+密码、旧 Session 撤销和 operator 审计原子提交；稳定 user、各工作区权限、业务引用、外部绑定和未兑换邀请不变。旧 Session / CSRF 的下一次解析拒绝，SSE 在发送 / heartbeat 复核关闭。此流程不等于外部 IdP 登出、邀请撤销、管理员交接或完整失陷处置。
+
+恢复后的备份保留新密码与审计，Session / 邀请 / OIDC 事务数据不恢复；旧备份可能恢复旧 verifier 和旧审计状态。旧工件只能恢复匹配旧备份到隔离空目标，再显式升级、重新 inspect 和执行新的恢复，登录验证后才能开放。当前 Compose 仍共用数据库凭据，不代表数据库最小权限分工已完成。应用与代理不记录密码 / Cookie / CSRF；自定义数据库 statement / 参数 / Detail 日志和外部运维采集必须单独审查，禁止启用会记录凭据的调试采集。
 
 ## 仓库演练
 
@@ -181,4 +227,6 @@ Go、Web 与 schema 必须配套更新，不支持跨 schema 版本滚动兼容�
 ./scripts/check-self-hosted-compose.sh
 ```
 
-脚本只使用本次生成的随机 Compose project、临时 Secret、随机 HTTPS 端口和全新命名 volumes。它验证静态配置、镜像构建、显式 migration、一次 bootstrap、重复 bootstrap 拒绝、Caddy CA、伪造转发 Header 清洗、login / Session / logout、正式 Message SSE 在连接保持打开时及时 flush `ready` / `message.created`，以及应用和数据库无宿主端口；退出时删除本次 project、临时网络、volumes 和 Secret，不删除用户实例或备份。SSE 仍由唯一 Caddy origin 转发，Caddy 2.11.4 对 `text/event-stream` 的流式识别已由该门禁固定验证；更换代理或版本必须重跑。
+脚本只使用本次生成的随机 Compose project、临时 Secret、随机 HTTPS 端口和全新命名 volumes。它验证静态配置、镜像构建、显式 migration、一次 bootstrap、重复 bootstrap 拒绝、Caddy CA、伪造转发 Header 清洗、login / Session / logout、正式 Message SSE 在连接保持打开时及时 flush `ready` / `message.created`，独立账户恢复 CLI、旧 Cookie / CSRF 拒绝、SSE 在恢复后通过 heartbeat / 发送复核关闭、代理敏感 Header 过滤，以及应用和数据库无宿主端口；退出时删除本次 project、临时网络、volumes 和 Secret，不删除用户实例或备份。SSE 仍由唯一 Caddy origin 转发，Caddy 2.11.4 对 `text/event-stream` 的流式识别已由该门禁固定验证；更换代理或版本必须重跑。
+
+需要配合真实浏览器人工复核时，可显式设置 `RADISHNEXUS_COMPOSE_BROWSER_REVIEW=true`。测试在恢复前后打印私有临时目录中的 `browser-*.json` 标记路径，完成该阶段浏览器操作后创建同名 `.done` 文件继续；每阶段最多等待十分钟，超时失败并按原范围清理。默认自动验收不暂停，不开启生产服务。

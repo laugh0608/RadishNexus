@@ -42,8 +42,8 @@ func TestCurrentMigrationHistoryReturnsEmbeddedArtifactIdentities(t *testing.T) 
 	if err != nil {
 		t.Fatalf("CurrentMigrationHistory() error = %v", err)
 	}
-	if len(history) != 16 {
-		t.Fatalf("CurrentMigrationHistory() length = %d, want 16", len(history))
+	if len(history) != 17 {
+		t.Fatalf("CurrentMigrationHistory() length = %d, want 17", len(history))
 	}
 	for index, record := range history {
 		if record.Sequence != index+1 || record.Name == "" || len(record.Checksum) != 64 {

@@ -49,7 +49,7 @@ type Clock interface {
 type Store interface {
 	Bootstrap(context.Context, BootstrapRecord) error
 	FindLocalAccount(context.Context, string) (LocalAccount, error)
-	RecordFailedLogin(context.Context, string, time.Time, time.Time, int) error
+	RecordFailedLogin(context.Context, LocalAccount, time.Time, time.Time, int) error
 	CreateSession(context.Context, SessionRecord) error
 	ResolveSession(context.Context, []byte, time.Time) (ResolvedSession, error)
 	ResolveWorkspaceSession(context.Context, []byte, string, time.Time) (VerifiedUser, error)
@@ -79,10 +79,11 @@ type BootstrapResult struct {
 }
 
 type LocalAccount struct {
-	UserID       string
-	PasswordHash string
-	Status       string
-	LockedUntil  *time.Time
+	UserID            string
+	PasswordHash      string
+	PasswordChangedAt time.Time
+	Status            string
+	LockedUntil       *time.Time
 }
 
 type LoginInput struct {
@@ -217,7 +218,7 @@ func (service *Service) Login(ctx context.Context, input LoginInput) (Session, e
 		if account.Status == "active" && !locked && !passwordMatches {
 			if err := service.store.RecordFailedLogin(
 				ctx,
-				account.UserID,
+				account,
 				now,
 				now.Add(LoginLockDuration),
 				LoginFailureLimit,

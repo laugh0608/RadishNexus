@@ -96,7 +96,7 @@ func (store *Store) FindLocalAccount(ctx context.Context, email string) (authn.L
 	err := store.pool.QueryRow(ctx, `
 		SELECT credential.user_id, credential.password_hash,
                CASE WHEN account.status = 'active' THEN credential.status ELSE 'disabled' END,
-               credential.locked_until
+               credential.locked_until, credential.password_changed_at
         FROM radishnexus.local_credentials AS credential
         JOIN radishnexus.user_accounts AS account ON account.user_id = credential.user_id
         WHERE credential.email = $1
@@ -105,6 +105,7 @@ func (store *Store) FindLocalAccount(ctx context.Context, email string) (authn.L
 		&account.PasswordHash,
 		&account.Status,
 		&account.LockedUntil,
+		&account.PasswordChangedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return authn.LocalAccount{}, authn.ErrAccountNotFound
@@ -115,31 +116,29 @@ func (store *Store) FindLocalAccount(ctx context.Context, email string) (authn.L
 	return account, nil
 }
 
-func (store *Store) RecordFailedLogin(
-	ctx context.Context,
-	userID string,
-	occurredAt time.Time,
-	lockUntil time.Time,
-	failureLimit int,
-) error {
-	_, err := store.pool.Exec(ctx, `
-		UPDATE radishnexus.local_credentials
-		SET failed_login_count = CASE
-				WHEN failed_login_count + 1 >= $4 THEN 0
-				ELSE failed_login_count + 1
-			END,
-			locked_until = CASE
-				WHEN failed_login_count + 1 >= $4 THEN $3
-				ELSE locked_until
-			END
-		WHERE user_id = $1
-		  AND status = 'active'
-		  AND (locked_until IS NULL OR locked_until <= $2)
-	`, userID, occurredAt, lockUntil, failureLimit)
-	if err != nil {
-		return storeError("record failed local login", err)
-	}
-	return nil
+func (store *Store) RecordFailedLogin(ctx context.Context, account authn.LocalAccount, occurredAt, lockUntil time.Time, failureLimit int) error {
+	return store.identityTransaction(ctx, func(tx pgx.Tx) error {
+		var status string
+		err := tx.QueryRow(ctx, `SELECT status FROM radishnexus.user_accounts WHERE user_id=$1 FOR UPDATE`, account.UserID).Scan(&status)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return storeError("lock failed login account", err)
+		}
+		if status != "active" {
+			return nil
+		}
+		_, err = tx.Exec(ctx, `UPDATE radishnexus.local_credentials
+   SET failed_login_count=CASE WHEN failed_login_count+1 >= $4 THEN 0 ELSE failed_login_count+1 END,
+       locked_until=CASE WHEN failed_login_count+1 >= $4 THEN $3 ELSE locked_until END
+   WHERE user_id=$1 AND status='active' AND (locked_until IS NULL OR locked_until <= $2)
+     AND password_hash=$5 AND password_changed_at=$6`, account.UserID, occurredAt, lockUntil, failureLimit, account.PasswordHash, account.PasswordChangedAt)
+		if err != nil {
+			return storeError("record failed local login", err)
+		}
+		return nil
+	})
 }
 
 func (store *Store) CreateSession(ctx context.Context, record authn.SessionRecord) (err error) {

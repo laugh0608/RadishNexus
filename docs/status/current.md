@@ -18,7 +18,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 | 能力 | 内部契约与实现 | 公共入口与交互 | 普通用户独立操作 / 持续使用 |
 | --- | --- | --- | --- |
-| 本地身份与 Session | 账户 / 密码拆分、邮箱 bootstrap、旧账户显式映射、Session、CSRF、邀请和外部身份事务 | 同源 HTTPS 邮箱登录、Workspace 选择、账户页和一次性邀请；真实 OIDC provider 尚未装配 | 本地与迁移自动化、邮箱登录与退出浏览器已有证据；新账户邀请兑换浏览器已有证据；Radish 联调、恢复入口、完整成员治理与团队使用仍待验收 |
+| 本地身份与 Session | 账户 / 密码拆分、邮箱 bootstrap、旧账户显式映射、Session、CSRF、邀请和外部身份事务 | 同源 HTTPS 邮箱登录、Workspace 选择、账户页和一次性邀请；真实 OIDC provider 尚未装配 | 本地与迁移自动化、邮箱登录与退出浏览器已有证据；新账户邀请兑换浏览器已有证据；本地恢复已按 ADR-0041 完成 CLI / 审计迁移 / 全账户 Session 撤销与隔离验收；Radish 联调、完整成员治理与团队使用仍待验收 |
 | Message → Thread → Decision → Ticket | migration 006 / 007、权限、来源、原子事件与幂等 receipt | canonical 页面和短请求；contributor / decider 浏览器验收已有记录 | 自动 Timeline 与首批双向关系已通过浏览器闭环；Project 工单与决策只读发现已完成；Ticket 最小状态流转已完成；其余协作对象列表与更完整执行管理未闭环 |
 | Project / Channel 发现 | 当前权限过滤、归档可读、稳定 ID 分页、当前成员复核 | 首页 Workspace → Project → Channel 导航；ID 工具保留为次级入口 | 服务端、真实数据库、Web 交互与隔离浏览器验收通过，含分页、撤权刷新、Workspace 切换及桌面 / 手机布局；基础配置已有独立切片证据，见下一行 |
 | Project 工单发现 | governing Project 当前权限、稳定 ID 分页；DTO 已随 ADR-0039 接受四状态 | 首页项目入口、canonical 工单列表与详情返回入口，刷新 / 页面恢复重新授权 | 正式创建链、普通成员重新登录、25＋2 分页、来源 / 组件 / 文档跳转、桌面 / 手机及撤权刷新 / 后退已验收；状态流转见下一行；持续使用另验 |
@@ -31,7 +31,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | Ticket 与 Component 人工关联 | migration 014、人工 `affects`、Project 写权限、精确解除 / 重连、协作 receipt、Activity v5 | Ticket 关联区、组件稳定详情与按权限过滤的反向分页 | Go / PostgreSQL / Web、013 升级与恢复通过；正式页面创建链、关联 / 解除 / 重连、桌面 / 手机与键盘通过；浏览器后退、显式刷新撤回读 / 写权及最终截图已补验，见[补验记录](reviews/2026-10-09-delivery-continuation.md) |
 | CI Run checkout 来源 A | migration 015、sources / payload v2、不可变 binding / built-from、schema 2 CI 事件与 Activity 6 | CI Run 来源详情、完整 OID 复制、Repository 稳定页面与反向分页 | 合成签名输入、真实 PostgreSQL、014 升级 / 混合恢复与隔离浏览器验证；真实 SCM 采集 B 暂缓，见[实施记录](reviews/2026-10-13-checkout-provenance.md) |
 | EntityLink / Activity | 带来源关系、权限过滤 query、同事务 Activity 更新与版本化全量重建 | Nexus View 可读 Current / 出向与首批入向 Relations / 正常更新的 Timeline | 正常写入与双向发现已通过真实 PostgreSQL / HTTP 和浏览器；未完成持续使用观察 |
-| 自部署与恢复 | 显式 migration、只读 schema readiness、PostgreSQL 17 同 major 空目标恢复 | 健康端点拒绝 migration 缺失 / 漂移 / 版本不匹配；固定工件 Compose 开发拓扑与 HTTPS 演练已有记录 | 新探针已有真实数据库证据；本轮未重跑 Compose，升级失败恢复、运维与生产容量尚未完成 |
+| 自部署与恢复 | 显式 migration、只读 schema readiness、PostgreSQL 17 同 major 空目标恢复 | 健康端点拒绝 migration 缺失 / 漂移 / 版本不匹配；固定工件 Compose 开发拓扑与 HTTPS 演练已有记录 | 当前 migration 017 工件的全新 Compose / HTTPS、账号恢复及旧备份升级已验收；通用升级失败恢复、运维与生产容量尚未完成 |
 | Document | migration 010、不可变版本、精确 receipt、当前 Project 权限、单一受限 Markdown parser、备份恢复 | Ticket 创建、Project 文档列表、阅读 / 编辑 / 预览、显式冲突重新应用、历史恢复 | 真实数据库及隔离 HTTPS 双标签页、恢复、手机布局、撤权已有证据；原生中文 IME、普通成员独立持续使用仍待验收 |
 
 ## 已确认缺口
@@ -54,7 +54,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | 1 | Project 下的 Ticket 只读发现 | 已按 [ADR-0038](../adr/0038-project-ticket-discovery.md) 完成；成员可从 Project 列表找回已有 Ticket，当前权限、分页与恢复验收见[记录](reviews/2026-10-13-project-ticket-discovery.md) |
 | 2 | Ticket 最小状态流转 | 已按 [ADR-0039](../adr/0039-ticket-status-transitions.md) 完成；四状态转换、独立版本、精确重试、读取兼容与恢复验收见[记录](reviews/2026-10-13-ticket-status-transitions.md) |
 | 3 | Project 下的 Decision 只读发现 | 已按 [ADR-0040](../adr/0040-project-decision-discovery.md) 完成；成员从 Project 找回两种状态，权限、分页、来源隔离与恢复见[记录](reviews/2026-10-18-project-decision-discovery.md)；拒绝、替代和复核另立写入切片 |
-| 4 | 试用所需身份与运维能力 | 分别设计账号恢复、管理员交接、支持范围与升级失败恢复；外部试用前准备评估授权和故障报告路径，必要设计可提前开展 |
+| 4 | 试用所需身份与运维能力 | 首片[本地账户受控恢复 ADR-0041](../adr/0041-controlled-local-account-recovery.md) 已实施并完成隔离验收；后续分别设计管理员交接、支持范围与升级失败恢复；外部试用前准备评估授权和故障报告路径 |
 | 5 | 受控小团队场景试用 | 满足必要条件后观察讨论—决策—工单—文档的持续使用，记录追溯、重复录入与维护者干预；真实交付链未恢复时不宣称完整 Golden Path 通过 |
 | 6 | 版本化结构化导出与全新实例导入 | 独立冻结可迁移数据、脱敏与映射合同并往返验证，不用整库备份代替 M1 退出条件 |
 | 暂缓 | 真实 Jenkins 采集与交付整链 | ADR-0035 / ADR-0037 B 继续暂缓；具体 Ticket ↔ CI Run 关系仍待 ADR-0037 约定的来源合同与 B 证据明确后独立冻结 |
@@ -62,13 +62,21 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 免费书面授权与评估说明应在邀请外部团队前准备，不能等到完整聊天或 CRDT 完成；版本化结构化导出与全新实例导入仍是 M1 的独立退出条件。账号恢复、安全审计、数据生命周期、数据库最小权限与升级演练按[路线图](../roadmap.md)的试用和生产边界推进，不因本表只列近期切片而取消。
 
+### 本轮完成：自部署本地账户受控恢复
+
+2026-10-18 所有者确认并实施 [ADR-0041](../adr/0041-controlled-local-account-recovery.md)：独立 CLI、migration 017 operator 审计、密码版本冲突、全账户旧 Session 撤销、迟到失败登录计数修正与提交结果查询。已有 active 本地账户可由受控部署者恢复，原身份和所有权限保留；产品 owner 不获得全局恢复权，disabled / OIDC-only / 未映射账户不被启用。
+
+Go / PostgreSQL / Web、当前 Compose / HTTPS、真实浏览器及恢复后备份已通过；016 旧备份以匹配旧工件恢复空目标后显式升级，确证旧 verifier 可能回来，必须重新核验并恢复。32 项矩阵的证据与限制见[实施记录](reviews/2026-10-18-controlled-account-recovery.md)。本轮临时资源已清理，所有者已授权核对后本地提交；未 push、未操作真实账户。
+
+下一步分别设计管理员交接、试用支持 / 评估授权及升级失败恢复；不扩展到自助找回、OIDC 或完整失陷处置，也不自动开始后续实现。
+
 ### 本轮完成：Project 决策只读发现
 
 [ADR-0040](../adr/0040-project-decision-discovery.md) 已接受并实施：Project 作用域只读列表仅返回 ref、问题与 proposed / accepted 状态，首页项目入口和 Decision 详情均可进入。当前 Project 权限与 evidence 可读性独立；页面名称和条目共同清理，刷新、重新登录和浏览器恢复重新读取。拒绝、替代、复核和“待我决策”未进入此片。
 
-Go、真实 PostgreSQL、Web 与隔离 HTTPS 浏览器通过。独立测量 3 个 Project / 1227 条 Decision 后，本片未新增索引、migration、依赖或写入命令。普通成员正式登录、25＋2 分页、来源脱敏、后续 Ticket、归档和撤权恢复的精确证据及环境中断修正见[实施记录](reviews/2026-10-18-project-decision-discovery.md)。临时验收资源已清理；提案已提交为 `19290dc`，所有者随后授权提交本轮实现、测试与文档，本次收尾纳入提交，未 push。
+Go、真实 PostgreSQL、Web 与隔离 HTTPS 浏览器通过。独立测量 3 个 Project / 1227 条 Decision 后，本片未新增索引、migration、依赖或写入命令。普通成员正式登录、25＋2 分页、来源脱敏、后续 Ticket、归档和撤权恢复的精确证据及环境中断修正见[实施记录](reviews/2026-10-18-project-decision-discovery.md)。临时验收资源已清理；提案已提交为 `19290dc`，实现、测试与文档已提交为 `5ddcc1c`，未 push。
 
-近期下一顺位是分别设计试用所需身份与运维能力，不自动扩大为实现授权；真实 Jenkins B、原生中文 IME 和真实团队持续使用仍按各自边界推进。
+近期已进入试用身份与运维准备，首片 ADR-0041 已完成实现与隔离验收；真实 Jenkins B、原生中文 IME 和真实团队持续使用仍按各自边界推进。
 
 ### 本轮完成：Project 工单只读发现
 
@@ -84,7 +92,7 @@ ADR-0038 实现与验收文档已提交为 `7ace9b4`；ADR-0039 提案已提交�
 
 详情、Project / Component 列表与创建重试同步支持四状态。Go、真实 PostgreSQL、015→016 正常与异常基线升级、权威备份 / 空目标恢复、Web 和隔离 HTTPS 浏览器已验证。普通 contributor 可在来源 Thread 受限时操作 Ticket；双标签冲突、已提交响应丢失后的原操作重试、手机 / 键盘、撤回写权与读权后恢复已验收。证据、首次失败修正及限制见[实施记录](reviews/2026-10-13-ticket-status-transitions.md)。临时资源已清理；实现与验收文档已提交为 `777a363`，未 push、迁移业务实例或部署。
 
-下一步按顺位梳理 Project 下 Decision 只读发现的独立范围；不自动开始实施。负责人、优先级、看板不在本轮范围，真实 Jenkins B 继续暂缓，后续顺位不自动授权资源启动或外部操作。
+后续 Project 下 Decision 只读发现已按 ADR-0040 完成，当前接续以本页近期顺序为准。负责人、优先级、看板不在本轮范围，真实 Jenkins B 继续暂缓，后续顺位不自动授权资源启动或外部操作。
 
 ### 交付链保留完成线与恢复顺序
 
@@ -108,9 +116,9 @@ Ticket 与 Component 人工关联已按 ADR-0034 实现，浏览器后退、显�
 
 ### 接下来的事项
 
-1. **评审并收束 Decision 发现切片**：[ADR-0040](../adr/0040-project-decision-discovery.md) 的实现与必要验证已完成，证据见[实施记录](reviews/2026-10-18-project-decision-discovery.md)。提案已提交；所有者已授权本轮实现、测试与文档提交，未授权 push。
-2. **设计试用所需身份与运维能力**：分别核对账号恢复、管理员交接、支持范围与升级失败恢复的现有合同和风险，形成独立范围；外部试用前准备评估授权与故障报告路径。当前不自动进入这些能力的实现。
-3. **保留范围**：Decision 拒绝、替代和复核另立写入切片；Ticket 负责人、优先级和看板不随发现入口扩展。后续账号恢复、管理员交接、升级失败恢复、评估授权及受控团队试用仍按近期顺序推进。
+1. **审阅本地账户恢复交付**：[ADR-0041](../adr/0041-controlled-local-account-recovery.md) 实现与隔离验收完成，见[记录](reviews/2026-10-18-controlled-account-recovery.md)；按所有者要求暂不提交或 push。
+2. **维持试用准备顺序**：ADR-0040 实现已提交为 `5ddcc1c`；账号恢复之后分别设计管理员交接、支持范围与升级失败恢复，外部试用前准备评估授权与故障报告路径。本轮不开始这些后续实现。
+3. **保留范围**：Decision 拒绝、替代和复核另立写入切片；Ticket 负责人、优先级和看板不随发现入口扩展。后续管理员交接、升级失败恢复、评估授权及受控团队试用仍按近期顺序推进。
 4. **继续暂缓**：真实 Jenkins ADR-0035 / ADR-0037 B 与原生中文 IME 人工验收。真实交付关系、完整 Golden Path、生产运维与团队持续使用均不因本日测试通过而标记完成；恢复时另行明确资源和验收范围。
 
 以上为当前接续事项，不创建自动任务或启动新服务。10 月 13 日的原收尾事实见[当日记录](reviews/2026-10-13-daily-closeout.md)，10 月 9 日的提交与原计划见[历史收尾记录](reviews/2026-10-09-daily-closeout.md)，当前顺位以上表为准。
@@ -190,7 +198,7 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 ## 开放问题
 
 - 关系分页、反向索引、查询容量与跨对象 Timeline；事务内 Activity 更新、重建并发及首批 direction 合同已由 ADR-0022 冻结；
-- 管理员交接、其他协作对象发现、账号恢复与应急入口；基础配置和首访 owner 初始化已由 ADR-0026 / ADR-0027 冻结；
+- 管理员交接、其他协作对象发现与超出 ADR-0041 的应急入口；基础配置和首访 owner 初始化已由 ADR-0026 / ADR-0027 冻结；
 - Document 正式页面原生中文 IME 与持续使用证据；正式富文本与 CRDT、受控脱敏和可移植导出仍未完成；
 - Jenkins 持续终态采集与业务实例配置、持久来源管理 / 安全审计、真实 checkout 采集与其余具体交付关系；
 - PostgreSQL 支持矩阵、schema 兼容窗口、forward repair、数据库权限拆分和容量基线；
@@ -201,6 +209,7 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 
 ## 证据与历史
 
+- [2026-10-18 本地账户受控恢复](reviews/2026-10-18-controlled-account-recovery.md)：独立 CLI、operator 审计、Session / 并发、旧工件升级恢复与 Compose 验收。
 - [2026-10-18 Project 决策只读发现](reviews/2026-10-18-project-decision-discovery.md)：最小列表、当前权限、分页、查询测量与隔离浏览器恢复。
 
 - [2026-10-13 提交回顾与文档收尾](reviews/2026-10-13-daily-closeout.md)：六笔提案 / 实现提交、源码与文档核对、Decision 发现接续建议。

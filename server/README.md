@@ -72,7 +72,7 @@ go run ./cmd/nexus-migrate
 
 runner 使用 session advisory lock 防止并发执行，每个 migration 单独事务提交，并拒绝已应用文件发生漂移。它只支持向前迁移；当前已建立 PostgreSQL 17 同 major 的最小恢复，跨版本生产升级仍需补齐失败中断、forward repair、兼容窗口和恢复限制。
 
-直接运行仍可把完整连接串放在 `DATABASE_URL`。受控部署也可以让 `DATABASE_URL` 只包含 PostgreSQL 用户、地址和数据库名，再用绝对路径 `RADISHNEXUS_DATABASE_PASSWORD_FILE` 输入单行密码；所有 server、migration、bootstrap、backup 和 restore 入口复用同一解析逻辑。两处同时提供密码、相对路径、空值、多行或读取失败都会显式拒绝，错误不会回显 Secret。正式 Compose 用法见 [`deploy/README.md`](../deploy/README.md)。
+直接运行仍可把完整连接串放在 `DATABASE_URL`。受控部署也可以让 `DATABASE_URL` 只包含 PostgreSQL 用户、地址和数据库名，再用绝对路径 `RADISHNEXUS_DATABASE_PASSWORD_FILE` 输入单行密码；所有 server、migration、bootstrap、account-recover、backup 和 restore 入口复用同一解析逻辑。两处同时提供密码、相对路径、空值、多行或读取失败都会显式拒绝，错误不会回显 Secret。正式 Compose 用法见 [`deploy/README.md`](../deploy/README.md)。
 
 ## 首次本地管理员
 
@@ -89,6 +89,26 @@ python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Emai
 密码必须为 15–128 个 Unicode 字符且最多 1024 bytes。命令通过 PostgreSQL transaction advisory lock 保证只有一个调用成功，创建 user、独立账户状态、本地密码凭证、Workspace 和 `owner` membership；`user_accounts` 已有任何账户时失败，不提供覆盖或默认密码。成功输出只包含稳定 user / Workspace ID，不输出邮箱、密码或 Session。bootstrap 不创建 Session，完成后通过正式登录入口建立会话；也不创建 Team、Project 或 Channel。
 
 密码 verifier 属于受保护的权威恢复数据，会进入 PostgreSQL 运维备份；`user_sessions` 只备份 schema、不备份数据，恢复后所有旧 Session 与 CSRF token 失效。该边界不授权 `.nexus` 可移植导出携带 credential。
+
+## 本地账户受控恢复
+
+[ADR-0041](../docs/adr/0041-controlled-local-account-recovery.md) 的 `nexus-account-recover` 是显式部署运维命令，常驻 server 不装配恢复 HTTP / Web 路由。仅支持已有 active 账户及 active、已映射邮箱的本地凭证；disabled、OIDC-only、legacy 未映射、目标不存在或预期邮箱 / 密码版本不一致均拒绝。暂时锁定可在成功恢复时解除。操作者须拥有目标实例运维授权，独立核实账户归属，确认影响同一 user 的所有 Workspace；产品 owner 身份本身不提供这个权限。
+
+先部署匹配 migration 017 的服务与 operations 工件，显式迁移，再按 `inspect → apply → status` 使用。三个子命令均要求 `--request-stdin`，最多 8 KiB 的单个 UTF-8 JSON object；未知 / 重复字段、null、尾随 JSON、错误类型、未配对 surrogate 和不规范标识均拒绝。不得把邮箱或密码放进 shell 参数、环境变量、普通文件、历史或日志。Compose 的无回显操作示例见[部署说明](../deploy/README.md#本地账户受控恢复)。
+
+| 命令 | JSON 字段 | 返回 |
+| --- | --- | --- |
+| `inspect --request-stdin` | `email` | `user_id`、两个 status、固定六位微秒 UTC `password_changed_at`、`eligible` |
+| `apply --request-stdin` | `user_id`、`expected_email`、原样的 `expected_password_changed_at`、预先生成并保存的 UUID v4 `operation_id`、`operator_ref`、`reason_code=lost_local_password`、`new_password`、`confirmed=true` | 确认提交后返回 `result=applied`、user / operation / audit ID、新密码版本 |
+| `status --request-stdin` | `user_id`、`operation_id` | 历史成功记录的同一安全形状，或 `result=not_observed`；不验证密码、不创建 Session |
+
+`operator_ref` 仅允许 1–64 个 ASCII 字母、数字、点、下划线或连字符，指向受控运维记录，不是自由说明或经过 Nexus 认证的人员证明。密码复用当前 15–128 Unicode code point / 1024 bytes 上限与 Argon2id；拒绝当前密码复用，保留输入原文，损坏 verifier / 随机源失败关闭。总预算两分钟，事务锁等待最多五秒，不自动重试或 migrate。
+
+实现先在事务外校验旧 verifier 并计算新 hash，再按账户 → 凭证锁序复核同一邮箱、状态、版本和 hash；使用数据库时间单调更新凭证，清临时失败状态，撤销全账户所有非 revoked Session，同时插入不可变 operator 审计。身份、成员、私密授权、外部绑定、邀请及业务事实保持不变。失败登录计数同时匹配校验时的 hash 与版本，防止旧请求污染新凭证。既有 Session / CSRF 在下一次认证时失效，SSE 按发送和 heartbeat 复核关闭；已通过认证的在途操作不保证瞬间取消，需要完全静止时先摘流并等待应用退出。
+
+恢复成功记录属于 `identity_audit` 权威备份数据，旧审计保留 user actor。相同 operation_id 再次 apply 一律 `operation_already_recorded`；冲突需要重新核对，不能换 ID 盲目覆盖。COMMIT 确认丢失或成功后 stdout 失败返回非零 `result_unconfirmed`，保留原 ID 查询 status。`applied` 只证明历史操作；`not_observed` 不能排除在途提交。待原进程结束并诊断后，只能先以原 ID / 原版本处理重试。其他错误仅输出固定分类，DB cause 保留在内部，不回显 SQL Detail、连接串或输入。
+
+恢复后备份保留新密码和审计，Session / 邀请 / OIDC 事务数据仍不恢复。恢复前的旧备份可能带回旧密码且没有新操作记录；必须用匹配旧工件恢复到隔离空目标，再显式升级、重新核验并用新 operation_id 恢复账户，完成正式登录验证后才开放。不要原地降级或把原实例的 status 当成备份副本真相。验收与未覆盖边界见[实施记录](../docs/status/reviews/2026-10-18-controlled-account-recovery.md)。
 
 ## Jenkins 来源接入
 
