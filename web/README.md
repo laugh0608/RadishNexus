@@ -1,6 +1,6 @@
 # RadishNexus Web
 
-`web/` 是 RadishNexus 第一正式产品形态的 React + TypeScript 入口。当前根路径已经建立最小 authenticated Web Shell，消费正式 login / session / logout transport，允许从当前 Session context 选择 Workspace、分页浏览可读 Project 并打开可读 Channel；Deployment、CI Run、Thread、Decision 与 Ticket 的已知 ID 工具保留在次级入口。Deployment / CI Run 页面安全读取 Nexus View，成功 CI Run 可显式记录外部 staging 部署结果；Ticket 可创建 Markdown Document、人工关联软件组件，并通过稳定组件详情反查可读事项；首页还提供 Repository 映射及组件关联。Project 提供工单与文档列表，Document 页面提供编辑与历史恢复；Channel 页面通过类型化 adapter 分页读取 Message、幂等发送并从 Message 发起 Thread；Thread → Proposed Decision → 人工 Accepted Decision → Ticket 继续使用权限过滤后的 canonical Nexus View 和幂等短请求。原 Decision、CI Run 与 Deployment 代表原型移动到显式 `/prototype/nexus-view`，不参与真实失败 fallback。
+`web/` 是 RadishNexus 第一正式产品形态的 React + TypeScript 入口。当前根路径已经建立最小 authenticated Web Shell，消费正式 login / session / logout transport，允许从当前 Session context 选择 Workspace、分页浏览可读 Project 并打开可读 Channel；Deployment、CI Run、Thread、Decision 与 Ticket 的已知 ID 工具保留在次级入口。Deployment / CI Run 页面安全读取 Nexus View，成功 CI Run 可显式记录外部 staging 部署结果；Ticket 可创建 Markdown Document、人工关联软件组件，并通过稳定组件详情反查可读事项；首页还提供 Repository 映射及组件关联。Project 提供工单、决策与文档列表，Document 页面提供编辑与历史恢复；Channel 页面通过类型化 adapter 分页读取 Message、幂等发送并从 Message 发起 Thread；Thread → Proposed Decision → 人工 Accepted Decision → Ticket 继续使用权限过滤后的 canonical Nexus View 和幂等短请求。原 Decision、CI Run 与 Deployment 代表原型移动到显式 `/prototype/nexus-view`，不参与真实失败 fallback。
 
 ## 本地运行
 
@@ -36,7 +36,7 @@ npm run dev
 - 登录使用私有邮箱与密码，展示名独立；凭据只保留在受控表单和当前同源请求体，不写入 URL、浏览器 storage 或自建 Cookie。Session token 只由服务端 `HttpOnly` Cookie 承载；登出从可读 CSRF Cookie 构造正式请求。
 - `/account` 展示服务端返回的登录方式，提供 owner 创建邀请与当前用户接受邀请；未登录用户可在首页兑换邀请并创建本地账户。邀请码不写入 URL 或 Web Storage，不自动授予 Project 角色或受限 Channel 成员资格。Radish 登录按 capability 隐藏，真实 provider 当前未装配；精确身份合同见 [ADR-0023](../docs/adr/0023-local-account-and-radish-oidc-login.md)。
 - Workspace 选择来自 Session context，但不写入 Session 或授予权限；canonical 业务请求仍按路径 Workspace 重新验证 current membership。
-- 首页已消费 Project / Channel 只读 list API，行为见下文；Project 工单列表已按 ADR-0038 开放；Deployment、Thread 与 Decision 独立列表仍未开放。次级 ID 工具校验正式 `dpl_` / `chn_` / `thr_` / `dec_` / `tkt_` ID 并导航到 canonical 路径，不从 fixture 猜测对象。
+- 首页已消费 Project / Channel 只读 list API，行为见下文；Project 工单列表已按 ADR-0038 开放，决策列表已按 ADR-0040 开放；Deployment 与 Thread 独立列表仍未开放。次级 ID 工具校验正式 `dpl_` / `chn_` / `thr_` / `dec_` / `tkt_` ID 并导航到 canonical 路径，不从 fixture 猜测对象。
 - canonical Deployment 页面只调用同源 `/api/v1/workspaces/{workspace_id}/deployments/{deployment_id}/nexus-view`，使用 `credentials: same-origin`、`cache: no-store`、显式公开 DTO 和运行时校验；未知形状不会被当成成功页面。
 - canonical Channel 页面用原生 EventSource 调用 ADR-0020 的同源 SSE，并继续用 ADR-0018 的三个短请求读写：先等待 `ready`，再读取 canonical history；history 期间的 `message.created` 先缓冲，完成后按 Message ID 去重合并。发送失败时为未修改正文保留同一 `client_operation_id`，`200` 精确重试不会追加重复 Message。
 - 浏览器自动重连沿用原生 `Last-Event-ID`；`resync-required` 关闭旧流、建立新边界并全量重读，断线错误链只允许一次 Session + canonical history 诊断，不做持续轮询。`access-revoked` 或诊断所得 `404` 会清空正文、草稿和 Thread 结果，Session `401` 回到登录态；事件顺序、cursor、空控制数据或 DTO 漂移均 fail closed。
@@ -66,6 +66,12 @@ npm run dev
 `workspace/ProjectTicketsPage.tsx` 与 `project-tickets-api.ts` 实现 [ADR-0038](../docs/adr/0038-project-ticket-discovery.md)。首页选中 Project 后，“查看项目工单”与文档入口并列，进入 `/workspaces/{workspace_id}/projects/{project_id}/tickets`；列表打开原 Ticket 详情，详情的 Project 区可返回列表首页。直接地址、刷新与登录后恢复原路径已接入正式 Web Shell。
 
 项目名称 / 归档状态复用现有 configuration 读取，与只读工单列表按同一请求代次加载；任一失败、撤权或 Session 失效都清空旧标题与条目，取消和迟到响应不能恢复旧内容。分页 cursor 栈仅在页面内存，刷新、焦点 / 可见性恢复和浏览器后退重读首页。按 ADR-0039 严格接受四状态并统一显示中文标签；空态不推断隐藏对象，无状态修改、筛选或排序入口。桌面、手机长标题、键盘与撤权恢复证据见[实施记录](../docs/status/reviews/2026-10-13-project-ticket-discovery.md)。
+
+## Project 决策只读发现
+
+`workspace/ProjectDecisionsPage.tsx` 与 `project-decisions-api.ts` 实现 [ADR-0040](../docs/adr/0040-project-decision-discovery.md)。首页 Project 的“查看项目决策”进入 `/workspaces/{workspace_id}/projects/{project_id}/decisions`；列表显示问题原文及“待确认 / 已确认”，打开既有 canonical Decision 详情，详情按自身 Project 返回列表首页。支持直接地址、刷新和退出后重新登录恢复。
+
+Project 名称 / 归档状态与列表共用请求代次；任一失败清空二者，取消或迟到响应不能恢复旧数据。cursor 栈仅存于页面内存，刷新、focus / 可见性恢复、popstate 和 BFCache pageshow 重读首页，pagehide 清理旧内容。错误、空态和加载状态分开；401 返回登录，404 不残留项目名。严格校验 ref、两个状态、问题文本、顺序和分页结构；HTML / Markdown 样式问题只作为纯文本显示。列表无接受动作、筛选或来源展开。桌面、390px 手机、键盘、分页、证据隔离及撤权恢复见[实施记录](../docs/status/reviews/2026-10-18-project-decision-discovery.md)。
 
 ## Ticket 状态操作
 

@@ -45,7 +45,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0037](0037-ci-run-repository-checkout-provenance.md) | 已接受；A 已实施，B 暂缓 | CI Run 的 Repository 与 checkout commit 来源 |
 | [ADR-0038](0038-project-ticket-discovery.md) | 已接受 | Project 下的 Ticket 只读发现 |
 | [ADR-0039](0039-ticket-status-transitions.md) | 已接受；已实施 | Ticket 最小状态流转 |
-| [ADR-0040](0040-project-decision-discovery.md) | 已接受；待实施 | Project 下的 Decision 只读发现 |
+| [ADR-0040](0040-project-decision-discovery.md) | 已接受 | Project 下的 Decision 只读发现 |
 
 ## 新建规则
 

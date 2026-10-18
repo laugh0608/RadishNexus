@@ -23,6 +23,7 @@ type fakeDiscoveryReader struct {
 	principal authz.Principal
 	project   string
 	input     goldenpath.DiscoveryPageInput
+	kind      string
 }
 
 func (reader *fakeDiscoveryReader) ListProjects(_ context.Context, principal authz.Principal, input goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error) {
@@ -41,6 +42,12 @@ func (reader *fakeDiscoveryReader) ListProjectTickets(ctx context.Context, princ
 	return reader.ListProjects(ctx, principal, input)
 }
 
+func (reader *fakeDiscoveryReader) ListProjectDecisions(ctx context.Context, principal authz.Principal, project string, input goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error) {
+	reader.kind = "decision"
+	reader.project = project
+	return reader.ListProjects(ctx, principal, input)
+}
+
 func discoveryHandlerForTest(t *testing.T, sessions WorkspaceSessionResolver, reader DiscoveryReader) http.Handler {
 	t.Helper()
 	session, err := NewBrowserSessionPolicy("https://nexus.example.test")
@@ -55,7 +62,7 @@ func discoveryHandlerForTest(t *testing.T, sessions WorkspaceSessionResolver, re
 }
 
 func TestDiscoveryRoutesReturnOnlySafeItemsAndScopedPagination(t *testing.T) {
-	for _, kind := range []string{"project", "channel", "ticket"} {
+	for _, kind := range []string{"project", "channel", "ticket", "decision"} {
 		t.Run(kind, func(t *testing.T) {
 			project := ""
 			path := "/api/v1/workspaces/wrk_main/projects"
@@ -67,6 +74,8 @@ func TestDiscoveryRoutesReturnOnlySafeItemsAndScopedPagination(t *testing.T) {
 			status := "archived"
 			if kind == "ticket" {
 				status = "open"
+			} else if kind == "decision" {
+				status = "proposed"
 			}
 			reader := &fakeDiscoveryReader{page: goldenpath.DiscoveryPage{Items: []goldenpath.DiscoveryItem{{Ref: entityref.Ref{Type: kind, ID: id}, Title: "Visible title", Status: status}}, NextID: id}}
 			sessions := validMessagingSessions()

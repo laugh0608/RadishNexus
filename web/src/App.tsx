@@ -1,3 +1,5 @@
+import { ProjectDecisionsPage } from "./workspace/ProjectDecisionsPage";
+import { projectDecisionsLocation } from "./workspace/project-decisions-api";
 import { RepositoryPage } from "./workspace/RepositoryPage";
 import { ProjectTicketsPage } from "./workspace/ProjectTicketsPage";
 import { projectTicketsLocation } from "./workspace/project-tickets-api";
@@ -70,6 +72,7 @@ type AppRoute =
       projectID: string | null;
     }
   | { kind: "repository"; workspaceID: string; repositoryID: string }
+  | { kind: "project-decisions"; workspaceID: string; projectID: string }
   | { kind: "project-tickets"; workspaceID: string; projectID: string }
   | { kind: "component"; workspaceID: string; componentID: string }
   | { kind: "prototype" }
@@ -163,6 +166,9 @@ function appRoute(pathname: string): AppRoute {
   }
   const repository = repositoryLocation(pathname);
   const projectTickets = projectTicketsLocation(pathname);
+  const projectDecisions = projectDecisionsLocation(pathname);
+  if (projectDecisions)
+    return { kind: "project-decisions", ...projectDecisions };
   if (projectTickets) return { kind: "project-tickets", ...projectTickets };
   if (repository) return { kind: "repository", ...repository };
   const component = componentLocation(pathname);
@@ -431,6 +437,7 @@ function SignedInShell({
     route.kind === "component" ||
     route.kind === "repository" ||
     route.kind === "project-tickets" ||
+    route.kind === "project-decisions" ||
     route.kind === "ci-run" ||
     route.kind === "document" ||
     route.kind === "channel" ||
@@ -484,6 +491,13 @@ function SignedInShell({
           session={session}
           navigate={navigate}
           client={discoveryClient}
+          onSessionExpired={onSignedOut}
+        />
+      ) : route.kind === "project-decisions" ? (
+        <ProjectDecisionsPage
+          key={`${route.workspaceID}/${route.projectID}`}
+          workspaceID={route.workspaceID}
+          projectID={route.projectID}
           onSessionExpired={onSignedOut}
         />
       ) : route.kind === "project-tickets" ? (

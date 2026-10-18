@@ -30,6 +30,7 @@ type DiscoveryStore interface {
 	ListProjects(context.Context, authz.Principal, DiscoveryPageInput) (DiscoveryPage, error)
 	ListProjectChannels(context.Context, authz.Principal, string, DiscoveryPageInput) (DiscoveryPage, error)
 	ListProjectTickets(context.Context, authz.Principal, string, DiscoveryPageInput) (DiscoveryPage, error)
+	ListProjectDecisions(context.Context, authz.Principal, string, DiscoveryPageInput) (DiscoveryPage, error)
 }
 
 type DiscoveryService struct{ store DiscoveryStore }
@@ -63,6 +64,16 @@ func (service *DiscoveryService) ListProjectTickets(ctx context.Context, princip
 		return DiscoveryPage{}, fmt.Errorf("%w: invalid Project reference", authz.ErrInvalid)
 	}
 	return service.store.ListProjectTickets(ctx, principal, projectID, input)
+}
+
+func (service *DiscoveryService) ListProjectDecisions(ctx context.Context, principal authz.Principal, projectID string, input DiscoveryPageInput) (DiscoveryPage, error) {
+	if err := validateDiscoveryInput(principal, "decision", input); err != nil {
+		return DiscoveryPage{}, err
+	}
+	if err := entityref.M0Registry().Validate(entityref.Ref{Type: "project", ID: projectID}); err != nil {
+		return DiscoveryPage{}, fmt.Errorf("%w: invalid Project reference", authz.ErrInvalid)
+	}
+	return service.store.ListProjectDecisions(ctx, principal, projectID, input)
 }
 
 func validateDiscoveryInput(principal authz.Principal, kind string, input DiscoveryPageInput) error {

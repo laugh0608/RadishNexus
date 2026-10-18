@@ -2421,3 +2421,24 @@ code {
 .project-tickets .configuration-list p {
   margin-block: 0.5rem 0;
 }
+
+.project-decisions {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.project-decisions .configuration-list {
+  list-style: none;
+  padding: 0;
+}
+.project-decisions .configuration-list li {
+  min-width: 0;
+  padding-block: 1rem;
+  border-bottom: 1px solid var(--border, #d4d4d8);
+}
+.project-decisions .configuration-list a {
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+.project-decisions .configuration-list p {
+  margin-block: 0.5rem 0;
+}

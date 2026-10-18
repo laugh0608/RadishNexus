@@ -19,9 +19,10 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | 能力 | 内部契约与实现 | 公共入口与交互 | 普通用户独立操作 / 持续使用 |
 | --- | --- | --- | --- |
 | 本地身份与 Session | 账户 / 密码拆分、邮箱 bootstrap、旧账户显式映射、Session、CSRF、邀请和外部身份事务 | 同源 HTTPS 邮箱登录、Workspace 选择、账户页和一次性邀请；真实 OIDC provider 尚未装配 | 本地与迁移自动化、邮箱登录与退出浏览器已有证据；新账户邀请兑换浏览器已有证据；Radish 联调、恢复入口、完整成员治理与团队使用仍待验收 |
-| Message → Thread → Decision → Ticket | migration 006 / 007、权限、来源、原子事件与幂等 receipt | canonical 页面和短请求；contributor / decider 浏览器验收已有记录 | 自动 Timeline 与首批双向关系已通过浏览器闭环；Project 工单只读发现已完成；Ticket 最小状态流转已完成；其余协作对象列表与更完整执行管理未闭环 |
+| Message → Thread → Decision → Ticket | migration 006 / 007、权限、来源、原子事件与幂等 receipt | canonical 页面和短请求；contributor / decider 浏览器验收已有记录 | 自动 Timeline 与首批双向关系已通过浏览器闭环；Project 工单与决策只读发现已完成；Ticket 最小状态流转已完成；其余协作对象列表与更完整执行管理未闭环 |
 | Project / Channel 发现 | 当前权限过滤、归档可读、稳定 ID 分页、当前成员复核 | 首页 Workspace → Project → Channel 导航；ID 工具保留为次级入口 | 服务端、真实数据库、Web 交互与隔离浏览器验收通过，含分页、撤权刷新、Workspace 切换及桌面 / 手机布局；基础配置已有独立切片证据，见下一行 |
 | Project 工单发现 | governing Project 当前权限、稳定 ID 分页；DTO 已随 ADR-0039 接受四状态 | 首页项目入口、canonical 工单列表与详情返回入口，刷新 / 页面恢复重新授权 | 正式创建链、普通成员重新登录、25＋2 分页、来源 / 组件 / 文档跳转、桌面 / 手机及撤权刷新 / 后退已验收；状态流转见下一行；持续使用另验 |
+| Project 决策发现 | governing Project 当前权限、两种状态、稳定 ID 分页，与 evidence 可读性独立 | Project 列表入口、canonical 决策列表与详情返回，恢复时重新授权 | 正式创建链、普通成员登录、25＋2 分页、受限来源、后续 Ticket、归档、桌面 / 手机 / 键盘及撤权恢复已验收；见[记录](reviews/2026-10-18-project-decision-discovery.md)，持续使用另验 |
 | Ticket 最小状态流转 | migration 016、独立状态版本、当前权限、精确 receipt、原子事件 / Activity 7 | 详情四状态动作与二次确认、冲突重读、原操作重试；现有列表与创建重试同步 | Go / PostgreSQL / 015 升级 / 备份恢复、Web 与正式创建链 HTTPS 浏览器通过；双标签冲突、响应丢失、桌面 / 手机 / 键盘与撤权恢复见[记录](reviews/2026-10-13-ticket-status-transitions.md)，持续使用另验 |
 | 基础对象与首批成员配置 | migration 009、明确初始 admin、普通角色 / 受限成员、配置 Audit / receipt、撤权清理、备份恢复 | owner 创建 Team / Project，Project admin 创建 Channel 与配置成员 | 从正式 bootstrap 的空业务工作区，经 Web 创建、邀请新账户、双层授权、成员发消息与撤权已验收；首次访问 Web 初始化已有独立证据，管理员交接仍缺 |
 | 单 Channel Message 实时 | 单进程 SSE、当前权限、有界回放、撤权与关闭 | canonical Channel 已接入 ready → history → 增量 | 有技术验收；没有目标团队规模与持续使用的容量证据 |
@@ -52,7 +53,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | --- | --- | --- |
 | 1 | Project 下的 Ticket 只读发现 | 已按 [ADR-0038](../adr/0038-project-ticket-discovery.md) 完成；成员可从 Project 列表找回已有 Ticket，当前权限、分页与恢复验收见[记录](reviews/2026-10-13-project-ticket-discovery.md) |
 | 2 | Ticket 最小状态流转 | 已按 [ADR-0039](../adr/0039-ticket-status-transitions.md) 完成；四状态转换、独立版本、精确重试、读取兼容与恢复验收见[记录](reviews/2026-10-13-ticket-status-transitions.md) |
-| 3 | Project 下的 Decision 只读发现 | [ADR-0040](../adr/0040-project-decision-discovery.md) 已于 2026-10-18 获确认，待实施与验收。找到待确认与已确认结论，拒绝、替代和复核另立写入切片 |
+| 3 | Project 下的 Decision 只读发现 | 已按 [ADR-0040](../adr/0040-project-decision-discovery.md) 完成；成员从 Project 找回两种状态，权限、分页、来源隔离与恢复见[记录](reviews/2026-10-18-project-decision-discovery.md)；拒绝、替代和复核另立写入切片 |
 | 4 | 试用所需身份与运维能力 | 分别设计账号恢复、管理员交接、支持范围与升级失败恢复；外部试用前准备评估授权和故障报告路径，必要设计可提前开展 |
 | 5 | 受控小团队场景试用 | 满足必要条件后观察讨论—决策—工单—文档的持续使用，记录追溯、重复录入与维护者干预；真实交付链未恢复时不宣称完整 Golden Path 通过 |
 | 6 | 版本化结构化导出与全新实例导入 | 独立冻结可迁移数据、脱敏与映射合同并往返验证，不用整库备份代替 M1 退出条件 |
@@ -61,11 +62,13 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 免费书面授权与评估说明应在邀请外部团队前准备，不能等到完整聊天或 CRDT 完成；版本化结构化导出与全新实例导入仍是 M1 的独立退出条件。账号恢复、安全审计、数据生命周期、数据库最小权限与升级演练按[路线图](../roadmap.md)的试用和生产边界推进，不因本表只列近期切片而取消。
 
-### 已确认待实施：Project 下的 Decision 只读发现
+### 本轮完成：Project 决策只读发现
 
-2026-10-18 已按 `fab5561` 完成 [ADR-0040](../adr/0040-project-decision-discovery.md) 的独立提案、源码核对和验收矩阵，核对 Decision 当前读取 / acceptance 权限、两种公共状态、Project 发现与页面恢复惯例。所有者随后确认最小列表、稳定分页和 canonical 入口范围，授权先提交提案文档，再开始实现与必要验证。
+[ADR-0040](../adr/0040-project-decision-discovery.md) 已接受并实施：Project 作用域只读列表仅返回 ref、问题与 proposed / accepted 状态，首页项目入口和 Decision 详情均可进入。当前 Project 权限与 evidence 可读性独立；页面名称和条目共同清理，刷新、重新登录和浏览器恢复重新读取。拒绝、替代、复核和“待我决策”未进入此片。
 
-验收矩阵区分 Decision 可读与 evidence 可读、角色撤回与读取撤回，并覆盖分页、归档、登录 / 浏览器恢复、迟到响应和桌面 / 手机 / 键盘。当前没有业务验证通过结论；查询索引须在实施时凭证据判断，默认不新增 migration。启动隔离验收资源前须说明目标、影响与清理方式；后续实现和验收改动暂不提交或 push。后续顺位和暂缓事项不变。
+Go、真实 PostgreSQL、Web 与隔离 HTTPS 浏览器通过。独立测量 3 个 Project / 1227 条 Decision 后，本片未新增索引、migration、依赖或写入命令。普通成员正式登录、25＋2 分页、来源脱敏、后续 Ticket、归档和撤权恢复的精确证据及环境中断修正见[实施记录](reviews/2026-10-18-project-decision-discovery.md)。临时验收资源已清理；提案已提交为 `19290dc`，所有者随后授权提交本轮实现、测试与文档，本次收尾纳入提交，未 push。
+
+近期下一顺位是分别设计试用所需身份与运维能力，不自动扩大为实现授权；真实 Jenkins B、原生中文 IME 和真实团队持续使用仍按各自边界推进。
 
 ### 本轮完成：Project 工单只读发现
 
@@ -105,8 +108,8 @@ Ticket 与 Component 人工关联已按 ADR-0034 实现，浏览器后退、显�
 
 ### 接下来的事项
 
-1. **实施 Project 下 Decision 只读发现**：[ADR-0040](../adr/0040-project-decision-discovery.md) 已获确认，按已冻结合同与验收矩阵推进。列表只展示当前可读结论，不展开受限 evidence；能读 Decision 不等于有权接受它。
-2. **完成验收和失败边界验证**：具体矩阵见 ADR-0040；首片不加状态筛选或其他业务字段，索引需独立查询证据支持。启动验收资源前说明目标、影响与清理；本轮实现与验收改动暂不提交或 push。
+1. **评审并收束 Decision 发现切片**：[ADR-0040](../adr/0040-project-decision-discovery.md) 的实现与必要验证已完成，证据见[实施记录](reviews/2026-10-18-project-decision-discovery.md)。提案已提交；所有者已授权本轮实现、测试与文档提交，未授权 push。
+2. **设计试用所需身份与运维能力**：分别核对账号恢复、管理员交接、支持范围与升级失败恢复的现有合同和风险，形成独立范围；外部试用前准备评估授权与故障报告路径。当前不自动进入这些能力的实现。
 3. **保留范围**：Decision 拒绝、替代和复核另立写入切片；Ticket 负责人、优先级和看板不随发现入口扩展。后续账号恢复、管理员交接、升级失败恢复、评估授权及受控团队试用仍按近期顺序推进。
 4. **继续暂缓**：真实 Jenkins ADR-0035 / ADR-0037 B 与原生中文 IME 人工验收。真实交付关系、完整 Golden Path、生产运维与团队持续使用均不因本日测试通过而标记完成；恢复时另行明确资源和验收范围。
 
@@ -197,6 +200,8 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
 
 ## 证据与历史
+
+- [2026-10-18 Project 决策只读发现](reviews/2026-10-18-project-decision-discovery.md)：最小列表、当前权限、分页、查询测量与隔离浏览器恢复。
 
 - [2026-10-13 提交回顾与文档收尾](reviews/2026-10-13-daily-closeout.md)：六笔提案 / 实现提交、源码与文档核对、Decision 发现接续建议。
 - [2026-10-13 Ticket 最小状态流转](reviews/2026-10-13-ticket-status-transitions.md)：四状态、版本冲突、精确重试、升级恢复与 HTTPS 浏览器证据。

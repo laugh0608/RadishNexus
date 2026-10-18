@@ -60,3 +60,38 @@ func TestDiscoveryValidatesBeforeReading(t *testing.T) {
 		t.Fatal("invalid Ticket request reached store")
 	}
 }
+
+func (store *discoveryStoreStub) ListProjectDecisions(context.Context, authz.Principal, string, DiscoveryPageInput) (DiscoveryPage, error) {
+	store.calls++
+	return DiscoveryPage{}, nil
+}
+
+func TestDecisionDiscoveryValidatesBeforeReading(t *testing.T) {
+	principal := authz.Principal{Kind: authz.PrincipalUser, ID: "usr_reader", WorkspaceID: "wrk_main"}
+	store := &discoveryStoreStub{}
+	service := NewDiscoveryService(store)
+	for _, input := range []DiscoveryPageInput{{Limit: -1}, {Limit: 0}, {Limit: 51}, {Limit: 25, AfterID: "chn_other"}, {Limit: 25, AfterID: "dec_invalid/path"}} {
+		if _, err := service.ListProjectDecisions(context.Background(), principal, "prj_main", input); !errors.Is(err, authz.ErrInvalid) {
+			t.Fatal(input, err)
+		}
+	}
+	for _, project := range []string{"", "tkt_wrong", "prj_invalid/path"} {
+		if _, err := service.ListProjectDecisions(context.Background(), principal, project, DiscoveryPageInput{Limit: 25}); !errors.Is(err, authz.ErrInvalid) {
+			t.Fatal(project, err)
+		}
+	}
+	if _, err := service.ListProjectDecisions(context.Background(), authz.Principal{}, "prj_main", DiscoveryPageInput{Limit: 25}); !errors.Is(err, authz.ErrUnauthenticated) {
+		t.Fatal(err)
+	}
+	if store.calls != 0 {
+		t.Fatal("invalid Decision request reached store")
+	}
+	for _, input := range []DiscoveryPageInput{{Limit: 1}, {Limit: 50, AfterID: "dec_missing"}} {
+		if _, err := service.ListProjectDecisions(context.Background(), principal, "prj_main", input); err != nil {
+			t.Fatal(input, err)
+		}
+	}
+	if store.calls != 2 {
+		t.Fatal("valid Decision request did not reach store")
+	}
+}

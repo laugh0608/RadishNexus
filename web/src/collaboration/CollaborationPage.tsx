@@ -1,3 +1,4 @@
+import { projectDecisionsPath } from "../workspace/project-decisions-api";
 import { useTicketStatusActions } from "./TicketStatusActions";
 import { ticketStatusLabels } from "./ticket-status";
 import { TicketComponents } from "./TicketComponents";
@@ -395,6 +396,11 @@ function CollaborationPageContent({
             <dt>Project</dt>
             <dd>
               <code>{current.project.id}</code>
+              {current.ref.type === "decision" ? (
+                <a href={projectDecisionsPath(workspaceID, current.project.id)}>
+                  查看项目决策
+                </a>
+              ) : null}
               {entityType === "ticket" ? (
                 <a href={projectTicketsPath(workspaceID, current.project.id)}>
                   查看项目工单

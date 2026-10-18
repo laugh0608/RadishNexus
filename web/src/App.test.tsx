@@ -1,3 +1,4 @@
+import { projectDecisionsClient } from "./workspace/project-decisions-api";
 import type { SetupClient } from "./auth/setup-api";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -66,6 +67,30 @@ describe("App prototype state controls", () => {
 });
 
 describe("authenticated Web Shell", () => {
+  it.each([
+    "/workspaces/wrk_main/projects/prj_main/decisions/new",
+    "/workspaces/wrk_main/projects/prj_main/decisions/dec_choice",
+    "/workspaces/wrk_main/projects/prj_main/decisions/configuration",
+  ])(
+    "keeps unknown nested Decision list routes unavailable: %s",
+    async (pathname) => {
+      const read = vi.spyOn(projectDecisionsClient, "decisions");
+      try {
+        render(
+          <App
+            pathname={pathname}
+            setupClient={establishedSetupClient}
+            authClient={testAuthClient()}
+          />,
+        );
+        await screen.findByRole("heading", { name: "这个页面不存在" });
+        expect(read).not.toHaveBeenCalled();
+      } finally {
+        read.mockRestore();
+      }
+    },
+  );
+
   it("resumes a canonical Project Ticket list after login with Workspace context", async () => {
     const project = vi
       .spyOn(projectTicketsClient, "project")
@@ -119,6 +144,61 @@ describe("authenticated Web Shell", () => {
     } finally {
       project.mockRestore();
       tickets.mockRestore();
+    }
+  });
+  it("resumes a canonical Project Decision list after login with Workspace context", async () => {
+    const project = vi
+      .spyOn(projectDecisionsClient, "project")
+      .mockResolvedValue({
+        id: "prj_main",
+        kind: "project",
+        name: "Decision project",
+        visibility: "workspace",
+        status: "active",
+        canManage: false,
+      });
+    const decisions = vi
+      .spyOn(projectDecisionsClient, "decisions")
+      .mockResolvedValue({
+        items: [{ id: "dec_work", title: "Existing work", status: "proposed" }],
+        nextCursor: null,
+      });
+    try {
+      render(
+        <App
+          pathname="/workspaces/wrk_main/projects/prj_main/decisions"
+          setupClient={establishedSetupClient}
+          authClient={testAuthClient({
+            resolveSession: vi
+              .fn()
+              .mockRejectedValue(
+                new AuthRequestError("expired", { status: 401 }),
+              ),
+          })}
+        />,
+      );
+      await screen.findByRole("heading", { name: "登录 RadishNexus" });
+      fireEvent.change(screen.getByLabelText("邮箱"), {
+        target: { value: "admin@example.test" },
+      });
+      fireEvent.change(screen.getByLabelText("密码"), {
+        target: { value: "synthetic test password" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "登录" }));
+      expect(
+        (
+          await screen.findByRole("link", { name: "Existing work" })
+        ).getAttribute("href"),
+      ).toBe("/workspaces/wrk_main/decisions/dec_work");
+      expect(screen.getAllByText("Main Workspace").length).toBeGreaterThan(0);
+      expect(project).toHaveBeenCalledWith(
+        "wrk_main",
+        "prj_main",
+        expect.any(AbortSignal),
+      );
+    } finally {
+      project.mockRestore();
+      decisions.mockRestore();
     }
   });
   it("shows login for an unauthenticated Session and enters the selected Workspace", async () => {

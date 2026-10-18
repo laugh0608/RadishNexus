@@ -150,6 +150,8 @@ go run ./cmd/nexus-identity-migrate --mapping-stdin < /path/to/private-identity-
 - `/workspaces/{workspace_id}/tickets/{ticket_id}`：读取 Ticket Nexus View 与结构化 Source Decision；
 - `/workspaces/{workspace_id}/documents/{document_id}`：文档阅读、编辑、预览、保存与历史恢复；
 - `/workspaces/{workspace_id}/projects/{project_id}/documents`：当前 Project 可读文档分页列表；
+- `/workspaces/{workspace_id}/projects/{project_id}/tickets`：当前 Project 可读工单分页列表；
+- `/workspaces/{workspace_id}/projects/{project_id}/decisions`：当前 Project 可读决策分页列表；
 - `/prototype/nexus-view`：与真实入口隔离的静态代表状态检视器。
 
 只有上述 HTML 路径和 build 的 `/assets/` 文件会由 Web handler 交付；未知路径返回 `404`。HTML 使用 `no-cache`，哈希资源使用长期 immutable cache，认证和业务 API 继续 `no-store`。完整 same-origin、CSP、启动失败、Session bootstrap 和 fixture 边界见 [ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md)。
@@ -173,6 +175,14 @@ Deployment Nexus View 只读路由为：
 [ADR-0038](../docs/adr/0038-project-ticket-discovery.md) 增加 `GET /api/v1/workspaces/{workspace_id}/projects/{project_id}/tickets`，复用 `DiscoveryService`、repeatable-read 查询与同源 Session 边界。按 Ticket 的 governing Project 当前权限发现，来源 Thread 权限不决定 Ticket 可读性；restricted Project 不允许 owner 绕过 membership，归档仍可读。
 
 响应为 `data.items[{ref,title,status}] / next_cursor`，接受 ADR-0039 的四状态，不展开来源或返回总数。仅接受 `limit`（默认 25、最大 50）与作用域绑定的 `after`，稳定 Ticket ID 升序、排他边界；不与 Component 反向列表共享 cursor。非法状态或数据拒绝整页，不静默筛除。不可读为 404、失效 Session 为 401，所有响应沿用 `private, no-store` 与 `Vary: Cookie`。现有索引满足本轮代表性查询，无新增 migration、依赖或写命令；查询与验收证据见[实施记录](../docs/status/reviews/2026-10-13-project-ticket-discovery.md)。
+
+## Project 决策只读发现
+
+[ADR-0040](../docs/adr/0040-project-decision-discovery.md) 增加 `GET /api/v1/workspaces/{workspace_id}/projects/{project_id}/decisions`。复用 `DiscoveryService`、同源 Session 与 repeatable-read 事务；按 governing Project 当前权限读取，与 evidence Thread / origin Channel 的可读性独立。active Workspace 成员可读 workspace 可见项目，restricted Project 必须有当前 membership，owner 不穿透；归档仍可读。
+
+响应仅为 `data.items[{ref,title,status}] / next_cursor`，title 保留 question 原文，状态严格为 `proposed / accepted`。仅接受 `limit`（默认 25、最大 50）与 `after`；v1 cursor 绑定 Workspace、Project、kind=`decision`，按稳定 ID 升序、排他边界翻页，不与其他列表互用。待返回页含非法状态、ref、问题或顺序时整页失败；不以状态过滤隐藏异常。列表不展开来源、结论、理由、能力或计数，不改变业务事实。401 / 404、错误 envelope、`private, no-store` 与 `Vary: Cookie` 沿用发现合同。
+
+独立查询测量支持本片不新增索引或 migration，无依赖和写入协议变化；规模、权限与浏览器证据见[实施记录](../docs/status/reviews/2026-10-18-project-decision-discovery.md)。
 
 ## Channel Message 短请求
 
