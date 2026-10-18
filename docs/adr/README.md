@@ -48,6 +48,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0040](0040-project-decision-discovery.md) | 已接受 | Project 下的 Decision 只读发现 |
 | [ADR-0041](0041-controlled-local-account-recovery.md) | 已接受并实施 | 自部署本地账户受控恢复 |
 | [ADR-0042](0042-workspace-owner-handoff.md) | 已接受并实施 | Workspace owner 主动交接 |
+| [ADR-0043](0043-single-host-upgrade-failure-recovery.md) | 提议；仅设计 | 单机停机升级与失败恢复 |
 
 ## 新建规则
 

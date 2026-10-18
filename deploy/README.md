@@ -2,6 +2,8 @@
 
 此目录实现 [ADR-0016](../docs/adr/0016-minimal-docker-compose-self-hosting.md) 的最小受控开发实例。它验证固定容器工件、显式 migration / bootstrap、唯一 HTTPS origin、持久化 PostgreSQL 和正式 Web build 的装配，不承诺公网生产证书、高可用或跨 PostgreSQL major 升级。
 
+拟议的试用支持范围见[受控试用支持说明](../docs/trial-support.md)；单机停机升级、失败分类与空目标恢复设计见 [ADR-0043](../docs/adr/0043-single-host-upgrade-failure-recovery.md)。该提案尚未实施或执行验收矩阵，不能把下述分项命令视为完整升级失败恢复手册，也不自动获得操作实例的授权。
+
 ## 边界
 
 - 只有 Caddy 发布宿主 HTTPS 端口；Go server 和 PostgreSQL 没有宿主端口。
