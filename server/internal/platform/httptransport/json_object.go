@@ -16,6 +16,10 @@ func decodeStrictObject(w http.ResponseWriter, r *http.Request, fields []string,
 	if err := decodeJSON(w, r, &raw, maxBytes); err != nil {
 		return nil, err
 	}
+	return decodeStrictObjectBytes(raw, fields)
+}
+
+func decodeStrictObjectBytes(raw []byte, fields []string) (map[string]json.RawMessage, error) {
 	d := json.NewDecoder(bytes.NewReader(raw))
 	token, err := d.Token()
 	if err != nil || token != json.Delim('{') {

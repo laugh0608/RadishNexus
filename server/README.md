@@ -8,12 +8,13 @@
 - 权限过滤、稳定 keyset 分页的 Project / Channel 发现和 canonical Channel Message application query；
 - Thread → Decision → Ticket 的幂等 application service 与 immutable command receipt；
 - 受控 Jenkins HMAC delivery → 完成态 CI Run 的 HTTP adapter、application service 与有限重试发送命令；
+- 独立 Jenkins 快照持久发送 worker、重启预算、精确恢复与双边确认后的显式 payload 清理；
 - 显式授权用户记录终态 staging Deployment 的 application service、Session 目标查询 / 写入与精确重试 receipt；
 - Project 角色、restricted Thread 和关系投影权限；
 - 与业务状态同事务写入的不可变领域事件与 Outbox 投递状态；
 - 正式 Component、CI Run 与不可变 inbound delivery receipt schema；
 - 正式 Environment、环境级部署授权与不可变 Deployment schema；
-- 在业务事务内正常更新、并可从领域事件原子重建的 Activity projection version 2；
+- 在业务事务内正常更新、并可从领域事件原子重建的 Activity projection version 5；
 - 为 Thread、Decision、Ticket、Document、CI Run 和 Deployment 返回 Current、Relations 和 Timeline 的权限过滤 Nexus View query；
 - 一次性本地管理员 bootstrap、Argon2id credential、账号锁定、opaque Session、CSRF digest 与当前 Workspace membership resolver；
 - 把已验证 Session 用户转换为 application `Principal` 的认证 adapter；
@@ -25,9 +26,10 @@
 - 同源 authenticated Web Shell、显式 production build root、页面 allowlist 与安全静态资源缓存；
 - 可选文件 Secret 覆盖数据库 URL 密码的公共 runtime config；
 - Ticket 来源的最小 Markdown Document、Project 发现、不可变版本、显式保存 / 恢复与安全展示投影；
+- Repository 映射与 Component 人工关系、Ticket 与 Component 人工关系、精确解除和按当前权限过滤的双向分页；
 - PostgreSQL 17 同 major 的版本化备份、全新空目标恢复、migration 校验与 Activity 重建命令。
 
-公共 transport 已开放 `/api/v1/auth/sessions` 与 `/api/v1/auth/session` 的 login / resolve / logout 闭环、Deployment / CI Run Nexus View 读取、staging 目标查询与显式记录、Document 创建 / 读取 / 保存 / 恢复、单 Channel Message 历史 / 发送 / Message → Thread、单进程 Message SSE，以及 Thread → Decision → Ticket 协作短请求；同一个 Go server 从显式 Web build root 交付 authenticated shell 和已注册页面。认证入口要求精确 HTTPS public origin、精确 Host、显式可信代理链、客户端 IP 限流、受控 JSON、Secure Cookie 和 CSRF，不接受可信用户 Header、insecure Cookie 或 credentialed CORS。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。inbound 与 collaboration command receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret、原始 webhook body 或业务正文。
+公共 transport 已开放 `/api/v1/auth/sessions` 与 `/api/v1/auth/session` 的 login / resolve / logout 闭环、Deployment / CI Run Nexus View 读取、staging 目标查询与显式记录、Document 创建 / 读取 / 保存 / 恢复、单 Channel Message 历史 / 发送 / Message → Thread、单进程 Message SSE、Thread → Decision → Ticket 协作短请求、Repository 配置 / 组件关系与 Ticket / Component 人工关联；同一个 Go server 从显式 Web build root 交付 authenticated shell 和已注册页面。认证入口要求精确 HTTPS public origin、精确 Host、显式可信代理链、客户端 IP 限流、受控 JSON、Secure Cookie 和 CSRF，不接受可信用户 Header、insecure Cookie 或 credentialed CORS。Jenkins 核心同样不读取请求或验证签名；只有完成来源认证、重放校验和字段映射的调用方才能构造 `VerifiedJenkinsDelivery`。inbound 与 collaboration command receipt 只保存规范化 SHA-256 和最终引用，不保存 Secret、原始 webhook body 或业务正文。
 
 Channel / Message migration 006 固化 Channel membership、Message 不可变和幂等唯一范围、同 Channel reply、messaging-origin Thread 的 `origin_channel_id` 与唯一 `started-from` Message 来源；创建 Message 或 Thread 时，业务事实、安全最小化事件与 `realtime-dispatcher` Outbox 在同一事务提交。canonical query 返回最新一页并按 `(created_at, message_id)` 以 exclusive keyset 向更旧内容翻页，先过滤当前不可读 Thread 回复，且不返回 `client_operation_id`。短请求用版本 1 opaque cursor 封装 keyset；正式 SSE 另用绑定当前进程 generation 与 Channel scope 的有界 opaque cursor，只缓存 Message ID，并在每次发送和 heartbeat 重新验证 Session、Workspace、Channel 与 Thread 权限。两种 cursor 都不是授权能力，SSE 丢失或重启必须回到 canonical history。
 
@@ -35,13 +37,13 @@ collaboration migration 007 以 `(workspace, actor, command, target, client_oper
 
 协作 Nexus View 的 readable relation 明确 `direction: outgoing | incoming`，支持 Thread 发现后续 Decision、Decision 发现后续 Ticket；不可读反向目标完全隐藏，原 evidence 占位不带方向。完整合同、全量关系读取限制与 Go / Web 同步升级要求见 [ADR-0022](../docs/adr/0022-transactional-activity-and-incoming-relations.md)。
 
-当前 Activity 白名单包含 `project.created`、`channel.created`、`decision.proposed`、`decision.accepted`、`ticket.created`、`ci-run.recorded`、`deployment.recorded`、`document.created` 和 `document.revised`。正常写入在同一事务投影，并将对应 `activity-projector` delivery 标记完成；命令成功返回后的重新读取立即可见，投影错误整单回滚。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，先锁定投影表再取得源事件快照，不依赖 Outbox 投递状态；当前不需要常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
+当前 Activity 白名单包含 `project.created`、`channel.created`、`decision.proposed`、`decision.accepted`、`ticket.created`、`ci-run.recorded`、`deployment.recorded`、`document.created`、`document.revised`、`component.created`、`environment.created`、`repository.created`、`component.repository-linked`、`component.repository-unlinked`、`ticket.component-linked` 和 `ticket.component-unlinked`。正常写入在同一事务投影，并将对应 `activity-projector` delivery 标记完成；命令成功返回后的重新读取立即可见，投影错误整单回滚。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，先锁定投影表再取得源事件快照，不依赖 Outbox 投递状态；当前不需要常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
 
-CI Run 的 M0 用户读取由所属 Component 控制：同一 Workspace 的活跃成员可读，非成员、暂停成员和跨 Workspace 主体得到 not-found；owner Team 和 Jenkins source 都不授予读取权。CI Run Current 只返回 status、受控时间与当前 Component，Timeline 隐藏 plugin/source ID，并且不返回 external run key、receipt、digest、Secret、原始 payload 或外部 URL。该 query 已按 ADR-0029 接入 Session 作用域的正式 HTTP DTO 与 Web 页面。
+CI Run 的 M0 用户读取由所属 Component 控制：同一 Workspace 的活跃成员可读，非成员、暂停成员和跨 Workspace 主体得到 not-found；owner Team 和 Jenkins source 都不授予读取权。CI Run Current 返回 status、受控时间、当前 Component 与按当前 Repository 权限过滤的 checkout 摘要，Timeline 隐藏 plugin/source ID，并且不返回 external run key、receipt、digest、Secret、原始 payload 或外部 URL。该 query 已按 ADR-0029 接入 Session 作用域的正式 HTTP DTO 与 Web 页面。
 
 staging Deployment 只记录外部已经完成的终态事实，不执行部署。目标必须是 active staging Environment，来源必须是 succeeded CI Run，调用者必须是 active Workspace 用户并持有该 Environment 的显式授权；Project 角色、owner Team 和 CI source 不隐式授予部署能力。Deployment、`deploys` 关系、`deployment.recorded` 和 Outbox 同事务提交。
 
-Deployment 的 M0 读取与写授权分离：同一 Workspace 的 active 成员只有同时能读取目标 Environment 与来源 CI Run 时才可读取；非成员、暂停成员和跨 Workspace 主体得到 not-found，Environment 归档不隐藏既有历史。Current 只返回终态、受控时间、Environment 与来源 CI Run；Relations 和 Timeline 复用当前权限，不返回 authorization ID、调用 source、Jenkins receipt、digest、Secret、原始 payload 或外部 URL。该 query 已通过独立公共 DTO 开放为第一个只读业务端点；授权管理入口、production、审批、回滚和执行引擎均未建立。
+Deployment 的 M0 读取与写授权分离：同一 Workspace 的 active 成员只有同时能读取目标 Environment 与来源 CI Run 时才可读取；非成员、暂停成员和跨 Workspace 主体得到 not-found，Environment 归档不隐藏既有历史。Current 只返回终态、受控时间、Environment 与来源 CI Run；Relations 和 Timeline 复用当前权限，不返回 authorization ID、调用 source、Jenkins receipt、digest、Secret、原始 payload 或外部 URL。该 query 已通过独立公共 DTO 开放为第一个只读业务端点；环境授权管理入口已按 ADR-0032 接通；production、审批、回滚和执行引擎仍未建立。
 
 本地认证以规范化私有邮箱、Argon2id verifier、5 次失败后 15 分钟账号锁定和 24 小时绝对有效的服务端 Session 为基线。数据库只保存 Session / CSRF token 的 SHA-256 digest；Session 不固定 Workspace，业务调用必须以当前 active membership 解析 `VerifiedUser`。登录 transport 另按客户端 IP 每分钟限制 5 次尝试、每进程最多并发 4 个密码校验并有界跟踪 4096 个客户端；多副本或公网部署仍必须在 reverse proxy / gateway 增加全局限流。成员准入使用一次性邀请；OIDC 状态与外部绑定事务已实现，真实 provider adapter 按当前计划延后，Radish 登录保持关闭。密码重置与 MFA 尚未建立。不可读资源由 application service 返回 `not found`，Deployment handler 还会把不可用 membership 收敛为同形 `not_found`。
 
@@ -70,7 +72,7 @@ go run ./cmd/nexus-migrate
 
 runner 使用 session advisory lock 防止并发执行，每个 migration 单独事务提交，并拒绝已应用文件发生漂移。它只支持向前迁移；当前已建立 PostgreSQL 17 同 major 的最小恢复，跨版本生产升级仍需补齐失败中断、forward repair、兼容窗口和恢复限制。
 
-直接运行仍可把完整连接串放在 `DATABASE_URL`。受控部署也可以让 `DATABASE_URL` 只包含 PostgreSQL 用户、地址和数据库名，再用绝对路径 `RADISHNEXUS_DATABASE_PASSWORD_FILE` 输入单行密码；所有 server、migration、bootstrap、backup 和 restore 入口复用同一解析逻辑。两处同时提供密码、相对路径、空值、多行或读取失败都会显式拒绝，错误不会回显 Secret。正式 Compose 用法见 [`deploy/README.md`](../deploy/README.md)。
+直接运行仍可把完整连接串放在 `DATABASE_URL`。受控部署也可以让 `DATABASE_URL` 只包含 PostgreSQL 用户、地址和数据库名，再用绝对路径 `RADISHNEXUS_DATABASE_PASSWORD_FILE` 输入单行密码；所有 server、migration、bootstrap、account-recover、backup 和 restore 入口复用同一解析逻辑。两处同时提供密码、相对路径、空值、多行或读取失败都会显式拒绝，错误不会回显 Secret。正式 Compose 用法见 [`deploy/README.md`](../deploy/README.md)。
 
 ## 首次本地管理员
 
@@ -88,9 +90,31 @@ python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Emai
 
 密码 verifier 属于受保护的权威恢复数据，会进入 PostgreSQL 运维备份；`user_sessions` 只备份 schema、不备份数据，恢复后所有旧 Session 与 CSRF token 失效。该边界不授权 `.nexus` 可移植导出携带 credential。
 
+## 本地账户受控恢复
+
+[ADR-0041](../docs/adr/0041-controlled-local-account-recovery.md) 的 `nexus-account-recover` 是显式部署运维命令，常驻 server 不装配恢复 HTTP / Web 路由。仅支持已有 active 账户及 active、已映射邮箱的本地凭证；disabled、OIDC-only、legacy 未映射、目标不存在或预期邮箱 / 密码版本不一致均拒绝。暂时锁定可在成功恢复时解除。操作者须拥有目标实例运维授权，独立核实账户归属，确认影响同一 user 的所有 Workspace；产品 owner 身份本身不提供这个权限。
+
+先部署匹配当前 migration 018（含 017 恢复审计）的服务与 operations 工件，显式迁移，再按 `inspect → apply → status` 使用。三个子命令均要求 `--request-stdin`，最多 8 KiB 的单个 UTF-8 JSON object；未知 / 重复字段、null、尾随 JSON、错误类型、未配对 surrogate 和不规范标识均拒绝。不得把邮箱或密码放进 shell 参数、环境变量、普通文件、历史或日志。Compose 的无回显操作示例见[部署说明](../deploy/README.md#本地账户受控恢复)。
+
+| 命令 | JSON 字段 | 返回 |
+| --- | --- | --- |
+| `inspect --request-stdin` | `email` | `user_id`、两个 status、固定六位微秒 UTC `password_changed_at`、`eligible` |
+| `apply --request-stdin` | `user_id`、`expected_email`、原样的 `expected_password_changed_at`、预先生成并保存的 UUID v4 `operation_id`、`operator_ref`、`reason_code=lost_local_password`、`new_password`、`confirmed=true` | 确认提交后返回 `result=applied`、user / operation / audit ID、新密码版本 |
+| `status --request-stdin` | `user_id`、`operation_id` | 历史成功记录的同一安全形状，或 `result=not_observed`；不验证密码、不创建 Session |
+
+`operator_ref` 仅允许 1–64 个 ASCII 字母、数字、点、下划线或连字符，指向受控运维记录，不是自由说明或经过 Nexus 认证的人员证明。密码复用当前 15–128 Unicode code point / 1024 bytes 上限与 Argon2id；拒绝当前密码复用，保留输入原文，损坏 verifier / 随机源失败关闭。总预算两分钟，事务锁等待最多五秒，不自动重试或 migrate。
+
+实现先在事务外校验旧 verifier 并计算新 hash，再按账户 → 凭证锁序复核同一邮箱、状态、版本和 hash；使用数据库时间单调更新凭证，清临时失败状态，撤销全账户所有非 revoked Session，同时插入不可变 operator 审计。身份、成员、私密授权、外部绑定、邀请及业务事实保持不变。失败登录计数同时匹配校验时的 hash 与版本，防止旧请求污染新凭证。既有 Session / CSRF 在下一次认证时失效，SSE 按发送和 heartbeat 复核关闭；已通过认证的在途操作不保证瞬间取消，需要完全静止时先摘流并等待应用退出。
+
+恢复成功记录属于 `identity_audit` 权威备份数据，旧审计保留 user actor。相同 operation_id 再次 apply 一律 `operation_already_recorded`；冲突需要重新核对，不能换 ID 盲目覆盖。COMMIT 确认丢失或成功后 stdout 失败返回非零 `result_unconfirmed`，保留原 ID 查询 status。`applied` 只证明历史操作；`not_observed` 不能排除在途提交。待原进程结束并诊断后，只能先以原 ID / 原版本处理重试。其他错误仅输出固定分类，DB cause 保留在内部，不回显 SQL Detail、连接串或输入。
+
+恢复后备份保留新密码和审计，Session / 邀请 / OIDC 事务数据仍不恢复。恢复前的旧备份可能带回旧密码且没有新操作记录；必须用匹配旧工件恢复到隔离空目标，再显式升级、重新核验并用新 operation_id 恢复账户，完成正式登录验证后才开放。不要原地降级或把原实例的 status 当成备份副本真相。验收与未覆盖边界见[实施记录](../docs/status/reviews/2026-10-18-controlled-account-recovery.md)。
+
 ## Jenkins 来源接入
 
-默认关闭，通过 `RADISHNEXUS_JENKINS_SOURCES_FILE` 显式启用受控来源；文件 Secret、来源绑定、HMAC / 重放、终态映射和有限重试发送工具的使用见 [Jenkins 接入说明](jenkins.md)。复用既有 CI Run 事务，无数据库迁移或新依赖。自动化与真实 Jenkins 三态隔离联调已验证，见[联调记录](../docs/status/reviews/2026-09-26-real-jenkins-lab.md)；持久采集与普通成员独立配置仍未完成。
+默认关闭，通过 `RADISHNEXUS_JENKINS_SOURCES_FILE` 显式启用受控来源；文件 Secret、来源绑定、HMAC / 重放、终态映射和有限重试发送工具的使用见 [Jenkins 接入说明](jenkins.md)。ADR-0037 A 增加 migration 015、sources / payload v2、不可变绑定与 built-from、schema 2 CI 事件和 Activity 6；未新增依赖。旧 v1 摘要与重试保持兼容，持久 collector / worker 仍只处理 v1，真实 checkout 采集 B 暂缓。既有 v1 终态接入已通过自动化与真实 Jenkins 三态隔离联调，见[联调记录](../docs/status/reviews/2026-09-26-real-jenkins-lab.md)；v2 checkout 目前仅有合成签名输入、真实数据库和浏览器的[接收与发现证据](../docs/status/reviews/2026-10-13-checkout-provenance.md)，不代表真实 SCM 采集；已落盘快照的持久发送 worker 已按 ADR-0035 A 实现，使用见 [worker 说明](jenkins-worker.md)。独立 [controller collector](../experiments/jenkins-collector/README.md) 和双边显式清理已有代码与离线故障证据，真实持续采集、挂载 / 重启验收与普通成员独立配置仍未完成。
+
+`./scripts/check-server.sh` 覆盖 Go race / vet 与模块一致性，不执行 Groovy 编译或真实 Jenkins。collector 检查与跨语言导出验证按其说明单独运行；`TestCollectorWorkerContract` 未设置 `RADISHNEXUS_COLLECTOR_CONTRACT` 时跳过，Linux 专属 CLI 用例也不能从 macOS 测试通过推导。各类证据见[当日收尾记录](../docs/status/reviews/2026-10-09-daily-closeout.md)。
 
 ## 公共认证入口
 
@@ -128,15 +152,32 @@ go run ./cmd/nexus-identity-migrate --mapping-stdin < /path/to/private-identity-
 
 命令只处理尚未映射的旧凭证；重复邮箱、重复用户、无效邮箱或未知 / 已映射用户使整批回滚。它不重置密码、不激活禁用账户、不改变业务关联，不在成功或失败输出中打印邮箱。妥善删除不再需要的私有输入材料，不将其提交或放入可移植导出。
 
-新成员由 owner 在 `/account` 创建邀请码，24 小时内单次兑换为 `member`；兑换时重查创建者当前 owner 权限。已有账户应先登录再接受邀请；未登录创建账户时，重复邮箱只返回冲突，不把请求登录为已有用户。无公开注册或自动授予 Project / Environment 权限。
+新成员由 owner 在 `/account` 创建邀请码，24 小时内单次兑换为 `member`；兑换时重查创建者当前 active 账户、owner membership 和邀请绑定的 role_revision，旧任期邀请不会因重新接任而复活。已有账户应先登录再接受邀请；未登录创建账户时，重复邮箱只返回冲突，不把请求登录为已有用户。无公开注册或自动授予 Project / Environment 权限。
 
 本地账户与邀请入口为 `GET /api/v1/auth/methods`、`GET /api/v1/auth/account`、`POST /api/v1/workspaces/{workspace_id}/invitations` 与 `POST /api/v1/auth/invitations/accept`；精确合同见 [ADR-0023](../docs/adr/0023-local-account-and-radish-oidc-login.md)。当前装配只开放本地方式，`methods` 的 `radish` 为 `false`；真实 OIDC provider 与 Radish 联调属于未来规划，当前不新增相关依赖；测试 provider 只验证内部事务边界。
+
+## Workspace owner 主动交接
+
+[ADR-0042](../docs/adr/0042-workspace-owner-handoff.md) 在 `/api/v1/workspaces/{workspace_id}` 下提供：
+
+| 接口 | 合同 |
+| --- | --- |
+| `GET /ownership` | 当前本人角色、十进制字符串代次、owner 能力与近期认证状态 |
+| `GET /owner-transfer-candidates` | owner 读取同工作区 active member 的稳定 ID、展示名与代次；默认 25、最大 50，cursor 绑定 Workspace / actor / kind |
+| `POST /owner-transfers` | 严格 8 KiB JSON：`client_operation_id`、`target_user_id`、双方 `expected_*_role_revision`、`confirmed=true` |
+| `GET /owner-transfers/{client_operation_id}` | 当前有效成员查询本人的 `applied` 历史事实或 `not_observed` |
+
+首次写入要求最近 10 分钟内认证的有效 owner Session，双方有效且代次匹配；在锁内原子交换 owner / member，递增代次并追加配置 Audit / receipt。不是通用角色编辑器；Project / Channel / Thread 与 Deployment 显式权限保持。完整 JSON、错误和不可发现性规则见 ADR。
+
+成功降级者仍可用原请求精确重试或查询自己的最小历史结果；其他配置命令不享有此例外。相同操作 ID 换目标或版本返回冲突。`503 result_unconfirmed`、网络中断或其他 5xx 后查询原 ID；`not_observed` 不能证明回滚，也不能排除在途提交。历史结果不代表现在角色，须重新读取 ownership / Session。
+
+migration 018 与 Go / Web 配套升级，旧 schema readiness 不通过。角色与代次、审计和 receipt 纳入权威备份，Session / 邀请 / OIDC 事务不恢复。旧备份可能带回交接前 owner，恢复后必须重新核对管理责任，不自动重放交接。实现与并发 / 恢复证据见[记录](../docs/status/reviews/2026-10-18-workspace-owner-handoff.md)。
 
 ## Authenticated Web Shell
 
 正式 Web 页面为：
 
-- `/`：Session 检查、首次访问管理员初始化、邮箱登录、邀请兑换、Workspace 选择、Project / Channel 浏览、基础对象与首批成员配置、次级已知 ID 入口和 logout；
+- `/`：Session 检查、首次访问管理员初始化、邮箱登录、邀请兑换、Workspace 选择、Project / Channel 浏览、基础对象与首批成员配置、Workspace owner 主动交接及本人操作查询、Component / Environment 配置与环境授权、次级已知 ID 入口和 logout；
 - `/account`：当前账户登录方式、owner 创建邀请码、当前用户接受邀请；
 - `/workspaces/{workspace_id}/ci-runs/{ci_run_id}`：读取正式 CI Run 安全 DTO，查看终态、Component 与完成活动；
 - `/workspaces/{workspace_id}/deployments/{deployment_id}`：先验证 Session，再消费正式 Deployment Nexus View DTO；
@@ -146,6 +187,8 @@ go run ./cmd/nexus-identity-migrate --mapping-stdin < /path/to/private-identity-
 - `/workspaces/{workspace_id}/tickets/{ticket_id}`：读取 Ticket Nexus View 与结构化 Source Decision；
 - `/workspaces/{workspace_id}/documents/{document_id}`：文档阅读、编辑、预览、保存与历史恢复；
 - `/workspaces/{workspace_id}/projects/{project_id}/documents`：当前 Project 可读文档分页列表；
+- `/workspaces/{workspace_id}/projects/{project_id}/tickets`：当前 Project 可读工单分页列表；
+- `/workspaces/{workspace_id}/projects/{project_id}/decisions`：当前 Project 可读决策分页列表；
 - `/prototype/nexus-view`：与真实入口隔离的静态代表状态检视器。
 
 只有上述 HTML 路径和 build 的 `/assets/` 文件会由 Web handler 交付；未知路径返回 `404`。HTML 使用 `no-cache`，哈希资源使用长期 immutable cache，认证和业务 API 继续 `no-store`。完整 same-origin、CSP、启动失败、Session bootstrap 和 fixture 边界见 [ADR-0015](../docs/adr/0015-same-origin-authenticated-web-shell.md)。
@@ -163,6 +206,20 @@ Deployment Nexus View 只读路由为：
 `GET /api/v1/workspaces/{workspace_id}/projects` 和 `GET /api/v1/workspaces/{workspace_id}/projects/{project_id}/channels` 返回当前可读条目的 `ref / title / status`，以及 nullable `next_cursor`。只接受 `limit`（默认 25、最大 50）和作用域绑定的 opaque `after`；按稳定 ID 升序，在权限过滤后分页，不返回总数或隐藏条目。
 
 每次查询复核 active Workspace membership；restricted Project 和 Channel 需要对应显式成员关系，owner / admin 不穿透。归档对象仍可读；无权限与不存在使用同形 `404`，Session 失效为 `401`，响应 `private, no-store`、`Vary: Cookie`。完整协议、分页变化与升级边界见 [ADR-0025](../docs/adr/0025-project-and-channel-discovery.md)。
+
+## Project 工单只读发现
+
+[ADR-0038](../docs/adr/0038-project-ticket-discovery.md) 增加 `GET /api/v1/workspaces/{workspace_id}/projects/{project_id}/tickets`，复用 `DiscoveryService`、repeatable-read 查询与同源 Session 边界。按 Ticket 的 governing Project 当前权限发现，来源 Thread 权限不决定 Ticket 可读性；restricted Project 不允许 owner 绕过 membership，归档仍可读。
+
+响应为 `data.items[{ref,title,status}] / next_cursor`，接受 ADR-0039 的四状态，不展开来源或返回总数。仅接受 `limit`（默认 25、最大 50）与作用域绑定的 `after`，稳定 Ticket ID 升序、排他边界；不与 Component 反向列表共享 cursor。非法状态或数据拒绝整页，不静默筛除。不可读为 404、失效 Session 为 401，所有响应沿用 `private, no-store` 与 `Vary: Cookie`。现有索引满足本轮代表性查询，无新增 migration、依赖或写命令；查询与验收证据见[实施记录](../docs/status/reviews/2026-10-13-project-ticket-discovery.md)。
+
+## Project 决策只读发现
+
+[ADR-0040](../docs/adr/0040-project-decision-discovery.md) 增加 `GET /api/v1/workspaces/{workspace_id}/projects/{project_id}/decisions`。复用 `DiscoveryService`、同源 Session 与 repeatable-read 事务；按 governing Project 当前权限读取，与 evidence Thread / origin Channel 的可读性独立。active Workspace 成员可读 workspace 可见项目，restricted Project 必须有当前 membership，owner 不穿透；归档仍可读。
+
+响应仅为 `data.items[{ref,title,status}] / next_cursor`，title 保留 question 原文，状态严格为 `proposed / accepted`。仅接受 `limit`（默认 25、最大 50）与 `after`；v1 cursor 绑定 Workspace、Project、kind=`decision`，按稳定 ID 升序、排他边界翻页，不与其他列表互用。待返回页含非法状态、ref、问题或顺序时整页失败；不以状态过滤隐藏异常。列表不展开来源、结论、理由、能力或计数，不改变业务事实。401 / 404、错误 envelope、`private, no-store` 与 `Vary: Cookie` 沿用发现合同。
+
+独立查询测量支持本片不新增索引或 migration，无依赖和写入协议变化；规模、权限与浏览器证据见[实施记录](../docs/status/reviews/2026-10-18-project-decision-discovery.md)。
 
 ## Channel Message 短请求
 
@@ -200,6 +257,14 @@ Deployment Nexus View 只读路由为：
 三个 GET 每次重新检查当前 Workspace、Project、Channel 与 restricted Thread 权限；三个 POST 还要求精确 Origin、double-submit + 存储态 CSRF。写请求携带 printable ASCII `client_operation_id`；首次 Decision / Ticket 创建返回 `201`，精确重试返回 `200`，变化重放返回 `409`。acceptance 只允许 decider / admin、要求当前可读全部 evidence 和显式 `confirmed=true`，首次与精确重试均返回 `200`。
 
 Thread DTO 只通过结构化 ref 返回 origin Channel 和 `started-from` Message，不返回 Message 正文；Decision restricted evidence 只形成无类型、ID、关系名、标题和时间的占位；Ticket 通过 `implements` 保留 Source Decision。所有响应均为 `private, no-store`，不返回 receipt、digest、operation ID、角色、membership、事件或 Outbox。完整边界见 [ADR-0019](../docs/adr/0019-session-scoped-thread-decision-ticket-transport.md)。同源 Web Shell 已接入三个 canonical 页面与对应写动作；production Web handler 只开放精确协作路径，未知或多余嵌套路由继续 `404`。
+
+## Ticket 最小状态流转
+
+[ADR-0039](../docs/adr/0039-ticket-status-transitions.md) 由 `TicketStatusService` 与独立 HTTP handler 承载 `POST /api/v1/workspaces/{workspace_id}/tickets/{ticket_id}/status-transitions`。严格 JSON 只接受 `client_operation_id / base_status_revision / to_status / confirmed=true`，上限 8 KiB；复用 Session、Host、Origin、CSRF 与 no-store 边界。仅当前 active Workspace 与 active Project 的 contributor / decider / admin 可写，不依赖来源私密 Thread 授权。
+
+新状态命令与精确重试均返回 200 的 `data{ticket,applied:true,applied_status,applied_status_revision}`，表示原操作已应用，不是当前快照；旧 receipt 不覆盖后续状态。新请求版本不符、同状态、非法边或版本上限返回 409。Ticket Nexus View 新增必填 `current.status_revision` 与仅 Ticket 使用的 `data.capabilities.change_status`；详情、Project 列表、Component 反向列表接受四状态，未知值失败。创建 201 固定 open / 1，200 重试返回当前值。
+
+migration 016 只为合法旧 open 基线建立版本 1，不虚构事件；异常非 open 基线拒绝升级。状态 / 时间 / 版本、receipt、事件、Outbox 与 Activity 7 同事务；历史事件与 receipt 随权威备份保存，空目标恢复后显式重建。上线需要停写、升级前备份和 Go / schema / Web 配套更新，并让浏览器重新加载；迁移后不能直接回退旧二进制，应恢复升级前备份到新目标或独立 forward repair。不要在运行中的静态入口快照下替换构建资源；发布完整构建后重启应用。验收范围见[实施记录](../docs/status/reviews/2026-10-13-ticket-status-transitions.md)。
 
 ## 基础配置与成员管理
 
@@ -239,7 +304,7 @@ go run ./cmd/nexus-restore --input /path/to/completed-backup-directory
 
 ## 最小 Markdown Document
 
-[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实；Activity projection 升至版本 2，新增事件可全量重建，旧投影不改变原有语义。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。
+[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实；Document 切片将 Activity projection 升至版本 2；当前已由 ADR-0039 扩展为版本 7，新增事件可全量重建，旧投影不改变原有语义。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。
 
 所有端点在 `/api/v1/workspaces/{workspace_id}` 下，要求当前 Session 与 Workspace membership；POST 另要求同源 CSRF。查询返回 `private, no-store`，不能通过引用授予权限。
 
@@ -277,4 +342,45 @@ POST 精确字段、确认及重试语义按 ADR。相同 operation ID / canonic
 
 migration 011 扩展既有协作 receipt 的 CHECK，保留 revision 合同。receipt、Deployment、`deploys`、领域事件、Outbox 和 Activity 同事务提交。显式迁移后才能使用匹配版本服务；不通过删除 migration history 回退。备份保留 receipt，恢复后精确重试返回原 Deployment。
 
-本入口记录外部已结束事实，不执行部署、调用 Jenkins、读取 Secrets 或授予环境权限。Environment / Component 配置和环境授权管理仍未提供产品入口。
+本入口记录外部已结束事实，不执行部署、调用 Jenkins、读取 Secrets 或授予环境权限。Environment / Component 配置与独立环境授权管理见下节。
+
+
+## Component / Environment 配置与环境授权
+
+[ADR-0032](../docs/adr/0032-component-environment-configuration-and-authorization.md) 扩展既有 `ConfigurationService`、配置 Audit / receipt 与 Session 路由。active Workspace owner 可创建 active Component 和 active staging Environment；所有 active Workspace 成员可分页发现既有对象与读取配置。创建只表达责任 Team，不自动赋予部署记录权，也不生成 Repository / CI source / 交付关系。
+
+公共路径统一以 `/api/v1/workspaces/{workspace_id}` 为前缀：`GET / POST /components`、`GET / POST /environments`、各对象的 `GET /configuration`；owner 通过环境的 `GET /deployment-authorizations` 和 `GET / PUT / DELETE /deployment-authorizations/{user_id}` 管理授权。严格字段、分页、状态码和 DTO 以 ADR 为准。PUT / DELETE 必填 `expected_authorization` 与显式确认；成功只表示原请求已经处理，客户端须重新读取当前状态。
+
+migration 012 保留 revoked 授权，重新授予追加新 ID 与 generation，并保持每个环境 / 用户至多一条 active 记录。历史 Deployment 始终关联原授权；旧授予或撤销 receipt 不重新改变权限。事务按账户、membership、Environment、授权记录的顺序加锁；Deployment 同步重查账户状态。撤销允许清理 archived staging 与失效成员，production 不开放管理写入。
+
+创建对象、Audit、receipt、领域事件、Outbox 和 Activity 同事务提交；授权只进入窄 Audit。此切片将 Activity projection 从 2 升至 3，新增 `component.created` / `environment.created`，migration 将现有 v2 投影标为 v3，重建与恢复继续从领域事件生成。当前版本已由 ADR-0034 扩展为 5；不补造历史对象创建事件。全代次授权、成功 Audit / receipt 与旧 Deployment 引用属于既有备份权威表；升级必须显式迁移，旧二进制拒绝新 schema，不能删历史授权降级。
+
+
+## Repository 映射与 Component 关联
+
+[ADR-0033](../docs/adr/0033-repository-mapping-and-component-relations.md) 沿用 `ConfigurationService` 与 `ConfigurationHandler`。Workspace owner 创建不可变映射，成员共享读取元数据；owner 明确关联 active Component，或按精确 link ID 解除既有关系。多对多 `source-repository` 保留来源、active 唯一与 removed 历史，重新关联生成新 ID。旧 receipt 返回原处理结果后，客户端必须刷新当前关系。
+
+Session API 位于 `/api/v1/workspaces/{workspace_id}`：
+
+- `GET /repositories`、`POST /repositories`、`GET /repositories/{repository_id}/configuration`；
+- `GET /repositories/{repository_id}/components`；
+- `GET /components/{component_id}/repositories`、`POST /components/{component_id}/repositories`；
+- `DELETE /components/{component_id}/repository-links/{link_id}`。
+
+请求复用严格 JSON、CSRF、当前权限与绑定作用域游标；失去可发现性返回 404，缺 owner 写权限为 403，身份 / active 关系 / receipt 冲突为 409。provider origin 与浏览 URL 使用同一规范化规则，拒绝凭据、query、fragment、歧义路径和非 HTTPS；服务端不访问 URL。共享 DTO 不包含 Audit、receipt 或 Secret。
+
+migration 013 新增 `repositories`、关系来源和唯一性约束、Audit / receipt 白名单及 provenance 校验；旧命令摘要保持不变。Activity v4 同事务记录创建、关联与解除，Repository 表纳入权威备份。升级须配套 Go / Web；只读 readiness 拒绝旧二进制 / schema 不匹配。验收覆盖 012 升级、并发撤权、事务故障、重建与全新目标恢复，具体见[实施记录](../docs/status/reviews/2026-10-06-repository-mapping.md)。
+
+## Ticket 与 Component 人工关联
+
+[ADR-0034](../docs/adr/0034-ticket-component-relations.md) 由独立 `TicketComponentService` 复用 EntityLink、协作 receipt、事件与 Outbox。Ticket 所属 active Project 的 contributor / decider / admin 可关联或精确解除；Workspace owner 不绕过 Project。新关联拒绝 retired Component，解除允许所有生命周期；原请求重试重新检查当前权限，不能复活旧关系或解除重连后的新关系。
+
+Session API 位于 `/api/v1/workspaces/{workspace_id}`：
+
+- `GET /tickets/{ticket_id}/components` 与 `POST /tickets/{ticket_id}/components`；
+- `DELETE /tickets/{ticket_id}/component-links/{link_id}`；
+- `GET /components/{component_id}/tickets`。
+
+写入要求 `client_operation_id` 与 `confirmed=true`，关联另带 `component_id`；严格 JSON 上限 8 KiB。返回 `{link_id,applied:true}`，首次关联 201、重试及解除 200。关系列表默认 25、最大 50，按目标 ID 排序，反向先过滤当前不可读 Ticket，再占页配额和生成作用域游标；不返回隐藏目标或总数。Ticket 列表返回 `capabilities.can_link`，各项包含 `can_unlink`。
+
+migration 014 增加 `ticket --affects--> component`、来源约束、active 唯一 / 反向索引与精确协作 receipt 来源校验。Activity v5 只把两类关系事件投影到 Ticket，字段为 `relation_state`，不改 Ticket `status`、来源 Decision 或更新时间。关系、receipt、事件、Outbox、Activity 同事务；恢复权威表后显式重建投影。Go / schema / Web 配套升级，旧二进制 readiness 拒绝新 schema。自动化与浏览器证据边界见[实施记录](../docs/status/reviews/2026-10-06-ticket-component.md)。

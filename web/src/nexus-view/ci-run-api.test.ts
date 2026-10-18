@@ -1,10 +1,56 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  parseCICheckout,
   ciRunLocation,
   ciRunPagePath,
   loadCIRun,
   parseCIRunResponse,
 } from "./ci-run-api";
+
+it("accepts explicit checkout states and rejects restricted or malformed leaks", () => {
+  const repository = {
+    ref: { type: "repository", id: "rep_source" },
+    title: "Source",
+  };
+  const observed = {
+    visibility: "readable",
+    state: "observed",
+    repository,
+    revision: { algorithm: "sha1", oid: "a".repeat(40) },
+  };
+  expect(parseCICheckout(observed)).toMatchObject({ state: "observed" });
+  expect(parseCICheckout({ visibility: "restricted" })).toEqual({
+    visibility: "restricted",
+  });
+  for (const reason of [
+    "checkout_not_observed",
+    "unsupported_checkout",
+    "binding_changed_during_run",
+  ]) {
+    expect(
+      parseCICheckout({
+        visibility: "readable",
+        state: "unavailable",
+        repository,
+        reason,
+      }),
+    ).toMatchObject({ reason });
+  }
+  for (const invalid of [
+    { visibility: "restricted", state: "observed" },
+    { ...observed, binding_id: "private" },
+    { ...observed, reason: "checkout_not_observed" },
+    { ...observed, revision: { algorithm: "sha1", oid: "0".repeat(40) } },
+    { ...observed, revision: { algorithm: "sha256", oid: "a".repeat(64) } },
+    {
+      visibility: "readable",
+      state: "unavailable",
+      repository,
+      reason: "arbitrary",
+    },
+  ])
+    expect(() => parseCICheckout(invalid)).toThrow();
+});
 const fixture = () => {
   const component = { ref: { type: "component", id: "cmp_api" }, title: "API" };
   return {
@@ -17,6 +63,7 @@ const fixture = () => {
         recorded_at: "2026-09-26T01:00:01Z",
         updated_at: "2026-09-26T01:00:01Z",
         component,
+        checkout: { visibility: "readable", state: "not_collected" },
       },
       relations: [],
       timeline: [

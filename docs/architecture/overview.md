@@ -86,6 +86,8 @@ Web App 应从一开始适配常见 PC 分辨率和移动浏览器，但移动 W
 
 Flutter 在 Web 产品闭环稳定后统一承载移动端和 PC 安装包。首期客户端应优先覆盖消息、通知、工单快速操作和文档阅读，再按真实需求增加完整编辑能力。
 
+同一官方 Flutter 安装包须在运行时选择官方端点或用户自部署的兼容实例，无需重新编译；实例与 Workspace 分离，凭据、缓存、realtime 与离线状态按实例隔离。该目标尚未实施，详细流程及 Web 同源边界见[客户端连接规划](client-server-connection-plan.md)和 [ADR-0036](../adr/0036-official-client-instance-connection.md)。
+
 Flutter 与 Web 共享：
 
 - HTTP/WebSocket 协议；
@@ -148,9 +150,21 @@ entity://environment/env_002
 
 引用必须经过原对象权限检查。能够看到工单不表示自动获得关联私密频道或文档的读取权。
 
-类型注册、结构化表示、Workspace 解析和受限占位的 M0 基线见[核心实体、授权与事件契约](core-contracts.md)。Thread、Decision、Ticket 的首段 Project 作用域与物理 schema 已由 ADR-0004、ADR-0005 和正式 migration 落地；Component、CI Run 的来源与读取边界已由 ADR-0006、ADR-0007 和 migration 003 落地；Environment、显式 staging Deployment、环境级写授权与安全读取已由 ADR-0009、ADR-0011 和 migration 004 落地；Channel、Message 与 messaging-origin Thread 的最小身份、来源、权限和幂等边界已由 ADR-0017 与 migration 006 落地；Thread → Decision → Ticket 的 Session transport、人工确认和命令 receipt 已由 ADR-0019 与 migration 007 落地。Document 的 `document / doc_` 身份、Project 读取边界、不可变 Markdown revision 和公共读写合同已由 [ADR-0028](../adr/0028-minimal-markdown-document.md) 落实到正式注册表、migration 010、Go HTTP 与 React 页面，文档与不可变版本纳入权威备份。具体 ID 生成算法及 Repository 等其余对象 schema 仍未冻结。
+类型注册、结构化表示、Workspace 解析和受限占位的 M0 基线见[核心实体、授权与事件契约](core-contracts.md)。Thread、Decision、Ticket 的首段 Project 作用域与物理 schema 已由 ADR-0004、ADR-0005 和正式 migration 落地；Component、CI Run 的来源与读取边界已由 ADR-0006、ADR-0007 和 migration 003 落地；Environment、显式 staging Deployment、环境级写授权与安全读取已由 ADR-0009、ADR-0011 和 migration 004 落地；Channel、Message 与 messaging-origin Thread 的最小身份、来源、权限和幂等边界已由 ADR-0017 与 migration 006 落地；Thread → Decision → Ticket 的 Session transport、人工确认和命令 receipt 已由 ADR-0019 与 migration 007 落地。Document 的 `document / doc_` 身份、Project 读取边界、不可变 Markdown revision 和公共读写合同已由 [ADR-0028](../adr/0028-minimal-markdown-document.md) 落实到正式注册表、migration 010、Go HTTP 与 React 页面，文档与不可变版本纳入权威备份。Repository 映射由 ADR-0033 与 migration 013 冻结；具体 ID 生成算法及其余对象 schema 仍未冻结。
 
 CI Run 的 Session 公共读取合同见 [ADR-0029](../adr/0029-session-scoped-ci-run-nexus-view.md)，外部终态写入的受控来源、签名与重放边界见 [ADR-0030](../adr/0030-authenticated-jenkins-delivery-adapter.md)。Jenkins adapter 验证后调用既有 service，不承担 Deployment 确认或用户授权，也不要求 Nexus 默认自部署拓扑启动 Jenkins。成功 CI Run 的 staging 记录按 [ADR-0031](../adr/0031-session-scoped-staging-deployment-recording.md) 通过独立 Session 命令和显式环境授权完成；migration 011 扩展既有 receipt，精确重试与当前权限复核共用唯一业务事务。
+
+[ADR-0035](../adr/0035-durable-jenkins-terminal-delivery.md) 将可信 controller 快照采集与独立 Go 签名发送分开，用本地不可变输入、持久预算、确认记录和显式双边清理恢复交付；不扩展公共 v1 payload 或核心业务表。运行与验证边界见[插件系统](plugin-system.md)，操作与备份见 [worker 说明](../../server/jenkins-worker.md)。本地 spool manifest 不等于核心数据库中的来源注册或权限配置。
+
+Component / staging Environment 的最小创建、发现与显式授权管理已按 [ADR-0032](../adr/0032-component-environment-configuration-and-authorization.md) 接入既有配置 service、成功 Audit / receipt 与 Session API。migration 012 保留撤销授权并追加不可变代次，历史 Deployment 继续引用当时授权；owner 管理权不自动成为部署记录权。该切片的创建事件自 Activity v3 起纳入投影，授权明细只进入窄 Audit。Repository 最小映射与 Component 的人工 `source-repository` 已按 [ADR-0033](../adr/0033-repository-mapping-and-component-relations.md) 和 migration 013 接通，沿 Workspace owner 配置权管理，成员共享读取；外部 provider 连接与通用来源管理仍是独立范围；具体 checkout 来源由下方 ADR-0037 承载。
+
+Ticket 与 Component 已按 [ADR-0034](../adr/0034-ticket-component-relations.md) 接通人工 `affects` 关系、Project 权限与双向读取。独立关系 service 复用协作 receipt 和业务事务，migration 014 与 Activity v5 配套升级；组件页仅汇集当前可读关系，不从共属组件推导 Ticket 已交付。
+
+[ADR-0037](../adr/0037-ci-run-repository-checkout-provenance.md) 增加受控 checkout binding 与不可变 `built-from`，由 migration 015 保存来源事实；来源 capability 与人工组件关联独立。一次性 sender / receiver 支持 v2，持久 collector / worker 的来源升级属于后续 B；当前接收与发现证据不代表真实 Jenkins checkout 采集完成。
+
+Project 工单只读发现按 [ADR-0038](../adr/0038-project-ticket-discovery.md) 复用当前 Project 权限和稳定 ID 分页；[ADR-0039](../adr/0039-ticket-status-transitions.md) 以独立状态版本与精确 receipt 接通四状态流转。migration 016、Activity v7、HTTP 与 Web 配套升级，状态命令和原操作重试均重新授权；工单完成不触发 CI Run 或 Deployment。协议与投影细节见[核心契约](core-contracts.md)。
+
+Project 决策只读发现按 [ADR-0040](../adr/0040-project-decision-discovery.md) 在同一 repeatable-read 快照中复核 governing Project 当前权限并按稳定 ID 分页，只返回问题、引用与 proposed / accepted 状态；evidence Thread / origin Channel 权限独立。首页、Project 列表与详情返回使用既有 canonical 页面，元数据与列表在撤权或恢复时共同重读；未新增 migration、索引或 Decision 写入动作。
 
 ## EntityLink 与 Nexus View
 
@@ -186,6 +200,11 @@ CI Run 的 Session 公共读取合同见 [ADR-0029](../adr/0029-session-scoped-c
 - 最小且经过权限评估的 payload。
 
 Activity 不是 Outbox 的副本。Outbox 用于可靠投递，Activity 是可重建、可权限过滤的产品时间线投影；审计日志则保存安全与合规所需的操作证据。三者可以来自同一领域事件，但保留不同职责和生命周期。
+
+本地账户受控恢复按 [ADR-0041](../adr/0041-controlled-local-account-recovery.md) 由独立运维 CLI 执行：账户 → 凭证锁内复核版本与状态，密码更新、全账户旧 Session 撤销和 operator 成功审计原子提交。migration 017 扩展既有 `identity_audit`，保留旧 user actor，分离 operator / target、唯一 operation_id 与前后密码版本；恢复记录不可变并纳入权威备份。status 只证明历史提交，模糊提交不可当作回滚。失败登录按校验时的凭证版本匹配，恢复不改变授权、外部身份或业务 Activity；该能力依赖宿主 / 数据库运维授权，产品 owner 无对应 HTTP 权限。旧备份可能带回旧 verifier，必须在隔离目标重新核验和恢复。
+
+Workspace owner 主动交接按 [ADR-0042](../adr/0042-workspace-owner-handoff.md) 使用独立配置命令：排序锁定双方账户，再锁 Session、排序锁定双方 membership，最后锁 Workspace；全部等待后复核有效期、近期认证和预期代次。双角色 / revision、配置 Audit 和 receipt 原子提交，不获取邀请或业务对象锁。migration 018 增加角色代次、邀请任期绑定和交接审计形状；历史成功仅允许当前有效成员读取本人最小结果，其他配置命令仍按当前管理权检查。提交确认丢失通过原 operation ID 查询，不自动生成新操作；不新增 Activity / Outbox 或全局最后 owner 约束。
+
 
 当前白名单事件已在业务事务内同步投影，提交成功后重新读取即可看到对应对象的 Timeline；失败回滚整笔业务。显式全量重建与正常投影共用映射，并通过先锁定投影表、再取源事件快照避免丢失并发提交。Thread / Decision 的反向关系从同一 EntityLink 查询，继续复用当前权限；精确时效、方向、升级与运行成本见 [ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md)。
 
@@ -233,7 +252,7 @@ canonical Channel Web 对 SSE 使用“先建立连接并收到 `ready`、再读
 
 M0.5 已建立第一条可验证恢复路径：显式命令生成版本化 manifest 与 PostgreSQL custom archive，只在本地或受控私有连接的全新空 PostgreSQL 17 目标上以单事务恢复，随后执行正式 forward-only migration 校验并从不可变领域事件重建 Activity。当前工件是同 major 整库运维备份，不是 `.nexus` 开放导出，也不包含自动覆盖、TLS 工具桥接、跨大版本承诺、远程存储、加密或 Secret 备份。精确边界见 [ADR-0010](../adr/0010-verified-postgresql-backup-and-restore.md)。
 
-M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 Caddy 是唯一宿主 HTTPS 入口，Go server 同源交付 production Web build 与 API，PostgreSQL 只位于内部数据网络；migration、一次性 bootstrap、backup 和 restore 继续使用现有显式 CLI，数据库密码通过按 service 挂载的文件 Secret 输入。该拓扑已经从全新命名 volume 验证 PostgreSQL readiness、migration、一次 bootstrap、重复 bootstrap 拒绝、HTTPS login / Session / logout、转发 Header 清洗和非公开应用/数据库端口；它仍不是公网证书、高可用或跨 major 升级方案。Go 业务就绪探针现按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 只读核对完整 migration history，缺失、漂移或版本不匹配返回不可用。此前完整 Compose 演练不包含 migration 008–011、新业务就绪探针、网页首访初始化和后续 Document / 交付入口；setup overlay 只通过配置合并校验，当前版本镜像、Secret 实际挂载与升级路径仍需单独演练。拓扑边界见 [ADR-0016](../adr/0016-minimal-docker-compose-self-hosting.md) 和 [`deploy/README.md`](../../deploy/README.md)。
+M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 Caddy 是唯一宿主 HTTPS 入口，Go server 同源交付 production Web build 与 API，PostgreSQL 只位于内部数据网络；migration、一次性 bootstrap、account-recover、backup 和 restore 继续使用现有显式 CLI，数据库密码通过按 service 挂载的文件 Secret 输入。该拓扑已经从全新命名 volume 验证 PostgreSQL readiness、migration、一次 bootstrap、重复 bootstrap 拒绝、HTTPS login / Session / logout、转发 Header 清洗和非公开应用/数据库端口；它仍不是公网证书、高可用或跨 major 升级方案。Go 业务就绪探针现按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 只读核对完整 migration history，缺失、漂移或版本不匹配返回不可用。2026-10-18 已验证 migration 017 工件的全新 Compose 装配、Secret 实际挂载、就绪探针、恢复 CLI 与 HTTPS / SSE；旧 016 工件备份在隔离空目标恢复后显式升级亦已验证。网页 setup overlay、Document / 交付全链、生产带流量升级和通用升级中断恢复不由本轮替代，精确范围见[恢复实施记录](../status/reviews/2026-10-18-controlled-account-recovery.md)。后续 migration 018 工件的 Compose HTTPS、owner 交接和旧 017 工件恢复证据见[交接实施记录](../status/reviews/2026-10-18-workspace-owner-handoff.md)。拓扑边界见 [ADR-0016](../adr/0016-minimal-docker-compose-self-hosting.md) 和 [`deploy/README.md`](../../deploy/README.md)。
 
 ### 可移植上下文包
 
@@ -259,7 +278,7 @@ M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 
 
 ### Project / Channel 发现入口
 
-首页按 [ADR-0025](../adr/0025-project-and-channel-discovery.md) 提供 Workspace 内的 Project 与 Channel 只读发现。服务端在一致的当前权限快照中先过滤后分页，客户端只渲染安全条目并进入既有 canonical 页面；列表不增加角色能力，也不取代最终对象读取时的复权。[ADR-0026](../adr/0026-foundation-configuration-and-membership.md) 已接通 owner 创建 Team / Project、显式初始 admin、Project admin 创建 Channel 与配置普通成员；受限 Channel 管理仍要求明确成员资格。配置 Audit / receipt 随 migration 009 保留，撤权清理下属私密授权，精确重试不复权；管理员交接仍独立推进。
+首页按 [ADR-0025](../adr/0025-project-and-channel-discovery.md) 提供 Workspace 内的 Project 与 Channel 只读发现。服务端在一致的当前权限快照中先过滤后分页，客户端只渲染安全条目并进入既有 canonical 页面；列表不增加角色能力，也不取代最终对象读取时的复权。[ADR-0026](../adr/0026-foundation-configuration-and-membership.md) 已接通 owner 创建 Team / Project、显式初始 admin、Project admin 创建 Channel 与配置普通成员；受限 Channel 管理仍要求明确成员资格。配置 Audit / receipt 随 migration 009 保留，撤权清理下属私密授权，精确重试不复权；Workspace owner 主动交接已按 ADR-0042 接通；Project admin / 私密对象管理权交接仍独立推进。
 
 ## 当前仓库布局
 

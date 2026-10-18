@@ -2306,6 +2306,14 @@ code {
   align-items: flex-start;
   gap: 0.5rem;
 }
+.configuration-panel .configuration-checkbox input {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  flex: 0 0 18px;
+  margin: 2px 0 0;
+  padding: 0;
+}
 .configuration-actions {
   display: flex;
   flex-wrap: wrap;
@@ -2394,4 +2402,43 @@ code {
 .document-layout button {
   min-height: 40px;
   margin: 0.25rem;
+}
+
+.project-tickets {
+  min-width: 0;
+}
+.project-tickets .configuration-list {
+  list-style: none;
+  padding: 0;
+}
+.project-tickets .configuration-list li {
+  padding-block: 1rem;
+  border-bottom: 1px solid var(--border, #d4d4d8);
+}
+.project-tickets .configuration-list a {
+  font-weight: 600;
+}
+.project-tickets .configuration-list p {
+  margin-block: 0.5rem 0;
+}
+
+.project-decisions {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.project-decisions .configuration-list {
+  list-style: none;
+  padding: 0;
+}
+.project-decisions .configuration-list li {
+  min-width: 0;
+  padding-block: 1rem;
+  border-bottom: 1px solid var(--border, #d4d4d8);
+}
+.project-decisions .configuration-list a {
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+.project-decisions .configuration-list p {
+  margin-block: 0.5rem 0;
 }

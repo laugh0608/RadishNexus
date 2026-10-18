@@ -4,7 +4,22 @@
 
 日期：2026-09-26
 
+[ADR-0032](../adr/0032-component-environment-configuration-and-authorization.md) 冻结 Component / Environment 创建、发现与 owner 环境授权管理：同环境 / 用户至多一条 active 授权，重新授予追加不可变代次，历史 Deployment 保留原授权 ID。命令沿用配置 receipt / Audit 与严格 Session 边界，expected ID / 状态防止旧页面覆盖；Component / Environment 创建事件同事务投影到主要对象，授权明细不进入普通 Activity。
+
+[ADR-0033](../adr/0033-repository-mapping-and-component-relations.md) 冻结 Repository 最小映射与 Component 关联：Workspace owner 写入、active 成员共享读取；`source-repository` 为有人工来源的多对多关系，解除精确指向 link ID，重新关联生成新 ID。三类命令复用配置 Audit / receipt，重试前重新检查当前账户、成员资格和两端权限，旧 receipt 不复活或移除后续关系。migration 013 扩展实体注册、约束和权威备份；无 provider 网络调用或 Secret。
+
+[ADR-0037](../adr/0037-ci-run-repository-checkout-provenance.md) 增加来源配置 / payload v2 与 migration 015。按 `effective_from_build` 严格划分旧 v1 与新 v2，v1 canonical digest 字节不变；首条 v2 的不可变 binding、CI Run、receipt、observed 的 built-from、schema 2 `ci-run.recorded`、Outbox 和 Activity 6 原子提交。Git OID 仅在关系 metadata；事件保存状态 / 原因、需重新授权的 Repository subject 与 nullable link ID。其他事件仍只接受既有 schema，恢复与正常写入共用投影器。
+
+CI Run 公共 Current 的 `checkout` 是封闭联合：readable 的 not_collected、observed（Repository + revision）、unavailable（Repository + 受控 reason），或只有 visibility 的 restricted。Relations / Timeline 必须与之保持一致。`GET /api/v1/workspaces/{workspace_id}/repositories/{repository_id}/ci-runs` 按同源 Session 和当前对象权限返回稳定 ID 分页，不输出隐藏数量；cursor 绑定 Workspace / Repository。客户端与服务端同步升级。
+
+[ADR-0038](../adr/0038-project-ticket-discovery.md) 增加 Project 下 Ticket 只读分页：按 `governing_project_id` 与当前 Project 权限读取，引用来源不授予或削减 Ticket 权限。公共列表只返回 `ref / title / status`，与正式详情一致接受 ADR-0039 的四状态；异常状态拒绝整页，不通过过滤掩盖漂移。稳定 ID cursor 绑定 Workspace / Project / 列表种类，不是授权或固定结果快照。该读取不改变领域状态、事件、Activity 或 receipt。
+
+[ADR-0039](../adr/0039-ticket-status-transitions.md) 增加唯一 `ticket.status.change` 命令与 migration 016。Ticket 独立 `status_revision` 防止并发覆盖和重新打开后的旧请求；先按当前账户 / Workspace / Project 重新授权，再匹配 receipt，最后检查新转换。receipt 返回原 applied 状态与版本，Nexus View 同事务读取 Current 和 `capabilities.change_status`；客户端成功后重新读取当前事实。状态、receipt、schema 1 `ticket.status-changed`、Outbox 与 Activity 7 原子提交。新事件无 subject，只投影到 Ticket 并记录四个前后状态 / 版本字段；旧创建仍为 open，组件事件仍为 relation_state。创建首次 201 为 open / 1，200 精确重试返回原 Ticket 的真实当前状态 / 版本。Go、schema、Web 必须配套升级；旧非 open 基线拒绝迁移，备份恢复保留状态版本与 receipt 后显式重建投影。
+
+
 ## 目的
+
+[ADR-0034](../adr/0034-ticket-component-relations.md) 增加 Ticket → Component 的人工 `affects`，复用协作 receipt；Ticket governing Project 的当前权限决定写入，反向列表先授权再分页。migration 014 的关系、receipt、事件、Outbox 与 Activity 同事务，两个关系事件只投影到 Ticket，安全事实为 `relation_state`，受控 subject 为 Component；旧来源和 Ticket 状态不变。
 
 本文件定义 Golden Path 开始实现前必须共享的最小技术契约：稳定实体引用如何表示和解析，跨对象关系如何复用原对象权限，领域事件如何进入 Transactional Outbox，以及 Activity 如何从权威事实投影并在读取时过滤。
 
@@ -40,6 +55,7 @@ M0 首批冻结以下类型名与 ID 前缀：
 | `project` | `prj_` | 协作与默认权限边界 |
 | `initiative` | `ini_` | 有结束条件的阶段目标 |
 | `component` | `cmp_` | 长期软件资产 |
+| `repository` | `rep_` | Workspace 内外部 Git 代码库映射 |
 | `decision` | `dec_` | 可确认、拒绝和替代的决策 |
 | `environment` | `env_` | 稳定部署目标 |
 | `entity-link` | `lnk_` | 带来源的跨对象关系 |
@@ -51,7 +67,7 @@ M0 首批冻结以下类型名与 ID 前缀：
 | `ci-run` | `cir_` | 一次构建或流水线运行 |
 | `deployment` | `dpl_` | 一次显式记录的部署终态事实 |
 
-Document 的 `document / doc_` 已按 [ADR-0028](../adr/0028-minimal-markdown-document.md) 进入 Go 注册表与 migration 010，Ticket → Document 的 `relates-to` 保留来源并按当前 Project 权限提供双向读取。Repository 等其余 Golden Path 类型进入同一注册表时，其 ID 前缀随各自字段契约一起冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结；CI Run 的来源和幂等边界由 [ADR-0006](../adr/0006-verified-jenkins-delivery-and-ci-run.md) 冻结；Deployment 由 [ADR-0009](../adr/0009-explicit-staging-deployment.md) 冻结；Channel、Message 与 messaging-origin Thread 由 [ADR-0017](../adr/0017-channel-message-boundary-and-single-process-realtime.md) 冻结；Thread → Decision → Ticket 的 Session transport 与命令 receipt 由 [ADR-0019](../adr/0019-session-scoped-thread-decision-ticket-transport.md) 冻结。
+Document 的 `document / doc_` 已按 [ADR-0028](../adr/0028-minimal-markdown-document.md) 进入 Go 注册表与 migration 010，Ticket → Document 的 `relates-to` 保留来源并按当前 Project 权限提供双向读取。Repository 的 `repository / rep_` 已按 ADR-0033 进入同一注册表与 migration 013；其余类型随各自字段契约冻结。前缀用于校验和诊断，不携带权限、Workspace、创建时间或存储位置。Thread 与 Ticket 的首批字段和权限上下文由 [ADR-0004](../adr/0004-project-scoped-collaboration-permissions.md) 冻结；CI Run 的来源和幂等边界由 [ADR-0006](../adr/0006-verified-jenkins-delivery-and-ci-run.md) 冻结；Deployment 由 [ADR-0009](../adr/0009-explicit-staging-deployment.md) 冻结；Channel、Message 与 messaging-origin Thread 由 [ADR-0017](../adr/0017-channel-message-boundary-and-single-process-realtime.md) 冻结；Thread → Decision → Ticket 的 Session transport 与命令 receipt 由 [ADR-0019](../adr/0019-session-scoped-thread-decision-ticket-transport.md) 冻结。
 
 ### 结构化表示
 
@@ -268,7 +284,7 @@ safe_facts
 
 ### 正常更新与协作对象反向发现
 
-[ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md) 将首批五类 Activity 事件接入同一业务事务；投影完成与业务提交一致，失败整单回滚。显式重建先取得投影表写入排他锁，再读取新的源事件快照，保留完整版本并避免覆盖并发提交。后续基础配置与 Document 扩展事件映射；当前投影版本为 2，包含 `document.created` 与 `document.revised`，恢复历史通过 revised 事件记录来源版本。旧数据仍由显式重建补齐，不随启动自动执行。
+[ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md) 将首批五类 Activity 事件接入同一业务事务；投影完成与业务提交一致，失败整单回滚。显式重建先取得投影表写入排他锁，再读取新的源事件快照，保留完整版本并避免覆盖并发提交。后续基础配置与 Document 扩展事件映射；当前投影版本为 5，包含 `document.created` 与 `document.revised`，以及 ADR-0032 的 `component.created` / `environment.created`；恢复历史通过 revised 事件记录来源版本。ADR-0033 增加 `repository.created`、`component.repository-linked` 与 `component.repository-unlinked`；创建投影到 Repository，关系事件的主要对象为 Component，Activity 只投影状态与受控对象引用，精确 link ID 保存在源事件中，不复制外部 URL / 身份。ADR-0034 增加 `ticket.component-linked` 与 `ticket.component-unlinked`，只投影到 Ticket，使用 `relation_state` 和受控 Component subject，不扩散到共享组件时间线。授权管理明细只进入配置 Audit，不进入普通 Activity。旧数据仍由显式重建补齐，不随启动自动执行。
 
 Thread ← Decision、Decision ← Ticket 从同一权威 EntityLink 反向读取，不复制镜像关系。协作 readable relation 明确 `direction`，不可读反向目标完全隐藏；原 evidence restricted 占位不携带方向或目标信息。结果排序、全量读取成本和 Go / Web 同步升级边界见 ADR-0022。Timeline 仍投影到原事件主要对象，不自动向所有关系端点传播。
 
@@ -341,7 +357,7 @@ M0 实验与正式纵向切片累计必须证明：
 
 ## 后续仍需决定
 
-- EntityID 的具体生成算法，以及 Repository 等尚未冻结的类型前缀；Document 前缀、业务合同、正式注册与存储已按 ADR-0028 落地；
+- EntityID 的具体生成算法，以及其余尚未冻结的类型前缀；Document 前缀、业务合同、正式注册与存储已按 ADR-0028 落地；
 - 后续对象的 PostgreSQL 表、约束、索引，以及事件事实和投递状态的保留与演进策略；
 - 关系类型注册表的完整方向、基数和 metadata schema；
 - Team 角色继承、对象分享、跨 Project 转换和管理员 break-glass 策略；

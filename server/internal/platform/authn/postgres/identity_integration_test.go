@@ -95,13 +95,13 @@ func assertIdentityAdmissionAndFederation(t *testing.T, ctx context.Context, poo
 	}
 
 	revoked := invite()
-	if _, err := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role='member' WHERE workspace_id=$1 AND user_id=$2`, workspaceID, owner.Account.User.ID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role_revision=role_revision+CASE WHEN role<>'member' THEN 1 ELSE 0 END,role='member' WHERE workspace_id=$1 AND user_id=$2`, workspaceID, owner.Account.User.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := identity.AcceptInvitation(ctx, acceptance(revoked.Token, "revoked@example.test")); !errors.Is(err, authn.ErrInvitationInvalid) {
 		t.Fatal("revoked inviter admitted member", err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role='owner' WHERE workspace_id=$1 AND user_id=$2`, workspaceID, owner.Account.User.ID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role_revision=role_revision+CASE WHEN role<>'owner' THEN 1 ELSE 0 END,role='owner' WHERE workspace_id=$1 AND user_id=$2`, workspaceID, owner.Account.User.ID); err != nil {
 		t.Fatal(err)
 	}
 	concurrent := invite()

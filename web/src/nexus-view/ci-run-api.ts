@@ -8,7 +8,14 @@ import {
   scopedID,
   validPathID,
 } from "./api";
-import type { CIRunStatus, NexusViewData } from "./model";
+import type {
+  CICheckout,
+  CheckoutReason,
+  GitRevision,
+  NexusRelation,
+  CIRunStatus,
+  NexusViewData,
+} from "./model";
 
 export function ciRunPagePath(
   workspaceID: string,
@@ -96,7 +103,7 @@ function fields(
     throw new TypeError("unexpected CI Run fields");
   return result;
 }
-function time(value: unknown): string {
+export function parseCIRunTime(value: unknown): string {
   if (
     typeof value !== "string" ||
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/u.test(value) ||
@@ -137,6 +144,7 @@ export function parseCIRunResponse(payload: unknown): NexusViewData {
     "recorded_at",
     "updated_at",
     "component",
+    "checkout",
   ]);
   const ref = fields(c.ref, ["type", "id"]);
   if (ref.type !== "ci-run") throw new TypeError("invalid CI Run type");
@@ -148,20 +156,20 @@ export function parseCIRunResponse(payload: unknown): NexusViewData {
   )
     throw new TypeError("invalid CI Run status");
   const status = c.status;
-  const started = c.started_at === null ? null : time(c.started_at),
-    completed = time(c.completed_at),
-    recorded = time(c.recorded_at),
-    updated = time(c.updated_at);
+  const started = c.started_at === null ? null : parseCIRunTime(c.started_at),
+    completed = parseCIRunTime(c.completed_at),
+    recorded = parseCIRunTime(c.recorded_at),
+    updated = parseCIRunTime(c.updated_at);
   if (
     updated !== recorded ||
     (started !== null && utcOrder(started) > utcOrder(completed))
   )
     throw new TypeError("inconsistent CI Run times");
   const subject = component(c.component);
+  const checkout = parseCICheckout(c.checkout);
   const relations = array(data.relations, "relations"),
     timeline = array(data.timeline, "timeline");
-  if (relations.length !== 0 || timeline.length !== 1)
-    throw new TypeError("unexpected CI Run context");
+  if (timeline.length !== 1) throw new TypeError("unexpected CI Run context");
   const item = fields(timeline[0], [
     "id",
     "activity_type",
@@ -169,6 +177,12 @@ export function parseCIRunResponse(payload: unknown): NexusViewData {
     "occurred_at",
     "status",
     "subjects",
+    ...(checkout.visibility === "readable" && checkout.state !== "not_collected"
+      ? [
+          "checkout_state",
+          ...(checkout.state === "unavailable" ? ["checkout_reason"] : []),
+        ]
+      : []),
   ]);
   const actor = fields(item.actor, ["kind"]);
   const subjects = array(item.subjects, "subjects");
@@ -176,8 +190,12 @@ export function parseCIRunResponse(payload: unknown): NexusViewData {
     actor.kind !== "plugin" ||
     item.activity_type !== "ci-run.recorded" ||
     item.status !== status ||
-    time(item.occurred_at) !== completed ||
-    subjects.length !== 1
+    parseCIRunTime(item.occurred_at) !== completed ||
+    subjects.length !==
+      (checkout.visibility === "restricted" ||
+      checkout.state !== "not_collected"
+        ? 2
+        : 1)
   )
     throw new TypeError("inconsistent CI Run event");
   const visible = fields(subjects[0], ["visibility", "entity"]);
@@ -188,8 +206,10 @@ export function parseCIRunResponse(payload: unknown): NexusViewData {
     eventSubject.title !== subject.title
   )
     throw new TypeError("inconsistent CI Run subject");
+  const parsedRelations = checkoutContext(checkout, relations, subjects, item);
   return {
     current: {
+      checkout,
       entityType: "ci-run",
       entityRef: `entity://ci-run/${id}`,
       eyebrow: `CI Run · ${subject.title}`,
@@ -206,7 +226,7 @@ export function parseCIRunResponse(payload: unknown): NexusViewData {
       updatedAt: updated,
       updatedAtLabel: formatTimestamp(updated),
     },
-    relations: [],
+    relations: parsedRelations,
     timeline: [
       {
         visibility: "readable",
@@ -220,4 +240,137 @@ export function parseCIRunResponse(payload: unknown): NexusViewData {
       },
     ],
   };
+}
+
+export function parseGitRevision(value: unknown): GitRevision {
+  const r = fields(value, ["algorithm", "oid"]);
+  if (
+    r.algorithm !== "sha1" ||
+    typeof r.oid !== "string" ||
+    !/^[0-9a-f]{40}$/u.test(r.oid) ||
+    r.oid === "0".repeat(40)
+  )
+    throw new TypeError("invalid checkout revision");
+  return { algorithm: "sha1", oid: r.oid };
+}
+export function parseCICheckout(value: unknown): CICheckout {
+  const raw = record(value, "checkout");
+  if (raw.visibility === "restricted") {
+    fields(raw, ["visibility"]);
+    return { visibility: "restricted" };
+  }
+  if (raw.visibility !== "readable")
+    throw new TypeError("invalid checkout visibility");
+  if (raw.state === "not_collected") {
+    fields(raw, ["visibility", "state"]);
+    return { visibility: "readable", state: "not_collected" };
+  }
+  if (raw.state !== "observed" && raw.state !== "unavailable")
+    throw new TypeError("invalid checkout state");
+  fields(raw, [
+    "visibility",
+    "state",
+    "repository",
+    raw.state === "observed" ? "revision" : "reason",
+  ]);
+  const repo = fields(raw.repository, ["ref", "title"]);
+  fields(repo.ref, ["type", "id"]);
+  const r = parseVisibleEntity(repo, "checkout.repository", "repository");
+  const repository = { id: r.ref.id, name: r.title };
+  if (raw.state === "observed")
+    return {
+      visibility: "readable",
+      state: "observed",
+      repository,
+      revision: parseGitRevision(raw.revision),
+    };
+  if (
+    raw.reason !== "checkout_not_observed" &&
+    raw.reason !== "unsupported_checkout" &&
+    raw.reason !== "binding_changed_during_run"
+  )
+    throw new TypeError("invalid checkout reason");
+  return {
+    visibility: "readable",
+    state: "unavailable",
+    repository,
+    reason: raw.reason as CheckoutReason,
+  };
+}
+function checkoutContext(
+  checkout: CICheckout,
+  relations: unknown[],
+  subjects: unknown[],
+  event: Record<string, unknown>,
+): NexusRelation[] {
+  if (checkout.visibility === "restricted") {
+    if (
+      relations.length !== 1 ||
+      fields(relations[0], ["visibility"]).visibility !== "restricted" ||
+      fields(subjects[1], ["visibility"]).visibility !== "restricted"
+    )
+      throw new TypeError("inconsistent restricted checkout");
+    return [{ visibility: "restricted" }];
+  }
+  if (checkout.state === "not_collected") {
+    if (relations.length !== 0)
+      throw new TypeError("legacy checkout has relationship");
+    return [];
+  }
+  if (
+    event.checkout_state !== checkout.state ||
+    (checkout.state === "unavailable" &&
+      event.checkout_reason !== checkout.reason)
+  )
+    throw new TypeError("checkout event mismatch");
+  const subject = fields(subjects[1], ["visibility", "entity"]);
+  const entity = fields(subject.entity, ["ref", "title"]);
+  fields(entity.ref, ["type", "id"]);
+  const repository = parseVisibleEntity(
+    entity,
+    "checkout subject",
+    "repository",
+  );
+  if (
+    subject.visibility !== "readable" ||
+    repository.ref.id !== checkout.repository.id ||
+    repository.title !== checkout.repository.name
+  )
+    throw new TypeError("checkout subject mismatch");
+  if (checkout.state === "unavailable") {
+    if (relations.length !== 0)
+      throw new TypeError("unavailable checkout has relationship");
+    return [];
+  }
+  if (relations.length !== 1)
+    throw new TypeError("missing checkout relationship");
+  const relation = fields(relations[0], [
+    "visibility",
+    "direction",
+    "relation_type",
+    "target",
+  ]);
+  const target = fields(relation.target, ["ref", "title"]);
+  fields(target.ref, ["type", "id"]);
+  const r = parseVisibleEntity(target, "checkout relationship", "repository");
+  if (
+    relation.visibility !== "readable" ||
+    relation.direction !== "outgoing" ||
+    relation.relation_type !== "built-from" ||
+    r.ref.id !== repository.ref.id ||
+    r.title !== repository.title
+  )
+    throw new TypeError("checkout relationship mismatch");
+  return [
+    {
+      visibility: "readable",
+      entityType: "repository",
+      entityRef: canonicalRef(r.ref),
+      entityTypeLabel: "Repository",
+      relationType: "built-from",
+      relationLabel: "Checkout 来源",
+      title: r.title,
+      summary: "管理员绑定代码库，controller 观察 checkout revision。",
+    },
+  ];
 }

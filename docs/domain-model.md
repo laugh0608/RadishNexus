@@ -63,6 +63,8 @@ Project、Initiative、Component、Decision、Environment 和 EntityLink 共享�
 
 身份模型按 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 分离用户、账户状态、本地密码凭证与外部身份。正式本地凭证采用规范化邮箱，展示名独立；Radish OIDC 以 exact `(issuer, subject)` 关联本地用户，两种认证都进入 Nexus Session。旧登录名到邮箱使用管理员显式映射，不改变稳定用户 ID，不自动合并账户或继承上游权限。迁移与当前实现完成线分别见 ADR 和[当前状态](status/current.md)。
 
+Workspace owner 主动交接按 [ADR-0042](adr/0042-workspace-owner-handoff.md) 由近期认证的当前 owner 明确确认，向同 Workspace 已有 active member 原子移交：接收人升为 owner，操作者降为 member，各自 `role_revision` 加一；其他 owner 和全部对象级权限不变。代次检查防止角色回转后的旧请求复用，邀请绑定创建者任期，旧任期邀请不会因重新接任而复活。操作者仍是有效成员时可查询本人的最小历史成功；该例外不开放其他配置审计或恢复管理权。此能力不包含应急接管、成员停用或完整离职流程。
+
 首位管理员初始化按 [ADR-0027](adr/0027-first-visit-administrator-setup.md) 创建一个本地账户与 Workspace owner；网页凭部署者的一次性初始化码，CLI 使用既有运维入口，两者共享唯一事务锁。该流程不产生跨 Workspace 的超级权限，也不自动建立业务对象或 Session；任何账户已存在后不重新开放。
 
 ### Team
@@ -90,7 +92,7 @@ M0 最小字段：
 
 `workspace` 表示 Workspace 成员默认可发现，`restricted` 表示必须通过显式成员或角色授权。Project 的可见性只提供默认边界，不能自动放宽其中私密 Channel、Conversation、Document 或其它对象的权限。归档 Project 不级联删除其内容或关系。
 
-创建与首批成员配置遵循 [ADR-0026](adr/0026-foundation-configuration-and-membership.md)：owner 显式指定本人为新 Project 的初始 admin；现有 admin 只能配置其他成员的 viewer / contributor / decider，管理权交接独立延后。restricted Channel 配置同时要求 Project admin 与 Channel membership。撤销 Project 角色会清理该成员在其下的显式 Channel / Thread 授权，重新加入不恢复历史私密授权。工作区可见项目的只读基线仍保留。
+创建与首批成员配置遵循 [ADR-0026](adr/0026-foundation-configuration-and-membership.md)：owner 显式指定本人为新 Project 的初始 admin；现有 admin 只能配置其他成员的 viewer / contributor / decider，Project admin 交接独立延后。restricted Channel 配置同时要求 Project admin 与 Channel membership。撤销 Project 角色会清理该成员在其下的显式 Channel / Thread 授权，重新加入不恢复历史私密授权。工作区可见项目的只读基线仍保留。
 
 ### Initiative
 
@@ -132,9 +134,13 @@ M0 最小字段：
 
 首期只需维护最小元数据和引用，不建设完整内部开发者门户或复杂依赖拓扑。
 
+Ticket 与 Component 的 `affects` 关系按 [ADR-0034](adr/0034-ticket-component-relations.md) 表达人工确认的涉及范围。多对多关系要求 Ticket 当前 Project 的协作权限，owner 不越过该边界；反向发现逐 Ticket 授权。新关联允许 planned / active / deprecated，retired 只保留读取与解除。解除精确指向旧 EntityLink，重连追加新记录，关系变化不改 Ticket 状态或证明代码已交付。
+
 ### Repository
 
-外部 Git 代码库的受控映射。RadishNexus 不托管 Git，只保存 provider、稳定外部 ID、URL、默认分支和关联 Component。Repository 凭据属于插件或集成 Secrets，不属于普通业务字段。
+外部 Git 代码库的受控映射。RadishNexus 不托管 Git。首批合同见 [ADR-0033](adr/0033-repository-mapping-and-component-relations.md)：`repository / rep_` 归属 Workspace，保存 name、provider、HTTPS provider origin、稳定外部 ID、同 origin 浏览 URL 和人工登记的默认分支。身份由 `(workspace, provider, provider_origin, external_id)` 唯一确定；首批不开放元数据修改或删除。凭据属于插件或集成 Secrets，不属于普通业务字段。
+
+active Workspace owner 创建映射并明确确认 Component → Repository 的 `source-repository` 关系；所有 active Workspace 成员共享读取映射元数据，引用本身不授予任何外部代码访问权。多对多关系保留人工来源，同一对至多一条 active；新关联要求 Component active，解除允许非 active Component。解除只移除指定 EntityLink，重新关联生成新 ID；旧请求的精确重试不改变当前关系。映射不证明 provider 连接成功，不推导 CI Run / commit 来源。
 
 ### CI Run
 
@@ -154,9 +160,15 @@ M0 最小字段：
 
 当前 application service 只记录完成终态，不定义 `queued / running` 的乱序更新、回退或重开语义。Jenkins delivery ID 是 receipt 的幂等身份，不是 CI Run ID；完全重复只返回既有 CI Run，相同 delivery 的 payload digest 改变则失败。receipt、CI Run、领域事件和 Outbox 原子提交，Secret 与原始 webhook body 不进入这些记录。精确边界见 [ADR-0006](adr/0006-verified-jenkins-delivery-and-ci-run.md)。
 
-CI Run 成功只表达构建事实，不能自动创建 Deployment。Repository、commit、Ticket 和其它上下文等待相应对象字段与关系方向冻结后再通过 EntityLink 表达。
+CI Run 成功只表达构建事实，不能自动创建 Deployment。Repository checkout 来源按 ADR-0037 通过不可变 `built-from` EntityLink 表达；Ticket 与具体构建的交付关系仍待独立冻结，不从 Component 共属推断。
 
-M0 读取以 Component 为授权边界：同一 Workspace 的活跃成员可以读取 Component 及其 CI Run；非成员、暂停成员和跨 Workspace 主体不可发现。`owner_team_id` 只表示责任，不形成私密访问组；Jenkins source 和 plugin actor 也不授予用户权限。CI Run 的 Nexus View 只投影受控状态、时间与当前 Component，不暴露来源标识和 receipt。详见 [ADR-0007](adr/0007-component-scoped-ci-run-read.md)。
+M0 读取以 Component 为授权边界：同一 Workspace 的活跃成员可以读取 Component 及其 CI Run；非成员、暂停成员和跨 Workspace 主体不可发现。`owner_team_id` 只表示责任，不形成私密访问组；Jenkins source 和 plugin actor 也不授予用户权限。CI Run 的 Nexus View 投影受控状态、时间、当前 Component 与按当前 Repository 权限过滤的 checkout 摘要，不暴露机器来源标识和 receipt。详见 [ADR-0007](adr/0007-component-scoped-ci-run-read.md)。
+
+[ADR-0037](adr/0037-ci-run-repository-checkout-provenance.md) 冻结来源状态 `not_collected / observed / unavailable`。v1 保持未采集；v2 由部署者绑定一个 Repository 稳定外部身份，首次成功提交后 binding、状态和原因不可变。observed 恰好有一条 `ci-run --built-from--> repository`，完整 SHA-1 Git OID 只保存于 EntityLink metadata；unavailable 保留有效构建终态和受控原因，不制造关系。该事实表达管理员仓库绑定与 controller checkout 观察，不证明完整构建输入、工单交付或部署。
+
+来源关系属于 source 的窄 capability，独立于 Component 的人工仓库关联；解除人工关系不撤销机器来源，停写须撤销 source / key 并重启。仓库不可读时来源摘要和关系仅返回无内容占位，不泄漏状态、原因或 commit。Repository 的反向构建列表只查询 built-from，并在分页前按当前 Component 权限过滤。真实 Jenkins checkout 采集仍待 ADR-0037 B 验收。
+
+Component 与 Environment 的创建、发现和环境授权管理按 [ADR-0032](adr/0032-component-environment-configuration-and-authorization.md) 冻结：active Workspace owner 可创建最小 active Component / staging Environment，创建不附带记录权。环境授权必须显式授予，撤销后重新授予生成新 ID 与递增代次，旧记录和历史 Deployment 引用不可改写；普通读取不暴露授权管理明细。
 
 ### Environment
 
@@ -215,7 +227,11 @@ M0 纵向切片继续冻结 `thread` / `thr_` 与 `ticket` / `tkt_` 的稳定引
 
 ### Ticket
 
-可执行工作的统一对象。需求、任务、缺陷、事故和改进项通过 type、workflow 和字段配置表达，不在首期拆成彼此无关的模型。
+可执行工作的统一对象。需求、任务、缺陷、事故和改进项的长期表达保持同一模型；type、workflow、负责人、优先级和看板尚未进入当前实现。
+
+[ADR-0039](adr/0039-ticket-status-transitions.md) 冻结最小四状态：open 待开始、in-progress 处理中、done 已完成、canceled 已取消。前两者可转向其他状态；两个终态只能显式重新打开为 open，不能直接互转。done 只表示人工完成执行事项，不证明 Decision、CI Run 或 Deployment 结果。
+
+Ticket 初始 `status_revision=1`，只随有效状态变化递增；当前 active Workspace 与 Project 的 contributor / decider / admin 基于所见版本显式提交，创建者和 owner 不绕过该边界，也不重新要求来源私密 Thread 的读取权。旧版本或同状态冲突；精确重试重新授权后确认原操作并读取当前状态。状态、版本、时间、不可变事件、receipt、Outbox 与 Activity 同事务，关系和原创建事实保持独立。
 
 ### Document
 
@@ -296,9 +312,10 @@ removal_reason
 - `derived-from`：Decision 来源于 Thread；
 - `implements`：Ticket 实现某 Decision；
 - `documents`：Document 解释某 Component 或 Initiative；
+- `source-repository`：Component 明确关联 Repository（ADR-0033 已实现）；
 - `built-from`：CI Run 来源于 Repository commit；
 - `deploys`：Deployment 发布某构建或制品；
-- `affects`：Incident 或 Ticket 影响某 Component；
+- `affects`：Ticket 人工确认涉及 Component（ADR-0034 已实现）；Incident 方向尚未实现；
 - `supersedes`：新 Decision 替代旧 Decision。
 
 关系必须保留来源和建立时间。插件推导的关系与用户明确建立的关系要能区分，避免自动化结果被误认为人工确认事实。

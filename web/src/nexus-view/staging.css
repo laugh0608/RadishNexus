@@ -61,3 +61,22 @@
     grid-template-columns: 1fr;
   }
 }
+
+.checkout-source {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border, #dfe7df);
+}
+.checkout-source h2 {
+  font-size: 1rem;
+}
+.checkout-source p {
+  line-height: 1.6;
+}
+.checkout-source button {
+  margin-top: 0.75rem;
+}
+.checkout-oid {
+  display: block;
+  overflow-wrap: anywhere;
+  user-select: all;
+}

@@ -16,6 +16,8 @@ type testConfiguration struct {
 	calls      int
 	result     goldenpath.ConfigurationResult
 	err        error
+	page       goldenpath.ConfigurationPage
+	query      goldenpath.ConfigurationQuery
 }
 
 func (s *testConfiguration) Configure(_ context.Context, i goldenpath.Invocation, input goldenpath.ConfigurationInput) (goldenpath.ConfigurationResult, error) {
@@ -27,8 +29,9 @@ func (s *testConfiguration) Configure(_ context.Context, i goldenpath.Invocation
 func (s *testConfiguration) ReadConfiguration(context.Context, authz.Principal, string, string) (goldenpath.ConfigurationObject, error) {
 	return s.result.Object, s.err
 }
-func (s *testConfiguration) ListConfiguration(context.Context, authz.Principal, goldenpath.ConfigurationQuery) (goldenpath.ConfigurationPage, error) {
-	return goldenpath.ConfigurationPage{}, s.err
+func (s *testConfiguration) ListConfiguration(_ context.Context, _ authz.Principal, q goldenpath.ConfigurationQuery) (goldenpath.ConfigurationPage, error) {
+	s.query = q
+	return s.page, s.err
 }
 func configurationTestHandler(t *testing.T, app *testConfiguration) http.Handler {
 	t.Helper()

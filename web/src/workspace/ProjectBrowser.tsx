@@ -1,4 +1,6 @@
+import { projectDecisionsPath } from "./project-decisions-api";
 import { documentsPath } from "../document/api";
+import { projectTicketsPath } from "./project-tickets-api";
 import {
   useCallback,
   useEffect,
@@ -101,7 +103,15 @@ export function ProjectBrowser({
               onSessionExpired={onSessionExpired}
               navigate={navigate}
             />
-            <a href={documentsPath(workspaceID, selected.id)}>查看项目文档</a>
+            <nav className="configuration-actions" aria-label="项目内容">
+              <a href={documentsPath(workspaceID, selected.id)}>查看项目文档</a>
+              <a href={projectTicketsPath(workspaceID, selected.id)}>
+                查看项目工单
+              </a>
+              <a href={projectDecisionsPath(workspaceID, selected.id)}>
+                查看项目决策
+              </a>
+            </nav>
             <ProjectChannels
               key={selected.id}
               workspaceID={workspaceID}

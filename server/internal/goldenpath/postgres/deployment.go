@@ -26,6 +26,10 @@ func (store *Store) RecordStagingDeployment(
 	}
 	defer rollback(ctx, tx, &err)
 
+	_, err = configurationActor(ctx, tx, command.Principal)
+	if err != nil {
+		return deployment, err
+	}
 	member, err := activeWorkspaceMember(ctx, tx, command.Principal)
 	if err != nil {
 		return deployment, err

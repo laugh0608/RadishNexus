@@ -9,16 +9,11 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/laugh0608/RadishNexus/server/db"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
@@ -52,27 +47,8 @@ type integrationClock struct{ now time.Time }
 func (clock integrationClock) Now() time.Time { return clock.now }
 
 func TestLocalIdentityBootstrapLoginAndSessionLifecycle(t *testing.T) {
-	databaseURL := os.Getenv("DATABASE_URL")
-	if databaseURL == "" {
-		t.Skip("DATABASE_URL is required for integration tests")
-	}
 	ctx := context.Background()
-	connection, err := pgx.Connect(ctx, databaseURL)
-	if err != nil {
-		t.Fatalf("pgx.Connect() error = %v", err)
-	}
-	if err := db.Migrate(ctx, connection); err != nil {
-		t.Fatalf("db.Migrate() error = %v", err)
-	}
-	if err := connection.Close(ctx); err != nil {
-		t.Fatalf("migration connection Close() error = %v", err)
-	}
-
-	pool, err := pgxpool.New(ctx, databaseURL)
-	if err != nil {
-		t.Fatalf("pgxpool.New() error = %v", err)
-	}
-	t.Cleanup(pool.Close)
+	pool := newIdentityTestDatabase(t)
 	store := authpostgres.New(pool)
 	// Session deletion is guarded against the database wall clock. Keep the
 	// service clock aligned with the integration run so this assertion does not

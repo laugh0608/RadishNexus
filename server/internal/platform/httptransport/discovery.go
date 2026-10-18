@@ -19,13 +19,17 @@ import (
 )
 
 const (
-	projectListPattern        = "/api/v1/workspaces/{workspace_id}/projects"
-	projectChannelListPattern = projectListPattern + "/{project_id}/channels"
+	projectListPattern         = "/api/v1/workspaces/{workspace_id}/projects"
+	projectChannelListPattern  = projectListPattern + "/{project_id}/channels"
+	projectTicketListPattern   = projectListPattern + "/{project_id}/tickets"
+	projectDecisionListPattern = projectListPattern + "/{project_id}/decisions"
 )
 
 type DiscoveryReader interface {
 	ListProjects(context.Context, authz.Principal, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
 	ListProjectChannels(context.Context, authz.Principal, string, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
+	ListProjectTickets(context.Context, authz.Principal, string, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
+	ListProjectDecisions(context.Context, authz.Principal, string, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
 }
 
 type DiscoveryHandler struct {
@@ -36,6 +40,7 @@ type DiscoveryHandler struct {
 }
 
 type discoveryCursor struct {
+	ActorID     string `json:"actor_id,omitempty"`
 	CIRunID     string `json:"ci_run_id,omitempty"`
 	Version     int    `json:"v"`
 	WorkspaceID string `json:"workspace_id"`
@@ -60,12 +65,16 @@ func NewDiscoveryHandler(sessions WorkspaceSessionResolver, reader DiscoveryRead
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+projectListPattern, handler.list)
 	mux.HandleFunc("GET "+projectChannelListPattern, handler.list)
+	mux.HandleFunc("GET "+projectTicketListPattern, handler.list)
+	mux.HandleFunc("GET "+projectDecisionListPattern, handler.list)
 	wrongMethod := func(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("Allow", http.MethodGet)
 		handler.writeError(response, request, ErrMethodNotAllowed)
 	}
 	mux.HandleFunc(projectListPattern, wrongMethod)
 	mux.HandleFunc(projectChannelListPattern, wrongMethod)
+	mux.HandleFunc(projectTicketListPattern, wrongMethod)
+	mux.HandleFunc(projectDecisionListPattern, wrongMethod)
 	mux.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) {
 		handler.writeError(response, request, authz.ErrNotFound)
 	})
@@ -112,6 +121,11 @@ func (handler *DiscoveryHandler) list(response http.ResponseWriter, request *htt
 	kind := "project"
 	if projectID != "" {
 		kind = "channel"
+		if request.Pattern == "GET "+projectTicketListPattern {
+			kind = "ticket"
+		} else if request.Pattern == "GET "+projectDecisionListPattern {
+			kind = "decision"
+		}
 	}
 	scope := discoveryCursor{Version: 1, WorkspaceID: workspaceID, Kind: kind, ProjectID: projectID}
 	input, err := parseDiscoveryQuery(request.URL.RawQuery, scope)
@@ -122,6 +136,10 @@ func (handler *DiscoveryHandler) list(response http.ResponseWriter, request *htt
 	var page goldenpath.DiscoveryPage
 	if kind == "project" {
 		page, err = handler.reader.ListProjects(request.Context(), principal, input)
+	} else if kind == "ticket" {
+		page, err = handler.reader.ListProjectTickets(request.Context(), principal, projectID, input)
+	} else if kind == "decision" {
+		page, err = handler.reader.ListProjectDecisions(request.Context(), principal, projectID, input)
 	} else {
 		page, err = handler.reader.ListProjectChannels(request.Context(), principal, projectID, input)
 	}
@@ -205,10 +223,18 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 		return dto, invalid
 	}
 	seen := make(map[string]bool, len(page.Items))
+	previousID := input.AfterID
 	for _, item := range page.Items {
-		if item.Ref.Type != scope.Kind || !validScopedID(item.Ref.ID, discoveryPrefix(scope.Kind)) || seen[item.Ref.ID] || !utf8.ValidString(item.Title) || strings.TrimSpace(item.Title) == "" || strings.ContainsRune(item.Title, '\x00') || (item.Status != "active" && item.Status != "archived") {
+		validStatus := item.Status == "active" || item.Status == "archived"
+		if scope.Kind == "ticket" {
+			validStatus = goldenpath.ValidTicketStatus(item.Status)
+		} else if scope.Kind == "decision" {
+			validStatus = item.Status == "proposed" || item.Status == "accepted"
+		}
+		if item.Ref.Type != scope.Kind || !validScopedID(item.Ref.ID, discoveryPrefix(scope.Kind)) || seen[item.Ref.ID] || !utf8.ValidString(item.Title) || strings.TrimSpace(item.Title) == "" || strings.ContainsRune(item.Title, '\x00') || !validStatus || ((scope.Kind == "ticket" || scope.Kind == "decision") && item.Ref.ID <= previousID) {
 			return dto, invalid
 		}
+		previousID = item.Ref.ID
 		seen[item.Ref.ID] = true
 		dto.Items = append(dto.Items, discoveryItemDTO{Ref: entityRefDTO{Type: item.Ref.Type, ID: item.Ref.ID}, Title: item.Title, Status: item.Status})
 	}
@@ -228,7 +254,28 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 }
 
 func discoveryPrefix(kind string) string {
-	if kind == "staging-environment" {
+	if kind == "owner-transfer-candidates" {
+		return "usr_"
+	}
+	if kind == "decision" {
+		return "dec_"
+	}
+	if kind == "repository-ci-runs" {
+		return "cir_"
+	}
+	if kind == "component-tickets" || kind == "ticket" {
+		return "tkt_"
+	}
+	if kind == "repositories" || kind == "component-repositories" {
+		return "rep_"
+	}
+	if kind == "components" || kind == "repository-components" || kind == "ticket-components" {
+		return "cmp_"
+	}
+	if kind == "environment-authorizations" {
+		return "usr_"
+	}
+	if kind == "staging-environment" || kind == "environments" {
 		return "env_"
 	}
 	if kind == "document" {

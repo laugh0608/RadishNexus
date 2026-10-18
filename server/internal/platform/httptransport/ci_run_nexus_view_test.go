@@ -17,6 +17,7 @@ func ciRunTestView() goldenpath.NexusView {
 	v.Current.CIRun = nil
 	component := goldenpath.SubjectProjection{State: goldenpath.ProjectionVisible, Ref: entityref.Ref{Type: "component", ID: "cmp_api"}, Title: "API"}
 	v.Current.Component = &component
+	v.Current.Checkout = &goldenpath.CICheckoutProjection{Visibility: goldenpath.ProjectionVisible, State: "not_collected"}
 	v.Relations = nil
 	v.Timeline[0].ActivityType = "ci-run.recorded"
 	v.Timeline[0].Actor = goldenpath.ActorRef{Kind: "plugin"}
@@ -137,6 +138,51 @@ func TestCIRunTransportAuthMethodsAndScope(t *testing.T) {
 			}
 			if c.want == 405 && w.Header().Get("Allow") != "GET" {
 				t.Fatal("missing Allow")
+			}
+		})
+	}
+}
+
+func TestCICheckoutTransportConsistencyAndRedaction(t *testing.T) {
+	for _, state := range []string{"observed", "unavailable", "restricted"} {
+		t.Run(state, func(t *testing.T) {
+			v := ciRunTestView()
+			repo := goldenpath.SubjectProjection{State: goldenpath.ProjectionVisible, Ref: entityref.Ref{Type: "repository", ID: "rep_source"}, Title: "Source"}
+			v.Current.Checkout = &goldenpath.CICheckoutProjection{Visibility: goldenpath.ProjectionVisible, State: state, Repository: &repo}
+			v.Timeline[0].Subjects = append(v.Timeline[0].Subjects, repo)
+			v.Timeline[0].SafeFacts["checkout_state"] = state
+			if state == "observed" {
+				v.Current.Checkout.Revision = &goldenpath.GitRevision{Algorithm: "sha1", OID: strings.Repeat("a", 40)}
+				v.Relations = []goldenpath.RelationProjection{{State: goldenpath.ProjectionVisible, Direction: "outgoing", RelationType: "built-from", Target: repo.Ref, Title: repo.Title}}
+			} else if state == "unavailable" {
+				v.Current.Checkout.Reason = "checkout_not_observed"
+				v.Timeline[0].SafeFacts["checkout_reason"] = "checkout_not_observed"
+			} else {
+				v.Current.Checkout = &goldenpath.CICheckoutProjection{Visibility: goldenpath.ProjectionRestricted}
+				v.Relations = []goldenpath.RelationProjection{{State: goldenpath.ProjectionRestricted}}
+				v.Timeline[0].Subjects[1] = goldenpath.SubjectProjection{State: goldenpath.ProjectionRestricted}
+				delete(v.Timeline[0].SafeFacts, "checkout_state")
+			}
+			reader := &fakeNexusViewReader{view: v}
+			w := httptest.NewRecorder()
+			ciRunTestHandler(t, validMessagingSessions(), reader).ServeHTTP(w, ciRunTestRequest())
+			if w.Code != 200 {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			if state == "restricted" {
+				for _, leak := range []string{"rep_source", "checkout_state", "checkout_reason", "oid", "Source"} {
+					if strings.Contains(w.Body.String(), leak) {
+						t.Fatal("leak", leak)
+					}
+				}
+				reader.view.Current.Checkout.State = "observed"
+			} else {
+				reader.view.Timeline[0].Subjects[1].Title = "mismatch"
+			}
+			w = httptest.NewRecorder()
+			ciRunTestHandler(t, validMessagingSessions(), reader).ServeHTTP(w, ciRunTestRequest())
+			if w.Code != 500 {
+				t.Fatal("accepted inconsistent context", w.Code)
 			}
 		})
 	}

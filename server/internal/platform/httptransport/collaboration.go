@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
@@ -62,10 +63,15 @@ type collaborationViewResponse struct {
 	Data collaborationViewDTO `json:"data"`
 }
 
+type ticketCapabilitiesDTO struct {
+	ChangeStatus bool `json:"change_status"`
+}
+
 type collaborationViewDTO struct {
-	Current   any                        `json:"current"`
-	Relations []collaborationRelationDTO `json:"relations"`
-	Timeline  []collaborationTimelineDTO `json:"timeline"`
+	Capabilities *ticketCapabilitiesDTO     `json:"capabilities,omitempty"`
+	Current      any                        `json:"current"`
+	Relations    []collaborationRelationDTO `json:"relations"`
+	Timeline     []collaborationTimelineDTO `json:"timeline"`
 }
 
 type threadCurrentDTO struct {
@@ -94,13 +100,14 @@ type decisionCurrentDTO struct {
 }
 
 type ticketCurrentDTO struct {
-	Ref       entityRefDTO       `json:"ref"`
-	Project   entityRefDTO       `json:"project"`
-	Title     string             `json:"title"`
-	Status    string             `json:"status"`
-	CreatedBy deploymentActorDTO `json:"created_by"`
-	CreatedAt string             `json:"created_at"`
-	UpdatedAt string             `json:"updated_at"`
+	StatusRevision int                `json:"status_revision"`
+	Ref            entityRefDTO       `json:"ref"`
+	Project        entityRefDTO       `json:"project"`
+	Title          string             `json:"title"`
+	Status         string             `json:"status"`
+	CreatedBy      deploymentActorDTO `json:"created_by"`
+	CreatedAt      string             `json:"created_at"`
+	UpdatedAt      string             `json:"updated_at"`
 }
 
 type collaborationRelationDTO struct {
@@ -111,12 +118,17 @@ type collaborationRelationDTO struct {
 }
 
 type collaborationTimelineDTO struct {
-	ID           string                    `json:"id"`
-	ActivityType string                    `json:"activity_type"`
-	Actor        deploymentActorDTO        `json:"actor"`
-	OccurredAt   string                    `json:"occurred_at"`
-	Status       string                    `json:"status"`
-	Subjects     []collaborationSubjectDTO `json:"subjects"`
+	FromStatus    string                    `json:"from_status,omitempty"`
+	ToStatus      string                    `json:"to_status,omitempty"`
+	FromRevision  int                       `json:"from_status_revision,omitempty"`
+	ToRevision    int                       `json:"to_status_revision,omitempty"`
+	ID            string                    `json:"id"`
+	ActivityType  string                    `json:"activity_type"`
+	Actor         deploymentActorDTO        `json:"actor"`
+	OccurredAt    string                    `json:"occurred_at"`
+	Status        string                    `json:"status,omitempty"`
+	RelationState string                    `json:"relation_state,omitempty"`
+	Subjects      []collaborationSubjectDTO `json:"subjects"`
 }
 
 type collaborationSubjectDTO struct {
@@ -382,7 +394,7 @@ func (handler *CollaborationHandler) createTicket(response http.ResponseWriter, 
 		return
 	}
 	if result.Ticket.WorkspaceID != workspaceID ||
-		result.Ticket.Title != strings.TrimSpace(body.Title) || result.Ticket.Status != "open" {
+		result.Ticket.Title != strings.TrimSpace(body.Title) || (result.Created && (result.Ticket.Status != "open" || result.Ticket.StatusRevision != 1)) {
 		handler.writeError(response, request, errors.New("invalid created Ticket application result"))
 		return
 	}
@@ -432,6 +444,14 @@ func publicCollaborationView(target entityref.Ref, view goldenpath.NexusView) (c
 		return collaborationViewDTO{}, err
 	}
 	dto := collaborationViewDTO{Relations: relations, Timeline: timeline}
+	if target.Type == "ticket" {
+		if view.TicketCapabilities == nil || (view.TicketCapabilities.ChangeStatus && view.Current.StatusRevision == goldenpath.MaxTicketStatusRevision) {
+			return collaborationViewDTO{}, errors.New("invalid Ticket capabilities")
+		}
+		dto.Capabilities = &ticketCapabilitiesDTO{ChangeStatus: view.TicketCapabilities.ChangeStatus}
+	} else if view.TicketCapabilities != nil || view.Current.StatusRevision != 0 {
+		return collaborationViewDTO{}, errors.New("unexpected Ticket state fields")
+	}
 	switch target.Type {
 	case "thread":
 		current, err := publicThreadCurrent(view.Current, sources, view.Timeline)
@@ -554,7 +574,7 @@ func publicTicketProjection(
 		return ticketCurrentDTO{}, errors.New("invalid Ticket Nexus View")
 	}
 	for _, item := range timeline {
-		if item.ActivityType != "ticket.created" {
+		if item.ActivityType != "ticket.created" && item.ActivityType != "ticket.component-linked" && item.ActivityType != "ticket.component-unlinked" && item.ActivityType != "ticket.status-changed" {
 			return ticketCurrentDTO{}, errors.New("unexpected Ticket Timeline item")
 		}
 	}
@@ -564,6 +584,7 @@ func publicTicketProjection(
 		GoverningProjectID: current.GoverningProjectID,
 		Title:              current.Title,
 		Status:             current.Status,
+		StatusRevision:     current.StatusRevision,
 		CreatedBy:          current.CreatedBy.ID,
 		CreatedAt:          current.CreatedAt,
 		UpdatedAt:          current.UpdatedAt,
@@ -629,18 +650,19 @@ func publicTicket(ticket goldenpath.Ticket) (ticketCurrentDTO, error) {
 	if err := entityref.M0Registry().Validate(project); err != nil {
 		return ticketCurrentDTO{}, fmt.Errorf("invalid Ticket governing Project: %w", err)
 	}
-	if ticket.Title == "" || ticket.Status != "open" || !validScopedID(ticket.CreatedBy, "usr_") || ticket.CreatedAt.IsZero() ||
+	if ticket.Title == "" || !goldenpath.ValidTicketStatus(ticket.Status) || !goldenpath.ValidTicketStatusRevision(ticket.StatusRevision) || !validScopedID(ticket.CreatedBy, "usr_") || ticket.CreatedAt.IsZero() ||
 		ticket.UpdatedAt.IsZero() || ticket.UpdatedAt.Before(ticket.CreatedAt) {
 		return ticketCurrentDTO{}, errors.New("invalid Ticket application projection")
 	}
 	return ticketCurrentDTO{
-		Ref:       publicRef(ref),
-		Project:   publicRef(project),
-		Title:     ticket.Title,
-		Status:    ticket.Status,
-		CreatedBy: deploymentActorDTO{Kind: "user", ID: ticket.CreatedBy},
-		CreatedAt: publicTime(ticket.CreatedAt),
-		UpdatedAt: publicTime(ticket.UpdatedAt),
+		Ref:            publicRef(ref),
+		Project:        publicRef(project),
+		Title:          ticket.Title,
+		Status:         ticket.Status,
+		StatusRevision: ticket.StatusRevision,
+		CreatedBy:      deploymentActorDTO{Kind: "user", ID: ticket.CreatedBy},
+		CreatedAt:      publicTime(ticket.CreatedAt),
+		UpdatedAt:      publicTime(ticket.UpdatedAt),
 	}, nil
 }
 
@@ -653,9 +675,9 @@ func collaborationSourceRelations(entityType string, relations []goldenpath.Rela
 		if entityType == "ticket" && relation.State == goldenpath.ProjectionRestricted {
 			continue
 		}
-		if entityType == "ticket" && relation.Direction == "outgoing" && relation.State == goldenpath.ProjectionVisible && relation.RelationType == "relates-to" && relation.Target.Type == "document" {
+		if entityType == "ticket" && relation.Direction == "outgoing" && relation.State == goldenpath.ProjectionVisible && ((relation.RelationType == "relates-to" && relation.Target.Type == "document") || (relation.RelationType == "affects" && relation.Target.Type == "component")) {
 			if seen[relation.Target] {
-				return nil, errors.New("duplicate Document relation")
+				return nil, errors.New("duplicate Ticket context relation")
 			}
 			seen[relation.Target] = true
 			continue
@@ -696,7 +718,7 @@ func publicCollaborationRelations(relations []goldenpath.RelationProjection) ([]
 				return nil, err
 			}
 			if relation.RelationType != "started-from" && relation.RelationType != "derived-from" &&
-				relation.RelationType != "implements" && relation.RelationType != "relates-to" {
+				relation.RelationType != "implements" && relation.RelationType != "relates-to" && relation.RelationType != "affects" {
 				return nil, fmt.Errorf("unsupported collaboration relation %q", relation.RelationType)
 			}
 			dto = append(dto, collaborationRelationDTO{
@@ -717,21 +739,50 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 	for _, item := range items {
 		if !validScopedID(item.EventID, "evt_") || item.Actor.Kind != "user" ||
 			!validScopedID(item.Actor.ID, "usr_") || item.OccurredAt.IsZero() ||
-			item.ProjectionVersion != goldenpath.ActivityProjectionVersion || len(item.SafeFacts) != 1 ||
-			item.SafeFacts["status"] == "" {
+			item.ProjectionVersion != goldenpath.ActivityProjectionVersion {
 			return nil, errors.New("invalid collaboration Timeline item")
 		}
-		if item.ActivityType != "decision.proposed" && item.ActivityType != "decision.accepted" &&
-			item.ActivityType != "ticket.created" {
+		if item.ActivityType == "ticket.status-changed" {
+			from, e1 := strconv.Atoi(item.SafeFacts["from_status_revision"])
+			to, e2 := strconv.Atoi(item.SafeFacts["to_status_revision"])
+			transition := goldenpath.TicketStatusTransition{FromStatus: item.SafeFacts["from_status"], ToStatus: item.SafeFacts["to_status"], FromRevision: from, ToRevision: to}
+			if e1 != nil || e2 != nil || strconv.Itoa(from) != item.SafeFacts["from_status_revision"] || strconv.Itoa(to) != item.SafeFacts["to_status_revision"] ||
+				len(item.SafeFacts) != 4 || len(item.Subjects) != 0 || !transition.Valid() {
+				return nil, errors.New("invalid Ticket status Timeline facts")
+			}
+			dto = append(dto, collaborationTimelineDTO{ID: item.EventID, ActivityType: item.ActivityType, Actor: deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID},
+				OccurredAt: publicTime(item.OccurredAt), Subjects: []collaborationSubjectDTO{}, FromStatus: transition.FromStatus, ToStatus: transition.ToStatus, FromRevision: from, ToRevision: to})
+			continue
+		}
+		if len(item.SafeFacts) != 1 {
+			return nil, errors.New("invalid collaboration Timeline facts")
+		}
+		expectedStatus, subjectType, relationState := "", "", ""
+		switch item.ActivityType {
+		case "decision.proposed":
+			expectedStatus, subjectType = "proposed", "thread"
+		case "decision.accepted":
+			expectedStatus = "accepted"
+		case "ticket.created":
+			expectedStatus, subjectType = "open", "decision"
+		case "ticket.component-linked":
+			relationState, subjectType = "active", "component"
+		case "ticket.component-unlinked":
+			relationState, subjectType = "removed", "component"
+		default:
 			return nil, fmt.Errorf("unsupported collaboration Activity type %q", item.ActivityType)
 		}
+		if item.SafeFacts["status"] != expectedStatus || item.SafeFacts["relation_state"] != relationState || (subjectType == "" && len(item.Subjects) != 0) || (subjectType != "" && len(item.Subjects) != 1) {
+			return nil, errors.New("invalid collaboration Timeline facts")
+		}
 		entry := collaborationTimelineDTO{
-			ID:           item.EventID,
-			ActivityType: item.ActivityType,
-			Actor:        deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID},
-			OccurredAt:   publicTime(item.OccurredAt),
-			Status:       item.SafeFacts["status"],
-			Subjects:     make([]collaborationSubjectDTO, 0, len(item.Subjects)),
+			ID:            item.EventID,
+			ActivityType:  item.ActivityType,
+			Actor:         deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID},
+			OccurredAt:    publicTime(item.OccurredAt),
+			Status:        item.SafeFacts["status"],
+			RelationState: item.SafeFacts["relation_state"],
+			Subjects:      make([]collaborationSubjectDTO, 0, len(item.Subjects)),
 		}
 		for _, subject := range item.Subjects {
 			switch subject.State {
@@ -741,7 +792,7 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 				}
 				entry.Subjects = append(entry.Subjects, collaborationSubjectDTO{Visibility: "restricted"})
 			case goldenpath.ProjectionVisible:
-				entity, err := requiredVisibleEntity(subject, "")
+				entity, err := requiredVisibleEntity(subject, subjectType)
 				if err != nil {
 					return nil, err
 				}

@@ -237,7 +237,7 @@ func TestCollaborationHandlerCreatesTicketWithStructuredDecisionSource(t *testin
 		Created: true,
 		Ticket: goldenpath.Ticket{
 			ID: "tkt_created", WorkspaceID: "wrk_main", GoverningProjectID: "prj_main",
-			Title: "Implement collaboration transport", Status: "open", CreatedBy: "usr_reader",
+			Title: "Implement collaboration transport", Status: "open", StatusRevision: 1, CreatedBy: "usr_reader",
 			CreatedAt: now, UpdatedAt: now,
 		},
 	}}
@@ -256,6 +256,23 @@ func TestCollaborationHandlerCreatesTicketWithStructuredDecisionSource(t *testin
 		strings.Contains(response.Body.String(), "client_operation") {
 		t.Fatalf("response = %d %q, application %#v", response.Code, response.Body.String(), application)
 	}
+	for _, status := range []string{"open", "in-progress", "done", "canceled"} {
+		application.ticketResult.Created = false
+		application.ticketResult.Ticket.Status = status
+		application.ticketResult.Ticket.StatusRevision = 6
+		response = httptest.NewRecorder()
+		testCollaborationHandler(t, validMessagingSessions(), application).ServeHTTP(response, messagingWriteRequest(http.MethodPost, "/api/v1/workspaces/wrk_main/decisions/dec_target/tickets", `{"client_operation_id":"browser:ticket:1","title":"Implement collaboration transport"}`))
+		if response.Code != 200 || !strings.Contains(response.Body.String(), `"status":"`+status+`"`) || !strings.Contains(response.Body.String(), `"status_revision":6`) {
+			t.Fatal("retry current lost", response.Code, response.Body.String())
+		}
+	}
+	application.ticketResult.Created = true
+	response = httptest.NewRecorder()
+	testCollaborationHandler(t, validMessagingSessions(), application).ServeHTTP(response, messagingWriteRequest(http.MethodPost, "/api/v1/workspaces/wrk_main/decisions/dec_target/tickets", `{"client_operation_id":"browser:ticket:1","title":"Implement collaboration transport"}`))
+	if response.Code != 500 {
+		t.Fatal("invalid first creation", response.Code)
+	}
+
 }
 
 func TestCollaborationHandlerKeepsRestrictedDecisionEvidenceOpaque(t *testing.T) {
@@ -428,9 +445,10 @@ func TestPublicCollaborationViewFailsClosedOnProjectionDrift(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 9, 2, 1, 8, 0, 0, time.UTC)
 	base := goldenpath.NexusView{
+		TicketCapabilities: &goldenpath.TicketCapabilities{ChangeStatus: true},
 		Current: goldenpath.CurrentProjection{
 			Ref: entityref.Ref{Type: "ticket", ID: "tkt_target"}, GoverningProjectID: "prj_main",
-			Title: "Implement transport", Status: "open",
+			Title: "Implement transport", Status: "open", StatusRevision: 1,
 			CreatedBy: goldenpath.ActorRef{Kind: "user", ID: "usr_reader"}, CreatedAt: now, UpdatedAt: now,
 		},
 		Relations: []goldenpath.RelationProjection{{
@@ -438,7 +456,13 @@ func TestPublicCollaborationViewFailsClosedOnProjectionDrift(t *testing.T) {
 			Target: entityref.Ref{Type: "decision", ID: "dec_target"}, Title: "Decision",
 		}},
 	}
+	if _, err := publicCollaborationView(base.Current.Ref, base); err != nil {
+		t.Fatal("invalid positive baseline", err)
+	}
 	for _, mutate := range []func(*goldenpath.NexusView){
+		func(view *goldenpath.NexusView) { view.TicketCapabilities = nil },
+		func(view *goldenpath.NexusView) { view.Current.StatusRevision = 0 },
+		func(view *goldenpath.NexusView) { view.Current.Status = "unknown" },
 		func(view *goldenpath.NexusView) { view.Current.Ref.ID = "tkt_other" },
 		func(view *goldenpath.NexusView) { view.Relations[0].RelationType = "derived-from" },
 		func(view *goldenpath.NexusView) { view.Relations[0].Target.Type = "thread" },

@@ -1,7 +1,6 @@
 package httptransport
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -61,22 +60,25 @@ type ciRunCurrentDTO struct {
 	RecordedAt  string           `json:"recorded_at"`
 	UpdatedAt   string           `json:"updated_at"`
 	Component   visibleEntityDTO `json:"component"`
+	Checkout    ciCheckoutDTO    `json:"checkout"`
 }
 type ciRunActorDTO struct {
 	Kind string `json:"kind"`
 }
 type ciRunTimelineDTO struct {
-	ID           string                 `json:"id"`
-	ActivityType string                 `json:"activity_type"`
-	Actor        ciRunActorDTO          `json:"actor"`
-	OccurredAt   string                 `json:"occurred_at"`
-	Status       string                 `json:"status"`
-	Subjects     []deploymentSubjectDTO `json:"subjects"`
+	ID             string                 `json:"id"`
+	ActivityType   string                 `json:"activity_type"`
+	Actor          ciRunActorDTO          `json:"actor"`
+	OccurredAt     string                 `json:"occurred_at"`
+	Status         string                 `json:"status"`
+	Subjects       []deploymentSubjectDTO `json:"subjects"`
+	CheckoutState  string                 `json:"checkout_state,omitempty"`
+	CheckoutReason string                 `json:"checkout_reason,omitempty"`
 }
 type ciRunNexusViewDTO struct {
-	Current   ciRunCurrentDTO    `json:"current"`
-	Relations []json.RawMessage  `json:"relations"`
-	Timeline  []ciRunTimelineDTO `json:"timeline"`
+	Current   ciRunCurrentDTO            `json:"current"`
+	Relations []collaborationRelationDTO `json:"relations"`
+	Timeline  []ciRunTimelineDTO         `json:"timeline"`
 }
 
 func ciRunNexusViewFromApplication(target entityref.Ref, view goldenpath.NexusView) (ciRunNexusViewDTO, error) {
@@ -100,12 +102,20 @@ func ciRunNexusViewFromApplication(target entityref.Ref, view goldenpath.NexusVi
 	if err != nil {
 		return fail("unreadable Component")
 	}
-	if len(view.Relations) != 0 || len(view.Timeline) != 1 {
+	if len(view.Timeline) != 1 {
 		return fail("unexpected relation or timeline count")
 	}
 	item := view.Timeline[0]
-	if item.ActivityType != "ci-run.recorded" || item.Actor != (goldenpath.ActorRef{Kind: "plugin"}) || !validScopedID(item.EventID, "evt_") || item.ProjectionVersion != goldenpath.ActivityProjectionVersion || !item.OccurredAt.Equal(*c.CompletedAt) || len(item.SafeFacts) != 1 || item.SafeFacts["status"] != c.Status || len(item.Subjects) != 1 || item.Subjects[0] != *c.Component {
+	if item.ActivityType != "ci-run.recorded" || item.Actor != (goldenpath.ActorRef{Kind: "plugin"}) || !validScopedID(item.EventID, "evt_") || item.ProjectionVersion != goldenpath.ActivityProjectionVersion || !item.OccurredAt.Equal(*c.CompletedAt) {
 		return fail("inconsistent or unsafe timeline")
+	}
+	checkout, err := publicCICheckout(c.Checkout)
+	if err != nil {
+		return fail("invalid checkout")
+	}
+	relations, subjects, err := ciCheckoutContext(c, view.Relations, item)
+	if err != nil {
+		return fail("inconsistent checkout context")
 	}
 	var started *string
 	if c.StartedAt != nil {
@@ -116,13 +126,13 @@ func ciRunNexusViewFromApplication(target entityref.Ref, view goldenpath.NexusVi
 		Current: ciRunCurrentDTO{
 			Ref: publicRef(target), Status: c.Status, StartedAt: started,
 			CompletedAt: publicTime(*c.CompletedAt), RecordedAt: publicTime(*c.RecordedAt),
-			UpdatedAt: publicTime(c.UpdatedAt), Component: component,
+			UpdatedAt: publicTime(c.UpdatedAt), Component: component, Checkout: checkout,
 		},
-		Relations: []json.RawMessage{},
+		Relations: relations,
 		Timeline: []ciRunTimelineDTO{{
 			ID: item.EventID, ActivityType: item.ActivityType, Actor: ciRunActorDTO{Kind: "plugin"},
 			OccurredAt: publicTime(item.OccurredAt), Status: c.Status,
-			Subjects: []deploymentSubjectDTO{{Visibility: "readable", Entity: &component}},
+			Subjects: subjects, CheckoutState: item.SafeFacts["checkout_state"], CheckoutReason: item.SafeFacts["checkout_reason"],
 		}},
 	}, nil
 }

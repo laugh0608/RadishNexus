@@ -9,13 +9,14 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
 
-const ActivityProjectionVersion = 2
+const ActivityProjectionVersion = 7
 
 type CurrentProjection struct {
 	Ref                entityref.Ref
 	GoverningProjectID string
 	Title              string
 	Status             string
+	StatusRevision     int
 	Visibility         string
 	CreatedBy          ActorRef
 	CreatedAt          time.Time
@@ -32,6 +33,7 @@ type CurrentProjection struct {
 	StartedAt          *time.Time
 	CompletedAt        *time.Time
 	RecordedAt         *time.Time
+	Checkout           *CICheckoutProjection
 }
 
 type ActorRef struct {
@@ -57,10 +59,15 @@ type TimelineItem struct {
 	SafeFacts         map[string]string
 }
 
+type TicketCapabilities struct {
+	ChangeStatus bool
+}
+
 type NexusView struct {
-	Current   CurrentProjection
-	Relations []RelationProjection
-	Timeline  []TimelineItem
+	TicketCapabilities *TicketCapabilities
+	Current            CurrentProjection
+	Relations          []RelationProjection
+	Timeline           []TimelineItem
 }
 
 func (service *Service) GetNexusView(

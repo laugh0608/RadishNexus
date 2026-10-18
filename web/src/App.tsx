@@ -1,6 +1,14 @@
+import { ProjectDecisionsPage } from "./workspace/ProjectDecisionsPage";
+import { projectDecisionsLocation } from "./workspace/project-decisions-api";
+import { RepositoryPage } from "./workspace/RepositoryPage";
+import { ProjectTicketsPage } from "./workspace/ProjectTicketsPage";
+import { projectTicketsLocation } from "./workspace/project-tickets-api";
+import { repositoryLocation } from "./workspace/repository-ci-runs-api";
 import { CIRunPage } from "./nexus-view/CIRunPage";
 import { ciRunLocation, ciRunPagePath } from "./nexus-view/ci-run-api";
 import { WorkbenchShell } from "./WorkbenchShell";
+import { ComponentPage } from "./workspace/ComponentPage";
+import { componentLocation } from "./collaboration/ticket-component-api";
 import { DocumentPage, DocumentList } from "./document/DocumentPage";
 import { documentLocation } from "./document/api";
 import { AppHeader } from "./AppHeader";
@@ -8,7 +16,13 @@ import { SetupGate } from "./auth/SetupGate";
 import { browserSetupClient, type SetupClient } from "./auth/setup-api";
 import { WorkspaceHome } from "./workspace/WorkspaceHome";
 import { browserDiscoveryClient, type DiscoveryClient } from "./workspace/api";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { IdentityLogin } from "./auth/IdentityLogin";
 import { IdentityPanel } from "./auth/IdentityPanel";
 import {
@@ -63,6 +77,10 @@ type AppRoute =
       documentID: string | null;
       projectID: string | null;
     }
+  | { kind: "repository"; workspaceID: string; repositoryID: string }
+  | { kind: "project-decisions"; workspaceID: string; projectID: string }
+  | { kind: "project-tickets"; workspaceID: string; projectID: string }
+  | { kind: "component"; workspaceID: string; componentID: string }
   | { kind: "prototype" }
   | { kind: "ci-run"; workspaceID: string; ciRunID: string }
   | { kind: "deployment"; workspaceID: string; deploymentID: string }
@@ -152,6 +170,15 @@ function appRoute(pathname: string): AppRoute {
   if (pathname === "/prototype/nexus-view") {
     return { kind: "prototype" };
   }
+  const repository = repositoryLocation(pathname);
+  const projectTickets = projectTicketsLocation(pathname);
+  const projectDecisions = projectDecisionsLocation(pathname);
+  if (projectDecisions)
+    return { kind: "project-decisions", ...projectDecisions };
+  if (projectTickets) return { kind: "project-tickets", ...projectTickets };
+  if (repository) return { kind: "repository", ...repository };
+  const component = componentLocation(pathname);
+  if (component) return { kind: "component", ...component };
   const doc = documentLocation(pathname);
   if (doc) return { kind: "document", ...doc };
   const ciRun = ciRunLocation(pathname);
@@ -227,6 +254,10 @@ function AuthenticatedApp({
     setAuthentication({ status: "signed-out" });
   }, []);
 
+  const acceptSession = useCallback((session: SessionContext) => {
+    setAuthentication({ status: "signed-in", session });
+  }, []);
+
   if (authentication.status === "loading") {
     return (
       <ShellState
@@ -267,6 +298,7 @@ function AuthenticatedApp({
   }
   return (
     <SignedInShell
+      key={authentication.session.user.id}
       route={route}
       session={authentication.session}
       authClient={authClient}
@@ -278,9 +310,7 @@ function AuthenticatedApp({
       loadDeployment={loadDeployment}
       navigate={navigate}
       onSignedOut={requireLogin}
-      onSession={(session) =>
-        setAuthentication({ status: "signed-in", session })
-      }
+      onSession={acceptSession}
     />
   );
 }
@@ -411,8 +441,52 @@ function SignedInShell({
     },
     [authClient],
   );
+  const sessionRefresh = useRef({ generation: 0, active: true });
+  const refreshSession = useCallback(async () => {
+    const generation = ++sessionRefresh.current.generation;
+    try {
+      const next = await authClient.resolveSession();
+      if (
+        sessionRefresh.current.active &&
+        generation === sessionRefresh.current.generation
+      )
+        onSession(next);
+    } catch (error) {
+      if (
+        sessionRefresh.current.active &&
+        generation === sessionRefresh.current.generation
+      )
+        throw error;
+    }
+  }, [authClient, onSession]);
+  useEffect(() => {
+    sessionRefresh.current.active = true;
+    const refresh = () => {
+      void refreshSession().catch((error: unknown) => {
+        if (error instanceof AuthRequestError && error.status === 401)
+          onSignedOut();
+      });
+    };
+    const visible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("pageshow", refresh);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      sessionRefresh.current.active = false;
+      sessionRefresh.current.generation++;
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("pageshow", refresh);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [refreshSession, onSignedOut]);
   const currentWorkspace =
     route.kind === "deployment" ||
+    route.kind === "component" ||
+    route.kind === "repository" ||
+    route.kind === "project-tickets" ||
+    route.kind === "project-decisions" ||
     route.kind === "ci-run" ||
     route.kind === "document" ||
     route.kind === "channel" ||
@@ -455,6 +529,7 @@ function SignedInShell({
     >
       {route.kind === "account" ? (
         <IdentityPanel
+          key={session.workspaces.map((w) => `${w.id}:${w.role}`).join(";")}
           client={identityClient}
           session={session}
           navigate={navigate}
@@ -463,9 +538,42 @@ function SignedInShell({
         />
       ) : route.kind === "home" ? (
         <WorkspaceHome
+          onSessionRefresh={refreshSession}
           session={session}
           navigate={navigate}
           client={discoveryClient}
+          onSessionExpired={onSignedOut}
+        />
+      ) : route.kind === "project-decisions" ? (
+        <ProjectDecisionsPage
+          key={`${route.workspaceID}/${route.projectID}`}
+          workspaceID={route.workspaceID}
+          projectID={route.projectID}
+          onSessionExpired={onSignedOut}
+        />
+      ) : route.kind === "project-tickets" ? (
+        <ProjectTicketsPage
+          workspaceID={route.workspaceID}
+          projectID={route.projectID}
+          onSessionExpired={onSignedOut}
+        />
+      ) : route.kind === "repository" ? (
+        <RepositoryPage
+          key={`${route.workspaceID}/${route.repositoryID}`}
+          workspaceID={route.workspaceID}
+          repositoryID={route.repositoryID}
+          workspaceName={currentWorkspace?.name ?? route.workspaceID}
+          isOwner={currentWorkspace?.role === "owner"}
+          onSessionExpired={onSignedOut}
+        />
+      ) : route.kind === "component" ? (
+        <ComponentPage
+          key={`${route.workspaceID}/${route.componentID}`}
+          workspaceID={route.workspaceID}
+          componentID={route.componentID}
+          workspaceName={currentWorkspace?.name ?? route.workspaceID}
+          isOwner={currentWorkspace?.role === "owner"}
+          userID={session.user.id}
           onSessionExpired={onSignedOut}
         />
       ) : route.kind === "ci-run" ? (

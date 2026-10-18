@@ -472,3 +472,7 @@ func TestStagingConfirmationTimesAndOperationIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func (*recordingStore) ListRepositoryCIRuns(context.Context, authz.Principal, string, DiscoveryPageInput) (RepositoryCIRunPage, error) {
+	return RepositoryCIRunPage{}, nil
+}

@@ -278,7 +278,7 @@ func assertMessagingHTTPTransport(
 	csrfDigest := sha256.Sum256([]byte(csrfToken))
 	deciderTokenDigest := sha256.Sum256([]byte(deciderSessionToken))
 	deciderCSRFDigest := sha256.Sum256([]byte(deciderCSRFToken))
-	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_contributor', 'active', $1), ('usr_decider', 'active', $1)`, now); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_contributor', 'active', $1), ('usr_decider', 'active', $1) ON CONFLICT(user_id) DO NOTHING`, now); err != nil {
 		t.Fatalf("seed identity accounts: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `

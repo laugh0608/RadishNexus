@@ -29,6 +29,7 @@ func M0Registry() Registry {
 		"project":     "prj_",
 		"initiative":  "ini_",
 		"component":   "cmp_",
+		"repository":  "rep_",
 		"channel":     "chn_",
 		"decision":    "dec_",
 		"environment": "env_",

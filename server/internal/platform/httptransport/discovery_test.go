@@ -23,6 +23,7 @@ type fakeDiscoveryReader struct {
 	principal authz.Principal
 	project   string
 	input     goldenpath.DiscoveryPageInput
+	kind      string
 }
 
 func (reader *fakeDiscoveryReader) ListProjects(_ context.Context, principal authz.Principal, input goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error) {
@@ -32,6 +33,17 @@ func (reader *fakeDiscoveryReader) ListProjects(_ context.Context, principal aut
 	return reader.page, reader.err
 }
 func (reader *fakeDiscoveryReader) ListProjectChannels(ctx context.Context, principal authz.Principal, project string, input goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error) {
+	reader.project = project
+	return reader.ListProjects(ctx, principal, input)
+}
+
+func (reader *fakeDiscoveryReader) ListProjectTickets(ctx context.Context, principal authz.Principal, project string, input goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error) {
+	reader.project = project
+	return reader.ListProjects(ctx, principal, input)
+}
+
+func (reader *fakeDiscoveryReader) ListProjectDecisions(ctx context.Context, principal authz.Principal, project string, input goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error) {
+	reader.kind = "decision"
 	reader.project = project
 	return reader.ListProjects(ctx, principal, input)
 }
@@ -50,16 +62,22 @@ func discoveryHandlerForTest(t *testing.T, sessions WorkspaceSessionResolver, re
 }
 
 func TestDiscoveryRoutesReturnOnlySafeItemsAndScopedPagination(t *testing.T) {
-	for _, kind := range []string{"project", "channel"} {
+	for _, kind := range []string{"project", "channel", "ticket", "decision"} {
 		t.Run(kind, func(t *testing.T) {
 			project := ""
 			path := "/api/v1/workspaces/wrk_main/projects"
-			if kind == "channel" {
+			if kind != "project" {
 				project = "prj_parent"
-				path += "/prj_parent/channels"
+				path += "/prj_parent/" + kind + "s"
 			}
 			id := discoveryPrefix(kind) + "visible"
-			reader := &fakeDiscoveryReader{page: goldenpath.DiscoveryPage{Items: []goldenpath.DiscoveryItem{{Ref: entityref.Ref{Type: kind, ID: id}, Title: "Visible title", Status: "archived"}}, NextID: id}}
+			status := "archived"
+			if kind == "ticket" {
+				status = "open"
+			} else if kind == "decision" {
+				status = "proposed"
+			}
+			reader := &fakeDiscoveryReader{page: goldenpath.DiscoveryPage{Items: []goldenpath.DiscoveryItem{{Ref: entityref.Ref{Type: kind, ID: id}, Title: "Visible title", Status: status}}, NextID: id}}
 			sessions := validMessagingSessions()
 			handler := discoveryHandlerForTest(t, sessions, reader)
 			response := httptest.NewRecorder()

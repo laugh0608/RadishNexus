@@ -26,6 +26,8 @@ type activityEvent struct {
 }
 
 type activityEventPayload struct {
+	Lifecycle            string         `json:"lifecycle"`
+	Classification       string         `json:"classification"`
 	Revision             int            `json:"revision"`
 	RestoredFromRevision *int           `json:"restored_from_revision"`
 	Ticket               *entityref.Ref `json:"ticket"`
@@ -35,6 +37,11 @@ type activityEventPayload struct {
 	Component            *entityref.Ref `json:"component"`
 	Environment          *entityref.Ref `json:"environment"`
 	CIRun                *entityref.Ref `json:"ci_run"`
+	Repository           *entityref.Ref `json:"repository"`
+	LinkID               string         `json:"link_id"`
+	State                string         `json:"state"`
+	CheckoutState        string         `json:"checkout_state"`
+	CheckoutReason       *string        `json:"checkout_reason"`
 }
 
 type activityRecord struct {
@@ -43,7 +50,7 @@ type activityRecord struct {
 	safeFacts map[string]string
 }
 
-// RebuildActivityProjection atomically replaces projection version 1 from
+// RebuildActivityProjection atomically replaces the current projection version from
 // immutable domain event facts. It deliberately does not read Outbox delivery
 // state, so delivery cleanup cannot remove the source needed for a rebuild.
 func (store *Store) RebuildActivityProjection(ctx context.Context) (projected int, err error) {
@@ -66,8 +73,9 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
 			occurred_at, payload
 		FROM radishnexus.domain_events
 		WHERE event_type IN (
-			'decision.proposed', 'decision.accepted', 'ticket.created',
-			'ci-run.recorded', 'deployment.recorded', 'project.created', 'channel.created', 'document.created', 'document.revised'
+			'decision.proposed', 'decision.accepted', 'ticket.created', 'ticket.status-changed',
+			'ci-run.recorded', 'deployment.recorded', 'project.created', 'channel.created', 'component.created', 'environment.created', 'document.created', 'document.revised',
+			'repository.created', 'component.repository-linked', 'component.repository-unlinked', 'ticket.component-linked', 'ticket.component-unlinked'
 		)
 		ORDER BY occurred_at, event_id
 	`)
@@ -184,7 +192,7 @@ func insertActivityRecord(ctx context.Context, tx pgx.Tx, record activityRecord)
 }
 
 func projectActivityEvent(event activityEvent) (activityRecord, error) {
-	if event.schemaVersion != 1 {
+	if event.schemaVersion != 1 && !(event.eventType == "ci-run.recorded" && event.schemaVersion == 2) {
 		return activityRecord{}, fmt.Errorf(
 			"project Activity event %s: unsupported %s schema version %d",
 			event.eventID,
@@ -200,7 +208,9 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 	if err := json.Unmarshal(event.payload, &payload); err != nil {
 		return activityRecord{}, fmt.Errorf("decode Activity event %s payload: %w", event.eventID, err)
 	}
-	if payload.Status == "" && event.target.Type != "document" {
+	repositoryEvent := event.eventType == "repository.created" || event.eventType == "component.repository-linked" || event.eventType == "component.repository-unlinked"
+	ticketRelation := event.eventType == "ticket.component-linked" || event.eventType == "ticket.component-unlinked"
+	if payload.Status == "" && event.target.Type != "document" && event.eventType != "component.created" && !repositoryEvent && !ticketRelation && event.eventType != "ticket.status-changed" {
 		return activityRecord{}, fmt.Errorf("project Activity event %s: status is required", event.eventID)
 	}
 
@@ -210,6 +220,48 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		safeFacts:     map[string]string{"status": payload.Status},
 	}
 	switch event.eventType {
+	case "ticket.status-changed":
+		transition, err := decodeTicketStatusTransition(event.payload)
+		if err != nil || event.target.Type != "ticket" || event.actorKind != "user" || event.actorID == nil {
+			return activityRecord{}, fmt.Errorf("invalid Ticket status event %s", event.eventID)
+		}
+		record.safeFacts = map[string]string{"from_status": transition.FromStatus, "to_status": transition.ToStatus,
+			"from_status_revision": strconv.Itoa(transition.FromRevision), "to_status_revision": strconv.Itoa(transition.ToRevision)}
+	case "ticket.component-linked", "ticket.component-unlinked":
+		state := "active"
+		if event.eventType == "ticket.component-unlinked" {
+			state = "removed"
+		}
+		if event.target.Type != "ticket" || event.actorKind != "user" || event.actorID == nil || payload.Component == nil || payload.Component.Type != "component" || !goldenpath.ValidConfigurationID(payload.LinkID, "lnk_") || payload.State != state {
+			return activityRecord{}, fmt.Errorf("invalid Ticket Component relation event %s", event.eventID)
+		}
+		record.subjects = []entityref.Ref{*payload.Component}
+		record.safeFacts = map[string]string{"relation_state": state}
+	case "repository.created":
+		if event.target.Type != "repository" || event.actorKind != "user" || event.actorID == nil || string(event.payload) != "{}" {
+			return activityRecord{}, fmt.Errorf("invalid Repository creation %s", event.eventID)
+		}
+		record.safeFacts = map[string]string{}
+	case "component.repository-linked", "component.repository-unlinked":
+		state := "active"
+		if event.eventType == "component.repository-unlinked" {
+			state = "removed"
+		}
+		if event.target.Type != "component" || event.actorKind != "user" || event.actorID == nil || payload.Repository == nil || payload.Repository.Type != "repository" || !goldenpath.ValidConfigurationID(payload.LinkID, "lnk_") || payload.State != state {
+			return activityRecord{}, fmt.Errorf("invalid Repository relation event %s", event.eventID)
+		}
+		record.subjects = []entityref.Ref{*payload.Repository}
+		record.safeFacts = map[string]string{"state": state}
+	case "component.created":
+		if event.target.Type != "component" || payload.Lifecycle != "active" || event.actorKind != "user" || event.actorID == nil {
+			return activityRecord{}, fmt.Errorf("invalid Component creation %s", event.eventID)
+		}
+		record.safeFacts = map[string]string{"lifecycle": payload.Lifecycle}
+	case "environment.created":
+		if event.target.Type != "environment" || payload.Status != "active" || payload.Classification != "staging" || event.actorKind != "user" || event.actorID == nil {
+			return activityRecord{}, fmt.Errorf("invalid Environment creation %s", event.eventID)
+		}
+		record.safeFacts = map[string]string{"status": payload.Status, "classification": payload.Classification}
 	case "document.created", "document.revised":
 		if event.target.Type != "document" || payload.Revision < 1 || event.actorKind != "user" || event.actorID == nil {
 			return activityRecord{}, fmt.Errorf("invalid Document event %s", event.eventID)
@@ -253,6 +305,24 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid ci-run.recorded facts", event.eventID)
 		}
 		record.subjects = []entityref.Ref{*payload.Component}
+		if event.schemaVersion == 2 {
+			var shape map[string]json.RawMessage
+			if err := json.Unmarshal(event.payload, &shape); err != nil || len(shape) != 6 || shape["checkout_reason"] == nil || shape["link_id"] == nil || payload.Repository == nil || payload.Repository.Type != "repository" || payload.Component.Type != "component" {
+				return activityRecord{}, fmt.Errorf("invalid CI checkout event %s", event.eventID)
+			}
+			if (payload.CheckoutState == "observed" && (payload.CheckoutReason != nil || !goldenpath.ValidConfigurationID(payload.LinkID, "lnk_"))) ||
+				(payload.CheckoutState == "unavailable" && (payload.CheckoutReason == nil || !goldenpath.ValidCheckoutReason(*payload.CheckoutReason) || string(shape["link_id"]) != "null")) ||
+				(payload.CheckoutState != "observed" && payload.CheckoutState != "unavailable") {
+				return activityRecord{}, fmt.Errorf("invalid CI checkout state in event %s", event.eventID)
+			}
+			record.subjects = append(record.subjects, *payload.Repository)
+			record.safeFacts["checkout_state"] = payload.CheckoutState
+			if payload.CheckoutReason != nil {
+				record.safeFacts["checkout_reason"] = *payload.CheckoutReason
+			}
+		} else if payload.CheckoutState != "" || payload.CheckoutReason != nil || payload.Repository != nil || payload.LinkID != "" {
+			return activityRecord{}, fmt.Errorf("legacy CI Run contains checkout in event %s", event.eventID)
+		}
 	case "deployment.recorded":
 		if event.target.Type != "deployment" || event.actorKind != "user" || event.actorID == nil ||
 			!isTerminalDeploymentStatus(payload.Status) || payload.Environment == nil || payload.CIRun == nil {

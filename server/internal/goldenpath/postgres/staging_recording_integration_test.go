@@ -190,6 +190,7 @@ func TestStagingRecordingWaitsForRevocationAndArchive(t *testing.T) {
 	}{
 		{"authorization", `UPDATE radishnexus.environment_deployment_authorizations SET status='revoked',revoked_by='usr_admin',revoked_at=now() WHERE id='dpa_staging_contributor'`, "%FROM radishnexus.environment_deployment_authorizations%", authz.ErrForbidden},
 		{"archive", `UPDATE radishnexus.environments SET status='archived' WHERE id='env_staging'`, "%FROM radishnexus.environments%", authz.ErrConflict},
+		{"account", `UPDATE radishnexus.user_accounts SET status='disabled' WHERE user_id='usr_contributor'`, "%FROM radishnexus.user_accounts%", authz.ErrNotFound},
 		{"membership", `UPDATE radishnexus.workspace_memberships SET status='suspended' WHERE workspace_id='wrk_main' AND user_id='usr_contributor'`, "%FROM radishnexus.workspace_memberships%", authz.ErrNotFound},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {

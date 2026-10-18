@@ -99,14 +99,15 @@ func validJob(job string) bool {
 }
 
 type Payload struct {
-	Version     int        `json:"version"`
-	Job         string     `json:"job_full_name"`
-	Number      int64      `json:"build_number"`
-	Building    bool       `json:"building"`
-	InProgress  bool       `json:"in_progress"`
-	Result      string     `json:"result"`
-	StartedAt   *time.Time `json:"started_at"`
-	CompletedAt time.Time  `json:"completed_at"`
+	Version     int                    `json:"version"`
+	Job         string                 `json:"job_full_name"`
+	Number      int64                  `json:"build_number"`
+	Building    bool                   `json:"building"`
+	InProgress  bool                   `json:"in_progress"`
+	Result      string                 `json:"result"`
+	StartedAt   *time.Time             `json:"started_at"`
+	CompletedAt time.Time              `json:"completed_at"`
+	Checkout    *goldenpath.CICheckout `json:"checkout,omitempty"`
 }
 
 func (p Payload) DeliveryID() string { return "build-" + strconv.FormatInt(p.Number, 10) }
@@ -115,7 +116,19 @@ func ParsePayload(body []byte, now time.Time) (Payload, error) {
 	if len(body) > MaxBody {
 		return p, ErrInvalid
 	}
-	fields, err := object(body, "version", "job_full_name", "build_number", "building", "in_progress", "result", "started_at", "completed_at")
+	// This probe selects the closed schema only. object below still rejects
+	// every duplicate, missing or unknown field, including duplicate version.
+	var probe struct {
+		Version int `json:"version"`
+	}
+	if json.Unmarshal(body, &probe) != nil || (probe.Version != 1 && probe.Version != 2) {
+		return p, ErrInvalid
+	}
+	names := []string{"version", "job_full_name", "build_number", "building", "in_progress", "result", "started_at", "completed_at"}
+	if probe.Version == 2 {
+		names = append(names, "checkout")
+	}
+	fields, err := object(body, names...)
 	if err != nil {
 		return p, err
 	}
@@ -124,7 +137,7 @@ func ParsePayload(body []byte, now time.Time) (Payload, error) {
 			return p, ErrInvalid
 		}
 	}
-	if p.Version != 1 || !validJob(p.Job) || !numberPattern.Match(fields["build_number"]) || p.Number > 2147483647 {
+	if !validJob(p.Job) || !numberPattern.Match(fields["build_number"]) || p.Number > 2147483647 {
 		return p, ErrInvalid
 	}
 	if p.Building || p.InProgress {
@@ -161,7 +174,45 @@ func ParsePayload(body []byte, now time.Time) (Payload, error) {
 		}
 		p.StartedAt = &start
 	}
+	if p.Version == 2 {
+		p.Checkout, err = parseCheckout(fields["checkout"])
+		if err != nil {
+			return p, err
+		}
+	}
 	return p, nil
+}
+
+func parseCheckout(raw []byte) (*goldenpath.CICheckout, error) {
+	f, err := object(raw, "binding_id", "state", "reason", "revision")
+	if err != nil {
+		return nil, ErrInvalid
+	}
+	c := &goldenpath.CICheckout{}
+	if decode(f["binding_id"], &c.BindingID) != nil || decode(f["state"], &c.State) != nil {
+		return nil, ErrInvalid
+	}
+	if !bytes.Equal(f["reason"], []byte("null")) {
+		var reason string
+		if decode(f["reason"], &reason) != nil {
+			return nil, ErrInvalid
+		}
+		c.Reason = &reason
+	}
+	if !bytes.Equal(f["revision"], []byte("null")) {
+		r, err := object(f["revision"], "algorithm", "oid")
+		if err != nil {
+			return nil, ErrInvalid
+		}
+		c.Revision = &goldenpath.GitRevision{}
+		if decode(r["algorithm"], &c.Revision.Algorithm) != nil || decode(r["oid"], &c.Revision.OID) != nil {
+			return nil, ErrInvalid
+		}
+	}
+	if !goldenpath.ValidCICheckout(*c) {
+		return nil, ErrInvalid
+	}
+	return c, nil
 }
 func status(result string) string {
 	switch result {
@@ -183,6 +234,22 @@ func (s Source) Map(p Payload, deliveryID string) (goldenpath.VerifiedJenkinsDel
 	if p.DeliveryID() != deliveryID {
 		return goldenpath.VerifiedJenkinsDelivery{}, goldenpath.RecordCompletedCIRunInput{}, ErrInvalid
 	}
+	if s.CheckoutBinding == nil {
+		if p.Version != 1 || p.Checkout != nil {
+			return goldenpath.VerifiedJenkinsDelivery{}, goldenpath.RecordCompletedCIRunInput{}, ErrInvalid
+		}
+	} else {
+		wantVersion := 1
+		if p.Number >= s.CheckoutBinding.EffectiveFromBuild {
+			wantVersion = 2
+		}
+		if p.Version != wantVersion || (p.Version == 2 && (p.Checkout == nil || !goldenpath.ValidCICheckout(*p.Checkout))) || (p.Version == 1 && p.Checkout != nil) {
+			return goldenpath.VerifiedJenkinsDelivery{}, goldenpath.RecordCompletedCIRunInput{}, ErrInvalid
+		}
+		if p.Checkout != nil && p.Checkout.BindingID != s.CheckoutBinding.BindingID {
+			return goldenpath.VerifiedJenkinsDelivery{}, goldenpath.RecordCompletedCIRunInput{}, ErrBinding
+		}
+	}
 	canonical, _ := json.Marshal(struct {
 		Version   int        `json:"version"`
 		Workspace string     `json:"workspace_id"`
@@ -194,8 +261,17 @@ func (s Source) Map(p Payload, deliveryID string) (goldenpath.VerifiedJenkinsDel
 		Started   *time.Time `json:"started_at"`
 		Completed time.Time  `json:"completed_at"`
 	}{p.Version, s.WorkspaceID, s.ComponentID, s.ID, p.Job, p.Number, p.Result, p.StartedAt, p.CompletedAt})
+	if p.Version == 2 {
+		// Embed the closed original fact object, preserving the original v1
+		// encoding byte-for-byte instead of injecting zero-valued new fields.
+		canonical, _ = json.Marshal(struct {
+			Facts    json.RawMessage              `json:"facts"`
+			Binding  goldenpath.CICheckoutBinding `json:"checkout_binding"`
+			Checkout goldenpath.CICheckout        `json:"checkout"`
+		}{canonical, *s.CheckoutBinding, *p.Checkout})
+	}
 	sum := sha256.Sum256(canonical)
-	return goldenpath.VerifiedJenkinsDelivery{WorkspaceID: s.WorkspaceID, SourceID: s.ID, DeliveryID: deliveryID, PayloadSHA256: hex.EncodeToString(sum[:])}, goldenpath.RecordCompletedCIRunInput{ComponentID: s.ComponentID, ExternalRunKey: strconv.FormatInt(p.Number, 10), Status: status(p.Result), StartedAt: p.StartedAt, CompletedAt: p.CompletedAt}, nil
+	return goldenpath.VerifiedJenkinsDelivery{WorkspaceID: s.WorkspaceID, SourceID: s.ID, DeliveryID: deliveryID, PayloadSHA256: hex.EncodeToString(sum[:]), Job: s.Job, CheckoutBinding: s.CheckoutBinding}, goldenpath.RecordCompletedCIRunInput{ComponentID: s.ComponentID, ExternalRunKey: strconv.FormatInt(p.Number, 10), Status: status(p.Result), StartedAt: p.StartedAt, CompletedAt: p.CompletedAt, Checkout: p.Checkout}, nil
 }
 func signature(secret []byte, sourceID, keyID, deliveryID, timestamp string, body []byte) string {
 	sum := sha256.Sum256(body)

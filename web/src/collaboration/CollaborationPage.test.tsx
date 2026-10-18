@@ -71,6 +71,28 @@ const decisionView: CollaborationView<DecisionCurrent> = {
 };
 
 describe("CollaborationPage", () => {
+  it("returns to the current Decision's own Project list homepage", async () => {
+    renderPage(
+      "decision",
+      "dec_choice",
+      testClient({
+        loadView: vi.fn().mockResolvedValue({
+          ...decisionView,
+          current: {
+            ...proposedDecision,
+            project: { type: "project", id: "prj_actual" },
+          },
+        }),
+      }),
+    );
+    expect(
+      (await screen.findByRole("link", { name: "查看项目决策" })).getAttribute(
+        "href",
+      ),
+    ).toBe("/workspaces/wrk_main/projects/prj_actual/decisions");
+    expect(screen.queryByRole("link", { name: "查看项目工单" })).toBeNull();
+  });
+
   it("opens an incoming Decision and drops old discoveries when re-entering", async () => {
     const loadView = vi
       .fn()
@@ -180,6 +202,7 @@ describe("CollaborationPage", () => {
         project: { type: "project", id: "prj_main" },
         title: "Implement collaboration UI",
         status: "open",
+        statusRevision: 1,
         createdBy: { kind: "user", id: "usr_decider" },
         createdAt: now,
         updatedAt: now,
@@ -315,6 +338,7 @@ function testClient(
   overrides: Partial<CollaborationClient> = {},
 ): CollaborationClient {
   return {
+    changeTicketStatus: vi.fn(),
     loadView: vi.fn().mockResolvedValue(threadView),
     proposeDecision: vi.fn(),
     acceptDecision: vi.fn(),

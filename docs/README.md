@@ -20,6 +20,10 @@
 14. [视觉方向与页面参考](design/visual-direction.md)：Radish 家族视觉来源、AFFiNE / Mattermost / AppFlowy 参考分工及待评审的页面建议。
 15. [工作台与 Document 代表页设计](design/workbench-v1.md)：Pen 原生设计源、桌面 / 手机预览、状态映射及静态检查边界。
 
+客户端连接方向见[官方客户端与实例连接规划](architecture/client-server-connection-plan.md)及 [ADR-0036](adr/0036-official-client-instance-connection.md)：同一官方安装包运行时支持官方端点或用户自部署后端，无需重新编译，Web 保持各实例同源交付。
+
+试用准备见[受控试用支持说明](trial-support.md)、[评估授权待决事项](evaluation-authorization-decisions.md)及 [ADR-0043：单机停机升级与失败恢复](adr/0043-single-host-upgrade-failure-recovery.md)。三者目前均为待确认设计，分别承载支持范围与准入、授权选择、运维流程与验收矩阵，不代表试用已开放或已授予运行权。
+
 ## 文档职责
 
 - 稳定产品定位只写在 `product-definition.md`。
@@ -39,6 +43,20 @@
 ## 状态与验证入口
 
 - [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
+- [2026-10-18 提交回顾与文档收尾](status/reviews/2026-10-18-daily-closeout.md)：决策发现、账户恢复、owner 交接和试用准备设计的提交映射、源码文档核对与下一切片。
+- [2026-10-18 Workspace owner 主动交接](status/reviews/2026-10-18-workspace-owner-handoff.md)：角色代次、邀请任期、历史查询、并发与旧工件恢复。
+- [2026-10-18 本地账户受控恢复](status/reviews/2026-10-18-controlled-account-recovery.md)：独立 CLI、全账户 Session 撤销、审计与隔离恢复。
+- [2026-10-18 Project 决策只读发现](status/reviews/2026-10-18-project-decision-discovery.md)：当前权限、稳定分页、来源隔离与浏览器恢复。
+- [2026-10-13 提交回顾与文档收尾](status/reviews/2026-10-13-daily-closeout.md)：checkout 来源、工单发现与状态流转的提交映射、文档核对和接续建议。
+- [2026-10-13 Ticket 最小状态流转](status/reviews/2026-10-13-ticket-status-transitions.md)：四状态、精确重试、升级恢复与权限验收。
+- [2026-10-13 Project 工单只读发现](status/reviews/2026-10-13-project-ticket-discovery.md)：正式入口、分页、普通成员发现与撤权恢复。
+- [2026-10-13 checkout 来源 A](status/reviews/2026-10-13-checkout-provenance.md)：来源接收、不可变关系与双向发现；真实采集 B 暂缓。
+- [2026-10-09 提交回顾与文档收尾](status/reviews/2026-10-09-daily-closeout.md)：持久发送、可信采集与双边清理的提交映射、文档核对和次日接续建议。
+- [2026-10-09 双边显式清理](status/reviews/2026-10-09-jenkins-cleanup.md)：双方确认、7 天保留、紧凑索引、进程中断与恢复；真实联调暂缓。
+- [2026-10-09 可信 collector 代码与离线验证](status/reviews/2026-10-09-jenkins-collector.md)：周期补采、历史缺口、故障与交接契约；真实联调暂缓。
+- [2026-10-09 浏览器补验与持久终态快照发送](status/reviews/2026-10-09-delivery-continuation.md)：Ticket / Component 撤权补验、ADR-0035 A 实现与恢复证据；B 后续见采集记录。
+- [2026-10-06 提交回顾与文档收尾](status/reviews/2026-10-06-daily-closeout.md)：Repository / Component 与 Ticket / Component 两段人工关联、文档核对及次日接续建议。
+- [2026-10-01 提交回顾与文档收尾](status/reviews/2026-10-01-daily-closeout.md)：依赖修复、阶段晋级、组件环境配置与授权管理，以及次日接续建议。
 - [2026-09-26 提交回顾与文档收尾](status/reviews/2026-09-26-daily-closeout.md)：Document、工作台视觉、CI Run、Jenkins 与 staging 记录的提交映射和文档核对。
 - [2026-09-10 提交回顾与文档收尾](status/reviews/2026-09-10-daily-closeout.md)：Activity、身份、readiness 与发现入口的提交映射和文档审阅结果。
 - [2026-09-05 项目审阅](status/reviews/2026-09-05-project-review.md)：源码发现、建议与实际验证范围。

@@ -1,3 +1,4 @@
+import { CheckoutSource } from "./CheckoutSource";
 import type {
   CIRunNexusCurrent,
   DecisionNexusCurrent,
@@ -9,11 +10,12 @@ import type {
 } from "./model";
 
 interface NexusViewProps {
+  workspaceID?: string;
   state: NexusViewState;
   onRetry?: () => void;
 }
 
-export function NexusView({ state, onRetry }: NexusViewProps) {
+export function NexusView({ state, onRetry, workspaceID }: NexusViewProps) {
   if (state.status === "loading") {
     return <LoadingNexusView />;
   }
@@ -22,7 +24,7 @@ export function NexusView({ state, onRetry }: NexusViewProps) {
     return <ErrorNexusView message={state.message} onRetry={onRetry} />;
   }
 
-  return <ReadyNexusView data={state.data} />;
+  return <ReadyNexusView data={state.data} workspaceID={workspaceID} />;
 }
 
 function LoadingNexusView() {
@@ -83,10 +85,16 @@ function ErrorNexusView({ message, onRetry }: ErrorNexusViewProps) {
   );
 }
 
-function ReadyNexusView({ data }: { data: NexusViewData }) {
+function ReadyNexusView({
+  data,
+  workspaceID,
+}: {
+  data: NexusViewData;
+  workspaceID?: string;
+}) {
   return (
     <main className="nexus-layout">
-      <CurrentCard current={data.current} />
+      <CurrentCard current={data.current} workspaceID={workspaceID} />
 
       <div className="nexus-columns">
         <RelationsPanel
@@ -99,10 +107,16 @@ function ReadyNexusView({ data }: { data: NexusViewData }) {
   );
 }
 
-function CurrentCard({ current }: { current: NexusViewData["current"] }) {
+function CurrentCard({
+  current,
+  workspaceID,
+}: {
+  current: NexusViewData["current"];
+  workspaceID?: string;
+}) {
   switch (current.entityType) {
     case "ci-run":
-      return <CIRunCurrentCard current={current} />;
+      return <CIRunCurrentCard current={current} workspaceID={workspaceID} />;
     case "deployment":
       return <DeploymentCurrentCard current={current} />;
     case "decision":
@@ -144,7 +158,13 @@ function DecisionCurrentCard({ current }: { current: DecisionNexusCurrent }) {
   );
 }
 
-function CIRunCurrentCard({ current }: { current: CIRunNexusCurrent }) {
+function CIRunCurrentCard({
+  current,
+  workspaceID,
+}: {
+  current: CIRunNexusCurrent;
+  workspaceID?: string;
+}) {
   return (
     <article
       className="current-card current-card--ci-run"
@@ -170,6 +190,12 @@ function CIRunCurrentCard({ current }: { current: CIRunNexusCurrent }) {
           <EntityStamp entityRef={current.entityRef} />
         </div>
       </div>
+
+      <CheckoutSource
+        key={current.entityRef}
+        checkout={current.checkout}
+        workspaceID={workspaceID}
+      />
 
       <dl className="current-meta current-meta--ci-run">
         <TimeMetaItem

@@ -52,6 +52,7 @@ const ticketCurrent = {
   project: { type: "project", id: "prj_main" },
   title: "Implement collaboration UI",
   status: "open",
+  status_revision: 1,
   created_by: { kind: "user", id: "usr_contributor" },
   created_at: now,
   updated_at: now,
@@ -381,3 +382,140 @@ function jsonResponse(payload: unknown, status = 200): Response {
     json: async () => payload,
   } as Response;
 }
+
+it("strictly parses all Ticket states, versions and status history", () => {
+  const data = {
+    current: { ...ticketCurrent, status_revision: 2 },
+    capabilities: { change_status: true },
+    relations: [
+      {
+        visibility: "readable",
+        direction: "outgoing",
+        relation_type: "implements",
+        target: {
+          ref: { type: "decision", id: "dec_source" },
+          title: "Source",
+        },
+      },
+    ],
+    timeline: [
+      {
+        id: "evt_state",
+        activity_type: "ticket.status-changed",
+        actor: { kind: "user", id: "usr_member" },
+        occurred_at: now,
+        subjects: [],
+        from_status: "open",
+        to_status: "done",
+        from_status_revision: 1,
+        to_status_revision: 2,
+      },
+    ],
+  };
+  for (const status of ["open", "in-progress", "done", "canceled"])
+    expect(
+      parseCollaborationView(
+        { data: { ...data, current: { ...data.current, status } } },
+        "ticket",
+        "tkt_work",
+      ).current,
+    ).toMatchObject({ status, statusRevision: 2 });
+  for (const bad of [
+    { ...data, current: { ...data.current, status_revision: 0 } },
+    { ...data, current: { ...data.current, status_revision: 1.5 } },
+    { ...data, current: { ...data.current, status_revision: 2147483648 } },
+    { ...data, current: { ...data.current, status: "unknown" } },
+    { ...data, capabilities: { change_status: "yes" } },
+    { ...data, timeline: [{ ...data.timeline[0], to_status: "open" }] },
+    { ...data, timeline: [{ ...data.timeline[0], to_status_revision: 3 }] },
+    {
+      ...data,
+      timeline: [
+        { ...data.timeline[0], subjects: [{ visibility: "restricted" }] },
+      ],
+    },
+  ])
+    expect(() =>
+      parseCollaborationView({ data: bad }, "ticket", "tkt_work"),
+    ).toThrow();
+});
+it("sends the immutable status command and validates its original applied receipt", async () => {
+  Object.defineProperty(document, "cookie", {
+    configurable: true,
+    value: `__Host-radishnexus-csrf=${csrfToken}`,
+  });
+  const input = {
+    clientOperationID: "web:status",
+    baseStatusRevision: 3,
+    toStatus: "done" as const,
+    confirmed: true as const,
+  };
+  const data = {
+    ticket: { type: "ticket", id: "tkt_work" },
+    applied: true,
+    applied_status: "done",
+    applied_status_revision: 4,
+  };
+  const fetch = vi.fn().mockResolvedValue(jsonResponse({ data }));
+  vi.stubGlobal("fetch", fetch);
+  expect(
+    await browserCollaborationClient.changeTicketStatus(
+      "wrk_main",
+      "tkt_work",
+      input,
+    ),
+  ).toMatchObject({ appliedStatus: "done", appliedStatusRevision: 4 });
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+    client_operation_id: "web:status",
+    base_status_revision: 3,
+    to_status: "done",
+    confirmed: true,
+  });
+  for (const bad of [
+    { ...data, applied: false },
+    { ...data, applied_status: "open" },
+    { ...data, applied_status_revision: 5 },
+    { ...data, event_id: "evt_internal" },
+  ]) {
+    fetch.mockResolvedValue(jsonResponse({ data: bad }));
+    await expect(
+      browserCollaborationClient.changeTicketStatus(
+        "wrk_main",
+        "tkt_work",
+        input,
+      ),
+    ).rejects.toThrow(/契约/);
+  }
+});
+it("returns current Ticket state on create retry but rejects non-open first creation", async () => {
+  Object.defineProperty(document, "cookie", {
+    configurable: true,
+    value: `__Host-radishnexus-csrf=${csrfToken}`,
+  });
+  const data = {
+    ticket: { ...ticketCurrent, status: "canceled", status_revision: 6 },
+    source_decision: { type: "decision", id: "dec_choice" },
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(jsonResponse({ data }, 200)),
+  );
+  expect(
+    (
+      await browserCollaborationClient.createTicket("wrk_main", "dec_choice", {
+        clientOperationID: "web:create",
+        title: ticketCurrent.title,
+      })
+    ).ticket,
+  ).toMatchObject({ status: "canceled", statusRevision: 6 });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(jsonResponse({ data }, 201)),
+  );
+  await expect(
+    browserCollaborationClient.createTicket("wrk_main", "dec_choice", {
+      clientOperationID: "web:create",
+      title: ticketCurrent.title,
+    }),
+  ).rejects.toThrow(/契约/);
+});

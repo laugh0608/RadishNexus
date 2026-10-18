@@ -23,6 +23,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
 
 func TestBackupRestoreGoldenPath(t *testing.T) {
@@ -43,9 +44,6 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	sourcePool := connectIntegrationPool(t, ctx, sourceURL)
 	defer sourcePool.Close()
 	seedBackupGoldenPath(t, ctx, sourcePool)
-	if _, err := sourcePool.Exec(ctx, `INSERT INTO radishnexus.user_accounts(user_id,status,created_at) VALUES ('usr_contributor','active',now())`); err != nil {
-		t.Fatal(err)
-	}
 	var ticketID string
 	if err := sourcePool.QueryRow(ctx, `SELECT id FROM radishnexus.tickets WHERE workspace_id='wrk_backup'`).Scan(&ticketID); err != nil {
 		t.Fatal(err)
@@ -71,6 +69,43 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	regrantBackupAuthorization(t, ctx, sourcePool, "dpa_backup", 2)
+	repositoryInputs, repositoryResults := seedBackupRepository(t, ctx, sourcePool, configurationInvocation)
+	checkoutBinding := &goldenpath.CICheckoutBinding{BindingID: "backup_checkout", RepositoryID: repositoryResults[0].Object.ID, Provider: "gitea", ProviderOrigin: "https://git.example.test", ExternalID: "backup-123", Profile: goldenpath.JenkinsCheckoutProfile, EffectiveFromBuild: 1}
+	checkoutDelivery := goldenpath.VerifiedJenkinsDelivery{WorkspaceID: "wrk_backup", SourceID: "checkout_backup", Job: "backup/build", DeliveryID: "build-1", PayloadSHA256: strings.Repeat("c", 64), CheckoutBinding: checkoutBinding}
+	checkoutInput := goldenpath.RecordCompletedCIRunInput{ComponentID: "cmp_backup", ExternalRunKey: "1", Status: "succeeded", CompletedAt: time.Now().UTC().Truncate(time.Millisecond), Checkout: &goldenpath.CICheckout{BindingID: "backup_checkout", State: "observed", Revision: &goldenpath.GitRevision{Algorithm: "sha1", OID: strings.Repeat("a", 40)}}}
+	checkoutReceipt, err := goldenpath.NewService(goldenpostgres.New(sourcePool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}).RecordCompletedJenkinsRun(ctx, checkoutDelivery, checkoutInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tcService := goldenpath.NewTicketComponentService(goldenpostgres.New(sourcePool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	tcInputs := []goldenpath.TicketComponentInput{{TicketID: ticketID, ComponentID: "cmp_backup", ClientOperationID: "backup-tc-link", Confirmed: true}}
+	tcKinds := []string{"ticket.component.link", "ticket.component.unlink", "ticket.component.link"}
+	tcResults := []goldenpath.TicketComponentResult{}
+	for i, kind := range tcKinds {
+		r, e := tcService.WriteTicketComponent(ctx, documentInvocation, kind, tcInputs[i])
+		if e != nil {
+			t.Fatal(e)
+		}
+		tcResults = append(tcResults, r)
+		if i == 0 {
+			tcInputs = append(tcInputs, goldenpath.TicketComponentInput{TicketID: ticketID, LinkID: r.LinkID, ClientOperationID: "backup-tc-unlink", Confirmed: true}, goldenpath.TicketComponentInput{TicketID: ticketID, ComponentID: "cmp_backup", ClientOperationID: "backup-tc-relink", Confirmed: true})
+		}
+	}
+
+	statusInputs := []goldenpath.TicketStatusInput{}
+	statusResults := []goldenpath.TicketStatusResult{}
+	statusService := goldenpath.NewTicketStatusService(goldenpostgres.New(sourcePool), goldenpath.CryptoIDGenerator{})
+	for i, status := range []string{"in-progress", "done", "open", "canceled"} {
+		in := goldenpath.TicketStatusInput{TicketID: ticketID, ClientOperationID: fmt.Sprintf("backup-state-%d", i), BaseStatusRevision: i + 1, ToStatus: status, Confirmed: true}
+		result, e := statusService.ChangeTicketStatus(ctx, documentInvocation, in)
+		if e != nil {
+			t.Fatal(e)
+		}
+		statusInputs = append(statusInputs, in)
+		statusResults = append(statusResults, result)
+	}
+
 	if got := snapshotTable(t, ctx, sourcePool, "radishnexus.user_sessions"); got == "[]" {
 		t.Fatal("source user session fixture is empty")
 	}
@@ -79,8 +114,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rebuild source Activity projection: %v", err)
 	}
-	if projected != 8 {
-		t.Fatalf("source Activity rows = %d, want 8", projected)
+	if projected != 20 {
+		t.Fatalf("source Activity rows = %d, want 20", projected)
 	}
 	sourceSnapshot := snapshotIncludedTables(t, ctx, sourcePool)
 	sourceActivity := snapshotTable(t, ctx, sourcePool, "radishnexus.activity_items")
@@ -171,6 +206,35 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil || replayed.Created || replayed.Object.ID != configured.Object.ID {
 		t.Fatal("restored receipt did not preserve idempotency", replayed, err)
 	}
+	restoredConfiguration := goldenpath.NewConfigurationService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	for i, in := range repositoryInputs {
+		r, e := restoredConfiguration.Configure(ctx, configurationInvocation, in)
+		if e != nil || r.Created || r.Object.ID != repositoryResults[i].Object.ID || r.LinkID != repositoryResults[i].LinkID {
+			t.Fatal("restored Repository receipt drift", i, r, e)
+		}
+	}
+	repositoryLinks, e := restoredConfiguration.ListConfiguration(ctx, configurationInvocation.Principal, goldenpath.ConfigurationQuery{Kind: "component-repositories", ScopeID: "cmp_backup", Limit: 25})
+	if e != nil || len(repositoryLinks.Links) != 1 || repositoryLinks.Links[0].ID != repositoryResults[3].LinkID {
+		t.Fatal("old restored receipts changed active relation", repositoryLinks, e)
+	}
+	restoredTC := goldenpath.NewTicketComponentService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	for i, kind := range tcKinds {
+		r, e := restoredTC.WriteTicketComponent(ctx, documentInvocation, kind, tcInputs[i])
+		if e != nil || r.Created || r.LinkID != tcResults[i].LinkID {
+			t.Fatal("restored Ticket Component receipt drift", i, r, e)
+		}
+	}
+	for i, in := range statusInputs {
+		result, e := goldenpath.NewTicketStatusService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}).ChangeTicketStatus(ctx, documentInvocation, in)
+		if e != nil || result != statusResults[i] {
+			t.Fatal("restored state receipt", result, e)
+		}
+	}
+
+	tcPage, e := restoredTC.ListTicketComponents(ctx, documentInvocation.Principal, entityref.Ref{Type: "ticket", ID: ticketID}, goldenpath.DiscoveryPageInput{Limit: 25})
+	if e != nil || len(tcPage.Links) != 1 || tcPage.Links[0].ID != tcResults[2].LinkID {
+		t.Fatal("restored old operation changed active relation", tcPage, e)
+	}
 	restoredSetup, err := authn.NewSetupService(nil, authpostgres.New(targetPool), "")
 	if err != nil {
 		t.Fatal(err)
@@ -213,13 +277,22 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 		t.Fatal("restored Deployment receipt", restoredDeployment, err)
 	}
 
+	restoredCheckout := goldenpath.NewService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	retryCheckout, err := restoredCheckout.RecordCompletedJenkinsRun(ctx, checkoutDelivery, checkoutInput)
+	if err != nil || !retryCheckout.Duplicate || retryCheckout.CIRun.ID != checkoutReceipt.CIRun.ID {
+		t.Fatal("restored checkout retry", err)
+	}
+	checkoutView, err := restoredCheckout.GetNexusView(ctx, configurationInvocation.Principal, entityref.Ref{Type: "ci-run", ID: checkoutReceipt.CIRun.ID})
+	if err != nil || checkoutView.Current.Checkout.Revision.OID != strings.Repeat("a", 40) {
+		t.Fatal("restored checkout projection", err)
+	}
 	targetStore := goldenpostgres.New(targetPool)
 	projected, err = targetStore.RebuildActivityProjection(ctx)
 	if err != nil {
 		t.Fatalf("rebuild target Activity projection: %v", err)
 	}
-	if projected != 8 {
-		t.Fatalf("target Activity rows = %d, want 8", projected)
+	if projected != 20 {
+		t.Fatalf("target Activity rows = %d, want 20", projected)
 	}
 	if targetActivity := snapshotTable(t, ctx, targetPool, "radishnexus.activity_items"); targetActivity != sourceActivity {
 		t.Fatalf("rebuilt Activity differs\nsource: %s\ntarget: %s", sourceActivity, targetActivity)
@@ -233,6 +306,59 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	afterConflict := snapshotIncludedTables(t, ctx, targetPool)
 	if !reflect.DeepEqual(afterConflict, beforeConflict) {
 		t.Fatalf("non-empty target changed after rejected restore")
+	}
+	var activeAuthorization string
+	if err := targetPool.QueryRow(ctx, `SELECT id FROM radishnexus.environment_deployment_authorizations WHERE environment_id='env_backup_staging' AND status='active'`).Scan(&activeAuthorization); err != nil {
+		t.Fatal(err)
+	}
+	regrantBackupAuthorization(t, ctx, targetPool, activeAuthorization, 3)
+	var historicalAuthorization string
+	if err := targetPool.QueryRow(ctx, `SELECT authorization_id FROM radishnexus.deployments WHERE id=$1`, deploymentID).Scan(&historicalAuthorization); err != nil || historicalAuthorization != "dpa_backup" {
+		t.Fatal("restored Deployment history changed", err)
+	}
+}
+
+func seedBackupRepository(t *testing.T, ctx context.Context, pool *pgxpool.Pool, inv goldenpath.Invocation) ([]goldenpath.ConfigurationInput, []goldenpath.ConfigurationResult) {
+	t.Helper()
+	s := goldenpath.NewConfigurationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	inputs := []goldenpath.ConfigurationInput{}
+	results := []goldenpath.ConfigurationResult{}
+	call := func(in goldenpath.ConfigurationInput) goldenpath.ConfigurationResult {
+		t.Helper()
+		r, e := s.Configure(ctx, inv, in)
+		if e != nil {
+			t.Fatal(e)
+		}
+		inputs = append(inputs, in)
+		results = append(results, r)
+		return r
+	}
+	repo := call(goldenpath.ConfigurationInput{Kind: "repository.create", ScopeID: "wrk_backup", ClientOperationID: "backup-repo", Name: "Backup source", Repository: &goldenpath.RepositoryConfigurationInput{RepositoryMetadata: goldenpath.RepositoryMetadata{Provider: "gitea", ProviderOrigin: "https://git.example.test", ExternalID: "backup-123", WebURL: "https://git.example.test/team/service", DefaultBranch: "main"}}})
+	link := goldenpath.ConfigurationInput{Kind: "component.repository.link", ScopeID: "cmp_backup", ClientOperationID: "backup-link", Repository: &goldenpath.RepositoryConfigurationInput{RepositoryID: repo.Object.ID, Confirmed: true}}
+	first := call(link)
+	call(goldenpath.ConfigurationInput{Kind: "component.repository.unlink", ScopeID: "cmp_backup", ClientOperationID: "backup-unlink", Repository: &goldenpath.RepositoryConfigurationInput{LinkID: first.LinkID, Confirmed: true}})
+	link.ClientOperationID = "backup-relink"
+	call(link)
+	return inputs, results
+}
+
+func regrantBackupAuthorization(t *testing.T, ctx context.Context, pool *pgxpool.Pool, previous string, wantGeneration int) {
+	t.Helper()
+	service := goldenpath.NewConfigurationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	inv := goldenpath.Invocation{Principal: authz.Principal{Kind: authz.PrincipalUser, ID: "usr_admin", WorkspaceID: "wrk_backup"}, SourceKind: "web", CorrelationID: "backup-authorization"}
+	input := goldenpath.ConfigurationInput{Kind: "environment.authorization.revoke", ScopeID: "env_backup_staging", UserID: "usr_contributor", ClientOperationID: fmt.Sprintf("revoke-%d", wantGeneration), Delivery: &goldenpath.DeliveryConfigurationInput{Confirmed: true, ExpectedAuthorization: &goldenpath.ConfigurationAuthorization{ID: previous, Status: "active"}}}
+	if _, err := service.Configure(ctx, inv, input); err != nil {
+		t.Fatal(err)
+	}
+	input.Kind = "environment.authorization.grant"
+	input.ClientOperationID = fmt.Sprintf("grant-%d", wantGeneration)
+	input.Delivery.ExpectedAuthorization.Status = "revoked"
+	if _, err := service.Configure(ctx, inv, input); err != nil {
+		t.Fatal(err)
+	}
+	var generation int
+	if err := pool.QueryRow(ctx, `SELECT generation FROM radishnexus.environment_deployment_authorizations WHERE environment_id='env_backup_staging' AND status='active'`).Scan(&generation); err != nil || generation != wantGeneration {
+		t.Fatal("restored generation", generation, err)
 	}
 }
 
@@ -327,7 +453,7 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	if err != nil {
 		t.Fatalf("seed backup base data: %v", err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_admin', 'active', '2026-08-30T01:00:00Z')`); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_admin', 'active', '2026-08-30T01:00:00Z'), ('usr_contributor', 'active', '2026-08-30T01:00:00Z')`); err != nil {
 		t.Fatalf("seed identity accounts: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `
@@ -342,7 +468,7 @@ func seedBackupGoldenPath(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	}
 	if _, err := pool.Exec(ctx, `
         INSERT INTO radishnexus.external_identities(user_id,issuer,subject,created_at) VALUES ('usr_admin','https://radish.example.test','backup-fixture-subject',now());
-        INSERT INTO radishnexus.identity_invitations(id,token_digest,workspace_id,created_by,created_at,expires_at) VALUES ('inv_backup',decode(repeat('33',32),'hex'),'wrk_backup','usr_admin',now(),now()+interval '24 hours');
+        INSERT INTO radishnexus.identity_invitations(id,token_digest,workspace_id,created_by,created_at,expires_at,creator_role_revision) VALUES ('inv_backup',decode(repeat('33',32),'hex'),'wrk_backup','usr_admin',now(),now()+interval '24 hours',1);
         INSERT INTO radishnexus.oidc_transactions(state_digest,browser_digest,nonce_digest,provider_digest,created_at,expires_at) VALUES (decode(repeat('44',32),'hex'),decode(repeat('55',32),'hex'),decode(repeat('66',32),'hex'),decode(repeat('77',32),'hex'),now(),now()+interval '5 minutes');
     `); err != nil {
 		t.Fatalf("seed federated backup fixture: %v", err)

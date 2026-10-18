@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 )
 
 const MaxConfig = 64 * 1024
@@ -19,11 +21,12 @@ var secretPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var ErrConfiguration = errors.New("invalid Jenkins configuration or secret file")
 
 type Source struct {
-	ID          string
-	WorkspaceID string
-	ComponentID string
-	Job         string
-	keys        map[string][]byte
+	ID              string
+	WorkspaceID     string
+	ComponentID     string
+	Job             string
+	CheckoutBinding *goldenpath.CICheckoutBinding
+	keys            map[string][]byte
 }
 
 // String deliberately omits bindings and key material in accidental formatting.
@@ -80,13 +83,17 @@ func LoadSources(body []byte, read FileReader) ([]Source, error) {
 	}
 	var version int
 	var entries []json.RawMessage
-	if decode(root["version"], &version) != nil || version != 1 || decode(root["sources"], &entries) != nil || len(entries) == 0 || len(entries) > 32 {
+	if decode(root["version"], &version) != nil || (version != 1 && version != 2) || decode(root["sources"], &entries) != nil || len(entries) == 0 || len(entries) > 32 {
 		return fail()
 	}
 	sources := make([]Source, 0, len(entries))
 	seen := map[string]bool{}
 	for _, entry := range entries {
-		fields, err := object(entry, "source_id", "workspace_id", "component_id", "job_full_name", "keys")
+		fieldNames := []string{"source_id", "workspace_id", "component_id", "job_full_name", "keys"}
+		if version == 2 {
+			fieldNames = append(fieldNames, "checkout_binding")
+		}
+		fields, err := object(entry, fieldNames...)
 		if err != nil {
 			return fail()
 		}
@@ -101,6 +108,13 @@ func LoadSources(body []byte, read FileReader) ([]Source, error) {
 			return fail()
 		}
 		seen[s.ID] = true
+		if version == 2 {
+			b, err := parseCheckoutBinding(fields["checkout_binding"])
+			if err != nil {
+				return fail()
+			}
+			s.CheckoutBinding = &b
+		}
 		s.keys = map[string][]byte{}
 		for _, entry := range keys {
 			f, err := object(entry, "key_id", "secret_file")
@@ -123,6 +137,24 @@ func LoadSources(body []byte, read FileReader) ([]Source, error) {
 		sources = append(sources, s)
 	}
 	return sources, nil
+}
+
+func parseCheckoutBinding(raw []byte) (goldenpath.CICheckoutBinding, error) {
+	var b goldenpath.CICheckoutBinding
+	f, err := object(raw, "binding_id", "repository_id", "provider", "provider_origin", "external_id", "profile", "effective_from_build")
+	if err != nil {
+		return b, ErrConfiguration
+	}
+	for key, target := range map[string]any{"binding_id": &b.BindingID, "repository_id": &b.RepositoryID, "provider": &b.Provider, "provider_origin": &b.ProviderOrigin, "external_id": &b.ExternalID, "profile": &b.Profile, "effective_from_build": &b.EffectiveFromBuild} {
+		if decode(f[key], target) != nil {
+			return b, ErrConfiguration
+		}
+	}
+	normalized, ok := goldenpath.NormalizeCICheckoutBinding(b)
+	if !ok || !numberPattern.Match(f["effective_from_build"]) {
+		return b, ErrConfiguration
+	}
+	return normalized, nil
 }
 
 type SenderConfig struct {

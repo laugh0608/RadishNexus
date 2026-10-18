@@ -6,6 +6,14 @@
 
 本文件用于防止后续讨论静默改变当前方向。修改“已确认”事项时，必须同时记录修改日期、原因、影响和迁移方式。
 
+2026-10-06 已确认 [ADR-0034](adr/0034-ticket-component-relations.md)：Ticket 与 Component 人工多对多关联，由 Ticket 当前 Project 协作权限控制；引用不授予目标权限，不推导已构建或已部署。migration 014 与 Activity v5 保留精确解除、重连和原请求历史。
+
+2026-10-06 已确认 [ADR-0033](adr/0033-repository-mapping-and-component-relations.md)：Workspace 内 Repository 最小映射、共享元数据与 owner 确认的 Component 多对多关联；解除保留来源、重新关联生成新 EntityLink。migration 013 复用配置 Audit / receipt，Activity 升至 v4；不增加 provider 调用、Secret 或隐式 CI / Deployment 关系。
+
+2026-10-01 已确认 [ADR-0032](adr/0032-component-environment-configuration-and-authorization.md)：Workspace owner 管理最小 Component / staging Environment 和显式环境授权（包括单独确认给本人授权）；撤销后新增授权代次，保留旧来源。migration 012 扩展授权唯一性与配置 Audit / receipt，新增有限 Session 发现和管理 API；不新增依赖或外部执行能力。
+
+2026-10-13 已确认 [ADR-0037](adr/0037-ci-run-repository-checkout-provenance.md)：先实施 A 的受控单仓库 checkout 接收、不可变来源与双向发现；保留管理员绑定与 controller 观察的证据区别。旧 v1 未采集，新 v2 缺少观察时保留终态并显式 unavailable；来源不能补写或覆盖。真实 Jenkins checkout 采集 B 继续暂缓，Ticket 具体交付关系另行冻结。
+
 ## 已确认
 
 ### D-001 项目名称
@@ -121,6 +129,7 @@
 - Project 首批角色为 `viewer / contributor / decider / admin`；只有 `decider` 和 `admin` 可以 Accepted Decision。
 - restricted Thread 需要显式 Thread 成员权限，Project 角色不会自动穿透；无权限关系目标只显示不含标识和展示字段的通用占位。
 - 协作 application service 只接收认证 adapter 提供的显式 Principal；本地身份与 Session 协议由 D-019 单独冻结。
+- Ticket 最小状态流转按 [ADR-0039](adr/0039-ticket-status-transitions.md) 使用独立状态版本、当前 Project 写权限与原操作精确重试；终态只允许重新打开，done 不证明 Decision、构建或部署结果。四状态语义和转换以[领域模型](domain-model.md#ticket)为准，不扩展负责人、优先级或看板。
 
 ### D-016 PostgreSQL migration 基线
 
@@ -156,6 +165,7 @@
 - 新实例通过显式 CLI `nexus-bootstrap --credentials-stdin`，或 [ADR-0027](adr/0027-first-visit-administrator-setup.md) 的一次性初始化码保护网页入口，创建首个 user、Workspace 与 `owner` membership。二者共享事务锁，任意账户存在后关闭初始化；不随服务启动创建账户，不生成默认密码或全局超级权限。CLI 凭据只从标准输入读取，网页经同源 HTTPS 严格请求提交；Session 通过后续登录建立。
 - 本地密码使用版本化 Argon2id verifier；不存在、禁用、锁定和错误密码统一失败，连续 5 次错误锁定 15 分钟。账号锁定不替代公共 transport 的客户端 IP 限流。
 - Session 是 24 小时绝对有效的服务端 opaque token，数据库只保存 Session / CSRF token digest。Session 不固定 Workspace，业务请求必须以当前 active membership 解析 `VerifiedUser`。
+- 本地账户受控恢复按 [ADR-0041](adr/0041-controlled-local-account-recovery.md) 由具有实例运维授权的部署者通过独立 CLI 执行，仅接受已有 active 本地凭证；密码更新、全账户旧 Session 撤销与不可变 operator 审计原子提交，身份与权限保持。产品 owner 不因此获得恢复 API，历史 status 不代表当前凭证状态，旧备份恢复后须重新核验。
 - 浏览器合同固定 Secure `__Host-` Cookie、SameSite Strict、精确 HTTPS Origin、CSRF cookie + Header + digest、服务端 request ID 与 `/api/v1` 版本化安全错误对象；不提供 insecure HTTP fallback，也不信任用户身份或转发 Header。
 - 账户、密码凭证与外部身份关联纳入受控 PostgreSQL 运维备份；Session、邀请与 OIDC 授权事务只恢复 schema。旧登录名到邮箱由管理员显式映射，保留稳定用户 ID 与业务引用。变更范围以 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 为准，原有 [ADR-0012](adr/0012-local-identity-and-session-foundation.md) / [ADR-0013](adr/0013-public-authentication-transport.md) 的 Session 与代理安全边界继续有效。
 
@@ -171,13 +181,22 @@
 - 浏览器页面、静态资源和 `/api/v1` 共享 ADR-0013 的唯一 HTTPS public origin；TLS reverse proxy 保持唯一公共入口，不开放 credentialed CORS 或第二个静态站点 origin。
 - Go server 只从必需的绝对 `RADISHNEXUS_WEB_ROOT` 交付 production build；HTML 路径显式 allowlist，未知路径不使用任意 SPA fallback。HTML `no-cache`、哈希资源 immutable cache，认证和业务 API 继续 `no-store`。
 - 根路径先检查正式 Session，未登录时读取初始化状态；新实例完成 ADR-0027 首访初始化后，再使用现有 login / logout transport。初始化码、密码和 Session token 不进入浏览器 storage。Workspace 选择不固定到 Session，业务请求仍按路径与 current membership 授权。
-- Project / Channel 按 [ADR-0025](adr/0025-project-and-channel-discovery.md) 通过当前权限过滤的只读列表进入 canonical 页面；尚无独立列表的 Deployment 与协作对象保留已知稳定 ID 入口。原代表检视器位于显式 `/prototype/nexus-view`，不参与真实失败 fallback。
+- Project / Channel 按 [ADR-0025](adr/0025-project-and-channel-discovery.md) 通过当前权限过滤的只读列表进入 canonical 页面；[ADR-0038](adr/0038-project-ticket-discovery.md) 与 [ADR-0040](adr/0040-project-decision-discovery.md) 增加 Project 工单与决策发现，来源 Thread / evidence 权限独立，分页与恢复不授予旧权限。Decision 列表只接受 proposed / accepted，不扩展拒绝、替代或复核。尚无独立列表的 Deployment 与 Thread 保留已知稳定 ID 入口。原代表检视器位于显式 `/prototype/nexus-view`，不参与真实失败 fallback。
 - 真实 PostgreSQL、正式 migration / application service、production Web build 和临时 HTTPS browser fixture 共同验证登录到 Deployment 再登出的完整链路。精确装配、页面、安全 Header 与验证边界以 [ADR-0015](adr/0015-same-origin-authenticated-web-shell.md) 为准。
 
 ### D-022 基础配置与最小 Document
 
 - 基础对象创建与首批普通成员管理按 [ADR-0026](adr/0026-foundation-configuration-and-membership.md) 实施；创建 Project 必须明确初始 admin，受限 Channel 保留窄授权，撤权清理从属权限，Audit 与 receipt 不可变。管理员交接不由普通成员配置隐式完成。
+- Workspace owner 主动交接按 [ADR-0042](adr/0042-workspace-owner-handoff.md) 由近期认证的当前 owner 明确确认，向已有 active member 原子移交，双角色代次与邀请任期绑定防止旧请求和旧邀请复活；全部对象级权限保持。当前有效成员仅可确认本人最小历史成功，不因此恢复管理权或读取其他配置审计；应急接管与 Project admin 交接仍独立设计。
 - 最小 Document 按 [ADR-0028](adr/0028-minimal-markdown-document.md) 冻结身份、Project 权限、权威 Markdown、不可变版本、显式保存 / 冲突 / 恢复与 Ticket 来源关系；正式实现已接通，验收成熟度由[当前状态](status/current.md)维护。后续结构化编辑与 CRDT 仍按 ADR-0021 分阶段推进。
+
+### D-023 同一官方客户端连接官方与自部署实例
+
+2026-10-12 确认，依据 [ADR-0036](adr/0036-official-client-instance-connection.md)。原因是此前自部署拓扑与 Flutter 路线没有说明同一安装包的服务器选择；影响是新增运行时选择、兼容检查、实例隔离及双目标交付验收，当前无需代码或数据迁移。
+
+- 官方端点纳入正式交付目标，同一官方 Flutter 安装包支持运行时选择官方或用户自部署后端，无需重新编译。
+- Web 继续按各实例同源入口交付相同官方构建产物，自部署核心路径不依赖官方云，也不引入席位限制。
+- 详细连接与迁移边界见[客户端连接规划](architecture/client-server-connection-plan.md)；实现仍按 M7 门槛和当前状态推进，官方服务尚未交付。
 
 ## 尚未冻结
 
@@ -195,6 +214,12 @@
 - 是否以及何时引入 AI 能力。
 
 ## 变更记录
+
+- 2026-10-18：按已接受 ADR-0040 / 0041 / 0042 补齐 Project 决策发现、本地账户受控恢复与 Workspace owner 主动交接的基线路由，纠正 Decision 尚无列表的过期表述。migration 017 / 018 和实现证据由对应 ADR 承载；本次收尾不新增权限或协议决定。支持 / 评估授权草案与 ADR-0043 仍待确认，不列为已接受决策。
+
+- 2026-10-13：按已接受 ADR-0037 / 0038 / 0039 同步 checkout 来源、Project 工单发现与最小状态流转。实现涉及 migration 015 / 016、配套 HTTP / Web 与备份恢复，具体升级边界见 ADR；本次收尾仅校正文档，不新增权限、协议或数据模型决定。真实 Jenkins B 继续暂缓。
+
+- 2026-10-12：新增 D-023 / ADR-0036，确认官方客户端运行时连接官方端点与自部署实例，无需重新编译。仅更新产品与客户端规划，当前无代码 / 数据迁移；Web-first、同源 transport、权限与许可证边界不变。
 
 - 2026-09-26：按已确认 ADR-0029 / 0030 / 0031 同步 CI Run 公共读取、Jenkins 受控来源与 staging 显式记录及精确重试合同，修正最小 Document 实施状态。实现包含 migration 010 / 011 与已授权 goldmark 依赖，具体迁移和回退见对应 ADR；本次收尾不新增权限、公共协议或依赖决策。
 

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/db"
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
+	"github.com/laugh0608/RadishNexus/server/internal/jenkins"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/httptransport"
@@ -162,6 +164,7 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	discoveryHandler := httptransport.NewDiscoveryHandler(authService, goldenpath.NewDiscoveryService(goldenpostgres.New(pool)), sessionPolicy, proxyPolicy)
 	configurationHandler := httptransport.NewConfigurationHandler(authService, goldenpath.NewConfigurationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy)
 	httptransport.RegisterConfigurationRoutes(mux, discoveryHandler, configurationHandler)
+	httptransport.RegisterOwnerTransferRoutes(mux, httptransport.NewOwnerTransferHandler(authService, goldenpath.NewOwnerTransferService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
 	mux.Handle("/api/v1/workspaces/{workspace_id}/projects/", discoveryHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/invitations", identityHandler)
 	mux.Handle("/auth/complete", identityHandler)
@@ -171,13 +174,42 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	mux.Handle("/api/v1/workspaces/{workspace_id}/threads/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/decisions/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/tickets/", collaborationHandler)
+	httptransport.RegisterTicketStatusRoutes(mux, httptransport.NewTicketStatusHandler(authService, goldenpath.NewTicketStatusService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
+	httptransport.RegisterTicketComponentRoutes(mux, httptransport.NewTicketComponentHandler(authService, goldenpath.NewTicketComponentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy))
 	httptransport.RegisterDocumentRoutes(mux, httptransport.NewDocumentHandler(authService, goldenpath.NewDocumentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy))
 	httptransport.RegisterStagingDeploymentRoutes(mux, httptransport.NewStagingDeploymentHandler(authService, viewService, sessionPolicy, proxyPolicy))
+	httptransport.RegisterRepositoryCIRunRoutes(mux, httptransport.NewRepositoryCIRunsHandler(authService, viewService, sessionPolicy, proxyPolicy))
 	httptransport.RegisterCIRunRoutes(mux, httptransport.NewCIRunNexusViewHandler(authService, viewService, sessionPolicy, proxyPolicy))
 	mux.Handle("/api/v1/workspaces", deploymentHandler)
 	mux.Handle("/api/v1/workspaces/", deploymentHandler)
 	mux.Handle("/", webHandler)
-	server := httptest.NewUnstartedServer(httptransport.WithRequestID(mux))
+	var app http.Handler = mux
+	if os.Getenv("RADISHNEXUS_BROWSER_CHECKOUT") == "1" {
+		// Test-only local configuration handoff lets the browser create its own
+		// Repository/Component first. Requests still traverse the real HMAC handler.
+		configPath := statePath + ".jenkins.json"
+		t.Cleanup(func() { _ = os.Remove(configPath) })
+		app = httptransport.WithJenkinsDeliveries(app, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, e := jenkins.ReadFile(configPath, jenkins.MaxConfig)
+			if e != nil {
+				http.Error(w, "fixture source unavailable", 503)
+				return
+			}
+			sources, e := jenkins.LoadSources(body, func(string, int64) ([]byte, error) { return []byte(strings.Repeat("ab", 32)), nil })
+			if e != nil {
+				http.Error(w, "fixture source invalid", 503)
+				return
+			}
+			for _, source := range sources {
+				if e = goldenpostgres.New(pool).ValidateJenkinsSource(r.Context(), source.WorkspaceID, source.ComponentID, source.ID, source.Job, source.CheckoutBinding); e != nil {
+					http.Error(w, "fixture binding invalid", 503)
+					return
+				}
+			}
+			httptransport.NewJenkinsDeliveryHandler(sources, viewService, sessionPolicy, proxyPolicy, time.Now, func(httptransport.JenkinsDeliveryLog) {}).ServeHTTP(w, r)
+		}))
+	}
+	server := httptest.NewUnstartedServer(httptransport.WithRequestID(app))
 	server.Listener = listener
 	server.Start()
 	t.Cleanup(server.Close)
@@ -230,6 +262,10 @@ func seedAuthenticatedWebBrowserData(
 ) authenticatedWebFixture {
 	t.Helper()
 	seedGoldenPath(t, ctx, pool)
+	accountCreatedAt := time.Now().UTC().Add(-time.Minute)
+	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_contributor', 'active', $1), ('usr_decider', 'active', $1)`, accountCreatedAt); err != nil {
+		t.Fatalf("seed identity accounts: %v", err)
+	}
 	seedDeploymentTargets(t, ctx, pool)
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO radishnexus.components (
@@ -261,6 +297,28 @@ func seedAuthenticatedWebBrowserData(
 	})
 	if err != nil {
 		t.Fatalf("RecordCompletedJenkinsRun() error = %v", err)
+	}
+
+	if os.Getenv("RADISHNEXUS_BROWSER_CHECKOUT") == "1" {
+		if _, e := pool.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET role_revision=role_revision+CASE WHEN role<>'owner' THEN 1 ELSE 0 END,role='owner' WHERE workspace_id='wrk_main' AND user_id='usr_contributor'`); e != nil {
+			t.Fatal(e)
+		}
+		cfg := goldenpath.NewConfigurationService(store, goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+		repo, e := cfg.Configure(ctx, tcInvocation("usr_contributor"), goldenpath.ConfigurationInput{Kind: "repository.create", ScopeID: "wrk_main", ClientOperationID: "browser-checkout", Name: "Synthetic checkout source", Repository: &goldenpath.RepositoryConfigurationInput{RepositoryMetadata: goldenpath.RepositoryMetadata{Provider: "gitea", ProviderOrigin: "https://git.example.test", ExternalID: "browser-123", WebURL: "https://git.example.test/team/source", DefaultBranch: "main"}}})
+		if e != nil {
+			t.Fatal(e)
+		}
+		source := jenkins.Source{ID: "browser_checkout", WorkspaceID: "wrk_main", ComponentID: "cmp_auth", Job: "synthetic/build", CheckoutBinding: &goldenpath.CICheckoutBinding{BindingID: "browser_binding", RepositoryID: repo.Object.ID, Provider: "gitea", ProviderOrigin: "https://git.example.test", ExternalID: "browser-123", Profile: goldenpath.JenkinsCheckoutProfile, EffectiveFromBuild: 1}}
+		p := jenkins.Payload{Version: 2, Job: source.Job, Number: 1, Result: "SUCCESS", CompletedAt: time.Now().UTC().Truncate(time.Millisecond), Checkout: &goldenpath.CICheckout{BindingID: "browser_binding", State: "observed", Revision: &goldenpath.GitRevision{Algorithm: "sha1", OID: strings.Repeat("a", 40)}}}
+		live := goldenpath.NewService(store, goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+		r := recordCheckoutHTTP(t, ctx, live, source, p)
+		ciRun.CIRun.ID = r.CIRunID
+		p.Number = 2
+		p.Checkout.State = "unavailable"
+		p.Checkout.Revision = nil
+		reason := "checkout_not_observed"
+		p.Checkout.Reason = &reason
+		recordCheckoutHTTP(t, ctx, live, source, p)
 	}
 
 	var deployment goldenpath.Deployment
@@ -319,10 +377,7 @@ func seedAuthenticatedWebBrowserData(
 	if err != nil {
 		t.Fatalf("hash browser fixture password: %v", err)
 	}
-	accountCreatedAt := time.Now().UTC().Add(-time.Minute)
-	if _, err := pool.Exec(ctx, `INSERT INTO radishnexus.user_accounts (user_id, status, created_at) VALUES ('usr_contributor', 'active', $1), ('usr_decider', 'active', $1)`, accountCreatedAt); err != nil {
-		t.Fatalf("seed identity accounts: %v", err)
-	}
+
 	if _, err := pool.Exec(ctx, `
 		INSERT INTO radishnexus.local_credentials (
 			user_id, email, password_hash, created_at, password_changed_at

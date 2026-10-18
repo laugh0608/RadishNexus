@@ -16,10 +16,12 @@ var sha256DigestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // replay headers, and payload mapping have succeeded. It intentionally carries
 // only an opaque digest and mapped facts, never a Secret or raw webhook body.
 type VerifiedJenkinsDelivery struct {
-	WorkspaceID   string
-	SourceID      string
-	DeliveryID    string
-	PayloadSHA256 string
+	WorkspaceID     string
+	SourceID        string
+	DeliveryID      string
+	PayloadSHA256   string
+	Job             string
+	CheckoutBinding *CICheckoutBinding
 }
 
 type RecordCompletedCIRunInput struct {
@@ -28,6 +30,7 @@ type RecordCompletedCIRunInput struct {
 	Status         string
 	StartedAt      *time.Time
 	CompletedAt    time.Time
+	Checkout       *CICheckout
 }
 
 type CIRun struct {
@@ -42,6 +45,8 @@ type CIRun struct {
 	CompletedAt    *time.Time
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	CheckoutState  string
+	CheckoutReason string
 }
 
 type CIRunReceipt struct {
@@ -50,19 +55,23 @@ type CIRunReceipt struct {
 }
 
 type RecordCompletedCIRunCommand struct {
-	WorkspaceID    string
-	SourceID       string
-	DeliveryID     string
-	PayloadSHA256  string
-	ComponentID    string
-	ExternalRunKey string
-	Status         string
-	StartedAt      *time.Time
-	CompletedAt    time.Time
-	CIRunID        string
-	EventID        string
-	CorrelationID  string
-	RecordedAt     time.Time
+	WorkspaceID     string
+	SourceID        string
+	DeliveryID      string
+	PayloadSHA256   string
+	ComponentID     string
+	ExternalRunKey  string
+	Status          string
+	StartedAt       *time.Time
+	CompletedAt     time.Time
+	CIRunID         string
+	EventID         string
+	CorrelationID   string
+	RecordedAt      time.Time
+	Job             string
+	CheckoutBinding *CICheckoutBinding
+	Checkout        *CICheckout
+	CheckoutLinkID  string
 }
 
 // RecordCompletedJenkinsRun records a terminal Jenkins fact. HTTP routing and
@@ -76,6 +85,9 @@ func (service *Service) RecordCompletedJenkinsRun(
 		return CIRunReceipt{}, err
 	}
 	if err := validateCompletedCIRunInput(input); err != nil {
+		return CIRunReceipt{}, err
+	}
+	if err := validateCICheckout(delivery, input); err != nil {
 		return CIRunReceipt{}, err
 	}
 
@@ -93,20 +105,31 @@ func (service *Service) RecordCompletedJenkinsRun(
 	}
 
 	startedAt := utcTimePointer(input.StartedAt)
+	var checkoutLinkID string
+	if input.Checkout != nil && input.Checkout.State == "observed" {
+		checkoutLinkID, err = service.ids.NewID("lnk_")
+		if err != nil {
+			return CIRunReceipt{}, fmt.Errorf("generate checkout link ID: %w", err)
+		}
+	}
 	return service.store.RecordCompletedCIRun(ctx, RecordCompletedCIRunCommand{
-		WorkspaceID:    delivery.WorkspaceID,
-		SourceID:       delivery.SourceID,
-		DeliveryID:     delivery.DeliveryID,
-		PayloadSHA256:  delivery.PayloadSHA256,
-		ComponentID:    input.ComponentID,
-		ExternalRunKey: input.ExternalRunKey,
-		Status:         input.Status,
-		StartedAt:      startedAt,
-		CompletedAt:    input.CompletedAt.UTC(),
-		CIRunID:        ciRunID,
-		EventID:        eventID,
-		CorrelationID:  correlationID,
-		RecordedAt:     service.clock.Now().UTC(),
+		WorkspaceID:     delivery.WorkspaceID,
+		SourceID:        delivery.SourceID,
+		DeliveryID:      delivery.DeliveryID,
+		PayloadSHA256:   delivery.PayloadSHA256,
+		ComponentID:     input.ComponentID,
+		ExternalRunKey:  input.ExternalRunKey,
+		Status:          input.Status,
+		StartedAt:       startedAt,
+		CompletedAt:     input.CompletedAt.UTC(),
+		CIRunID:         ciRunID,
+		EventID:         eventID,
+		CorrelationID:   correlationID,
+		RecordedAt:      service.clock.Now().UTC(),
+		Job:             delivery.Job,
+		CheckoutBinding: delivery.CheckoutBinding,
+		Checkout:        input.Checkout,
+		CheckoutLinkID:  checkoutLinkID,
 	})
 }
 

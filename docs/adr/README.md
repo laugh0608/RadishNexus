@@ -37,6 +37,18 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0029](0029-session-scoped-ci-run-nexus-view.md) | 已接受 | Session 作用域下的 CI Run Nexus View |
 | [ADR-0030](0030-authenticated-jenkins-delivery-adapter.md) | 已接受 | 受控 Jenkins 终态 delivery adapter |
 | [ADR-0031](0031-session-scoped-staging-deployment-recording.md) | 已接受 | Session 作用域下的 staging Deployment 显式记录 |
+| [ADR-0032](0032-component-environment-configuration-and-authorization.md) | 已接受 | Component、Environment 最小配置与环境授权管理 |
+| [ADR-0033](0033-repository-mapping-and-component-relations.md) | 已接受 | Repository 最小映射与 Component 关联 |
+| [ADR-0034](0034-ticket-component-relations.md) | 已接受 | Ticket 与 Component 的人工关联 |
+| [ADR-0035](0035-durable-jenkins-terminal-delivery.md) | A 已实现；B 采集与显式清理代码已具备，真实验收未完成 | Jenkins 终态快照的持久交付与漏采恢复 |
+| [ADR-0036](0036-official-client-instance-connection.md) | 规划已接受；尚未实施 | 同一官方客户端连接官方与自部署实例 |
+| [ADR-0037](0037-ci-run-repository-checkout-provenance.md) | 已接受；A 已实施，B 暂缓 | CI Run 的 Repository 与 checkout commit 来源 |
+| [ADR-0038](0038-project-ticket-discovery.md) | 已接受 | Project 下的 Ticket 只读发现 |
+| [ADR-0039](0039-ticket-status-transitions.md) | 已接受；已实施 | Ticket 最小状态流转 |
+| [ADR-0040](0040-project-decision-discovery.md) | 已接受 | Project 下的 Decision 只读发现 |
+| [ADR-0041](0041-controlled-local-account-recovery.md) | 已接受并实施 | 自部署本地账户受控恢复 |
+| [ADR-0042](0042-workspace-owner-handoff.md) | 已接受并实施 | Workspace owner 主动交接 |
+| [ADR-0043](0043-single-host-upgrade-failure-recovery.md) | 提议；仅设计 | 单机停机升级与失败恢复 |
 
 ## 新建规则
 

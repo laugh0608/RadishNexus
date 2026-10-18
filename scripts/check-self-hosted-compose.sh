@@ -250,6 +250,11 @@ kill "${events_pid}" >/dev/null 2>&1 || true
 wait "${events_pid}" >/dev/null 2>&1 || true
 events_pid=""
 
+compose_json="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:]))' "${compose[@]}")"
+python3 "${script_dir}/check-account-recovery-compose.py" "${run_dir}" "${compose_json}"
+python3 "${script_dir}/check-owner-transfer-compose.py" "${run_dir}" "${compose_json}"
+csrf_token="$(awk '$6 == "__Host-radishnexus-csrf" { print $7 }' "${cookie_jar}")"
+
 logout_status="$(curl --silent --show-error \
   --cacert "${ca_path}" \
   --cookie "${cookie_jar}" \
