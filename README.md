@@ -4,7 +4,7 @@
 
 RadishNexus 是 Radish 家族中的团队协作项目。它把私聊、团队频道、决策、工单、协作文档和 CI/CD 上下文放进同一个工作空间，让一次讨论能够持续关联到结论、任务、软件组件、构建、发布和复盘，而不是把多个独立产品简单拼接在一起。
 
-项目当前处于 M0.5 Golden Path 与 M1 Web 平台基础交界的纵向切片阶段。正式 Go 服务与 React + TypeScript Web 已接通首次访问初始化、邮箱登录、基础配置与成员管理，以及讨论到 Decision / Ticket / Markdown Document 的局部协作闭环；成员可从 Project 找回工单，并显式开始、完成、取消或重新打开。交付侧已支持组件与仓库人工关联、CI Run checkout 来源接收与双向发现、staging 结果显式记录；真实 Jenkins 三态采集有隔离联调证据，持久发送已实现，持续采集和清理有离线证据。真实 checkout 采集、Ticket 与具体构建的交付关系、管理员交接和完整 Golden Path 仍未齐备。各能力的实现、验收证据、下一步与停止线统一见[当前状态](docs/status/current.md)。Flutter 客户端在 Web 产品达到阶段门槛后再启动，并统一覆盖移动端与 PC 端。
+项目当前处于 M0.5 Golden Path 与 M1 Web 平台基础交界的纵向切片阶段。正式 Go 服务与 React + TypeScript Web 已接通首次访问初始化、邮箱登录、基础配置与成员管理，以及讨论到 Decision / Ticket / Markdown Document 的局部协作闭环；成员可从 Project 找回决策和工单，并显式开始、完成、取消或重新打开工单。本地账户受控恢复与 Workspace owner 主动交接已接通。交付侧已支持组件与仓库人工关联、CI Run checkout 来源接收与双向发现、staging 结果显式记录；真实 Jenkins 三态采集有隔离联调证据，持久发送已实现，持续采集和清理有离线证据。真实 checkout 采集、Ticket 与具体构建的交付关系、Project admin 交接、通用升级失败恢复和完整 Golden Path 仍未齐备。各能力的实现、验收证据、下一步与停止线统一见[当前状态](docs/status/current.md)。Flutter 客户端在 Web 产品达到阶段门槛后再启动，并统一覆盖移动端与 PC 端。
 
 已确认[客户端连接规划](docs/architecture/client-server-connection-plan.md)：同一个官方安装包运行时支持官方端点和用户自部署后端，无需重新编译；官方服务是后续交付目标，自部署核心路径不依赖官方云。当前尚未实现 Flutter 服务器选择或完成官方端点交付。
 

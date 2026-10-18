@@ -43,6 +43,10 @@
 ## 状态与验证入口
 
 - [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
+- [2026-10-18 提交回顾与文档收尾](status/reviews/2026-10-18-daily-closeout.md)：决策发现、账户恢复、owner 交接和试用准备设计的提交映射、源码文档核对与下一切片。
+- [2026-10-18 Workspace owner 主动交接](status/reviews/2026-10-18-workspace-owner-handoff.md)：角色代次、邀请任期、历史查询、并发与旧工件恢复。
+- [2026-10-18 本地账户受控恢复](status/reviews/2026-10-18-controlled-account-recovery.md)：独立 CLI、全账户 Session 撤销、审计与隔离恢复。
+- [2026-10-18 Project 决策只读发现](status/reviews/2026-10-18-project-decision-discovery.md)：当前权限、稳定分页、来源隔离与浏览器恢复。
 - [2026-10-13 提交回顾与文档收尾](status/reviews/2026-10-13-daily-closeout.md)：checkout 来源、工单发现与状态流转的提交映射、文档核对和接续建议。
 - [2026-10-13 Ticket 最小状态流转](status/reviews/2026-10-13-ticket-status-transitions.md)：四状态、精确重试、升级恢复与权限验收。
 - [2026-10-13 Project 工单只读发现](status/reviews/2026-10-13-project-ticket-discovery.md)：正式入口、分页、普通成员发现与撤权恢复。

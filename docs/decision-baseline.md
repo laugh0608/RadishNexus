@@ -165,6 +165,7 @@
 - 新实例通过显式 CLI `nexus-bootstrap --credentials-stdin`，或 [ADR-0027](adr/0027-first-visit-administrator-setup.md) 的一次性初始化码保护网页入口，创建首个 user、Workspace 与 `owner` membership。二者共享事务锁，任意账户存在后关闭初始化；不随服务启动创建账户，不生成默认密码或全局超级权限。CLI 凭据只从标准输入读取，网页经同源 HTTPS 严格请求提交；Session 通过后续登录建立。
 - 本地密码使用版本化 Argon2id verifier；不存在、禁用、锁定和错误密码统一失败，连续 5 次错误锁定 15 分钟。账号锁定不替代公共 transport 的客户端 IP 限流。
 - Session 是 24 小时绝对有效的服务端 opaque token，数据库只保存 Session / CSRF token digest。Session 不固定 Workspace，业务请求必须以当前 active membership 解析 `VerifiedUser`。
+- 本地账户受控恢复按 [ADR-0041](adr/0041-controlled-local-account-recovery.md) 由具有实例运维授权的部署者通过独立 CLI 执行，仅接受已有 active 本地凭证；密码更新、全账户旧 Session 撤销与不可变 operator 审计原子提交，身份与权限保持。产品 owner 不因此获得恢复 API，历史 status 不代表当前凭证状态，旧备份恢复后须重新核验。
 - 浏览器合同固定 Secure `__Host-` Cookie、SameSite Strict、精确 HTTPS Origin、CSRF cookie + Header + digest、服务端 request ID 与 `/api/v1` 版本化安全错误对象；不提供 insecure HTTP fallback，也不信任用户身份或转发 Header。
 - 账户、密码凭证与外部身份关联纳入受控 PostgreSQL 运维备份；Session、邀请与 OIDC 授权事务只恢复 schema。旧登录名到邮箱由管理员显式映射，保留稳定用户 ID 与业务引用。变更范围以 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 为准，原有 [ADR-0012](adr/0012-local-identity-and-session-foundation.md) / [ADR-0013](adr/0013-public-authentication-transport.md) 的 Session 与代理安全边界继续有效。
 
@@ -180,7 +181,7 @@
 - 浏览器页面、静态资源和 `/api/v1` 共享 ADR-0013 的唯一 HTTPS public origin；TLS reverse proxy 保持唯一公共入口，不开放 credentialed CORS 或第二个静态站点 origin。
 - Go server 只从必需的绝对 `RADISHNEXUS_WEB_ROOT` 交付 production build；HTML 路径显式 allowlist，未知路径不使用任意 SPA fallback。HTML `no-cache`、哈希资源 immutable cache，认证和业务 API 继续 `no-store`。
 - 根路径先检查正式 Session，未登录时读取初始化状态；新实例完成 ADR-0027 首访初始化后，再使用现有 login / logout transport。初始化码、密码和 Session token 不进入浏览器 storage。Workspace 选择不固定到 Session，业务请求仍按路径与 current membership 授权。
-- Project / Channel 按 [ADR-0025](adr/0025-project-and-channel-discovery.md) 通过当前权限过滤的只读列表进入 canonical 页面；[ADR-0038](adr/0038-project-ticket-discovery.md) 增加 Project 工单发现，来源 Thread 权限独立，分页与恢复不授予旧权限。尚无独立列表的 Deployment、Thread 与 Decision 保留已知稳定 ID 入口。原代表检视器位于显式 `/prototype/nexus-view`，不参与真实失败 fallback。
+- Project / Channel 按 [ADR-0025](adr/0025-project-and-channel-discovery.md) 通过当前权限过滤的只读列表进入 canonical 页面；[ADR-0038](adr/0038-project-ticket-discovery.md) 与 [ADR-0040](adr/0040-project-decision-discovery.md) 增加 Project 工单与决策发现，来源 Thread / evidence 权限独立，分页与恢复不授予旧权限。Decision 列表只接受 proposed / accepted，不扩展拒绝、替代或复核。尚无独立列表的 Deployment 与 Thread 保留已知稳定 ID 入口。原代表检视器位于显式 `/prototype/nexus-view`，不参与真实失败 fallback。
 - 真实 PostgreSQL、正式 migration / application service、production Web build 和临时 HTTPS browser fixture 共同验证登录到 Deployment 再登出的完整链路。精确装配、页面、安全 Header 与验证边界以 [ADR-0015](adr/0015-same-origin-authenticated-web-shell.md) 为准。
 
 ### D-022 基础配置与最小 Document
@@ -213,6 +214,8 @@
 - 是否以及何时引入 AI 能力。
 
 ## 变更记录
+
+- 2026-10-18：按已接受 ADR-0040 / 0041 / 0042 补齐 Project 决策发现、本地账户受控恢复与 Workspace owner 主动交接的基线路由，纠正 Decision 尚无列表的过期表述。migration 017 / 018 和实现证据由对应 ADR 承载；本次收尾不新增权限或协议决定。支持 / 评估授权草案与 ADR-0043 仍待确认，不列为已接受决策。
 
 - 2026-10-13：按已接受 ADR-0037 / 0038 / 0039 同步 checkout 来源、Project 工单发现与最小状态流转。实现涉及 migration 015 / 016、配套 HTTP / Web 与备份恢复，具体升级边界见 ADR；本次收尾仅校正文档，不新增权限、协议或数据模型决定。真实 Jenkins B 继续暂缓。
 

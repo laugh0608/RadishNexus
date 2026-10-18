@@ -10,7 +10,7 @@
 - Caddy 使用 internal CA 并覆盖传入的转发 Header；Go server 只信任 Caddy 固定地址的 `/32`。
 - PostgreSQL 数据保存在命名 volume；本地备份工件只写入忽略提交的 `deploy/local-data/backups/`。
 - 数据库密码通过 Compose Secret 文件按 service 挂载，不进入 Compose environment、命令参数或镜像层。
-- migration、bootstrap、identity-migrate、backup 和 restore 都是显式一次性 operation；`docker compose up` 不会自动执行它们。
+- migration、bootstrap、identity-migrate、account-recover、backup 和 restore 都是显式一次性 operation；`docker compose up` 不会自动执行它们。
 
 该入口使用 [Docker Official Images](https://hub.docker.com/search?image_filter=official)：Caddy `2.11.4-alpine`、PostgreSQL `17.10-alpine`、Go builder `1.26.7-alpine3.23`、Node builder `24.16.0-alpine3.23` 和 Alpine runtime `3.23.5`。实际配置同时固定完整 digest；升级时必须重新核验版本、许可证、漏洞和 multi-platform manifest。
 

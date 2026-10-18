@@ -164,6 +164,8 @@ Ticket 与 Component 已按 [ADR-0034](../adr/0034-ticket-component-relations.md
 
 Project 工单只读发现按 [ADR-0038](../adr/0038-project-ticket-discovery.md) 复用当前 Project 权限和稳定 ID 分页；[ADR-0039](../adr/0039-ticket-status-transitions.md) 以独立状态版本与精确 receipt 接通四状态流转。migration 016、Activity v7、HTTP 与 Web 配套升级，状态命令和原操作重试均重新授权；工单完成不触发 CI Run 或 Deployment。协议与投影细节见[核心契约](core-contracts.md)。
 
+Project 决策只读发现按 [ADR-0040](../adr/0040-project-decision-discovery.md) 在同一 repeatable-read 快照中复核 governing Project 当前权限并按稳定 ID 分页，只返回问题、引用与 proposed / accepted 状态；evidence Thread / origin Channel 权限独立。首页、Project 列表与详情返回使用既有 canonical 页面，元数据与列表在撤权或恢复时共同重读；未新增 migration、索引或 Decision 写入动作。
+
 ## EntityLink 与 Nexus View
 
 跨模块关系使用一等 `EntityLink` 记录，而不是让每个模块分别维护不可追溯的关联字段。EntityLink 至少保存关系类型、两端实体、来源、创建者、建立时间和状态。
