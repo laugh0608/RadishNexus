@@ -20,7 +20,7 @@ func (store *Store) RecordStagingDeployment(
 		return deployment, err
 	}
 
-	tx, err := store.pool.Begin(ctx)
+	tx, err := store.beginAdmission(ctx, command.Principal, pgx.TxOptions{})
 	if err != nil {
 		return deployment, fmt.Errorf("begin record staging Deployment transaction: %w", err)
 	}
@@ -204,7 +204,7 @@ func (s *Store) ListStagingTargets(ctx context.Context, p authz.Principal, ciRun
 	if err = p.ValidateUser(); err != nil {
 		return page, err
 	}
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := s.beginAdmission(ctx, p, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return page, fmt.Errorf("begin staging targets: %w", err)
 	}

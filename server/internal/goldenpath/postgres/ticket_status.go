@@ -16,7 +16,7 @@ func (s *Store) ChangeTicketStatus(ctx context.Context, c goldenpath.TicketStatu
 	if err = c.Principal.ValidateUser(); err != nil {
 		return result, err
 	}
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.beginAdmission(ctx, c.Principal, pgx.TxOptions{})
 	if err != nil {
 		return result, fmt.Errorf("begin Ticket status change: %w", err)
 	}

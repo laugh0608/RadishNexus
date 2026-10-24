@@ -435,32 +435,40 @@ function SignedInShell({
 }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+  const sessionRefresh = useRef({ generation: 0, active: true });
+  const acceptUpdatedSession = useCallback(
+    (next: SessionContext) => {
+      sessionRefresh.current.generation++;
+      onSession(next);
+    },
+    [onSession],
+  );
   const probeSession = useCallback(
     async (signal?: AbortSignal) => {
-      await authClient.resolveSession(signal);
+      const generation = ++sessionRefresh.current.generation;
+      try {
+        const next = await authClient.resolveSession(signal);
+        if (
+          sessionRefresh.current.active &&
+          !signal?.aborted &&
+          generation === sessionRefresh.current.generation
+        )
+          onSession(next);
+      } catch (error) {
+        if (
+          sessionRefresh.current.active &&
+          !signal?.aborted &&
+          generation === sessionRefresh.current.generation
+        )
+          throw error;
+      }
     },
-    [authClient],
+    [authClient, onSession],
   );
-  const sessionRefresh = useRef({ generation: 0, active: true });
-  const refreshSession = useCallback(async () => {
-    const generation = ++sessionRefresh.current.generation;
-    try {
-      const next = await authClient.resolveSession();
-      if (
-        sessionRefresh.current.active &&
-        generation === sessionRefresh.current.generation
-      )
-        onSession(next);
-    } catch (error) {
-      if (
-        sessionRefresh.current.active &&
-        generation === sessionRefresh.current.generation
-      )
-        throw error;
-    }
-  }, [authClient, onSession]);
+  const refreshSession = useCallback(() => probeSession(), [probeSession]);
   useEffect(() => {
-    sessionRefresh.current.active = true;
+    const state = sessionRefresh.current;
+    state.active = true;
     const refresh = () => {
       void refreshSession().catch((error: unknown) => {
         if (error instanceof AuthRequestError && error.status === 401)
@@ -474,13 +482,34 @@ function SignedInShell({
     window.addEventListener("pageshow", refresh);
     document.addEventListener("visibilitychange", visible);
     return () => {
-      sessionRefresh.current.active = false;
-      sessionRefresh.current.generation++;
+      state.active = false;
+      state.generation++;
       window.removeEventListener("focus", refresh);
       window.removeEventListener("pageshow", refresh);
       document.removeEventListener("visibilitychange", visible);
     };
   }, [refreshSession, onSignedOut]);
+  useEffect(() => {
+    const unavailable = (event: Event) => {
+      if (!(event instanceof CustomEvent) || typeof event.detail !== "string")
+        return;
+      acceptUpdatedSession({
+        ...session,
+        workspaces: session.workspaces.map((w) =>
+          w.id === event.detail ? { ...w, requiresAuthentication: true } : w,
+        ),
+      });
+    };
+    window.addEventListener(
+      "radishnexus-workspace-authentication",
+      unavailable,
+    );
+    return () =>
+      window.removeEventListener(
+        "radishnexus-workspace-authentication",
+        unavailable,
+      );
+  }, [session, acceptUpdatedSession]);
   const currentWorkspace =
     route.kind === "deployment" ||
     route.kind === "component" ||
@@ -529,12 +558,15 @@ function SignedInShell({
     >
       {route.kind === "account" ? (
         <IdentityPanel
-          key={session.workspaces.map((w) => `${w.id}:${w.role}`).join(";")}
+          key={session.workspaces
+            .map((w) => `${w.id}:${w.role}:${w.requiresAuthentication}`)
+            .join(";")}
           client={identityClient}
+          authClient={authClient}
           session={session}
           navigate={navigate}
           onSignedOut={onSignedOut}
-          onSession={onSession}
+          onSession={acceptUpdatedSession}
         />
       ) : route.kind === "home" ? (
         <WorkspaceHome
@@ -544,6 +576,22 @@ function SignedInShell({
           client={discoveryClient}
           onSessionExpired={onSignedOut}
         />
+      ) : "workspaceID" in route &&
+        (!currentWorkspace || currentWorkspace.requiresAuthentication) ? (
+        <main className="workspace-home">
+          <h1>
+            {currentWorkspace?.requiresAuthentication
+              ? "此工作区需要重新认证"
+              : "当前无法进入此工作区"}
+          </h1>
+          <p>本工作区内容已清空。其他工作区仍可继续使用。</p>
+          <button type="button" onClick={() => navigate("/account")}>
+            账户与重新认证
+          </button>
+          <button type="button" onClick={() => navigate("/")}>
+            返回工作区选择
+          </button>
+        </main>
       ) : route.kind === "project-decisions" ? (
         <ProjectDecisionsPage
           key={`${route.workspaceID}/${route.projectID}`}
@@ -594,6 +642,8 @@ function SignedInShell({
         />
       ) : route.kind === "channel" ? (
         <ChannelPage
+          userID={session.user.id}
+          navigate={navigate}
           key={`${route.workspaceID}/${route.channelID}`}
           workspaceID={route.workspaceID}
           channelID={route.channelID}
@@ -620,6 +670,8 @@ function SignedInShell({
         )
       ) : route.kind === "collaboration" ? (
         <CollaborationPage
+          userID={session.user.id}
+          navigate={navigate}
           key={`${route.workspaceID}/${route.entityType}/${route.entityID}`}
           workspaceID={route.workspaceID}
           entityType={route.entityType}

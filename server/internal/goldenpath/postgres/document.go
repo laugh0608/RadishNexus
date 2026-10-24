@@ -50,7 +50,7 @@ func (s *Store) WriteDocument(ctx context.Context, c goldenpath.DocumentCommand)
 	if err = c.Principal.ValidateUser(); err != nil {
 		return result, err
 	}
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.beginAdmission(ctx, c.Principal, pgx.TxOptions{})
 	if err != nil {
 		return result, err
 	}
@@ -157,7 +157,7 @@ func loadDocumentRevision(ctx context.Context, tx pgx.Tx, workspace, id string, 
 	return v, nil
 }
 func (s *Store) ReadDocument(ctx context.Context, p authz.Principal, id string, revision int) (view goldenpath.DocumentView, err error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := s.beginAdmission(ctx, p, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return view, err
 	}
@@ -197,7 +197,7 @@ func (s *Store) ReadDocument(ctx context.Context, p authz.Principal, id string, 
 	return view, err
 }
 func (s *Store) PreviewDocument(ctx context.Context, p authz.Principal, project, body, format string) (view markdown.View, err error) {
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.beginAdmission(ctx, p, pgx.TxOptions{})
 	if err != nil {
 		return view, err
 	}
@@ -214,7 +214,7 @@ func (s *Store) PreviewDocument(ctx context.Context, p authz.Principal, project,
 }
 
 func (s *Store) ListDocuments(ctx context.Context, p authz.Principal, project string, in goldenpath.DiscoveryPageInput) (page goldenpath.DocumentPage, err error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := s.beginAdmission(ctx, p, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return page, err
 	}
@@ -248,7 +248,7 @@ func (s *Store) ListDocuments(ctx context.Context, p authz.Principal, project st
 	return page, err
 }
 func (s *Store) ListDocumentRevisions(ctx context.Context, p authz.Principal, id string, before, limit int) (page goldenpath.DocumentPage, err error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := s.beginAdmission(ctx, p, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return page, err
 	}

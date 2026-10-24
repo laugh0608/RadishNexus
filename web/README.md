@@ -81,9 +81,17 @@ Project 名称 / 归档状态与列表共用请求代次；任一失败清空二
 
 ## 基础对象与成员配置
 
-`workspace/ConfigurationPanel.tsx` 提供 owner 的 Team / Project 创建、显式初始 admin 确认、Project 普通成员角色配置、Channel 创建与受限成员管理；`configuration-api.ts` 校验专用响应。成员选择使用稳定 ID 与展示名区分重名，不返回邮箱。界面说明撤权会清除从属私密授权；Project admin / 私密对象管理权交接尚未开放。
+`workspace/ConfigurationPanel.tsx` 提供 owner 的 Team / Project 创建、显式初始 admin 确认、Channel 创建；`configuration-api.ts` 校验专用响应。成员选择使用稳定 ID 与展示名区分重名，不返回邮箱。界面说明撤权会清除从属私密授权；成员和管理责任操作由下述 ADR-0045 面板承接。
 
 写请求复用现有同源 Session / CSRF；连续点击被阻止，网络或 5xx 模糊失败保留原 operation ID，成功后重新读取当前列表。配置面板和分页在刷新、焦点复核与作用域切换时清理旧数据，取消或忽略迟到结果。普通配置能力由服务端返回，客户端显示不构成授权。首次访问通过 `auth/SetupGate.tsx` 与 `setup-api.ts` 实现 [ADR-0027](../docs/adr/0027-first-visit-administrator-setup.md)：Session 确认未登录后读取初始化状态，required 展示首位管理员表单，complete 进入正式登录，unavailable 提示部署者配置。状态读取失败可重试；提交后清理码与密码，模糊结果必须重新检查状态，不自动重放创建。
+
+## 成员生命周期与管理交接
+
+`workspace/ManagementPanel.tsx` 与严格 `management-api.ts` 实现 [ADR-0045](../docs/adr/0045-membership-lifecycle-and-management-handoff.md)：首页 Workspace 管理、Project 成员，以及 canonical Channel / Thread 的私密成员面板。候选来自当前作用域的服务端分页，显示展示名与稳定 ID，不要求手输用户 ID。提供预览、能力变化说明、确认勾选、增补管理员、角色变更、交接及退出；Workspace owner 可暂停、恢复、移除和签发绑定退出代次的再次加入邀请。本人可分页查看当前可见管理责任。
+
+未知结果在内存保留原请求和 operation ID，支持精确重试及 `/account` 本人结果查询；`not_observed` 不代表回滚。邀请只在首次成功响应显示，重试与结果查询不重放 token。退出成功返回可访问入口；再加入不恢复旧对象权限。Session context 的 `requires_authentication` 只限制对应 Workspace，账户页重新认证可建立新会话。焦点、页面恢复、作用域切换和权限失败清理过期内容；迟到 Session 读取不能覆盖新登录或撤权结果。
+
+管理面板不授予业务写能力：局部 viewer manager 可管理成员，仍不可发送消息或确认 Decision。部分既有业务表单仍允许提交后显示服务端拒绝，不据此声称全部按钮已按写权限隐藏。390px、键盘、双标签冲突、SSE 清屏、退出确认丢失及再次加入的实际证据见[验证记录](../docs/status/reviews/2026-10-24-membership-lifecycle.md)。
 
 ## Workspace owner 主动交接
 

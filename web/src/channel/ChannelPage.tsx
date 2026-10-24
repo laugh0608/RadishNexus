@@ -1,3 +1,4 @@
+import { ConfigurationLauncher } from "../workspace/ConfigurationPanel";
 import { ContextSourceNotice } from "../ContextSourceNotice";
 import { useEffect, useReducer, useState, type FormEvent } from "react";
 import { AuthRequestError, browserAuthClient } from "../auth/api";
@@ -17,6 +18,8 @@ import {
 import { channelPageReducer } from "./state";
 
 interface ChannelPageProps {
+  userID?: string;
+  navigate?: (path: string) => void;
   workspaceID: string;
   channelID: string;
   client?: ChannelMessageClient;
@@ -38,6 +41,8 @@ interface ThreadDraft {
 }
 
 export function ChannelPage({
+  userID,
+  navigate,
   workspaceID,
   channelID,
   client = browserChannelMessageClient,
@@ -414,6 +419,17 @@ export function ChannelPage({
           dispatch({ type: "failed", message: "当前无法访问这个频道。" })
         }
       />
+      {userID ? (
+        <ConfigurationLauncher
+          workspaceID={workspaceID}
+          kind="channel"
+          id={channelID}
+          userID={userID}
+          onSessionExpired={onSessionExpired}
+          onChanged={() => setReloadKey((k) => k + 1)}
+          navigate={(path) => navigate?.(path)}
+        />
+      ) : null}
       <section className="channel-hero" aria-labelledby="channel-title">
         <div>
           <p className="section-kicker">Canonical Channel history</p>
@@ -564,6 +580,13 @@ export function ChannelPage({
                               <option value="restricted">Restricted</option>
                             </select>
                           </label>
+                          {threadDraft.visibility === "restricted" ? (
+                            <p>
+                              创建后仅你获得此私密 Thread
+                              的初始成员与局部管理身份；
+                              其他人须具备父级访问权限后，由有权管理者明确加入。
+                            </p>
+                          ) : null}
                           {threadError === null ? null : (
                             <p className="inline-error" role="alert">
                               {threadError}

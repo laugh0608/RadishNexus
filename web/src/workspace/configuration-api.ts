@@ -86,6 +86,32 @@ export async function request(
   signal?: AbortSignal,
 ): Promise<unknown> {
   requireID(workspace, "wrk_");
+  try {
+    return await requestPath(
+      `/api/v1/workspaces/${encodeURIComponent(workspace)}${suffix}`,
+      method,
+      body,
+      signal,
+    );
+  } catch (e) {
+    if (
+      e instanceof AuthRequestError &&
+      e.code === "workspace_authentication_required"
+    )
+      window.dispatchEvent(
+        new CustomEvent("radishnexus-workspace-authentication", {
+          detail: workspace,
+        }),
+      );
+    throw e;
+  }
+}
+export async function requestPath(
+  path: string,
+  method = "GET",
+  body?: Record<string, unknown>,
+  signal?: AbortSignal,
+): Promise<unknown> {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (method !== "GET") {
     headers["Content-Type"] = "application/json";
@@ -98,17 +124,14 @@ export async function request(
   }
   let response: Response;
   try {
-    response = await fetch(
-      `/api/v1/workspaces/${encodeURIComponent(workspace)}${suffix}`,
-      {
-        method,
-        credentials: "same-origin",
-        cache: "no-store",
-        headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal,
-      },
-    );
+    response = await fetch(path, {
+      method,
+      credentials: "same-origin",
+      cache: "no-store",
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
+    });
   } catch (cause) {
     if (signal?.aborted) throw cause;
     throw new AuthRequestError("请求结果尚未确认，可保持原内容重试。");
@@ -128,8 +151,9 @@ export async function request(
       /* Status remains authoritative when an error body is unavailable. */
     }
     throw new AuthRequestError(
-      code === "recent_authentication_required"
-        ? "请退出并重新登录，再核对接收人并确认交接。"
+      code === "recent_authentication_required" ||
+        code === "workspace_authentication_required"
+        ? "请到“账户与邀请”重新认证，再核对并确认操作。"
         : response.status === 401
           ? "会话已失效，请重新登录。"
           : response.status === 403

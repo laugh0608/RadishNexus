@@ -79,7 +79,7 @@ func TestEnvironmentRevocationSerializesWithDeployment(t *testing.T) {
 			} else {
 				go record()
 			}
-			waitForLock("%FROM radishnexus.environments%")
+			waitForLock("%19450001%")
 			if err = gate.Commit(ctx); err != nil {
 				t.Fatal(err)
 			}

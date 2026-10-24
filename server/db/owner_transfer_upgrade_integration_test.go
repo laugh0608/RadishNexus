@@ -98,13 +98,13 @@ func TestOwnerTransferUpgradeFrom017(t *testing.T) {
 	if err = fresh.CheckReady(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if memberships != snapshot(`SELECT jsonb_agg(to_jsonb(m)-'role_revision' ORDER BY workspace_id,user_id)::text FROM radishnexus.workspace_memberships m`) {
+	if memberships != snapshot(`SELECT jsonb_agg(to_jsonb(m)-'role_revision'-'lifecycle_revision'-'session_valid_after' ORDER BY workspace_id,user_id)::text FROM radishnexus.workspace_memberships m`) {
 		t.Fatal("membership rewritten")
 	}
-	if invitations != snapshot(`SELECT jsonb_agg(to_jsonb(i)-'creator_role_revision' ORDER BY token_digest)::text FROM radishnexus.identity_invitations i`) {
+	if invitations != snapshot(`SELECT jsonb_agg(to_jsonb(i)-'creator_role_revision'-'creator_lifecycle_revision'-'target_user_id'-'target_lifecycle_revision' ORDER BY token_digest)::text FROM radishnexus.identity_invitations i`) {
 		t.Fatal("invitation rewritten")
 	}
-	if audit != snapshot(`SELECT (to_jsonb(a)-'actor_before_role'-'actor_after_role'-'actor_before_role_revision'-'actor_after_role_revision'-'subject_before_role_revision'-'subject_after_role_revision')::text FROM radishnexus.workspace_configuration_audit a`) {
+	if audit != snapshot(`SELECT (to_jsonb(a)-'actor_before_role'-'actor_after_role'-'actor_before_role_revision'-'actor_after_role_revision'-'subject_before_role_revision'-'subject_after_role_revision'-'management_plan_digest'-'management_before_revision'-'management_after_revision'-'management_actor_after_role'-'revoked_authorization_ids')::text FROM radishnexus.workspace_configuration_audit a`) {
 		t.Fatal("audit rewritten")
 	}
 	if receipt != snapshot(`SELECT to_jsonb(r)::text FROM radishnexus.workspace_configuration_receipts r`) {

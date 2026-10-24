@@ -100,7 +100,7 @@ func configurationChannel(ctx context.Context, tx pgx.Tx, p authz.Principal, id 
 }
 
 func (s *Store) Configure(ctx context.Context, c goldenpath.ConfigurationCommand) (result goldenpath.ConfigurationResult, err error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	tx, err := s.beginWorkspaceAdmission(ctx, c.Principal, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}, true)
 	if err != nil {
 		return result, err
 	}
@@ -243,7 +243,7 @@ func (s *Store) Configure(ctx context.Context, c goldenpath.ConfigurationCommand
 		_, err = tx.Exec(ctx, `INSERT INTO radishnexus.channels(id,workspace_id,governing_project_id,name,visibility,status,created_by_kind,created_by_id,created_at,updated_at) VALUES($1,$2,$3,$4,$5,'active','user',$6,$7,$7)`, c.ID, c.Principal.WorkspaceID, projectID, c.Name, c.Visibility, c.Principal.ID, c.OccurredAt)
 		if err == nil {
 			for _, id := range c.MemberUserIDs {
-				_, err = tx.Exec(ctx, `INSERT INTO radishnexus.channel_memberships(workspace_id,channel_id,user_id,created_at) VALUES($1,$2,$3,$4)`, c.Principal.WorkspaceID, c.ID, id, c.OccurredAt)
+				_, err = tx.Exec(ctx, `INSERT INTO radishnexus.channel_memberships(workspace_id,channel_id,user_id,created_at,management_role) VALUES($1,$2,$3,$4,CASE WHEN $3=$5 THEN 'manager' ELSE 'member' END)`, c.Principal.WorkspaceID, c.ID, id, c.OccurredAt, c.Principal.ID)
 				if err != nil {
 					break
 				}
@@ -387,6 +387,23 @@ func configureMember(ctx context.Context, tx pgx.Tx, c goldenpath.ConfigurationC
 			return
 		}
 	}
+	// Legacy in-process callers must preserve the same descendant responsibility
+	// invariant as the public management commands. HTTP member mutations have
+	// moved to the explicit preview/confirmation contract.
+	scope := managementScope{kind: "channel", id: c.ScopeID}
+	if projectCommand {
+		scope = managementScope{kind: "project", id: project}
+	}
+	responsibilities, checkErr := affectedManagementResponsibilities(ctx, tx, c.Principal.WorkspaceID, []string{c.UserID}, scope)
+	if checkErr != nil {
+		err = checkErr
+		return
+	}
+	defer func() {
+		if err == nil {
+			err = checkManagementResponsibilities(ctx, tx, c.Principal.WorkspaceID, responsibilities)
+		}
+	}()
 	rows, queryErr := tx.Query(ctx, `DELETE FROM radishnexus.thread_memberships m USING radishnexus.threads t WHERE m.workspace_id=$1 AND m.user_id=$2 AND t.workspace_id=m.workspace_id AND t.id=m.thread_id AND t.governing_project_id=$3 AND ($4='' OR t.origin_channel_id=$4) RETURNING m.thread_id`, c.Principal.WorkspaceID, c.UserID, project, func() string {
 		if projectCommand {
 			return ""

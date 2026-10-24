@@ -1,3 +1,4 @@
+import { ManagementPanel } from "./ManagementPanel";
 import { OwnerTransferPanel } from "./OwnerTransferPanel";
 import { ciRunPagePath } from "../nexus-view/ci-run-api";
 import { useState, type FormEvent } from "react";
@@ -27,9 +28,14 @@ export function WorkspaceHome({
   session: SessionContext;
   navigate: (path: string) => void;
 }) {
-  const [workspaceID, setWorkspaceID] = useState(
+  const [selectedWorkspaceID, setWorkspaceID] = useState(
     session.workspaces[0]?.id ?? "",
   );
+  const workspaceID = session.workspaces.some(
+    (w) => w.id === selectedWorkspaceID,
+  )
+    ? selectedWorkspaceID
+    : (session.workspaces[0]?.id ?? "");
   const [ciRunID, setCIRunID] = useState("");
   const [deploymentID, setDeploymentID] = useState("");
   const [channelID, setChannelID] = useState("");
@@ -109,14 +115,37 @@ export function WorkspaceHome({
             {session.workspaces.map((workspace) => (
               <option key={workspace.id} value={workspace.id}>
                 {workspace.name} · {workspace.role}
+                {workspace.requiresAuthentication ? " · 需重新认证" : ""}
               </option>
             ))}
           </select>
         </label>
         {workspaceID === "" ? (
           <p>你还没有加入工作区。请在“账户与邀请”中接受邀请。</p>
+        ) : session.workspaces.find((w) => w.id === workspaceID)
+            ?.requiresAuthentication ? (
+          <div>
+            <p role="status">
+              此工作区的旧会话已失效。请重新认证；其他工作区仍可继续使用。
+            </p>
+            <button type="button" onClick={() => navigate("/account")}>
+              前往账户重新认证
+            </button>
+          </div>
         ) : (
           <>
+            <ManagementPanel
+              key={`membership:${workspaceID}`}
+              scope={{
+                workspace: workspaceID,
+                kind: "workspace",
+                id: workspaceID,
+              }}
+              userID={session.user.id}
+              onSessionExpired={onSessionExpired}
+              onChanged={onSessionRefresh}
+              onLeft={() => navigate("/")}
+            />
             <OwnerTransferPanel
               key={`owner:${session.user.id}:${workspaceID}`}
               workspaceID={workspaceID}

@@ -102,9 +102,10 @@ type SessionRecord struct {
 }
 
 type Workspace struct {
-	ID   string
-	Name string
-	Role string
+	RequiresAuthentication bool
+	ID                     string
+	Name                   string
+	Role                   string
 }
 
 type User struct {
@@ -119,6 +120,7 @@ type SessionAccount struct {
 }
 
 type ResolvedSession struct {
+	CreatedAt       time.Time
 	Account         SessionAccount
 	CSRFTokenDigest []byte
 }

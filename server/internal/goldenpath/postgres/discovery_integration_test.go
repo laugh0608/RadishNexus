@@ -27,7 +27,7 @@ func assertDiscoverySlice(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 	t.Helper()
 	_, err := pool.Exec(ctx, `
 		INSERT INTO radishnexus.users(id,display_name) VALUES ('usr_discovery_reader','Reader'),('usr_discovery_owner','Owner'),('usr_discovery_member','Member');
-		INSERT INTO radishnexus.user_accounts(user_id,status,created_at) VALUES ('usr_discovery_reader','active',now());
+		INSERT INTO radishnexus.user_accounts(user_id,status,created_at) VALUES ('usr_discovery_reader','active',now()),('usr_discovery_owner','active',now()),('usr_discovery_member','active',now());
 		INSERT INTO radishnexus.workspaces(id,name) VALUES ('wrk_discovery','Discovery'),('wrk_discovery_other','Other');
 		INSERT INTO radishnexus.workspace_memberships(workspace_id,user_id,role) VALUES
 		('wrk_discovery','usr_discovery_reader','member'),('wrk_discovery','usr_discovery_owner','owner'),('wrk_discovery','usr_discovery_member','member');
@@ -127,7 +127,7 @@ func assertDiscoverySlice(t *testing.T, ctx context.Context, pool *pgxpool.Pool)
 
 func assertDiscoveryHTTP(t *testing.T, ctx context.Context, pool *pgxpool.Pool, service *goldenpath.DiscoveryService) {
 	t.Helper()
-	now := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	token := deploymentHTTPToken(91)
 	digest := sha256.Sum256([]byte(token))
 	csrf := sha256.Sum256([]byte(deploymentHTTPToken(92)))
@@ -212,7 +212,8 @@ func assertDiscoveryScale(t *testing.T, ctx context.Context, pool *pgxpool.Pool,
 			page, err = service.ListProjectChannels(ctx, principal, "prj_discovery_a", goldenpath.DiscoveryPageInput{AfterID: "chn_discovery_scale_000", Limit: 25})
 		}
 		elapsed := time.Since(start)
-		if err != nil || len(page.Items) != 25 || !strings.HasSuffix(page.NextID, "050") || counter.queries.Load() > 6 {
+        // Admission adds five fixed queries: timeout, schema/Workspace gates, account and membership.
+		if err != nil || len(page.Items) != 25 || !strings.HasSuffix(page.NextID, "050") || counter.queries.Load() > 11 {
 			t.Fatal("unbounded or incorrectly filtered discovery", kind, page, err, counter.queries.Load())
 		}
 		t.Logf("%s discovery scale: 100 candidates, 25 visible results, %d SQL calls, %s", kind, counter.queries.Load(), elapsed)

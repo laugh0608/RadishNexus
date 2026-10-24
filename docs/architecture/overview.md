@@ -203,7 +203,7 @@ Activity 不是 Outbox 的副本。Outbox 用于可靠投递，Activity 是可�
 
 本地账户受控恢复按 [ADR-0041](../adr/0041-controlled-local-account-recovery.md) 由独立运维 CLI 执行：账户 → 凭证锁内复核版本与状态，密码更新、全账户旧 Session 撤销和 operator 成功审计原子提交。migration 017 扩展既有 `identity_audit`，保留旧 user actor，分离 operator / target、唯一 operation_id 与前后密码版本；恢复记录不可变并纳入权威备份。status 只证明历史提交，模糊提交不可当作回滚。失败登录按校验时的凭证版本匹配，恢复不改变授权、外部身份或业务 Activity；该能力依赖宿主 / 数据库运维授权，产品 owner 无对应 HTTP 权限。旧备份可能带回旧 verifier，必须在隔离目标重新核验和恢复。
 
-Workspace owner 主动交接按 [ADR-0042](../adr/0042-workspace-owner-handoff.md) 使用独立配置命令：排序锁定双方账户，再锁 Session、排序锁定双方 membership，最后锁 Workspace；全部等待后复核有效期、近期认证和预期代次。双角色 / revision、配置 Audit 和 receipt 原子提交，不获取邀请或业务对象锁。migration 018 增加角色代次、邀请任期绑定和交接审计形状；历史成功仅允许当前有效成员读取本人最小结果，其他配置命令仍按当前管理权检查。提交确认丢失通过原 operation ID 查询，不自动生成新操作；不新增 Activity / Outbox 或全局最后 owner 约束。
+Workspace owner 主动交接按 [ADR-0042](../adr/0042-workspace-owner-handoff.md) 使用独立配置命令，并由 [ADR-0045](../adr/0045-membership-lifecycle-and-management-handoff.md) 将 schema 共享锁、Workspace 排他协调锁置于行锁之前：排序锁定双方账户，再锁 Session、排序锁定双方 membership，最后锁 Workspace；全部等待后复核有效期、近期认证和预期代次。双角色 / revision、配置 Audit 和 receipt 原子提交，不获取邀请或业务对象锁。migration 018 增加角色代次、邀请任期绑定和交接审计形状；历史成功仅允许当前有效成员读取本人最小结果，其他配置命令仍按当前管理权检查。提交确认丢失通过原 operation ID 查询，不自动生成新操作；不新增 Activity / Outbox 或全局最后 owner 约束。
 
 
 当前白名单事件已在业务事务内同步投影，提交成功后重新读取即可看到对应对象的 Timeline；失败回滚整笔业务。显式全量重建与正常投影共用映射，并通过先锁定投影表、再取源事件快照避免丢失并发提交。Thread / Decision 的反向关系从同一 EntityLink 查询，继续复用当前权限；精确时效、方向、升级与运行成本见 [ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md)。
@@ -278,7 +278,7 @@ M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 
 
 ### Project / Channel 发现入口
 
-首页按 [ADR-0025](../adr/0025-project-and-channel-discovery.md) 提供 Workspace 内的 Project 与 Channel 只读发现。服务端在一致的当前权限快照中先过滤后分页，客户端只渲染安全条目并进入既有 canonical 页面；列表不增加角色能力，也不取代最终对象读取时的复权。[ADR-0026](../adr/0026-foundation-configuration-and-membership.md) 已接通 owner 创建 Team / Project、显式初始 admin、Project admin 创建 Channel 与配置普通成员；受限 Channel 管理仍要求明确成员资格。配置 Audit / receipt 随 migration 009 保留，撤权清理下属私密授权，精确重试不复权；Workspace owner 主动交接已按 ADR-0042 接通；Project admin / 私密对象管理权交接仍独立推进。
+首页按 [ADR-0025](../adr/0025-project-and-channel-discovery.md) 提供 Workspace 内的 Project 与 Channel 只读发现。服务端在一致的当前权限快照中先过滤后分页，客户端只渲染安全条目并进入既有 canonical 页面；列表不增加角色能力，也不取代最终对象读取时的复权。[ADR-0026](../adr/0026-foundation-configuration-and-membership.md) 已接通 owner 创建 Team / Project、显式初始 admin、Project admin 创建 Channel 与配置普通成员；受限 Channel 管理仍要求明确成员资格。配置 Audit / receipt 随 migration 009 保留，撤权清理下属私密授权，精确重试不复权；Workspace owner 主动交接已按 ADR-0042 接通；Project admin / 私密对象管理权交接及 Workspace 成员生命周期已按 ADR-0045 接通。统一事务准入、会话代次、锁顺序和恢复边界见[核心合同](core-contracts.md#成员准入与管理交接)；它们不增加 owner 对私密内容的访问。
 
 ## 当前仓库布局
 

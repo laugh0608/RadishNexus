@@ -26,7 +26,7 @@ var contextObjectQueries = map[string]string{
 }
 
 func (s *ContextStore) ExportContext(ctx context.Context, a goldenpath.OwnerAccess, project string) (out cp.Bundle, err error) {
-	err = s.contextTransaction(ctx, pgx.RepeatableRead, func(tx pgx.Tx) (bool, error) {
+	err = s.contextTransaction(ctx, a.Principal, pgx.RepeatableRead, func(tx pgx.Tx) (bool, error) {
 		session, _, e := lockOwnerReader(ctx, tx, a)
 		if e != nil {
 			return false, e
@@ -160,7 +160,7 @@ func (s *ContextStore) ExportContext(ctx context.Context, a goldenpath.OwnerAcce
 		if e != nil {
 			return false, e
 		}
-		out, e = cp.Pack(cp.Manifest{PackageID: packageID, CreatedAt: now.UTC(), SourceVersion: "schema-019", WorkspaceID: a.Principal.WorkspaceID, ProjectID: project}, d)
+		out, e = cp.Pack(cp.Manifest{PackageID: packageID, CreatedAt: now.UTC(), SourceVersion: "schema-020", WorkspaceID: a.Principal.WorkspaceID, ProjectID: project}, d)
 		if e != nil {
 			if errors.Is(e, cp.ErrInvalid) {
 				return false, cp.ErrIncomplete

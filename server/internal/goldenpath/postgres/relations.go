@@ -27,7 +27,7 @@ func (store *Store) ListRelations(
 		return nil, err
 	}
 
-	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := store.beginAdmission(ctx, principal, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return nil, fmt.Errorf("begin relation projection transaction: %w", err)
 	}

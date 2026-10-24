@@ -65,11 +65,15 @@ Project、Initiative、Component、Decision、Environment 和 EntityLink 共享�
 
 一个独立组织的最高数据、成员、配置和授权边界。任何实体、事件、搜索索引和插件数据都必须能够明确归属到一个 Workspace。
 
-首期 Workspace membership 独立保存 `status: active / suspended` 与 `role: owner / member`。`owner` 表示 Workspace 级管理责任，不自动授予 restricted Project、私密协作对象或 Environment Deployment 权限；这些能力仍由对应对象的显式授权决定。用户 Session 不固定 Workspace，业务请求选择 Workspace 后必须以当前 active membership 重新解析权限。
+首期 Workspace membership 独立保存 `status: active / suspended / removed` 与 `role: owner / member`。`owner` 表示 Workspace 级管理责任，不自动授予 restricted Project、私密协作对象或 Environment Deployment 权限；这些能力仍由对应对象的显式授权决定。用户 Session 不固定 Workspace，业务请求选择 Workspace 后必须以当前 active membership、生命周期代次和会话准入起点重新解析权限。
 
 身份模型按 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 分离用户、账户状态、本地密码凭证与外部身份。正式本地凭证采用规范化邮箱，展示名独立；Radish OIDC 以 exact `(issuer, subject)` 关联本地用户，两种认证都进入 Nexus Session。旧登录名到邮箱使用管理员显式映射，不改变稳定用户 ID，不自动合并账户或继承上游权限。迁移与当前实现完成线分别见 ADR 和[当前状态](status/current.md)。
 
-Workspace owner 主动交接按 [ADR-0042](adr/0042-workspace-owner-handoff.md) 由近期认证的当前 owner 明确确认，向同 Workspace 已有 active member 原子移交：接收人升为 owner，操作者降为 member，各自 `role_revision` 加一；其他 owner 和全部对象级权限不变。代次检查防止角色回转后的旧请求复用，邀请绑定创建者任期，旧任期邀请不会因重新接任而复活。操作者仍是有效成员时可查询本人的最小历史成功；该例外不开放其他配置审计或恢复管理权。此能力不包含应急接管、成员停用或完整离职流程。
+Workspace owner 主动交接按 [ADR-0042](adr/0042-workspace-owner-handoff.md) 由近期认证的当前 owner 明确确认，向同 Workspace 已有 active member 原子移交：接收人升为 owner，操作者降为 member，各自 `role_revision` 加一；其他 owner 和全部对象级权限不变。代次检查防止角色回转后的旧请求复用，邀请绑定创建者任期，旧任期邀请不会因重新接任而复活。操作者仍是有效成员时可查询本人的最小历史成功；该例外不开放其他配置审计或恢复管理权。此能力不包含应急接管；成员暂停、恢复、正式退出与再加入由 [ADR-0045](adr/0045-membership-lifecycle-and-management-handoff.md) 承接。
+
+成员生命周期按 ADR-0045 区分临时暂停和正式退出。暂停保留协作角色与窄授权但阻断访问；恢复只启用尚存授权，要求目标重新认证。正式退出保留稳定身份与历史作者，清除 Project / Channel / Thread 授权；重新加入只可兑换绑定本人及退出代次的新邀请，从普通 member 和空显式授权开始。两种停权均撤销 Deployment 授权，恢复不自动重授。旧 Session 在本 Workspace 永久失效，其他 Workspace 不受影响。
+
+正常退出、角色降级和管理交接不能留下无有效管理者的作用域；安全暂停可以暂时造成 Project / 私密对象失管，但不自动转交内容，且最后有效 Workspace owner 仍受保护。历史导入身份不进入选任、恢复或再邀请流程。Workspace owner 可管理成员状态，不能通过目录、审计或隐藏责任提示获得私密对象的 ID、名称、数量或正文。
 
 首位管理员初始化按 [ADR-0027](adr/0027-first-visit-administrator-setup.md) 创建一个本地账户与 Workspace owner；网页凭部署者的一次性初始化码，CLI 使用既有运维入口，两者共享唯一事务锁。该流程不产生跨 Workspace 的超级权限，也不自动建立业务对象或 Session；任何账户已存在后不重新开放。
 
@@ -98,7 +102,9 @@ M0 最小字段：
 
 `workspace` 表示 Workspace 成员默认可发现，`restricted` 表示必须通过显式成员或角色授权。Project 的可见性只提供默认边界，不能自动放宽其中私密 Channel、Conversation、Document 或其它对象的权限。归档 Project 不级联删除其内容或关系。
 
-创建与首批成员配置遵循 [ADR-0026](adr/0026-foundation-configuration-and-membership.md)：owner 显式指定本人为新 Project 的初始 admin；现有 admin 只能配置其他成员的 viewer / contributor / decider，Project admin 交接独立延后。restricted Channel 配置同时要求 Project admin 与 Channel membership。撤销 Project 角色会清理该成员在其下的显式 Channel / Thread 授权，重新加入不恢复历史私密授权。工作区可见项目的只读基线仍保留。
+创建与首批成员配置遵循 [ADR-0026](adr/0026-foundation-configuration-and-membership.md)：owner 显式指定本人为新 Project 的初始 admin；[ADR-0045](adr/0045-membership-lifecycle-and-management-handoff.md) 扩展为多个 admin 的增补、降级、移除与主动交接；接任者须为已有有效显式成员，原管理员明确选择后续角色或退出。撤销 Project 角色会清理该成员在其下的显式 Channel / Thread 授权，重新加入不恢复历史私密授权。工作区可见项目的只读基线仍保留。
+
+restricted Channel / Thread 的 membership 独立保存 `management_role: manager / member`。当前可读该对象的 Project admin 或局部 manager 可以管理其受众与责任；必须同时满足 Project、来源 Channel 和自身成员边界。viewer 可以成为局部 manager，但不因此获得业务写入能力。新建私密对象的创建者、导入目标的负责人取得明确的初始局部管理责任；历史 creator 字段不随交接改变。Thread 加人不补授来源 Channel 权限，退出 Channel 同时清理其下 Thread 授权并保护剩余管理责任。
 
 ### Initiative
 

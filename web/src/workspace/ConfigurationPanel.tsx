@@ -1,10 +1,9 @@
+import { ManagementPanel } from "./ManagementPanel";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { AuthRequestError } from "../auth/api";
 import {
   configurationClient as api,
   type ConfigurationObject,
-  type ConfigurationMember,
-  type ProjectRole,
 } from "./configuration-api";
 import { useAction, usePage } from "./configuration-hooks";
 import { PageControls, Feedback, Field } from "./configuration-ui";
@@ -283,38 +282,30 @@ function ConfigurationEditor({
       {object ? (
         <>
           <h3>{object.name}</h3>
-          {object.canManage ? (
-            <>
-              <MemberEditor
-                key={`${id}:${revision}`}
-                workspaceID={workspaceID}
-                currentUserID={userID}
-                object={object}
-                onSessionExpired={onSessionExpired}
-              />
-              {kind === "project" ? (
-                <CreateChannel
-                  workspaceID={workspaceID}
-                  projectID={id}
-                  userID={userID}
-                  onSessionExpired={onSessionExpired}
-                  onCreated={(channel) => {
-                    onChanged?.();
-                    const path = channelPagePath(workspaceID, channel.id);
-                    if (path) navigate(path);
-                  }}
-                />
-              ) : null}
-            </>
+          {kind === "project" || object.visibility === "restricted" ? (
+            <ManagementPanel
+              scope={{ workspace: workspaceID, kind, id }}
+              userID={userID}
+              onSessionExpired={onSessionExpired}
+              onChanged={onChanged}
+              onLeft={() => navigate("/")}
+            />
           ) : (
-            <p>
-              {object.status === "archived"
-                ? "已归档，当前只可浏览。"
-                : kind === "channel" && object.visibility === "project"
-                  ? "此频道沿用项目权限，无独立成员列表。"
-                  : "当前没有此项配置权限。"}
-            </p>
+            <p>此频道沿用项目权限，无独立成员列表。</p>
           )}
+          {kind === "project" && object.canManage ? (
+            <CreateChannel
+              workspaceID={workspaceID}
+              projectID={id}
+              userID={userID}
+              onSessionExpired={onSessionExpired}
+              onCreated={(channel) => {
+                onChanged?.();
+                const path = channelPagePath(workspaceID, channel.id);
+                if (path) navigate(path);
+              }}
+            />
+          ) : null}
         </>
       ) : null}
     </section>
@@ -381,233 +372,12 @@ function CreateChannel({
               checked={confirmed}
               onChange={(e) => setConfirmed(e.target.checked)}
             />
-            将我明确加入此私密频道；创建后由我添加其他成员。
+            将我明确加入此私密频道并成为初始局部管理者；创建后由我添加其他成员。
           </label>
         ) : null}
         <button type="submit">创建并打开频道</button>
       </fieldset>
       <Feedback busy={action.busy} message={action.message} />
     </form>
-  );
-}
-function MemberEditor({
-  workspaceID,
-  currentUserID,
-  object,
-  onSessionExpired,
-}: {
-  workspaceID: string;
-  currentUserID: string;
-  object: ConfigurationObject;
-  onSessionExpired: () => void;
-}) {
-  const load = useCallback(
-    (after: string | undefined, signal: AbortSignal) =>
-      api.members(workspaceID, object.kind, object.id, after, signal),
-    [workspaceID, object.kind, object.id],
-  );
-  const members = usePage(load, onSessionExpired);
-  const loadCandidates = useCallback(
-    (after: string | undefined, signal: AbortSignal) =>
-      api.members(
-        workspaceID,
-        object.kind === "project" ? "workspace" : "project",
-        object.kind === "project" ? workspaceID : object.projectID!,
-        after,
-        signal,
-      ),
-    [workspaceID, object.kind, object.projectID],
-  );
-  const candidates = usePage(loadCandidates, onSessionExpired);
-  const action = useAction(onSessionExpired);
-  const [user, setUser] = useState("");
-  const [role, setRole] = useState("contributor");
-  const refresh = () => {
-    members.refresh();
-    candidates.refresh();
-    setUser("");
-  };
-  const add = (event: FormEvent) => {
-    event.preventDefault();
-    if (!user) return;
-    void action.run(
-      `add:${object.kind}:${user}`,
-      object.kind === "project"
-        ? { expected_role: null, role }
-        : { expected_member: false },
-      (body) =>
-        api.member(workspaceID, object.kind, object.id, user, "PUT", body),
-      refresh,
-    );
-  };
-  return (
-    <div>
-      <p>
-        {object.kind === "project"
-          ? "仅配置普通成员角色。撤销项目角色会清除其在本项目下的私密频道和讨论授权；工作区可见项目仍保留只读基线。管理员交接尚未开放。"
-          : "添加频道成员不会改变项目角色。移除成员会同时清理其在此频道下的私密讨论授权；重新加入需要重新授权。"}
-      </p>
-      {members.error ? <p role="alert">{members.error}</p> : null}
-      {!members.page && !members.error ? <p>正在加载成员…</p> : null}
-      <ul className="configuration-members">
-        {members.page?.items.map((member) => (
-          <MemberRow
-            key={`${member.id}:${member.role ?? "member"}`}
-            workspaceID={workspaceID}
-            object={object}
-            member={member}
-            currentUserID={currentUserID}
-            onChanged={refresh}
-            onSessionExpired={onSessionExpired}
-          />
-        ))}
-      </ul>
-      {members.page?.items.length === 0 ? <p>当前没有成员。</p> : null}
-      <PageControls page={members} />
-      <form onSubmit={add}>
-        <fieldset disabled={action.busy || !members.page || !candidates.page}>
-          <legend>添加成员</legend>
-          <Field label="选择成员">
-            <select
-              required
-              value={user}
-              onChange={(e) => setUser(e.target.value)}
-            >
-              <option value="">
-                选择已加入{object.kind === "project" ? "工作区" : "项目"}的成员
-              </option>
-              {candidates.page?.items
-                .filter(
-                  (m) =>
-                    m.eligible &&
-                    !members.page?.items.some(
-                      (existing) => existing.id === m.id,
-                    ),
-                )
-                .map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} · {m.id}
-                  </option>
-                ))}
-            </select>
-          </Field>
-          {object.kind === "project" ? (
-            <Field label="授予项目角色">
-              <select value={role} onChange={(e) => setRole(e.target.value)}>
-                <option value="viewer">viewer · 只读</option>
-                <option value="contributor">contributor · 可参与协作</option>
-                <option value="decider">decider · 可确认决策</option>
-              </select>
-            </Field>
-          ) : null}
-          {role === "decider" && object.kind === "project" ? (
-            <p>此角色可人工确认有权读取证据的 Decision。</p>
-          ) : null}
-          <button type="submit" disabled={!user}>
-            明确添加成员
-          </button>
-        </fieldset>
-      </form>
-      {candidates.error ? <p role="alert">{candidates.error}</p> : null}
-      <PageControls page={candidates} />
-      <Feedback busy={action.busy} message={action.message} />
-    </div>
-  );
-}
-function MemberRow({
-  workspaceID,
-  currentUserID,
-  object,
-  member,
-  onChanged,
-  onSessionExpired,
-}: {
-  workspaceID: string;
-  currentUserID: string;
-  object: ConfigurationObject;
-  member: ConfigurationMember;
-  onChanged: () => void;
-  onSessionExpired: () => void;
-}) {
-  const [role, setRole] = useState<ProjectRole>(member.role ?? "viewer");
-  const action = useAction(onSessionExpired, onChanged);
-  return (
-    <li>
-      <p>
-        {member.name} · {member.id}
-        {member.eligible ? "" : " · 当前不可授予新权限"}
-      </p>
-      {member.role === "admin" || member.id === currentUserID ? (
-        <p>admin · 管理权交接尚未开放</p>
-      ) : (
-        <fieldset disabled={action.busy}>
-          {object.kind === "project" ? (
-            <>
-              <Field label={`调整 ${member.name} 的角色`}>
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as ProjectRole)}
-                >
-                  <option value="viewer">viewer · 只读</option>
-                  <option value="contributor">contributor · 可参与协作</option>
-                  <option value="decider">decider · 可确认决策</option>
-                </select>
-              </Field>
-              {role === "decider" ? (
-                <p>可人工确认有权读取证据的 Decision。</p>
-              ) : null}
-              <button
-                type="button"
-                disabled={!member.eligible || role === member.role}
-                onClick={() =>
-                  void action.run(
-                    `role:${member.id}`,
-                    { expected_role: member.role, role },
-                    (body) =>
-                      api.member(
-                        workspaceID,
-                        object.kind,
-                        object.id,
-                        member.id,
-                        "PUT",
-                        body,
-                      ),
-                    onChanged,
-                  )
-                }
-              >
-                保存角色
-              </button>
-            </>
-          ) : null}
-          <button
-            type="button"
-            onClick={() =>
-              void action.run(
-                `remove:${member.id}`,
-                object.kind === "project"
-                  ? { expected_role: member.role }
-                  : { expected_member: true },
-                (body) =>
-                  api.member(
-                    workspaceID,
-                    object.kind,
-                    object.id,
-                    member.id,
-                    "DELETE",
-                    body,
-                  ),
-                onChanged,
-              )
-            }
-          >
-            {object.kind === "project"
-              ? "撤销角色及从属私密授权"
-              : "移除成员及从属私密授权"}
-          </button>
-        </fieldset>
-      )}
-      <Feedback busy={action.busy} message={action.message} />
-    </li>
   );
 }

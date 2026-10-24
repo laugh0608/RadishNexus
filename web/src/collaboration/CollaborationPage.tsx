@@ -1,3 +1,4 @@
+import { ManagementPanel } from "../workspace/ManagementPanel";
 import { ContextSourceNotice } from "../ContextSourceNotice";
 import { projectDecisionsPath } from "../workspace/project-decisions-api";
 import { useTicketStatusActions } from "./TicketStatusActions";
@@ -32,6 +33,8 @@ import {
 } from "./api";
 
 interface CollaborationPageProps {
+  userID?: string;
+  navigate?: (path: string) => void;
   workspaceID: string;
   entityType: CollaborationEntityType;
   entityID: string;
@@ -71,6 +74,8 @@ export function CollaborationPage(props: CollaborationPageProps) {
 }
 
 function CollaborationPageContent({
+  userID,
+  navigate,
   workspaceID,
   entityType,
   entityID,
@@ -385,6 +390,17 @@ function CollaborationPageContent({
           setState({ status: "error", message: "当前无法访问这个协作对象。" })
         }
       />
+      {userID &&
+      isThreadCurrent(current) &&
+      current.visibility === "restricted" ? (
+        <ManagementPanel
+          scope={{ workspace: workspaceID, kind: "thread", id: entityID }}
+          userID={userID}
+          onSessionExpired={onSessionExpired}
+          onChanged={() => setReloadKey((k) => k + 1)}
+          onLeft={() => navigate?.("/")}
+        />
+      ) : null}
       <section
         className="collaboration-hero"
         aria-labelledby="collaboration-title"

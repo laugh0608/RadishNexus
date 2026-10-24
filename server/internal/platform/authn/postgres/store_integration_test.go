@@ -191,7 +191,7 @@ func TestLocalIdentityBootstrapLoginAndSessionLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveWorkspace() error = %v", err)
 	}
-	if verified != (authn.VerifiedUser{UserID: bootstrap.UserID, WorkspaceID: bootstrap.WorkspaceID}) {
+	if verified.UserID != bootstrap.UserID || verified.WorkspaceID != bootstrap.WorkspaceID || verified.MembershipRevision != 1 || verified.SessionID == "" {
 		t.Fatalf("ResolveWorkspace() = %#v", verified)
 	}
 	if _, err := sessionService.ResolveWorkspace(ctx, session.Token, "wrk_not_a_member"); !errors.Is(err, authz.ErrForbidden) {

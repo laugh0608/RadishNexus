@@ -1,3 +1,4 @@
+import { managementClient } from "./management-api";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { FoundationCreate, ConfigurationLauncher } from "./ConfigurationPanel";
@@ -76,16 +77,26 @@ it("shows readonly configuration without loading a privileged member directory",
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "项目配置" }));
-  await screen.findByText("当前没有此项配置权限。");
+  await screen.findByRole("button", { name: "成员与管理交接" });
   expect(members).not.toHaveBeenCalled();
 });
 it("clears member data when a refreshed configuration is no longer accessible", async () => {
   vi.spyOn(api, "read")
     .mockResolvedValueOnce(project)
     .mockRejectedValue(new AuthRequestError("项目已不可访问", { status: 404 }));
-  vi.spyOn(api, "members").mockResolvedValue({
+  vi.spyOn(managementClient, "members").mockResolvedValue({
+    canManage: true,
+    selfRole: "admin",
+    revision: "1",
     items: [
-      { id: "usr_member", name: "Member", role: "contributor", eligible: true },
+      {
+        id: "usr_member",
+        displayName: "Member",
+        role: "contributor",
+        status: "active",
+        revision: "1",
+        eligible: true,
+      },
     ],
     nextCursor: null,
   });
@@ -100,8 +111,11 @@ it("clears member data when a refreshed configuration is no longer accessible", 
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "项目配置" }));
-  await screen.findByText("Member · usr_member");
+  fireEvent.click(
+    await screen.findByRole("button", { name: "成员与管理交接" }),
+  );
+  await screen.findByText("Member");
   fireEvent.click(screen.getByRole("button", { name: "刷新配置" }));
   await screen.findByText("项目已不可访问");
-  expect(screen.queryByText("Member · usr_member")).toBeNull();
+  expect(screen.queryByText("Member")).toBeNull();
 });

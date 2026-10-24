@@ -19,7 +19,7 @@ func (store *Store) AuthorizeChannelRead(
 	if err := principal.ValidateUser(); err != nil {
 		return err
 	}
-	tx, err := store.pool.Begin(ctx)
+	tx, err := store.beginAdmission(ctx, principal, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("begin authorize Channel read transaction: %w", err)
 	}
@@ -42,7 +42,7 @@ func (store *Store) GetChannelMessage(
 	if err := principal.ValidateUser(); err != nil {
 		return message, err
 	}
-	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := store.beginAdmission(ctx, principal, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return message, fmt.Errorf("begin get Channel Message transaction: %w", err)
 	}

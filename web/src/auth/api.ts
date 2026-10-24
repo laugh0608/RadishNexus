@@ -4,6 +4,7 @@ export interface SessionUser {
 }
 
 export interface SessionWorkspace {
+  requiresAuthentication?: boolean;
   id: string;
   name: string;
   role: "owner" | "member";
@@ -168,7 +169,10 @@ export function parseSessionContext(payload: unknown): SessionContext {
       if (role !== "owner" && role !== "member") {
         throw new TypeError(`session.workspaces[${index}].role is invalid`);
       }
+      if (typeof workspace.requires_authentication !== "boolean")
+        throw new TypeError("Workspace admission flag is invalid");
       return {
+        requiresAuthentication: workspace.requires_authentication,
         id: scopedID(workspace.id, `session.workspaces[${index}].id`, "wrk_"),
         name: nonEmptyString(
           workspace.name,

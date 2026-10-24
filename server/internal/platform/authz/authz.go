@@ -21,12 +21,15 @@ const (
 	PrincipalSystem PrincipalKind = "system"
 )
 
-// Principal is produced by a future authentication adapter. It deliberately
-// contains no token, session, or HTTP details.
+// Principal is produced by the authentication adapter. It deliberately
+// contains no credentials or HTTP details. SessionID is an internal record key
+// used to recheck revocation at the transaction boundary.
 type Principal struct {
-	Kind        PrincipalKind
-	ID          string
-	WorkspaceID string
+	Kind               PrincipalKind
+	ID                 string
+	WorkspaceID        string
+	SessionID          string `json:"-"`
+	MembershipRevision int64  // Server-verified Workspace admission generation; never client input.
 }
 
 func (principal Principal) ValidateUser() error {

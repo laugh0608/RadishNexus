@@ -19,7 +19,7 @@ func (s *ContextStore) ApplyContext(ctx context.Context, a goldenpath.OwnerAcces
 	if confirmed == "" || expected.PlanDigest != confirmed || !cp.ValidOperation(expected.OperationID) {
 		return out, authz.ErrConflict
 	}
-	err = s.contextTransaction(ctx, pgx.ReadCommitted, func(tx pgx.Tx) (bool, error) {
+	err = s.contextTransaction(ctx, a.Principal, pgx.ReadCommitted, func(tx pgx.Tx) (bool, error) {
 		if _, e := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(739140967704145)`); e != nil {
 			return false, ownerDBError("serialize context import", e)
 		}
@@ -204,11 +204,11 @@ func writeContext(ctx context.Context, tx pgx.Tx, a goldenpath.OwnerAccess, p cp
 				e = exec(`INSERT INTO radishnexus.project_memberships(workspace_id,project_id,user_id,role,created_at) VALUES($1,$2,$3,'admin',$4)`, w, id, a.Principal.ID, now)
 			case "channel":
 				if v.(cp.Channel).Visibility == "restricted" {
-					e = exec(`INSERT INTO radishnexus.channel_memberships(workspace_id,channel_id,user_id,created_at) VALUES($1,$2,$3,$4)`, w, id, a.Principal.ID, now)
+					e = exec(`INSERT INTO radishnexus.channel_memberships(workspace_id,channel_id,user_id,created_at,management_role) VALUES($1,$2,$3,$4,'manager')`, w, id, a.Principal.ID, now)
 				}
 			case "thread":
 				if v.(cp.Thread).Visibility == "restricted" {
-					e = exec(`INSERT INTO radishnexus.thread_memberships(workspace_id,thread_id,user_id,created_at) VALUES($1,$2,$3,$4)`, w, id, a.Principal.ID, now)
+					e = exec(`INSERT INTO radishnexus.thread_memberships(workspace_id,thread_id,user_id,created_at,management_role) VALUES($1,$2,$3,$4,'manager')`, w, id, a.Principal.ID, now)
 				}
 			}
 			if e != nil {

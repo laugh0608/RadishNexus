@@ -216,7 +216,7 @@ func (store *Store) ResolveSession(
 	}()
 
 	err = tx.QueryRow(ctx, `
-		SELECT session.csrf_token_digest, session.expires_at,
+		SELECT session.created_at, session.csrf_token_digest, session.expires_at,
 		       users.id, users.display_name
 		FROM radishnexus.user_sessions AS session
 		JOIN radishnexus.user_accounts AS account ON account.user_id = session.user_id
@@ -226,6 +226,7 @@ func (store *Store) ResolveSession(
 		  AND session.expires_at > $2
 		  AND account.status = 'active'
 	`, tokenDigest, now).Scan(
+		&resolved.CreatedAt,
 		&resolved.CSRFTokenDigest,
 		&resolved.Account.ExpiresAt,
 		&resolved.Account.User.ID,
@@ -239,19 +240,19 @@ func (store *Store) ResolveSession(
 	}
 
 	rows, err := tx.Query(ctx, `
-		SELECT workspaces.id, workspaces.name, membership.role
+		SELECT workspaces.id, workspaces.name, membership.role, membership.session_valid_after > $2
 		FROM radishnexus.workspace_memberships AS membership
 		JOIN radishnexus.workspaces AS workspaces ON workspaces.id = membership.workspace_id
 		WHERE membership.user_id = $1 AND membership.status = 'active'
 		ORDER BY workspaces.id
-	`, resolved.Account.User.ID)
+	`, resolved.Account.User.ID, resolved.CreatedAt)
 	if err != nil {
 		return authn.ResolvedSession{}, storeError("list session workspaces", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var workspace authn.Workspace
-		if err := rows.Scan(&workspace.ID, &workspace.Name, &workspace.Role); err != nil {
+		if err := rows.Scan(&workspace.ID, &workspace.Name, &workspace.Role, &workspace.RequiresAuthentication); err != nil {
 			return authn.ResolvedSession{}, storeError("scan session workspace", err)
 		}
 		resolved.Account.Workspaces = append(resolved.Account.Workspaces, workspace)
@@ -271,9 +272,11 @@ func (store *Store) ResolveWorkspaceSession(
 	workspaceID string,
 	now time.Time,
 ) (authn.VerifiedUser, error) {
-	var userID string
+	var userID, sessionID string
+	var revision int64
+	var needsAuthentication bool
 	err := store.pool.QueryRow(ctx, `
-		SELECT session.user_id
+		SELECT session.user_id,session.id, membership.lifecycle_revision, session.created_at < membership.session_valid_after
 		FROM radishnexus.user_sessions AS session
 		JOIN radishnexus.user_accounts AS account ON account.user_id = session.user_id
 		JOIN radishnexus.workspace_memberships AS membership
@@ -284,7 +287,7 @@ func (store *Store) ResolveWorkspaceSession(
 		  AND session.revoked_at IS NULL
 		  AND session.expires_at > $3
 		  AND account.status = 'active'
-	`, tokenDigest, workspaceID, now).Scan(&userID)
+	`, tokenDigest, workspaceID, now).Scan(&userID, &sessionID, &revision, &needsAuthentication)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if _, sessionErr := store.ResolveSession(ctx, tokenDigest, now); sessionErr != nil {
 			return authn.VerifiedUser{}, sessionErr
@@ -294,7 +297,10 @@ func (store *Store) ResolveWorkspaceSession(
 	if err != nil {
 		return authn.VerifiedUser{}, storeError("resolve workspace session", err)
 	}
-	return authn.VerifiedUser{UserID: userID, WorkspaceID: workspaceID}, nil
+	if needsAuthentication {
+		return authn.VerifiedUser{}, authn.ErrWorkspaceAuthenticationRequired
+	}
+	return authn.VerifiedUser{UserID: userID, WorkspaceID: workspaceID, MembershipRevision: revision, SessionID: sessionID}, nil
 }
 
 func (store *Store) RevokeSession(ctx context.Context, tokenDigest []byte, now time.Time) error {

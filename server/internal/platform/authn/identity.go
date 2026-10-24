@@ -13,12 +13,13 @@ const RecentAuthentication = 10 * time.Minute
 const InvitationLifetime = 24 * time.Hour
 
 var (
-	ErrInvitationInvalid    = errors.New("invitation unavailable")
-	ErrRecentAuthentication = errors.New("recent authentication required")
-	ErrLastLoginMethod      = errors.New("cannot remove last login method")
-	ErrIdentityConflict     = errors.New("identity operation conflicts with existing account")
-	ErrOIDCUnavailable      = errors.New("Radish login unavailable")
-	ErrOIDCInvalid          = errors.New("Radish login failed")
+	ErrInvitationInvalid               = errors.New("invitation unavailable")
+	ErrRecentAuthentication            = errors.New("recent authentication required")
+	ErrWorkspaceAuthenticationRequired = fmt.Errorf("workspace admission requires new authentication: %w", ErrRecentAuthentication)
+	ErrLastLoginMethod                 = errors.New("cannot remove last login method")
+	ErrIdentityConflict                = errors.New("identity operation conflicts with existing account")
+	ErrOIDCUnavailable                 = errors.New("Radish login unavailable")
+	ErrOIDCInvalid                     = errors.New("Radish login failed")
 )
 
 type AccountDetails struct {

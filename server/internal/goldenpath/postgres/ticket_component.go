@@ -37,7 +37,7 @@ func (s *Store) WriteTicketComponent(ctx context.Context, c goldenpath.TicketCom
 	if err = c.Principal.ValidateUser(); err != nil {
 		return result, err
 	}
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.beginAdmission(ctx, c.Principal, pgx.TxOptions{})
 	if err != nil {
 		return result, fmt.Errorf("begin Ticket Component command: %w", err)
 	}
@@ -111,7 +111,7 @@ func (s *Store) WriteTicketComponent(ctx context.Context, c goldenpath.TicketCom
 }
 
 func (s *Store) ListTicketComponents(ctx context.Context, p authz.Principal, source entityref.Ref, in goldenpath.DiscoveryPageInput) (page goldenpath.TicketComponentPage, err error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := s.beginAdmission(ctx, p, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return page, fmt.Errorf("begin Ticket Component list: %w", err)
 	}

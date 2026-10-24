@@ -50,9 +50,10 @@ type sessionUser struct {
 }
 
 type sessionWorkspace struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Role string `json:"role"`
+	ID                     string `json:"id"`
+	Name                   string `json:"name"`
+	Role                   string `json:"role"`
+	RequiresAuthentication bool   `json:"requires_authentication"`
 }
 
 func NewAuthHandler(
@@ -264,7 +265,7 @@ func decodeJSON(response http.ResponseWriter, request *http.Request, target any,
 func writeSessionResponse(response http.ResponseWriter, status int, account authn.SessionAccount) error {
 	workspaces := make([]sessionWorkspace, len(account.Workspaces))
 	for index, workspace := range account.Workspaces {
-		workspaces[index] = sessionWorkspace{ID: workspace.ID, Name: workspace.Name, Role: workspace.Role}
+		workspaces[index] = sessionWorkspace{ID: workspace.ID, Name: workspace.Name, Role: workspace.Role, RequiresAuthentication: workspace.RequiresAuthentication}
 	}
 	body, err := json.Marshal(sessionResponse{
 		User: sessionUser{

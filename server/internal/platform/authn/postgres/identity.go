@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/workspaceauth"
 )
 
 // Keep the cause available to errors.Is/As without printing PostgreSQL Detail,
@@ -110,20 +111,23 @@ func requireOwner(ctx context.Context, tx pgx.Tx, userID, workspaceID string) er
 
 func (store *Store) CreateInvitation(ctx context.Context, digest []byte, workspaceID string, record authn.InvitationRecord) error {
 	return store.identityTransaction(ctx, func(tx pgx.Tx) error {
-		userID, err := sessionAccount(ctx, tx, digest, record.CreatedAt, false)
+		if err := workspaceauth.Lock(ctx, tx, workspaceID, false); err != nil {
+			return err
+		}
+		userID, err := admissionSession(ctx, tx, digest, record.CreatedAt, false)
 		if err != nil {
 			return err
 		}
 		if err := requireOwner(ctx, tx, userID, workspaceID); err != nil {
 			return err
 		}
-		var ownerRevision int64
-		if err := tx.QueryRow(ctx, `SELECT role_revision FROM radishnexus.workspace_memberships WHERE workspace_id=$1 AND user_id=$2`, workspaceID, userID).Scan(&ownerRevision); err != nil {
+		var ownerRevision, ownerLifecycle int64
+		if err := tx.QueryRow(ctx, `SELECT role_revision,lifecycle_revision FROM radishnexus.workspace_memberships WHERE workspace_id=$1 AND user_id=$2 AND session_valid_after <= (SELECT created_at FROM radishnexus.user_sessions WHERE token_digest=$3)`, workspaceID, userID, digest).Scan(&ownerRevision, &ownerLifecycle); err != nil {
 			return storeError("read invitation creator revision", err)
 		}
 		// Bound outstanding admission capabilities per owner/workspace. Expired
 		// and consumed capabilities carry no audit authority and may be purged.
-		if _, err := tx.Exec(ctx, `DELETE FROM radishnexus.identity_invitations WHERE expires_at <= $1 OR consumed_at IS NOT NULL`, record.CreatedAt); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM radishnexus.identity_invitations WHERE workspace_id=$2 AND (expires_at <= $1 OR consumed_at IS NOT NULL)`, record.CreatedAt, workspaceID); err != nil {
 			return storeError("purge inactive invitations", err)
 		}
 		var count int
@@ -133,7 +137,7 @@ func (store *Store) CreateInvitation(ctx context.Context, digest []byte, workspa
 		if count >= 20 {
 			return authz.ErrConflict
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO radishnexus.identity_invitations (id,token_digest,workspace_id,created_by,created_at,expires_at,creator_role_revision) VALUES ($1,$2,$3,$4,$5,$6,$7)`, record.ID, record.TokenDigest, workspaceID, userID, record.CreatedAt, record.ExpiresAt, ownerRevision); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO radishnexus.identity_invitations (id,token_digest,workspace_id,created_by,created_at,expires_at,creator_role_revision,creator_lifecycle_revision) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, record.ID, record.TokenDigest, workspaceID, userID, record.CreatedAt, record.ExpiresAt, ownerRevision, ownerLifecycle); err != nil {
 			return storeError("create invitation", err)
 		}
 		return recordAudit(ctx, tx, record.AuditID, "invitation.created", userID, workspaceID, record.CreatedAt)
@@ -142,8 +146,8 @@ func (store *Store) CreateInvitation(ctx context.Context, digest []byte, workspa
 
 func invitationWorkspace(ctx context.Context, tx pgx.Tx, digest []byte, now time.Time) (string, error) {
 	var workspaceID, creatorID string
-	var invitationRevision int64
-	if err := tx.QueryRow(ctx, `SELECT workspace_id, created_by, creator_role_revision FROM radishnexus.identity_invitations WHERE token_digest = $1 AND consumed_at IS NULL AND expires_at > $2 AND created_at <= $2 FOR UPDATE`, digest, now).Scan(&workspaceID, &creatorID, &invitationRevision); err != nil {
+	var invitationRevision, invitationLifecycle int64
+	if err := tx.QueryRow(ctx, `SELECT workspace_id, created_by, creator_role_revision, creator_lifecycle_revision FROM radishnexus.identity_invitations WHERE token_digest = $1 AND consumed_at IS NULL AND expires_at > $2 AND created_at <= $2 FOR UPDATE`, digest, now).Scan(&workspaceID, &creatorID, &invitationRevision, &invitationLifecycle); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", authn.ErrInvitationInvalid
 		}
@@ -162,17 +166,35 @@ func invitationWorkspace(ctx context.Context, tx pgx.Tx, digest []byte, now time
 		}
 		return "", err
 	}
-	var currentRevision int64
-	if err := tx.QueryRow(ctx, `SELECT role_revision FROM radishnexus.workspace_memberships WHERE workspace_id=$1 AND user_id=$2`, workspaceID, creatorID).Scan(&currentRevision); err != nil {
+	var currentRevision, currentLifecycle int64
+	if err := tx.QueryRow(ctx, `SELECT role_revision,lifecycle_revision FROM radishnexus.workspace_memberships WHERE workspace_id=$1 AND user_id=$2`, workspaceID, creatorID).Scan(&currentRevision, &currentLifecycle); err != nil {
 		return "", storeError("check invitation creator revision", err)
 	}
-	if invitationRevision <= 0 || invitationRevision != currentRevision {
+	if invitationRevision <= 0 || invitationRevision != currentRevision || invitationLifecycle <= 0 || invitationLifecycle != currentLifecycle {
 		return "", authn.ErrInvitationInvalid
 	}
 	return workspaceID, nil
 }
 
 func joinInvitation(ctx context.Context, tx pgx.Tx, digest []byte, workspaceID, userID string, now time.Time) error {
+	var target string
+	var revision int64
+	if err := tx.QueryRow(ctx, `SELECT coalesce(target_user_id,''),coalesce(target_lifecycle_revision,0) FROM radishnexus.identity_invitations WHERE token_digest=$1`, digest).Scan(&target, &revision); err != nil {
+		return storeError("read invitation target", err)
+	}
+	if target != "" {
+		if target != userID {
+			return authn.ErrInvitationInvalid
+		}
+		tag, err := tx.Exec(ctx, `UPDATE radishnexus.workspace_memberships SET status='active' WHERE workspace_id=$1 AND user_id=$2 AND status='removed' AND role='member' AND lifecycle_revision=$3`, workspaceID, userID, revision)
+		if err != nil {
+			return storeError("readmit invited member", err)
+		}
+		if tag.RowsAffected() != 1 {
+			return authn.ErrInvitationInvalid
+		}
+	}
+
 	if _, err := tx.Exec(ctx, `INSERT INTO radishnexus.workspace_memberships (workspace_id,user_id,status,role,created_at) VALUES ($1,$2,'active','member',$3) ON CONFLICT (workspace_id,user_id) DO NOTHING`, workspaceID, userID, now); err != nil {
 		return storeError("join invited workspace", err)
 	}
@@ -208,10 +230,13 @@ func insertSession(ctx context.Context, tx pgx.Tx, record authn.SessionRecord) e
 
 func (store *Store) AcceptInvitation(ctx context.Context, record authn.InvitationAcceptance) (userID string, err error) {
 	err = store.identityTransaction(ctx, func(tx pgx.Tx) error {
+		if err := lockInvitationWorkspace(ctx, tx, record.InvitationDigest, record.Session.CreatedAt, true); err != nil {
+			return err
+		}
 		userID = record.UserID
 		if len(record.ExistingSessionDigest) != 0 {
 			var err error
-			userID, err = sessionAccount(ctx, tx, record.ExistingSessionDigest, record.Session.CreatedAt, false)
+			userID, err = admissionSession(ctx, tx, record.ExistingSessionDigest, record.Session.CreatedAt, false)
 			if err != nil {
 				return err
 			}
@@ -221,6 +246,13 @@ func (store *Store) AcceptInvitation(ctx context.Context, record authn.Invitatio
 			return err
 		}
 		if len(record.ExistingSessionDigest) == 0 {
+			var targeted bool
+			if err := tx.QueryRow(ctx, `SELECT target_user_id IS NOT NULL FROM radishnexus.identity_invitations WHERE token_digest=$1`, record.InvitationDigest).Scan(&targeted); err != nil {
+				return err
+			}
+			if targeted {
+				return authn.ErrInvitationInvalid
+			}
 			if err := insertAccount(ctx, tx, userID, record.DisplayName, record.Session.CreatedAt); err != nil {
 				return err
 			}
@@ -275,4 +307,43 @@ func recordAudit(ctx context.Context, tx pgx.Tx, id, action, userID, workspaceID
 		return storeError(fmt.Sprintf("record identity audit %s", action), err)
 	}
 	return nil
+}
+
+// Resolve only the scope before taking any row locks; validate the token again
+// under that gate. The lookup itself grants no admission.
+func lockInvitationWorkspace(ctx context.Context, tx pgx.Tx, digest []byte, now time.Time, exclusive bool) error {
+	var workspace string
+	err := tx.QueryRow(ctx, `SELECT workspace_id FROM radishnexus.identity_invitations WHERE token_digest=$1 AND consumed_at IS NULL AND created_at<=$2 AND expires_at>$2`, digest, now).Scan(&workspace)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return authn.ErrInvitationInvalid
+	}
+	if err != nil {
+		return storeError("resolve invitation scope", err)
+	}
+	return workspaceauth.Lock(ctx, tx, workspace, exclusive)
+}
+
+// Admission does not mutate login methods. Shared account locks allow the
+// inviter and invitee to be checked without cross-account upgrade cycles.
+func admissionSession(ctx context.Context, tx pgx.Tx, digest []byte, now time.Time, recent bool) (string, error) {
+	var user, status string
+	err := tx.QueryRow(ctx, `SELECT a.user_id,a.status FROM radishnexus.user_accounts a JOIN radishnexus.user_sessions s ON s.user_id=a.user_id WHERE s.token_digest=$1 FOR SHARE OF a`, digest).Scan(&user, &status)
+	if errors.Is(err, pgx.ErrNoRows) || err == nil && status != "active" {
+		return "", authn.ErrInvalidSession
+	}
+	if err != nil {
+		return "", storeError("lock admission account", err)
+	}
+	var created time.Time
+	err = tx.QueryRow(ctx, `SELECT created_at FROM radishnexus.user_sessions WHERE token_digest=$1 AND revoked_at IS NULL AND expires_at>$2 FOR SHARE`, digest, now).Scan(&created)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", authn.ErrInvalidSession
+	}
+	if err != nil {
+		return "", storeError("recheck admission session", err)
+	}
+	if recent && (created.Before(now.Add(-authn.RecentAuthentication)) || created.After(now)) {
+		return "", authn.ErrRecentAuthentication
+	}
+	return user, nil
 }

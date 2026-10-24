@@ -741,12 +741,13 @@ func TestProjectDecisionDiscoveryScaleAndConstantQueries(t *testing.T) {
 			t.Fatal("invalid EXPLAIN JSON", string(plan))
 		}
 		t.Logf("Decision EXPLAIN %s: total=%d target=%d non-target=%d Projects=%d limit=%d after=%q plan=%s", probe.label, targetCount+2*otherCount, targetCount, 2*otherCount, len(projects), probe.limit, probe.after, plan)
+		// Five fixed admission statements (timeout, schema gate, Workspace gate, account and membership).
 		counter.queries.Store(0)
 		start := time.Now()
 		page, err := service.ListProjectDecisions(f.ctx, f.users["reader"], projects[0], goldenpath.DiscoveryPageInput{Limit: probe.limit, AfterID: probe.after})
 		elapsed := time.Since(start)
 		calls := counter.queries.Load()
-		if err != nil || len(page.Items) != probe.want || calls > 6 {
+		if err != nil || len(page.Items) != probe.want || calls > 11 {
 			t.Fatal(probe.label, page, err, calls)
 		}
 		if baseline == 0 {

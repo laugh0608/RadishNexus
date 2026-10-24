@@ -20,7 +20,7 @@ func (store *Store) CreateMessage(
 		return result, err
 	}
 
-	tx, err := store.pool.Begin(ctx)
+	tx, err := store.beginAdmission(ctx, command.Principal, pgx.TxOptions{})
 	if err != nil {
 		return result, fmt.Errorf("begin create Message transaction: %w", err)
 	}
@@ -143,7 +143,7 @@ func (store *Store) ListChannelMessages(
 		return page, err
 	}
 
-	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := store.beginAdmission(ctx, principal, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return page, fmt.Errorf("begin list Channel Messages transaction: %w", err)
 	}
@@ -253,7 +253,7 @@ func (store *Store) StartThreadFromMessage(
 		return thread, err
 	}
 
-	tx, err := store.pool.Begin(ctx)
+	tx, err := store.beginAdmission(ctx, command.Principal, pgx.TxOptions{})
 	if err != nil {
 		return thread, fmt.Errorf("begin start Thread transaction: %w", err)
 	}
@@ -312,8 +312,8 @@ func (store *Store) StartThreadFromMessage(
 	if command.Visibility == "restricted" {
 		_, err = tx.Exec(ctx, `
 			INSERT INTO radishnexus.thread_memberships (
-				workspace_id, thread_id, user_id, created_at
-			) VALUES ($1, $2, $3, $4)
+				workspace_id, thread_id, user_id, created_at, management_role
+			) VALUES ($1, $2, $3, $4, 'manager')
 		`, command.Principal.WorkspaceID, command.ThreadID,
 			command.Principal.ID, command.OccurredAt)
 		if err != nil {

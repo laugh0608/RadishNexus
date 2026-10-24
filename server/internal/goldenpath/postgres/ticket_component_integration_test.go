@@ -242,7 +242,7 @@ func TestTicketComponentHTTPHistoryAndCurrentPermissions(t *testing.T) {
 		{`UPDATE radishnexus.projects SET status='archived' WHERE id='prj_auth'`, `UPDATE radishnexus.projects SET status='active' WHERE id='prj_auth'`, authz.ErrForbidden},
 		{`UPDATE radishnexus.project_memberships SET role='viewer' WHERE user_id='usr_contributor'`, `UPDATE radishnexus.project_memberships SET role='contributor' WHERE user_id='usr_contributor'`, authz.ErrForbidden},
 		{`UPDATE radishnexus.workspace_memberships SET status='suspended' WHERE user_id='usr_contributor'`, `UPDATE radishnexus.workspace_memberships SET status='active' WHERE user_id='usr_contributor'`, authz.ErrNotFound},
-		{`UPDATE radishnexus.user_accounts SET status='disabled' WHERE user_id='usr_contributor'`, `UPDATE radishnexus.user_accounts SET status='active' WHERE user_id='usr_contributor'`, authz.ErrNotFound},
+		{`UPDATE radishnexus.user_accounts SET status='disabled' WHERE user_id='usr_contributor'`, `UPDATE radishnexus.user_accounts SET status='active' WHERE user_id='usr_contributor'`, authn.ErrInvalidSession},
 	} {
 		if _, e = pool.Exec(ctx, scenario.sql); e != nil {
 			t.Fatal(e)
@@ -412,9 +412,9 @@ func TestTicketComponentPermissionSerialization(t *testing.T) {
 		want               error
 	}{
 		{"archive", `UPDATE radishnexus.projects SET status='archived' WHERE id='prj_auth'`, "%FROM radishnexus.projects%", authz.ErrForbidden},
-		{"role", `UPDATE radishnexus.project_memberships SET role='viewer' WHERE user_id='usr_contributor' AND project_id='prj_auth'`, "%FROM radishnexus.project_memberships%", authz.ErrForbidden},
+		{"role", `UPDATE radishnexus.project_memberships SET role='viewer' WHERE user_id='usr_contributor' AND project_id='prj_auth'`, "%FROM radishnexus.projects%", authz.ErrForbidden},
 		{"membership", `UPDATE radishnexus.workspace_memberships SET status='suspended' WHERE user_id='usr_contributor' AND workspace_id='wrk_main'`, "%FROM radishnexus.workspace_memberships%", authz.ErrNotFound},
-		{"account", `UPDATE radishnexus.user_accounts SET status='disabled' WHERE user_id='usr_contributor'`, "%FROM radishnexus.user_accounts%", authz.ErrNotFound},
+		{"account", `UPDATE radishnexus.user_accounts SET status='disabled' WHERE user_id='usr_contributor'`, "%FROM radishnexus.user_accounts%", authn.ErrInvalidSession},
 	} {
 		for _, writeFirst := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/write-first-%v", change.name, writeFirst), func(t *testing.T) {

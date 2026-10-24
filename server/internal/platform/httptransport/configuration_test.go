@@ -46,46 +46,46 @@ func configurationTestHandler(t *testing.T, app *testConfiguration) http.Handler
 	return WithRequestID(NewConfigurationHandler(validMessagingSessions(), app, policy, proxy))
 }
 func TestConfigurationStrictCommandsAndAuthority(t *testing.T) {
-	app := &testConfiguration{result: goldenpath.ConfigurationResult{UserID: "usr_target"}}
+	app := &testConfiguration{result: goldenpath.ConfigurationResult{Created: true, Object: goldenpath.ConfigurationObject{ID: "chn_created", Kind: "channel", Name: "Channel", ProjectID: "prj_parent", Visibility: "project", Status: "active"}}}
 	h := configurationTestHandler(t, app)
-	body := `{"client_operation_id":"role-1","expected_role":null,"role":"contributor"}`
-	path := "/api/v1/workspaces/wrk_main/projects/prj_parent/members/usr_target"
+	body := `{"client_operation_id":"channel-1","name":"Channel","visibility":"project","member_user_ids":[]}`
+	path := "/api/v1/workspaces/wrk_main/projects/prj_parent/channels"
 	response := httptest.NewRecorder()
-	h.ServeHTTP(response, messagingWriteRequest("PUT", path, body))
-	if response.Code != 200 || app.calls != 1 || app.input.Kind != "project.member.set" || app.input.UserID != "usr_target" || app.invocation.Principal.ID != "usr_reader" || app.invocation.SourceKind != "web" || app.input.ExpectedRole != nil {
+	h.ServeHTTP(response, messagingWriteRequest("POST", path, body))
+	if response.Code != 201 || app.calls != 1 || app.input.Kind != "channel.create" || app.input.ScopeID != "prj_parent" || app.invocation.Principal.ID != "usr_reader" || app.invocation.SourceKind != "web" {
 		t.Fatal(response.Code, response.Body.String(), app)
 	}
-	if response.Header().Get("Cache-Control") != "private, no-store" || strings.Contains(response.Body.String(), "role-1") {
+	if response.Header().Get("Cache-Control") != "private, no-store" || strings.Contains(response.Body.String(), "channel-1") {
 		t.Fatal("unsafe response")
 	}
 	for _, invalid := range []string{
-		`{"client_operation_id":"a","role":"viewer"}`,
-		`{"client_operation_id":"a","expected_role":null,"role":"viewer","actor":"usr_owner"}`,
-		`{"client_operation_id":"a","expected_role":null,"role":"viewer","role":"contributor"}`,
-		`{"client_operation_id":"a","expected_role":null,"role":null}`,
+		`{"client_operation_id":"a","name":"Channel","visibility":"project"}`,
+		`{"client_operation_id":"a","name":"Channel","visibility":"project","member_user_ids":[],"actor":"usr_owner"}`,
+		`{"client_operation_id":"a","name":"Channel","name":"Other","visibility":"project","member_user_ids":[]}`,
+		`{"client_operation_id":"a","name":null,"visibility":"project","member_user_ids":[]}`,
 		`null`, body + body,
 	} {
 		response = httptest.NewRecorder()
-		h.ServeHTTP(response, messagingWriteRequest("PUT", path, invalid))
+		h.ServeHTTP(response, messagingWriteRequest("POST", path, invalid))
 		if response.Code != 400 || app.calls != 1 {
 			t.Fatal(response.Code, response.Body.String(), invalid)
 		}
 	}
 	response = httptest.NewRecorder()
-	request := messagingWriteRequest("PUT", path, body)
+	request := messagingWriteRequest("POST", path, body)
 	request.Header.Del("X-CSRF-Token")
 	h.ServeHTTP(response, request)
 	if response.Code != 403 || app.calls != 1 {
 		t.Fatal("missing CSRF accepted", response.Code)
 	}
 	response = httptest.NewRecorder()
-	h.ServeHTTP(response, messagingWriteRequest("PUT", path+"?role=admin", body))
+	h.ServeHTTP(response, messagingWriteRequest("POST", path+"?role=admin", body))
 	if response.Code != 400 || app.calls != 1 {
 		t.Fatal("query accepted")
 	}
 	response = httptest.NewRecorder()
 	h.ServeHTTP(response, messagingRequest("PATCH", path, body))
-	if response.Code != 405 || response.Header().Get("Allow") != "PUT, DELETE" {
+	if response.Code != 405 || response.Header().Get("Allow") != "POST" {
 		t.Fatal("method boundary", response.Code)
 	}
 }
@@ -105,5 +105,19 @@ func TestCreatedChannelCannotDriftToAnotherProject(t *testing.T) {
 	configurationTestHandler(t, app).ServeHTTP(response, messagingWriteRequest("POST", "/api/v1/workspaces/wrk_main/projects/prj_expected/channels", `{"client_operation_id":"create","name":"Channel","visibility":"project","member_user_ids":[]}`))
 	if response.Code != 500 || strings.Contains(response.Body.String(), "Secret") {
 		t.Fatal(response.Code, response.Body.String())
+	}
+}
+
+func TestLegacyMemberMutationsCannotBypassPlans(t *testing.T) {
+	app := &testConfiguration{}
+	h := configurationTestHandler(t, app)
+	for _, scope := range []string{"projects/prj_main", "channels/chn_main"} {
+		for _, method := range []string{"PUT", "DELETE"} {
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, messagingWriteRequest(method, "/api/v1/workspaces/wrk_main/"+scope+"/members/usr_target", `{"client_operation_id":"old"}`))
+			if w.Code != 404 || app.calls != 0 {
+				t.Fatal("legacy management bypass", w.Code)
+			}
+		}
 	}
 }

@@ -44,10 +44,13 @@ func RegisterConfigurationRoutes(mux *http.ServeMux, discovery, configuration ht
 	}))
 	mux.Handle(configurationBase+"/projects", combined)
 	mux.Handle(configurationBase+"/projects/{project_id}/channels", combined)
+	// Retired mutation paths fail closed in this handler, never discovery.
+	mux.Handle(configurationBase+"/projects/{project_id}/members/{user_id}", configuration)
+	mux.Handle(configurationBase+"/channels/{channel_id}/members/{user_id}", configuration)
 	for _, suffix := range []string{"/repositories", "/repositories/{repository_id}/configuration", "/repositories/{repository_id}/components", "/components/{component_id}/repositories", "/components/{component_id}/repository-links/{link_id}"} {
 		mux.Handle(configurationBase+suffix, configuration)
 	}
-	for _, suffix := range []string{"/components", "/components/{component_id}/configuration", "/environments", "/environments/{environment_id}/configuration", "/environments/{environment_id}/deployment-authorizations", "/environments/{environment_id}/deployment-authorizations/{user_id}", "/teams", "/members", "/projects/{project_id}/configuration", "/projects/{project_id}/members", "/projects/{project_id}/members/{user_id}", "/channels/{channel_id}/configuration", "/channels/{channel_id}/members", "/channels/{channel_id}/members/{user_id}"} {
+	for _, suffix := range []string{"/components", "/components/{component_id}/configuration", "/environments", "/environments/{environment_id}/configuration", "/environments/{environment_id}/deployment-authorizations", "/environments/{environment_id}/deployment-authorizations/{user_id}", "/teams", "/members", "/projects/{project_id}/configuration", "/projects/{project_id}/members", "/channels/{channel_id}/configuration", "/channels/{channel_id}/members"} {
 		mux.Handle(configurationBase+suffix, configuration)
 	}
 }
@@ -71,11 +74,9 @@ func NewConfigurationHandler(sessions MessagingSessionService, application Confi
 		{"/projects", "POST", "project.create"},
 		{"/projects/{project_id}/configuration", "GET", "project"},
 		{"/projects/{project_id}/members", "GET", "project-members"},
-		{"/projects/{project_id}/members/{user_id}", "PUT, DELETE", "project.member"},
 		{"/projects/{project_id}/channels", "POST", "channel.create"},
 		{"/channels/{channel_id}/configuration", "GET", "channel"},
 		{"/channels/{channel_id}/members", "GET", "channel-members"},
-		{"/channels/{channel_id}/members/{user_id}", "PUT, DELETE", "channel.member"},
 	} {
 		mux.HandleFunc(configurationBase+route.path, func(w http.ResponseWriter, r *http.Request) {
 			allowed := false
@@ -175,19 +176,6 @@ func (h *ConfigurationHandler) serve(w http.ResponseWriter, r *http.Request, kin
 		fields = append(fields, "key", "name", "owner_team_id", "visibility", "initial_admin_user_id")
 	case "channel.create":
 		fields = append(fields, "name", "visibility", "member_user_ids")
-	case "project.member":
-		input.Kind = "project.member.remove"
-		fields = append(fields, "expected_role")
-		if r.Method == "PUT" {
-			input.Kind = "project.member.set"
-			fields = append(fields, "role")
-		}
-	case "channel.member":
-		input.Kind = "channel.member.remove"
-		fields = append(fields, "expected_member")
-		if r.Method == "PUT" {
-			input.Kind = "channel.member.add"
-		}
 	}
 	body, err := decodeStrictObject(w, r, fields, 32*1024)
 	if err != nil {
@@ -241,14 +229,8 @@ func (h *ConfigurationHandler) serve(w http.ResponseWriter, r *http.Request, kin
 			target = &input.InitialAdminUserID
 		case "member_user_ids":
 			target = &input.MemberUserIDs
-		case "role":
-			target = &input.Role
-		case "expected_role":
-			target = &input.ExpectedRole
-		case "expected_member":
-			target = &input.ExpectedMember
 		}
-		if key != "expected_role" && string(value) == "null" {
+		if string(value) == "null" {
 			writeIdentityError(w, r, authz.ErrInvalid)
 			return
 		}

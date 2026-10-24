@@ -12,6 +12,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/workspaceauth"
 )
 
 // Keep SQL causes classifiable without printing parameter values or Detail.
@@ -24,8 +25,8 @@ func (e ownerStoreError) Error() string              { return e.operation + ": d
 func (e ownerStoreError) Unwrap() error              { return e.cause }
 func ownerDBError(operation string, err error) error { return ownerStoreError{operation, err} }
 
-func (s *Store) ownerTransaction(ctx context.Context, action func(pgx.Tx) (bool, error)) (err error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+func (s *Store) ownerTransaction(ctx context.Context, p authz.Principal, write bool, action func(pgx.Tx) (bool, error)) (err error) {
+	tx, err := s.beginWorkspaceAdmission(ctx, p, pgx.TxOptions{IsoLevel: pgx.ReadCommitted}, write)
 	if err != nil {
 		return ownerDBError("begin owner transfer transaction", err)
 	}
@@ -142,7 +143,7 @@ func lockOwnerReader(ctx context.Context, tx pgx.Tx, a goldenpath.OwnerAccess) (
 	return session, m, nil
 }
 func (s *Store) ReadOwnership(ctx context.Context, a goldenpath.OwnerAccess) (out goldenpath.Ownership, err error) {
-	err = s.ownerTransaction(ctx, func(tx pgx.Tx) (bool, error) {
+	err = s.ownerTransaction(ctx, a.Principal, false, func(tx pgx.Tx) (bool, error) {
 		session, m, e := lockOwnerReader(ctx, tx, a)
 		if e != nil {
 			return false, e
@@ -158,7 +159,7 @@ func (s *Store) ReadOwnership(ctx context.Context, a goldenpath.OwnerAccess) (ou
 }
 func (s *Store) ListOwnerCandidates(ctx context.Context, a goldenpath.OwnerAccess, after string, limit int) (out goldenpath.OwnerCandidatePage, err error) {
 	out.Items = []goldenpath.OwnerCandidate{}
-	err = s.ownerTransaction(ctx, func(tx pgx.Tx) (bool, error) {
+	err = s.ownerTransaction(ctx, a.Principal, false, func(tx pgx.Tx) (bool, error) {
 		session, m, e := lockOwnerReader(ctx, tx, a)
 		if e != nil {
 			return false, e
@@ -205,7 +206,10 @@ func ownerReceipt(ctx context.Context, tx pgx.Tx, a goldenpath.OwnerAccess, oper
 	return
 }
 func (s *Store) ReadOwnerTransfer(ctx context.Context, a goldenpath.OwnerAccess, operation string) (out goldenpath.OwnerTransferResult, err error) {
-	err = s.ownerTransaction(ctx, func(tx pgx.Tx) (bool, error) {
+	err = s.managementTransaction(ctx, a, false, true, func(tx pgx.Tx, _ ownerSessionState) (bool, error) {
+		if e := workspaceauth.Check(ctx, tx, a.Principal); e != nil {
+			return false, e
+		}
 		session, _, e := lockOwnerReader(ctx, tx, a)
 		if e != nil {
 			return false, e
@@ -221,7 +225,7 @@ func (s *Store) ReadOwnerTransfer(ctx context.Context, a goldenpath.OwnerAccess,
 }
 func (s *Store) TransferOwner(ctx context.Context, c goldenpath.OwnerTransferCommand) (out goldenpath.OwnerTransferResult, err error) {
 	a := c.Access
-	err = s.ownerTransaction(ctx, func(tx pgx.Tx) (bool, error) {
+	err = s.ownerTransaction(ctx, a.Principal, true, func(tx pgx.Tx) (bool, error) {
 		// A pre-read selects the history-only path. It never authorizes that read.
 		previous, _, e := ownerReceipt(ctx, tx, a, c.Input.ClientOperationID)
 		if e != nil {

@@ -1,4 +1,5 @@
 import { projectDecisionsClient } from "./workspace/project-decisions-api";
+import { browserIdentityClient } from "./auth/identity-api";
 import type { SetupClient } from "./auth/setup-api";
 import {
   act,
@@ -691,4 +692,98 @@ it("keeps the newest observed role when older focus refreshes resolve later", as
   expect(
     screen.getByRole("option", { name: "Main Workspace · member" }),
   ).toBeTruthy();
+});
+
+it.each(["response", "expired"])(
+  "keeps Workspace reauthentication required after a late focus %s",
+  async (outcome) => {
+    let older!: (s: SessionContext) => void;
+    let fail!: (e: Error) => void;
+    const resolve = vi
+      .fn()
+      .mockResolvedValueOnce(session)
+      .mockImplementationOnce(
+        () =>
+          new Promise<SessionContext>((yes, no) => {
+            older = yes;
+            fail = no;
+          }),
+      );
+    render(
+      <App
+        setupClient={establishedSetupClient}
+        pathname="/workspaces/wrk_main/channels/chn_main"
+        authClient={testAuthClient({ resolveSession: resolve })}
+        channelClient={testChannelClient()}
+        channelRealtimeClient={testRealtimeClient()}
+      />,
+    );
+    await screen.findByRole("button", { name: "退出登录" });
+    fireEvent.focus(window);
+    fireEvent(
+      window,
+      new CustomEvent("radishnexus-workspace-authentication", {
+        detail: "wrk_main",
+      }),
+    );
+    await screen.findByRole("heading", { name: "此工作区需要重新认证" });
+    await act(async () => {
+      if (outcome === "response") older(session);
+      else fail(new AuthRequestError("expired", { status: 401 }));
+    });
+    expect(
+      screen.getByRole("heading", { name: "此工作区需要重新认证" }),
+    ).toBeDefined();
+    expect(
+      screen.queryByRole("heading", { name: "登录 RadishNexus" }),
+    ).toBeNull();
+  },
+);
+
+it("does not overwrite a fresh login with an earlier focus response", async () => {
+  let older!: (s: SessionContext) => void;
+  const resolve = vi
+    .fn()
+    .mockResolvedValueOnce(session)
+    .mockImplementationOnce(
+      () =>
+        new Promise<SessionContext>((yes) => {
+          older = yes;
+        }),
+    );
+  const fresh = {
+    ...session,
+    user: { ...session.user, displayName: "Fresh account" },
+  };
+  render(
+    <App
+      setupClient={establishedSetupClient}
+      pathname="/account"
+      authClient={testAuthClient({
+        resolveSession: resolve,
+        login: vi.fn().mockResolvedValue(fresh),
+      })}
+      identityClient={{
+        ...browserIdentityClient,
+        account: async () => ({
+          user: session.user,
+          local: true,
+          radishLinked: false,
+          recentAuthentication: true,
+        }),
+      }}
+    />,
+  );
+  await screen.findByRole("button", { name: "重新认证" });
+  fireEvent.focus(window);
+  fireEvent.change(screen.getByLabelText("账户邮箱"), {
+    target: { value: "synthetic@example.test" },
+  });
+  fireEvent.change(screen.getByLabelText("账户密码"), {
+    target: { value: "synthetic fixture password" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "重新认证" }));
+  await screen.findAllByText("Fresh account");
+  await act(async () => older(session));
+  expect(screen.getAllByText("Fresh account")).toHaveLength(2);
 });

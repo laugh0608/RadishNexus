@@ -57,19 +57,30 @@ env CGO_ENABLED=0 GOOS=linux GOARCH="${image_architecture}" GOCACHE="${run_dir}/
 # Optional real pre-handoff artifact check. Resolve only a local commit; this
 # never fetches, switches branches, edits the checkout, or rewrites history.
 legacy_artifact_dir=""
-if [[ -n "${RADISHNEXUS_OWNER_TRANSFER_LEGACY_REF:-}" ]]; then
-    legacy_commit="$(git -C "${repo_root}" rev-parse --verify "${RADISHNEXUS_OWNER_TRANSFER_LEGACY_REF}^{commit}")"
-    mkdir -p "${run_dir}/legacy-source" "${run_dir}/legacy-bin"
-    git -C "${repo_root}" archive "${legacy_commit}" server | tar -xf - -C "${run_dir}/legacy-source"
+membership_artifact_dir=""
+for legacy_kind in owner_transfer membership; do
+    if [[ "${legacy_kind}" == owner_transfer ]]; then
+        legacy_ref="${RADISHNEXUS_OWNER_TRANSFER_LEGACY_REF:-}"
+    else
+        legacy_ref="${RADISHNEXUS_MEMBERSHIP_LEGACY_REF:-}"
+    fi
+    [[ -n "${legacy_ref}" ]] || continue
+    legacy_commit="$(git -C "${repo_root}" rev-parse --verify "${legacy_ref}^{commit}")"
+    mkdir -p "${run_dir}/${legacy_kind}-source" "${run_dir}/${legacy_kind}-bin"
+    git -C "${repo_root}" archive "${legacy_commit}" server | tar -xf - -C "${run_dir}/${legacy_kind}-source"
     (
-        cd "${run_dir}/legacy-source/server"
+        cd "${run_dir}/${legacy_kind}-source/server"
         for command in nexus-migrate nexus-bootstrap nexus-backup nexus-restore; do
             env CGO_ENABLED=0 GOOS=linux GOARCH="${image_architecture}" GOCACHE="${run_dir}/go-cache" \
-                go build -o "${run_dir}/legacy-bin/${command}" "./cmd/${command}"
+                go build -o "${run_dir}/${legacy_kind}-bin/${command}" "./cmd/${command}"
         done
     )
-    legacy_artifact_dir="/work/legacy-bin"
-fi
+    if [[ "${legacy_kind}" == owner_transfer ]]; then
+        legacy_artifact_dir="/work/${legacy_kind}-bin"
+    else
+        membership_artifact_dir="/work/${legacy_kind}-bin"
+    fi
+done
 
 docker network create "${network_name}" >/dev/null
 
@@ -136,8 +147,9 @@ docker exec \
     --env "SOURCE_DATABASE_URL=${source_database_url}" \
     --env "RADISHNEXUS_RESTORE_TEST_BIN=/work/nexus-restore" \
     --env "RADISHNEXUS_OWNER_TRANSFER_LEGACY_BIN=${legacy_artifact_dir}" \
+    --env "RADISHNEXUS_MEMBERSHIP_LEGACY_BIN=${membership_artifact_dir}" \
     --env "TARGET_DATABASE_URL=${target_database_url}" \
     "${source_container}" \
     /work/backuprestore.test \
     -test.v \
-    -test.run '^TestBackupRestore(GoldenPath|AccountRecovery|OwnerTransfer|OwnerTransferLegacy|UpgradeFailures|ImportedContext)$'
+    -test.run '^TestBackupRestore(GoldenPath|AccountRecovery|OwnerTransfer|OwnerTransferLegacy|UpgradeFailures|ImportedContext|MembershipLifecycle|MembershipLegacy)$'

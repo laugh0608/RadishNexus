@@ -45,7 +45,7 @@ staging Deployment 只记录外部已经完成的终态事实，不执行部署�
 
 Deployment 的 M0 读取与写授权分离：同一 Workspace 的 active 成员只有同时能读取目标 Environment 与来源 CI Run 时才可读取；非成员、暂停成员和跨 Workspace 主体得到 not-found，Environment 归档不隐藏既有历史。Current 只返回终态、受控时间、Environment 与来源 CI Run；Relations 和 Timeline 复用当前权限，不返回 authorization ID、调用 source、Jenkins receipt、digest、Secret、原始 payload 或外部 URL。该 query 已通过独立公共 DTO 开放为第一个只读业务端点；环境授权管理入口已按 ADR-0032 接通；production、审批、回滚和执行引擎仍未建立。
 
-本地认证以规范化私有邮箱、Argon2id verifier、5 次失败后 15 分钟账号锁定和 24 小时绝对有效的服务端 Session 为基线。数据库只保存 Session / CSRF token 的 SHA-256 digest；Session 不固定 Workspace，业务调用必须以当前 active membership 解析 `VerifiedUser`。登录 transport 另按客户端 IP 每分钟限制 5 次尝试、每进程最多并发 4 个密码校验并有界跟踪 4096 个客户端；多副本或公网部署仍必须在 reverse proxy / gateway 增加全局限流。成员准入使用一次性邀请；OIDC 状态与外部绑定事务已实现，真实 provider adapter 按当前计划延后，Radish 登录保持关闭。密码重置与 MFA 尚未建立。不可读资源由 application service 返回 `not found`，Deployment handler 还会把不可用 membership 收敛为同形 `not_found`。
+本地认证以规范化私有邮箱、Argon2id verifier、5 次失败后 15 分钟账号锁定和 24 小时绝对有效的服务端 Session 为基线。数据库只保存 Session / CSRF token 的 SHA-256 digest；Session 不固定 Workspace，业务调用必须以当前 active membership、生命周期代次与 Session 有效起点解析 `VerifiedUser`，业务事务继续复查 Session 撤销和到期。登录 transport 另按客户端 IP 每分钟限制 5 次尝试、每进程最多并发 4 个密码校验并有界跟踪 4096 个客户端；多副本或公网部署仍必须在 reverse proxy / gateway 增加全局限流。成员准入使用一次性邀请；OIDC 状态与外部绑定事务已实现，真实 provider adapter 按当前计划延后，Radish 登录保持关闭。密码重置与 MFA 尚未建立。不可读资源由 application service 返回 `not found`，Deployment handler 还会把不可用 membership 收敛为同形 `not_found`。
 
 ## 存活与业务就绪
 
@@ -152,7 +152,7 @@ go run ./cmd/nexus-identity-migrate --mapping-stdin < /path/to/private-identity-
 
 命令只处理尚未映射的旧凭证；重复邮箱、重复用户、无效邮箱或未知 / 已映射用户使整批回滚。它不重置密码、不激活禁用账户、不改变业务关联，不在成功或失败输出中打印邮箱。妥善删除不再需要的私有输入材料，不将其提交或放入可移植导出。
 
-新成员由 owner 在 `/account` 创建邀请码，24 小时内单次兑换为 `member`；兑换时重查创建者当前 active 账户、owner membership 和邀请绑定的 role_revision，旧任期邀请不会因重新接任而复活。已有账户应先登录再接受邀请；未登录创建账户时，重复邮箱只返回冲突，不把请求登录为已有用户。无公开注册或自动授予 Project / Environment 权限。
+新成员由 owner 在 `/account` 创建邀请码，24 小时内单次兑换为 `member`；兑换时重查创建者当前 active 账户、owner membership 和邀请绑定的 role_revision 与 lifecycle_revision，旧任期邀请不会因重新接任而复活。已有账户应先登录再接受邀请；未登录创建账户时，重复邮箱只返回冲突，不把请求登录为已有用户。无公开注册或自动授予 Project / Environment 权限。
 
 本地账户与邀请入口为 `GET /api/v1/auth/methods`、`GET /api/v1/auth/account`、`POST /api/v1/workspaces/{workspace_id}/invitations` 与 `POST /api/v1/auth/invitations/accept`；精确合同见 [ADR-0023](../docs/adr/0023-local-account-and-radish-oidc-login.md)。当前装配只开放本地方式，`methods` 的 `radish` 为 `false`；真实 OIDC provider 与 Radish 联调属于未来规划，当前不新增相关依赖；测试 provider 只验证内部事务边界。
 
@@ -271,6 +271,18 @@ migration 016 只为合法旧 open 基线建立版本 1，不虚构事件；异�
 [ADR-0026](../docs/adr/0026-foundation-configuration-and-membership.md) 给出专用 API 路由、严格字段、角色与成员边界。migration 009 新增不可变配置 Audit / receipt，纳入备份与恢复；业务对象仍沿用既有表。`ConfigurationService` 负责规范化命令，PostgreSQL 事务重新验证当前权限并按 Project 串行配置；撤权清理下属显式授权，旧 receipt 不重新授予权限。Project / Channel 创建事件与 Activity 同事务更新，成员明细不进入普通读取。
 
 首次初始化可使用上文 `nexus-bootstrap`，或按 [ADR-0027](../docs/adr/0027-first-visit-administrator-setup.md) 配置 `RADISHNEXUS_SETUP_CODE_FILE`，通过 `GET /api/v1/setup` 和 `POST /api/v1/setup` 完成网页初始化。均创建 Workspace owner，复用唯一 bootstrap 事务锁，不建立全局超级权限或默认业务对象。Secret 文件须为绝对路径，保存 32 随机字节的 43 字符 base64url 编码；启动读取失败或格式错误直接失败。未配置且无账户时返回 unavailable，已有账户始终 complete。readiness 错误不能当作空实例；POST 同源、限流、4 KiB 严格正文，成功后由用户正式登录。
+
+## 成员生命周期与管理交接
+
+[ADR-0045](../docs/adr/0045-membership-lifecycle-and-management-handoff.md) 与 migration 020 增加 `ManagementService`、专用 HTTP handler 和 Workspace 事务准入。Workspace owner 可暂停 / 恢复 / 移除成员、签发绑定本人及退出代次的再邀请；Project admin 与可读私密对象的局部 manager 可管理本作用域成员和交接责任。没有 Workspace owner 对私密内容的绕过。
+
+路由基于 `/api/v1/workspaces/{workspace_id}`，Workspace 使用 `/management`，Project / Channel / Thread 分别使用 `/{collection}/{id}/management`；每个作用域提供 `members / candidates / audit` GET，以及动作的 `/{action}/preview` 和 `/{action}` POST。Workspace 另有本人 `responsibilities` GET。精确动作、必填 JSON、计划字段和枚举见 [ADR 路由附表](../docs/adr/0045-membership-lifecycle-and-management-handoff.md#已实现的路由与严格-dto)。原成员 PUT / DELETE 返回 410，避免旧无确认写路径绕开新合同；对象创建与原只读合同保留。
+
+apply 只接受已确认 proposal、UUID operation ID 与计划摘要；等待后重新核对所有可见代次与管理责任，变更、Deployment 撤销、Audit / receipt 同事务提交。503 未确认时用原 operation 查询 `/api/v1/auth/management-results/{workspace_id}/{client_operation_id}`；本人退出后可凭有效全局 Session 查询固定历史摘要。邀请明文仅首次返回，查询与重试不重放 token。
+
+暂停保留尚存协作授权，正式退出清空对象授权，二者均撤销 Deployment 授权；恢复及再加入要求重新认证。本 Workspace 的旧 Session 永久失效，其他 Workspace 继续可用；Session context 标记 `requires_authentication`，不伪造全账户退出。普通业务共享、权限写入排他 Workspace 协调，schema 锁在前，5 秒锁等待；SSE 每次输出与 15 秒 heartbeat 复权。
+
+`./scripts/check-server-membership.sh` 运行隔离 PostgreSQL 专项；`--browser-review` 构建并冻结对应 Web 产物，启动本轮回环 HTTPS fixture，使用状态文件中的完成标记结束并自动清理。只使用已安装镜像 / 依赖，不操作真实数据或系统信任。正式验证记录见[实施记录](../docs/status/reviews/2026-10-24-membership-lifecycle.md)。
 
 ## Project 上下文包
 

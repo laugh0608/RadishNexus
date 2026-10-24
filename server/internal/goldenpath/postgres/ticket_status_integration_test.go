@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 	"reflect"
@@ -220,9 +221,9 @@ func TestTicketStatusPermissionSerialization(t *testing.T) {
 		want               error
 	}{
 		{"archive", `UPDATE radishnexus.projects SET status='archived' WHERE id='prj_auth'`, "%FROM radishnexus.projects%", authz.ErrConflict},
-		{"role", `UPDATE radishnexus.project_memberships SET role='viewer' WHERE user_id='usr_contributor' AND project_id='prj_auth'`, "%FROM radishnexus.project_memberships%", authz.ErrForbidden},
+		{"role", `UPDATE radishnexus.project_memberships SET role='viewer' WHERE user_id='usr_contributor' AND project_id='prj_auth'`, "%FROM radishnexus.projects%", authz.ErrForbidden},
 		{"membership", `UPDATE radishnexus.workspace_memberships SET status='suspended' WHERE user_id='usr_contributor' AND workspace_id='wrk_main'`, "%FROM radishnexus.workspace_memberships%", authz.ErrNotFound},
-		{"account", `UPDATE radishnexus.user_accounts SET status='disabled' WHERE user_id='usr_contributor'`, "%FROM radishnexus.user_accounts%", authz.ErrNotFound},
+		{"account", `UPDATE radishnexus.user_accounts SET status='disabled' WHERE user_id='usr_contributor'`, "%FROM radishnexus.user_accounts%", authn.ErrInvalidSession},
 	} {
 		for _, writeFirst := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/write-first-%v", change.name, writeFirst), func(t *testing.T) {

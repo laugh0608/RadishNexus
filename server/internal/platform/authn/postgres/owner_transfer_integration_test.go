@@ -399,7 +399,7 @@ func TestOwnerTransferConcurrentOperations(t *testing.T) {
 			f.wait(t, "%FROM radishnexus.workspaces%")
 			go func() { r, e := f.apply(f.ctx, s2, i2); results <- outcome{r, e} }()
 			if mode != "two-owners-two-targets" {
-				f.wait(t, "%FROM radishnexus.workspace_memberships%")
+				f.wait(t, "%19450001%")
 			}
 			if e := gate.Commit(f.ctx); e != nil {
 				t.Fatal(e)
@@ -714,10 +714,7 @@ func TestOwnerTransferInvitationInterleavings(t *testing.T) {
 				go transfer()
 				f.wait(t, "%FROM radishnexus.workspaces%")
 				go func() { actionDone <- action() }()
-				pattern := "%FROM radishnexus.workspace_memberships%"
-				if mode == "transfer-first-create" {
-					pattern = "%FROM radishnexus.user_accounts%"
-				}
+				pattern := "%19450001%" // Workspace coordination precedes all identity rows.
 				f.wait(t, pattern)
 				if e = gate.Commit(f.ctx); e != nil {
 					t.Fatal(e)
@@ -740,10 +737,7 @@ func TestOwnerTransferInvitationInterleavings(t *testing.T) {
 				go func() { actionDone <- action() }()
 				f.wait(t, "%INSERT INTO radishnexus.identity_audit%")
 				go transfer()
-				pattern := "%FROM radishnexus.workspace_memberships%"
-				if mode == "create-first" || mode == "existing-recipient" {
-					pattern = "%FROM radishnexus.user_accounts%"
-				}
+				pattern := "%19450001%" // Workspace coordination precedes all identity rows.
 				f.wait(t, pattern)
 				if e = gate.Commit(f.ctx); e != nil {
 					t.Fatal(e)
@@ -951,7 +945,7 @@ func TestOwnerTransferConfigurationLockOrder(t *testing.T) {
 				} else {
 					go transferCall()
 				}
-				f.wait(t, "%FROM radishnexus.workspace_memberships%")
+				f.wait(t, "%19450001%")
 				if e := gate.Commit(f.ctx); e != nil {
 					t.Fatal(e)
 				}

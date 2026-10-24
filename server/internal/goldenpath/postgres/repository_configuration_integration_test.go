@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
@@ -319,10 +320,10 @@ func assertRepositoryConfigurationFromBootstrap(t *testing.T, ctx context.Contex
 	if _, e := pool.Exec(ctx, `UPDATE radishnexus.user_accounts SET status='disabled' WHERE user_id=$1`, owner.ID); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := call(owner, create); !errors.Is(e, authz.ErrNotFound) {
+	if _, e := call(owner, create); !errors.Is(e, authn.ErrInvalidSession) {
 		t.Fatal("disabled owner replayed create", e)
 	}
-	if _, e := call(owner, unlink); !errors.Is(e, authz.ErrNotFound) {
+	if _, e := call(owner, unlink); !errors.Is(e, authn.ErrInvalidSession) {
 		t.Fatal("disabled owner replayed unlink", e)
 	}
 	if _, e := pool.Exec(ctx, `UPDATE radishnexus.user_accounts SET status='active' WHERE user_id=$1`, owner.ID); e != nil {
@@ -386,7 +387,11 @@ func assertRepositoryPermissionSerialization(t *testing.T, ctx context.Context, 
 				if e = tx.Commit(ctx); e != nil {
 					t.Fatal(e)
 				}
-				if e = <-done; !errors.Is(e, authz.ErrNotFound) {
+				want := authz.ErrNotFound
+				if table == "user_accounts" {
+					want = authn.ErrInvalidSession
+				}
+				if e = <-done; !errors.Is(e, want) {
 					t.Fatal("write crossed committed revocation", label, e)
 				}
 			} else {
@@ -419,7 +424,11 @@ func assertRepositoryPermissionSerialization(t *testing.T, ctx context.Context, 
 					t.Fatal(e)
 				}
 			}
-			if e := call(); !errors.Is(e, authz.ErrNotFound) {
+			wantPermissionError := authz.ErrNotFound
+			if table == "user_accounts" {
+				wantPermissionError = authn.ErrInvalidSession
+			}
+			if e := call(); !errors.Is(e, wantPermissionError) {
 				t.Fatal("receipt bypassed permission", label, e)
 			}
 			var count int

@@ -208,7 +208,7 @@ func parseDiscoveryQuery(raw string, scope discoveryCursor) (goldenpath.Discover
 		}
 		after := cursor.AfterID
 		cursor.AfterID = ""
-		if cursor != scope || !validScopedID(after, discoveryPrefix(scope.Kind)) {
+		if cursor != scope || !validDiscoveryAfterID(after, scope.Kind) {
 			return input, invalid
 		}
 		input.AfterID = after
@@ -254,6 +254,9 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 }
 
 func discoveryPrefix(kind string) string {
+	if strings.HasPrefix(kind, "management-") {
+		return managementCursorPrefix(kind)
+	}
 	if kind == "owner-transfer-candidates" {
 		return "usr_"
 	}
@@ -303,4 +306,11 @@ func (handler *DiscoveryHandler) writeError(response http.ResponseWriter, reques
 	if err := WriteError(response, RequestID(request.Context()), err); err != nil {
 		log.Printf("write discovery error: %v", err)
 	}
+}
+
+func validDiscoveryAfterID(id, kind string) bool {
+	if kind == "management-responsibilities-workspace" {
+		return validScopedID(id, "prj_") || validScopedID(id, "chn_") || validScopedID(id, "thr_")
+	}
+	return validScopedID(id, discoveryPrefix(kind))
 }

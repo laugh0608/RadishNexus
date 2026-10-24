@@ -15,8 +15,8 @@ import (
 	"time"
 )
 
-func (s *Store) contextTransaction(ctx context.Context, iso pgx.TxIsoLevel, fn func(pgx.Tx) (bool, error)) (err error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: iso})
+func (s *Store) contextTransaction(ctx context.Context, p authz.Principal, iso pgx.TxIsoLevel, fn func(pgx.Tx) (bool, error)) (err error) {
+	tx, err := s.beginAdmission(ctx, p, pgx.TxOptions{IsoLevel: iso})
 	if err != nil {
 		return ownerDBError("begin context transaction", err)
 	}
@@ -120,7 +120,7 @@ func (s *ContextStore) PrepareContext(ctx context.Context, a goldenpath.OwnerAcc
 	if err != nil {
 		return out, err
 	}
-	err = s.contextTransaction(ctx, pgx.RepeatableRead, func(tx pgx.Tx) (bool, error) {
+	err = s.contextTransaction(ctx, a.Principal, pgx.RepeatableRead, func(tx pgx.Tx) (bool, error) {
 		session, e := contextOwner(ctx, tx, a)
 		if e != nil {
 			return false, e
@@ -159,7 +159,7 @@ func contextResult(ctx context.Context, tx pgx.Tx, a goldenpath.OwnerAccess, op 
 	return out, nil
 }
 func (s *ContextStore) ContextResult(ctx context.Context, a goldenpath.OwnerAccess, op string) (out cp.Result, err error) {
-	err = s.contextTransaction(ctx, pgx.ReadCommitted, func(tx pgx.Tx) (bool, error) {
+	err = s.contextTransaction(ctx, a.Principal, pgx.ReadCommitted, func(tx pgx.Tx) (bool, error) {
 		session, _, e := lockOwnerReader(ctx, tx, a)
 		if e != nil {
 			return false, e
@@ -174,7 +174,7 @@ func (s *ContextStore) ContextResult(ctx context.Context, a goldenpath.OwnerAcce
 	return
 }
 func (s *ContextStore) ReadContextSource(ctx context.Context, p authz.Principal, ref entityref.Ref) (out goldenpath.ContextSource, err error) {
-	err = s.contextTransaction(ctx, pgx.RepeatableRead, func(tx pgx.Tx) (bool, error) {
+	err = s.contextTransaction(ctx, p, pgx.RepeatableRead, func(tx pgx.Tx) (bool, error) {
 		exists, readable, e := entityAccess(ctx, tx, p, ref)
 		if e != nil {
 			return false, e

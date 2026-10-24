@@ -48,12 +48,14 @@ type ErrorResponse struct {
 // separately without exposing their cause to the caller.
 func MapApplicationError(err error) ErrorMapping {
 	switch {
-	case errors.Is(err, goldenpath.ErrOwnerTransferUnconfirmed), errors.Is(err, cp.ErrUnconfirmed):
+	case errors.Is(err, goldenpath.ErrManagementUnconfirmed), errors.Is(err, goldenpath.ErrOwnerTransferUnconfirmed), errors.Is(err, cp.ErrUnconfirmed):
 		return ErrorMapping{StatusCode: http.StatusServiceUnavailable, Code: "result_unconfirmed", Message: "query the original operation before retrying"}
 	case errors.Is(err, authn.ErrAlreadyBootstrapped):
 		return ErrorMapping{StatusCode: http.StatusConflict, Code: "setup_complete", Message: "instance setup already complete"}
 	case errors.Is(err, authn.ErrInvitationInvalid):
 		return ErrorMapping{StatusCode: http.StatusForbidden, Code: "invitation_invalid", Message: "invitation unavailable"}
+	case errors.Is(err, authn.ErrWorkspaceAuthenticationRequired):
+		return ErrorMapping{StatusCode: http.StatusForbidden, Code: "workspace_authentication_required", Message: "sign in again to enter this workspace"}
 	case errors.Is(err, authn.ErrRecentAuthentication):
 		return ErrorMapping{StatusCode: http.StatusForbidden, Code: "recent_authentication_required", Message: "sign in again to continue"}
 	case errors.Is(err, authn.ErrLastLoginMethod):

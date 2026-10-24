@@ -158,6 +158,19 @@ func TestFoundationConfigurationFromBootstrap(t *testing.T) {
 		t.Fatal(err)
 	}
 	role := "contributor"
+	// The creator is now the initial local manager. Before removing that
+	// member, explicitly admit the Project admin through the creator's own
+	// authenticated management command; being owner never grants private access.
+	management := goldenpath.NewManagementService(store, goldenpath.CryptoIDGenerator{})
+	proposal := goldenpath.ManagementProposal{ScopeKind: "thread", ScopeID: thread.ID, Action: "add", TargetUserID: owner.ID}
+	plan, err := management.Preview(ctx, member, memberSession.Token, proposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = management.Apply(ctx, invocation(member, "cor_foundation_management"), memberSession.Token, goldenpath.ManagementInput{ManagementProposal: proposal, ClientOperationID: "12345678-1234-4234-8234-000000000001", PlanDigest: plan.Digest, Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
 	must(goldenpath.ConfigurationInput{Kind: "project.member.remove", ScopeID: project.Object.ID, UserID: member.ID, ClientOperationID: "revoke", ExpectedRole: &role})
 	if _, e := messaging.CreateMessage(ctx, invocation(member, "cor_foundation_retry"), messageInput); !errors.Is(e, authz.ErrNotFound) {
 		t.Fatal("revoked retry succeeded", e)

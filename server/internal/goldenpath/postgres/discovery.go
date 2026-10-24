@@ -13,7 +13,7 @@ func (store *Store) ListProjects(ctx context.Context, principal authz.Principal,
 	if err := principal.ValidateUser(); err != nil {
 		return page, err
 	}
-	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := store.beginAdmission(ctx, principal, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return page, fmt.Errorf("begin Project discovery: %w", err)
 	}
@@ -55,7 +55,7 @@ func (store *Store) ListProjectChannels(ctx context.Context, principal authz.Pri
 	if err := principal.ValidateUser(); err != nil {
 		return page, err
 	}
-	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := store.beginAdmission(ctx, principal, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return page, fmt.Errorf("begin Channel discovery: %w", err)
 	}
@@ -97,7 +97,7 @@ func (store *Store) ListProjectTickets(ctx context.Context, principal authz.Prin
 	if err := principal.ValidateUser(); err != nil {
 		return page, err
 	}
-	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := store.beginAdmission(ctx, principal, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return page, fmt.Errorf("begin Ticket discovery: %w", err)
 	}
@@ -133,7 +133,7 @@ func (store *Store) ListProjectDecisions(ctx context.Context, principal authz.Pr
 	if err := principal.ValidateUser(); err != nil {
 		return page, err
 	}
-	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := store.beginAdmission(ctx, principal, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return page, fmt.Errorf("begin Decision discovery: %w", err)
 	}

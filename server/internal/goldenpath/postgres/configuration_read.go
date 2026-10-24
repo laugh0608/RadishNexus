@@ -8,7 +8,7 @@ import (
 )
 
 func (s *Store) ReadConfiguration(ctx context.Context, p authz.Principal, kind, id string) (o goldenpath.ConfigurationObject, err error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := s.beginAdmission(ctx, p, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return o, err
 	}
@@ -34,7 +34,7 @@ func (s *Store) ReadConfiguration(ctx context.Context, p authz.Principal, kind, 
 	return
 }
 func (s *Store) ListConfiguration(ctx context.Context, p authz.Principal, q goldenpath.ConfigurationQuery) (page goldenpath.ConfigurationPage, err error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := s.beginAdmission(ctx, p, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return page, err
 	}

@@ -12,6 +12,11 @@ import (
 
 func (store *Store) BeginOIDC(ctx context.Context, record authn.OIDCTransaction) error {
 	return store.identityTransaction(ctx, func(tx pgx.Tx) error {
+		if len(record.InvitationDigest) != 0 {
+			if err := lockInvitationWorkspace(ctx, tx, record.InvitationDigest, record.CreatedAt, false); err != nil {
+				return err
+			}
+		}
 		if len(record.InitiatingSessionDigest) != 0 {
 			if _, err := sessionAccount(ctx, tx, record.InitiatingSessionDigest, record.CreatedAt, true); err != nil {
 				return err
@@ -58,6 +63,19 @@ func (store *Store) ConsumeOIDC(ctx context.Context, state, browser []byte, now 
 func (store *Store) CompleteOIDC(ctx context.Context, record authn.OIDCCompletion) error {
 	return store.identityTransaction(ctx, func(tx pgx.Tx) error {
 		now := record.Session.CreatedAt
+		if len(record.Transaction.InvitationDigest) != 0 {
+			if err := lockInvitationWorkspace(ctx, tx, record.Transaction.InvitationDigest, now, true); err != nil {
+				return err
+			}
+			var targeted bool
+			if err := tx.QueryRow(ctx, `SELECT target_user_id IS NOT NULL FROM radishnexus.identity_invitations WHERE token_digest=$1`, record.Transaction.InvitationDigest).Scan(&targeted); err != nil {
+				return err
+			}
+			// Dedicated re-admission is redeemed by a signed-in existing user.
+			if targeted {
+				return authn.ErrInvitationInvalid
+			}
+		}
 		// The code exchange cannot extend the five-minute authorization window.
 		if !now.Before(record.Transaction.ExpiresAt) {
 			return authn.ErrOIDCInvalid
@@ -84,7 +102,7 @@ func (store *Store) CompleteOIDC(ctx context.Context, record authn.OIDCCompletio
 		}
 		if !newAccount {
 			var status string
-			if err := tx.QueryRow(ctx, `SELECT status FROM radishnexus.user_accounts WHERE user_id = $1 FOR UPDATE`, userID).Scan(&status); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT status FROM radishnexus.user_accounts WHERE user_id = $1 FOR SHARE`, userID).Scan(&status); err != nil {
 				return storeError("lock external account", err)
 			}
 			if status != "active" {

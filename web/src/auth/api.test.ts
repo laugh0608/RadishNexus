@@ -9,8 +9,18 @@ import {
 const sessionPayload = {
   user: { id: "usr_admin", display_name: "Radish Admin" },
   workspaces: [
-    { id: "wrk_main", name: "Main Workspace", role: "owner" },
-    { id: "wrk_docs", name: "Docs", role: "member" },
+    {
+      id: "wrk_main",
+      name: "Main Workspace",
+      role: "owner",
+      requires_authentication: false,
+    },
+    {
+      id: "wrk_docs",
+      name: "Docs",
+      role: "member",
+      requires_authentication: false,
+    },
   ],
   expires_at: "2026-08-31T02:24:31Z",
 };
@@ -38,8 +48,18 @@ describe("authentication API", () => {
     expect(session).toEqual({
       user: { id: "usr_admin", displayName: "Radish Admin" },
       workspaces: [
-        { id: "wrk_main", name: "Main Workspace", role: "owner" },
-        { id: "wrk_docs", name: "Docs", role: "member" },
+        {
+          id: "wrk_main",
+          name: "Main Workspace",
+          role: "owner",
+          requiresAuthentication: false,
+        },
+        {
+          id: "wrk_docs",
+          name: "Docs",
+          role: "member",
+          requiresAuthentication: false,
+        },
       ],
       expiresAt: "2026-08-31T02:24:31Z",
     });

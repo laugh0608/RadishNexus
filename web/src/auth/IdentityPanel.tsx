@@ -1,3 +1,5 @@
+import { ManagementReceipts } from "../workspace/ManagementPanel";
+import { browserAuthClient, type AuthClient } from "./api";
 import { useEffect, useState, type FormEvent } from "react";
 import { AuthRequestError, type SessionContext } from "./api";
 import { identityErrorMessage as message } from "./identity-api";
@@ -10,12 +12,14 @@ import type {
 
 export function IdentityPanel({
   client,
+  authClient = browserAuthClient,
   session,
   navigate,
   onSignedOut,
   onSession,
 }: {
   client: IdentityClient;
+  authClient?: AuthClient;
   session: SessionContext;
   navigate: (url: string) => void;
   onSignedOut: () => void;
@@ -28,8 +32,11 @@ export function IdentityPanel({
   const [confirmUnlink, setConfirmUnlink] = useState(false);
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [invitationToken, setInvitationToken] = useState("");
+  const [reauthEmail, setReauthEmail] = useState("");
+  const [reauthPassword, setReauthPassword] = useState("");
   const owners = session.workspaces.filter(
-    (workspace) => workspace.role === "owner",
+    (workspace) =>
+      workspace.role === "owner" && !workspace.requiresAuthentication,
   );
   const [workspaceID, setWorkspaceID] = useState(owners[0]?.id ?? "");
   useEffect(() => {
@@ -77,6 +84,66 @@ export function IdentityPanel({
   };
   return (
     <main className="workspace-home">
+      <ManagementReceipts
+        userID={session.user.id}
+        onSessionExpired={onSignedOut}
+      />
+      <section className="identity-section" aria-label="重新认证">
+        <h2>重新认证</h2>
+        <p>
+          建立新的登录会话以恢复本账户在已恢复工作区中的准入，或完成要求近期认证的操作。无需先退出其他工作区。
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void perform(async () => {
+              const next = await authClient.login({
+                email: reauthEmail,
+                password: reauthPassword,
+              });
+              setReauthPassword("");
+              onSession(next);
+            });
+          }}
+        >
+          <fieldset disabled={busy}>
+            <label>
+              账户邮箱
+              <input
+                type="email"
+                autoComplete="username"
+                required
+                value={reauthEmail}
+                onChange={(e) => setReauthEmail(e.target.value)}
+              />
+            </label>
+            <label>
+              账户密码
+              <input
+                type="password"
+                autoComplete="current-password"
+                required
+                value={reauthPassword}
+                onChange={(e) => setReauthPassword(e.target.value)}
+              />
+            </label>
+            <button type="submit">重新认证</button>
+          </fieldset>
+        </form>
+        {methods?.radish ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              void perform(async () =>
+                navigate(await client.start({ mode: "login" })),
+              )
+            }
+          >
+            使用 Radish 重新认证
+          </button>
+        ) : null}
+      </section>
       <section className="identity-section">
         <h1>账户与成员邀请</h1>
         {account ? (

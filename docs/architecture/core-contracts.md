@@ -318,6 +318,16 @@ Document / revision、关系、receipt、领域事件和必要 Outbox 纳入权�
 
 配置状态、不可变 Audit 与 receipt 在同一事务提交；Project / Channel 创建同时生成最小事件、Outbox 和 Activity。成员变更明细、初始授权与撤权清理只进入受控 Audit，不进入普通 Activity 或 DTO。成员写入使用预期状态检测并发变化，精确重试仅确认原操作已处理，前端随后读取当前状态。新表属于必须保留的权威备份数据，Session 和一次性邀请仍按既有恢复边界处理。
 
+## 成员准入与管理交接
+
+[ADR-0045](../adr/0045-membership-lifecycle-and-management-handoff.md) 与 migration 020 扩展成员生命周期、Project 管理员和 restricted Channel / Thread 局部 manager。管理动作先预览当前可见事实和代次，再凭明确确认与原计划摘要提交；apply 在事务中重新判定。普通成员增补、管理责任交接、退出清理使用同一组作用域约束，不把 Workspace owner、Project admin 或局部 manager 变成内容超级权限。精确字段和合法动作以 ADR 附表为准。
+
+Session adapter 产生携带 `MembershipRevision` 和 `SessionID` 的受验证主体，浏览器不能提交或选择准入代次。业务事务经 `workspaceauth` 先取得 schema 共享锁，再取得 Workspace 协调锁，最后复查账户、Session、membership 与对象权限；配置与成员写取排他协调，普通业务取共享协调。锁等待预算 5 秒；schema migration 排在 Workspace 锁之前。已持授权事务可以先结束，停权提交后迟到旧代次不能继续。SSE 每批短事务复权，空闲 heartbeat 保持 15 秒边界，不在长连接上持锁。
+
+暂停 / 退出递增生命周期并更新本 Workspace 的会话有效起点；恢复不让旧 Session 复活。协作授权保留或清除、Deployment 撤销、受控成功 Audit / receipt 同事务提交，不新增管理 Activity / Outbox。操作结果查询只以当前全局 Session 返回本人固定历史摘要，正式退出后仍可确认已提交事实，不恢复 Workspace 读取。管理审计在当前管理权和对象读取权过滤后分页，不返回隐藏总数。
+
+权威备份保存成员状态、代次、局部管理角色及 Audit / receipt；Session 和未兑换邀请仍排除。019 与 020 不滚动兼容，须停写升级；旧备份先以匹配旧工件恢复空目标，再显式迁移。`.nexus` 包保持原 profile，不传递源 ACL；导入目标负责人取得初始管理责任，历史作者保持不可激活。
+
 ## Canonical Message query
 
 正式 application query 以 Channel 和当前用户 `Principal` 为作用域，直接读取权威 Message 表。它不是 Activity、实时 replay 或搜索投影：

@@ -12,8 +12,10 @@ import (
 // and expected from a future OIDC verifier. It intentionally contains no
 // token, cookie, claim set, or transport metadata.
 type VerifiedUser struct {
-	UserID      string
-	WorkspaceID string
+	UserID             string
+	WorkspaceID        string
+	MembershipRevision int64
+	SessionID          string // Server-side session record identity, never a credential.
 }
 
 // UserPrincipal converts a verified user into the only principal kind that
@@ -21,9 +23,11 @@ type VerifiedUser struct {
 // mechanisms must verify credentials before constructing VerifiedUser.
 func UserPrincipal(user VerifiedUser) (authz.Principal, error) {
 	principal := authz.Principal{
-		Kind:        authz.PrincipalUser,
-		ID:          user.UserID,
-		WorkspaceID: user.WorkspaceID,
+		Kind:               authz.PrincipalUser,
+		ID:                 user.UserID,
+		WorkspaceID:        user.WorkspaceID,
+		MembershipRevision: user.MembershipRevision,
+		SessionID:          user.SessionID,
 	}
 	if err := principal.ValidateUser(); err != nil {
 		return authz.Principal{}, fmt.Errorf("adapt verified user: %w", err)

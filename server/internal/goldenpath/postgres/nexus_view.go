@@ -23,7 +23,7 @@ func (store *Store) GetNexusView(
 		return view, err
 	}
 
-	tx, err := store.pool.BeginTx(ctx, pgx.TxOptions{
+	tx, err := store.beginAdmission(ctx, principal, pgx.TxOptions{
 		IsoLevel: pgx.RepeatableRead,
 	})
 	if err != nil {

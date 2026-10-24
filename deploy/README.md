@@ -173,7 +173,7 @@ docker compose -f deploy/compose.yaml down
 
 ## 当前 schema 与演练证据
 
-当前源码构建的工件包含 migration 019 和 Activity v8。导入批次、映射、历史来源与导出审计纳入权威备份；导入历史在恢复后重建且不产生历史 Outbox。上下文迁移与恢复证据见[记录](../docs/status/reviews/2026-10-24-portable-context-package.md)。checkout binding / built-from、Ticket 状态版本与精确 receipt，以及既有对象和关系均纳入权威备份；恢复后显式重建 Activity。014→015 的混合来源恢复与 015→016 的状态升级证据分别见[checkout 来源记录](../docs/status/reviews/2026-10-13-checkout-provenance.md)和[Ticket 状态记录](../docs/status/reviews/2026-10-13-ticket-status-transitions.md)。
+当前源码构建的工件包含 migration 020 和 Activity v8。成员生命周期、局部管理角色及管理 Audit / receipt 随权威备份保留，Session 与未兑换邀请不恢复。019→020 须停写并配套更新 Go / Web；旧 019 备份先用匹配旧工件恢复空目标，再显式 migrate，不能用新工件直接恢复旧 schema。恢复可能带回备份时有效的成员与角色，开放前必须重新核对人员变动。升级与恢复验证见[成员生命周期记录](../docs/status/reviews/2026-10-24-membership-lifecycle.md)。导入批次、映射、历史来源与导出审计纳入权威备份；导入历史在恢复后重建且不产生历史 Outbox。上下文迁移与恢复证据见[记录](../docs/status/reviews/2026-10-24-portable-context-package.md)。checkout binding / built-from、Ticket 状态版本与精确 receipt，以及既有对象和关系均纳入权威备份；恢复后显式重建 Activity。014→015 的混合来源恢复与 015→016 的状态升级证据分别见[checkout 来源记录](../docs/status/reviews/2026-10-13-checkout-provenance.md)和[Ticket 状态记录](../docs/status/reviews/2026-10-13-ticket-status-transitions.md)。
 
 Go、Web 与 schema 必须配套更新，不支持跨 schema 版本滚动兼容。升级前停写并保留备份；016 只允许旧 Ticket 全为 open 的合法基线，异常状态须先调查，不手改状态绕过保护。升级后旧二进制不能直接回退，需要恢复升级前备份到全新目标或独立验证 forward repair，并明确备份点后的数据取舍。应用缓存启动时的静态入口，须发布完整匹配的 Web build 并重启应用，不能在运行中替换资源后继续沿用旧入口；浏览器须重新加载。
 

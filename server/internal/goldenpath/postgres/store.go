@@ -37,7 +37,7 @@ func (store *Store) CreateDecisionFromThread(
 		return result, err
 	}
 
-	tx, err := store.pool.Begin(ctx)
+	tx, err := store.beginAdmission(ctx, command.Principal, pgx.TxOptions{})
 	if err != nil {
 		return result, fmt.Errorf("begin create Decision transaction: %w", err)
 	}
@@ -161,7 +161,7 @@ func (store *Store) AcceptDecision(
 		return result, err
 	}
 
-	tx, err := store.pool.Begin(ctx)
+	tx, err := store.beginAdmission(ctx, command.Principal, pgx.TxOptions{})
 	if err != nil {
 		return result, fmt.Errorf("begin accept Decision transaction: %w", err)
 	}
@@ -298,7 +298,7 @@ func (store *Store) CreateTicketFromDecision(
 		return result, err
 	}
 
-	tx, err := store.pool.Begin(ctx)
+	tx, err := store.beginAdmission(ctx, command.Principal, pgx.TxOptions{})
 	if err != nil {
 		return result, fmt.Errorf("begin create Ticket transaction: %w", err)
 	}

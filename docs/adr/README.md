@@ -50,6 +50,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0042](0042-workspace-owner-handoff.md) | 已接受并实施 | Workspace owner 主动交接 |
 | [ADR-0043](0043-single-host-upgrade-failure-recovery.md) | 已接受；已实施，人工复验暂缓 | 单机停机升级与失败恢复 |
 | [ADR-0044](0044-portable-project-context-package.md) | 已接受；首片隔离往返通过 | Project 结构化上下文导出与新实例导入 |
+| [ADR-0045](0045-membership-lifecycle-and-management-handoff.md) | 已接受并实施 | 成员生命周期与管理交接 |
 
 ## 新建规则
 

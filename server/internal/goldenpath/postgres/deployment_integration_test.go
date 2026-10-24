@@ -281,7 +281,8 @@ func assertDeploymentNexusViewHTTP(
 	sourceInput goldenpath.RecordCompletedCIRunInput,
 ) {
 	t.Helper()
-	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+	// This is a fresh session after the preceding lifecycle revocation probe.
+	now := time.Now().UTC()
 	passwordHash, err := authn.NewArgon2idHasher().Hash("integration reader password")
 	if err != nil {
 		t.Fatalf("hash HTTP integration password: %v", err)
@@ -316,7 +317,6 @@ func assertDeploymentNexusViewHTTP(
 	if err != nil {
 		t.Fatalf("NewTrustedProxyPolicy() error = %v", err)
 	}
-	assertCIRunHTTPTransport(t, ctx, pool, service, authService, sessionPolicy, proxyPolicy, sessionToken, sourceDelivery, sourceInput)
 	assertJenkinsDeliveryHTTP(t, ctx, pool, authService, sessionToken)
 	handler := httptransport.WithRequestID(httptransport.NewDeploymentNexusViewHandler(
 		authService,
@@ -373,6 +373,8 @@ func assertDeploymentNexusViewHTTP(
 			t.Fatalf("HTTP unreadable Deployment = status %d, body %q", response.Code, response.Body.String())
 		}
 	}
+	assertCIRunHTTPTransport(t, ctx, pool, service, authService, sessionPolicy, proxyPolicy, sessionToken, sourceDelivery, sourceInput)
+
 }
 
 func deploymentHTTPRequest(workspaceID string, deploymentID string, token string) *http.Request {

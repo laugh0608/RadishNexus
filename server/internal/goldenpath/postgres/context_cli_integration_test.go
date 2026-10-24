@@ -73,6 +73,7 @@ func contextHTTPS(t *testing.T, f *contextFixture, webRoot string) (*httptest.Se
 	httptransport.RegisterConfigurationRoutes(mux, discovery, configuration)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/projects/", discovery)
 	httptransport.RegisterContextRoutes(mux, httptransport.NewContextHandler(f.auth, f.service, policy, proxy))
+	httptransport.RegisterManagementRoutes(mux, httptransport.NewManagementHandler(f.auth, goldenpath.NewManagementService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
 	httptransport.RegisterOwnerTransferRoutes(mux, httptransport.NewOwnerTransferHandler(f.auth, goldenpath.NewOwnerTransferService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
 	messages := httptransport.NewChannelMessagesHandler(f.auth, core, policy, proxy)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages", messages)

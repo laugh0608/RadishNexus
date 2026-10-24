@@ -160,7 +160,7 @@ func (s *Store) ListRepositoryCIRuns(ctx context.Context, p authz.Principal, rep
 	if err := p.ValidateUser(); err != nil {
 		return page, err
 	}
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	tx, err := s.beginAdmission(ctx, p, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return page, fmt.Errorf("begin Repository CI Runs: %w", err)
 	}

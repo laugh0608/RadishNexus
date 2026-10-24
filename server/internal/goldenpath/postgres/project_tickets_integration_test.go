@@ -236,10 +236,11 @@ func TestProjectTicketDiscoveryPermissionsPaginationAndScale(t *testing.T) {
 	if e := measured.Ping(ctx); e != nil {
 		t.Fatal(e)
 	}
+	// Five fixed admission statements (timeout, schema gate, Workspace gate, account and membership).
 	counter.queries.Store(0)
 	start := time.Now()
 	page, e := goldenpath.NewDiscoveryService(goldenpostgres.New(measured)).ListProjectTickets(ctx, reader, "prj_auth", goldenpath.DiscoveryPageInput{Limit: 25})
-	if e != nil || len(page.Items) != 25 || counter.queries.Load() > 6 {
+	if e != nil || len(page.Items) != 25 || counter.queries.Load() > 11 {
 		t.Fatal(page, e, counter.queries.Load())
 	}
 	t.Logf("Ticket discovery scale: 1200 Tickets, 200 in target Project, 25 results, %d SQL calls, %s", counter.queries.Load(), time.Since(start))
