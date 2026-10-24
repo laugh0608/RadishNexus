@@ -1,3 +1,4 @@
+import { ContextSourceNotice } from "../ContextSourceNotice";
 import { useEffect, useReducer, useState, type FormEvent } from "react";
 import { AuthRequestError, browserAuthClient } from "../auth/api";
 import {
@@ -404,6 +405,15 @@ export function ChannelPage({
 
   return (
     <main className="channel-layout">
+      <ContextSourceNotice
+        workspaceID={workspaceID}
+        entityType="channel"
+        entityID={channelID}
+        onSessionExpired={onSessionExpired}
+        onUnavailable={() =>
+          dispatch({ type: "failed", message: "当前无法访问这个频道。" })
+        }
+      />
       <section className="channel-hero" aria-labelledby="channel-title">
         <div>
           <p className="section-kicker">Canonical Channel history</p>

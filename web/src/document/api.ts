@@ -34,6 +34,7 @@ export type Relation =
       target: { ref: Ref; title: string };
     };
 export type Timeline = {
+  imported?: true;
   id: string;
   activity_type: string;
   actor: { kind: "user"; id: string };
@@ -311,21 +312,28 @@ function parseDocument(value: unknown): DocumentView {
     }),
     timeline: list(v.timeline).map((value) => {
       const t = record(value);
-      keys(t, [
-        "id",
-        "activity_type",
-        "actor",
-        "occurred_at",
-        "revision",
-        "restored_from_revision",
-        "subjects",
-      ]);
+      keys(
+        t,
+        [
+          "id",
+          "activity_type",
+          "actor",
+          "occurred_at",
+          "revision",
+          "restored_from_revision",
+          "subjects",
+        ],
+        ["imported"],
+      );
+      if (t.imported !== undefined && t.imported !== true)
+        throw new TypeError("无效导入标识");
       if (
         t.activity_type !== "document.created" &&
         t.activity_type !== "document.revised"
       )
         throw new TypeError("未知文档活动");
       return {
+        ...(t.imported === true ? { imported: true as const } : {}),
         id: str(t.id),
         activity_type: t.activity_type,
         actor: actor(t.actor),

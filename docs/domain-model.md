@@ -2,7 +2,7 @@
 
 状态：M0 领域基线，首批核心与沟通入口字段已冻结
 
-日期：2026-09-14
+日期：2026-10-24
 
 ## 目标
 
@@ -52,6 +52,12 @@ Project、Initiative、Component、Decision、Environment 和 EntityLink 共享�
 - M0 不支持跨 Workspace 的 EntityLink。所有关系、事件和投影都必须能验证同一 `workspace_id`。
 - `created_by` 表达来源主体，不等于该主体永久拥有读取或修改权限。
 - 删除、归档和移除是不同语义。归档不删除历史，EntityLink 的移除也不删除其来源证据。
+
+### 可移植上下文中的身份与事实
+
+[ADR-0044](adr/0044-portable-project-context-package.md) 的结构化导入为目标对象、事件和历史作者生成新 ID，持久保存源引用与有界来源链；不按相同 ID、邮箱或名称自动认领。历史作者为 disabled account 与 suspended membership，不建凭据、不取得目标角色能力；备份恢复与跨实例导入是不同操作。
+
+历史状态、原作者和发生时间属于来源声明；真实导入负责人及接纳时间单独记录。accepted Decision 或 Ticket done 不代表目标用户刚完成审批或部署。首片目标为空业务实例，新 Project 为 restricted，初始仅负责人获得显式 admin 与包内私密对象访问；后续成员通过正式授权加入，源 ACL 不自动迁移。
 
 ## 组织和工作边界
 

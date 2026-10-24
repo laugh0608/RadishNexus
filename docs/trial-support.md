@@ -14,7 +14,7 @@
 | [部署说明](../deploy/README.md)与 ADR-0041 / 0042 隔离记录覆盖 Compose HTTPS、身份恢复、交接及备份 | 有可复用技术基础 | 目标试用宿主与浏览器的实际验收；不能从开发机或镜像架构推导任意环境受支持 |
 | [缺陷模板](../.github/ISSUE_TEMPLATE/bug-report.yml)已有环境、复现、边界与脱敏要求；[安全策略](../SECURITY.md)已有私密报告方式与 best-effort 原则 | 复用现有渠道，不建立第二套工单或安全入口 | 普通支持联系人、可联系时段、预期首次回复时间与升级路径，均待明确，不预先承诺 SLA |
 | [账号恢复](adr/0041-controlled-local-account-recovery.md)和 [owner 交接](adr/0042-workspace-owner-handoff.md)已实现 | 部署者恢复身份与用户主动移交管理责任分开 | 无 owner 应急接管、Project admin 交接和完整成员退出流程未交付 |
-| [备份恢复](adr/0010-verified-postgresql-backup-and-restore.md)保存权威数据并重建 Activity | 可在匹配版本的空目标验证往返 | `.nexus` 可移植导出尚未实现；整库备份不能代替通用导出或生产灾备承诺 |
+| [备份恢复](adr/0010-verified-postgresql-backup-and-restore.md)保存权威数据并重建 Activity | 可在匹配版本的空目标验证往返 | 单 Project 协作上下文包已按 [ADR-0044](adr/0044-portable-project-context-package.md) 实现并隔离往返验证；完整 Workspace / 研发上下文、容量和独立持续使用仍未验收，整库备份不能代替通用导出或生产灾备承诺 |
 
 ## 推荐首批范围
 

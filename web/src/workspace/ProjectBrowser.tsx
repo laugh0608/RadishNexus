@@ -1,3 +1,4 @@
+import { ContextSourceNotice } from "../ContextSourceNotice";
 import { projectDecisionsPath } from "./project-decisions-api";
 import { documentsPath } from "../document/api";
 import { projectTicketsPath } from "./project-tickets-api";
@@ -94,6 +95,13 @@ export function ProjectBrowser({
           </div>
         ) : (
           <div>
+            <ContextSourceNotice
+              workspaceID={workspaceID}
+              entityType="project"
+              entityID={selected.id}
+              onSessionExpired={onSessionExpired}
+              onUnavailable={refresh}
+            />
             <ConfigurationLauncher
               key={`config:${selected.id}`}
               workspaceID={workspaceID}

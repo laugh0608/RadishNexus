@@ -264,7 +264,7 @@ M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 
 - 附件、校验和和导入报告；
 - 被省略或脱敏内容的明确清单。
 
-导出包默认不包含 Secrets、Token 和不可迁移的授权材料。正式交付前必须通过“导出 → 全新实例导入 → 关系与权限复核”的往返测试。
+导出包默认不包含 Secrets、Token 和不可迁移的授权材料。正式交付前必须通过“导出 → 全新实例导入 → 关系与权限复核”的往返测试。已接受的单 Project 协作首片、历史身份 / 来源映射与目标权限变化见 [ADR-0044](../adr/0044-portable-project-context-package.md)，首片已完成隔离往返与 Web 验证，证据及剩余限制见[实施记录](../status/reviews/2026-10-24-portable-context-package.md)；不替代本节长期范围。
 
 ## 安全原则
 

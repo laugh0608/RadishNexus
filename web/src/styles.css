@@ -2442,3 +2442,16 @@ code {
 .project-decisions .configuration-list p {
   margin-block: 0.5rem 0;
 }
+
+.context-source-notice {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid #c9d9d1;
+  border-radius: 0.5rem;
+  color: #365d4a;
+  background: #f2f7f3;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}

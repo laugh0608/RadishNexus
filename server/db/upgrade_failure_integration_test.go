@@ -74,9 +74,12 @@ func upgradeSQL(t *testing.T, conn *pgx.Conn, sql string, args ...any) {
 }
 
 func upgradeHistory(t *testing.T, conn *pgx.Conn) string {
+	return upgradeHistoryThrough(t, conn, 2147483647)
+}
+func upgradeHistoryThrough(t *testing.T, conn *pgx.Conn, limit int) string {
 	t.Helper()
 	var result string
-	if err := conn.QueryRow(context.Background(), `SELECT coalesce(jsonb_agg(to_jsonb(h) ORDER BY sequence),'[]')::text FROM public.radishnexus_schema_migrations h`).Scan(&result); err != nil {
+	if err := conn.QueryRow(context.Background(), `SELECT coalesce(jsonb_agg(to_jsonb(h) ORDER BY sequence),'[]')::text FROM public.radishnexus_schema_migrations h WHERE sequence<=$1`, limit).Scan(&result); err != nil {
 		t.Fatal(err)
 	}
 	return result
@@ -168,7 +171,7 @@ func TestUpgradeFailureSQLAndCommittedPrefix(t *testing.T) {
 			if err := Migrate(context.Background(), observer); err != nil {
 				t.Fatal(err)
 			}
-			requireUpgradePrefix(t, observer, 18)
+			requireUpgradePrefix(t, observer, 19)
 			after := upgradeHistory(t, observer)
 			if err := Migrate(context.Background(), observer); err != nil {
 				t.Fatal(err)
@@ -213,7 +216,7 @@ func TestUpgradeFailureCancellationAndTermination(t *testing.T) {
 			if err := Migrate(context.Background(), fresh); err != nil {
 				t.Fatal(err)
 			}
-			requireUpgradePrefix(t, fresh, 18)
+			requireUpgradePrefix(t, fresh, 19)
 		})
 	}
 }
@@ -234,8 +237,8 @@ func TestUpgradeFailureLostCommitAcknowledgement(t *testing.T) {
 	if err := Migrate(context.Background(), fresh); err != nil {
 		t.Fatal(err)
 	}
-	if before != upgradeHistory(t, fresh) {
-		t.Fatal("uncertain commit replay changed history")
+	if before != upgradeHistoryThrough(t, fresh, 18) {
+		t.Fatal("uncertain commit replay changed its committed prefix")
 	}
 }
 
@@ -264,7 +267,7 @@ func TestUpgradeFailureConcurrentRunnersAndTimeout(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	requireUpgradePrefix(t, observer, 18)
+	requireUpgradePrefix(t, observer, 19)
 }
 
 func TestUpgradeFailureHistoryDriftAndUntrackedDDL(t *testing.T) {
@@ -285,7 +288,7 @@ func TestUpgradeFailureHistoryDriftAndUntrackedDDL(t *testing.T) {
 		})
 	}
 	t.Run("manual_DDL_is_outside_readiness", func(t *testing.T) {
-		conn, _ := upgradeFailureDatabase(t, 18)
+		conn, _ := upgradeFailureDatabase(t, 19)
 		upgradeSQL(t, conn, `ALTER TABLE radishnexus.workspaces ADD COLUMN manual_upgrade_test text`)
 		probe, err := NewReadinessChecker(conn)
 		if err != nil {

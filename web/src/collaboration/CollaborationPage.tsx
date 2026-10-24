@@ -1,3 +1,4 @@
+import { ContextSourceNotice } from "../ContextSourceNotice";
 import { projectDecisionsPath } from "../workspace/project-decisions-api";
 import { useTicketStatusActions } from "./TicketStatusActions";
 import { ticketStatusLabels } from "./ticket-status";
@@ -375,6 +376,15 @@ function CollaborationPageContent({
   const { current, relations, timeline } = state.view;
   return (
     <main className="collaboration-layout">
+      <ContextSourceNotice
+        workspaceID={workspaceID}
+        entityType={entityType}
+        entityID={entityID}
+        onSessionExpired={onSessionExpired}
+        onUnavailable={() =>
+          setState({ status: "error", message: "当前无法访问这个协作对象。" })
+        }
+      />
       <section
         className="collaboration-hero"
         aria-labelledby="collaboration-title"
@@ -815,7 +825,10 @@ function TimelineList({
           <time dateTime={item.occurredAt}>
             {formatTimestamp(item.occurredAt)}
           </time>
-          <strong>{item.activityType}</strong>
+          <strong>
+            {item.activityType}
+            {item.imported ? " · 导入历史" : ""}
+          </strong>
           <span>
             {item.actor.id} ·{" "}
             {"relationState" in item

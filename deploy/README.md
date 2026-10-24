@@ -6,6 +6,8 @@
 
 执行单宿主升级与失败恢复时，使用[运维手册](upgrade-recovery.md)及其隔离演练入口；实际证据与未完成项见[2026-10-24 记录](../docs/status/reviews/2026-10-24-upgrade-failure-recovery.md)。
 
+单 Project 结构化导出与新实例导入使用[上下文迁移手册](context-package.md)的受认证独立 CLI。它不使用数据库凭据，也不替代整库恢复。
+
 ## 边界
 
 - 只有 Caddy 发布宿主 HTTPS 端口；Go server 和 PostgreSQL 没有宿主端口。
@@ -171,7 +173,7 @@ docker compose -f deploy/compose.yaml down
 
 ## 当前 schema 与演练证据
 
-当前源码构建的工件包含 migration 018 和 Activity v7。checkout binding / built-from、Ticket 状态版本与精确 receipt，以及既有对象和关系均纳入权威备份；恢复后显式重建 Activity。014→015 的混合来源恢复与 015→016 的状态升级证据分别见[checkout 来源记录](../docs/status/reviews/2026-10-13-checkout-provenance.md)和[Ticket 状态记录](../docs/status/reviews/2026-10-13-ticket-status-transitions.md)。
+当前源码构建的工件包含 migration 019 和 Activity v8。导入批次、映射、历史来源与导出审计纳入权威备份；导入历史在恢复后重建且不产生历史 Outbox。上下文迁移与恢复证据见[记录](../docs/status/reviews/2026-10-24-portable-context-package.md)。checkout binding / built-from、Ticket 状态版本与精确 receipt，以及既有对象和关系均纳入权威备份；恢复后显式重建 Activity。014→015 的混合来源恢复与 015→016 的状态升级证据分别见[checkout 来源记录](../docs/status/reviews/2026-10-13-checkout-provenance.md)和[Ticket 状态记录](../docs/status/reviews/2026-10-13-ticket-status-transitions.md)。
 
 Go、Web 与 schema 必须配套更新，不支持跨 schema 版本滚动兼容。升级前停写并保留备份；016 只允许旧 Ticket 全为 open 的合法基线，异常状态须先调查，不手改状态绕过保护。升级后旧二进制不能直接回退，需要恢复升级前备份到全新目标或独立验证 forward repair，并明确备份点后的数据取舍。应用缓存启动时的静态入口，须发布完整匹配的 Web build 并重启应用，不能在运行中替换资源后继续沿用旧入口；浏览器须重新加载。
 
@@ -179,7 +181,7 @@ Go、Web 与 schema 必须配套更新，不支持跨 schema 版本滚动兼容�
 
 ## Workspace owner 主动交接与恢复
 
-当前 migration 018 为 Workspace membership 增加角色代次，为邀请绑定创建者任期，并扩展不可变配置审计 / receipt。与匹配的 Go / Web 一起升级；停写、使用旧工件备份、显式 migration、部署新工件后检查 readiness。既有 membership 从代次 1 开始，有效旧邀请绑定该代次，失效邀请不会恢复；迁移不修复零 owner 实例。交接使用 Web Session 权限，不提供运维强制 owner 接管入口，见 [ADR-0042](../docs/adr/0042-workspace-owner-handoff.md)。
+migration 018 为 Workspace membership 增加角色代次，为邀请绑定创建者任期，并扩展不可变配置审计 / receipt。与匹配的 Go / Web 一起升级；停写、使用旧工件备份、显式 migration、部署新工件后检查 readiness。既有 membership 从代次 1 开始，有效旧邀请绑定该代次，失效邀请不会恢复；迁移不修复零 owner 实例。交接使用 Web Session 权限，不提供运维强制 owner 接管入口，见 [ADR-0042](../docs/adr/0042-workspace-owner-handoff.md)。
 
 同版本备份保留角色、代次与交接历史；恢复不带回 Session、邀请或 OIDC 事务。恢复 017 旧备份会带回备份时的 owner，并可能缺少后来成功的交接 receipt；必须用匹配旧工件恢复到全新隔离目标，再显式升级、重新登录并核验实际管理责任，不从原实例操作 ID 自动重放交接，也不重新 bootstrap。
 
@@ -195,7 +197,7 @@ RADISHNEXUS_OWNER_TRANSFER_LEGACY_REF=333c4ce ./scripts/check-server-backup-rest
 
 使用 [ADR-0041](../docs/adr/0041-controlled-local-account-recovery.md) 的独立 `account-recover` operations service。该 service 默认不运行，二进制不进入常驻 server 镜像。部署者须先独立核实恢复请求和账户归属，核对部署目录、Compose project、数据库 Secret 与目标实例；备份副本可能拥有相同 user ID，inspect 不构成实例身份认证。此入口能接管目标全局账户，需要宿主 / 数据库运维授权；Workspace owner 身份不能替代运维授权。
 
-升级窗口先停写，使用匹配的旧工件留存受控备份，再显式运行当前 migration 018（含 017 恢复审计），并部署匹配的新 app / operations。不得与恢复命令并行迁移；readiness 会拒绝旧、漂移或较新的 schema，但不是升级锁。若要求没有任何已认证的在途操作，先摘流并等待 app 停止；恢复命令本身不停止服务。已有运行授权之外的生产升级、备份位置与保留策略须独立确定。
+升级窗口先停写，使用匹配的旧工件留存受控备份，再显式运行当前 migrations（含 017 恢复审计），并部署匹配的新 app / operations。不得与恢复命令并行迁移；readiness 会拒绝旧、漂移或较新的 schema，但不是升级锁。若要求没有任何已认证的在途操作，先摘流并等待 app 停止；恢复命令本身不停止服务。已有运行授权之外的生产升级、备份位置与保留策略须独立确定。
 
 下列命令从仓库根执行，使用前面配置的 Compose 环境和文件 Secret。`getpass` 从终端无回显读取；不要用真实值替换成命令参数或环境变量，也不要保存密码 JSON。先 inspect：
 

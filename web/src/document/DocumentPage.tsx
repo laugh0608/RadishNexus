@@ -1,3 +1,4 @@
+import { ContextSourceNotice } from "../ContextSourceNotice";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   documentClient,
@@ -346,6 +347,17 @@ export function DocumentPage({
     <main
       className={`document-workspace${informationOpen ? " document-workspace--information" : ""}`}
     >
+      {view ? (
+        <ContextSourceNotice
+          workspaceID={workspaceID}
+          entityType="document"
+          entityID={documentID}
+          onSessionExpired={onSessionExpired}
+          onUnavailable={() =>
+            fail(new DocumentError("当前无法访问这个文档。", 404))
+          }
+        />
+      ) : null}
       <header className="document-toolbar">
         <nav aria-label="文档位置">
           <a href="/">工作区</a>
@@ -712,7 +724,7 @@ export function DocumentPage({
                 <ol>
                   {view.timeline.map((item) => (
                     <li key={item.id}>
-                      版本 {item.revision} ·{" "}
+                      版本 {item.revision} {item.imported ? "· 导入历史 " : ""}·{" "}
                       {item.restored_from_revision
                         ? `恢复自 ${item.restored_from_revision}`
                         : item.activity_type === "document.created"

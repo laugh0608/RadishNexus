@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/laugh0608/RadishNexus/server/db"
@@ -158,7 +159,7 @@ func run() error {
 	}
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler, setupHandler, documentHandler, httptransport.NewCIRunNexusViewHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), jenkinsHandler, httptransport.NewStagingDeploymentHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), httptransport.NewTicketComponentHandler(authService, goldenpath.NewTicketComponentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy), httptransport.NewRepositoryCIRunsHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), httptransport.NewTicketStatusHandler(authService, goldenpath.NewTicketStatusService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy), ownerTransferHandler),
+		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler, setupHandler, documentHandler, httptransport.NewCIRunNexusViewHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), jenkinsHandler, httptransport.NewStagingDeploymentHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), httptransport.NewTicketComponentHandler(authService, goldenpath.NewTicketComponentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy), httptransport.NewRepositoryCIRunsHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), httptransport.NewTicketStatusHandler(authService, goldenpath.NewTicketStatusService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy), ownerTransferHandler, httptransport.NewContextHandler(authService, goldenpath.NewContextService(goldenpostgres.NewContextStore(pool, contextSchemaReady)), sessionPolicy, proxyPolicy)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -237,6 +238,9 @@ func newHandler(
 		mux.Handle("/api/v1/workspaces/{workspace_id}/invitations", identityHandler[0])
 		mux.Handle("/auth/complete", identityHandler[0])
 	}
+	if len(identityHandler) >= 12 {
+		httptransport.RegisterContextRoutes(mux, identityHandler[11])
+	}
 	if len(identityHandler) >= 11 {
 		httptransport.RegisterOwnerTransferRoutes(mux, identityHandler[10])
 	}
@@ -290,4 +294,12 @@ func newHandler(
 func healthMethodNotAllowed(response http.ResponseWriter, _ *http.Request) {
 	response.Header().Set("Allow", http.MethodGet)
 	response.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+func contextSchemaReady(ctx context.Context, tx pgx.Tx) error {
+	checker, e := db.NewReadinessChecker(tx)
+	if e != nil {
+		return e
+	}
+	return checker.CheckReady(ctx)
 }

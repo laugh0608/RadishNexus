@@ -84,6 +84,7 @@ export type CollaborationSubject =
   | { visibility: "readable"; entity: VisibleEntity };
 
 interface TimelineBase {
+  imported?: true;
   id: string;
   actor: UserActor;
   occurredAt: string;
@@ -803,6 +804,12 @@ function parseTimelineItem(
 ): CollaborationTimelineItem {
   const path = `response.data.timeline[${index}]`;
   const raw = record(value, path);
+  if (raw.imported !== undefined && raw.imported !== true)
+    throw new TypeError("Invalid import marker");
+  const provenance = raw.imported === true ? { imported: true as const } : {};
+  const nativeFields = { ...raw };
+  delete nativeFields.imported;
+  value = nativeFields;
   if (raw.activity_type === "ticket.status-changed") {
     const item = exactRecord(value, path, [
       "id",
@@ -827,6 +834,7 @@ function parseTimelineItem(
     )
       throw new TypeError("Invalid Ticket transition timeline");
     return {
+      ...provenance,
       id: scopedID(item.id, `${path}.id`, "evt_"),
       activityType: "ticket.status-changed",
       actor: parseActor(item.actor, `${path}.actor`),
@@ -867,6 +875,7 @@ function parseTimelineItem(
     )
       throw new TypeError(`${path} relation subject is invalid`);
     return {
+      ...provenance,
       id: scopedID(item.id, `${path}.id`, "evt_"),
       activityType: raw.activity_type,
       actor: parseActor(item.actor, `${path}.actor`),
@@ -896,6 +905,7 @@ function parseTimelineItem(
     throw new TypeError(`${path} does not match ${expectedType} Timeline`);
   }
   return {
+    ...provenance,
     id: scopedID(item.id, `${path}.id`, "evt_"),
     activityType: activityType as
       "decision.proposed" | "decision.accepted" | "ticket.created",

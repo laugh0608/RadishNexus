@@ -14,6 +14,7 @@ import (
 )
 
 type activityEvent struct {
+	imported      bool
 	eventID       string
 	eventType     string
 	schemaVersion int
@@ -68,17 +69,16 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
 	}
 
 	rows, err := tx.Query(ctx, `
-		SELECT event_id, event_type, schema_version, workspace_id,
-			actor_kind, actor_id, primary_entity_type, primary_entity_id,
-			occurred_at, payload
-		FROM radishnexus.domain_events
-		WHERE event_type IN (
-			'decision.proposed', 'decision.accepted', 'ticket.created', 'ticket.status-changed',
-			'ci-run.recorded', 'deployment.recorded', 'project.created', 'channel.created', 'component.created', 'environment.created', 'document.created', 'document.revised',
-			'repository.created', 'component.repository-linked', 'component.repository-unlinked', 'ticket.component-linked', 'ticket.component-unlinked'
-		)
-		ORDER BY occurred_at, event_id
-	`)
+ SELECT e.event_id, COALESCE(h.original_type,e.event_type), e.schema_version, e.workspace_id,
+ e.actor_kind, COALESCE(h.original_actor,e.actor_id), e.primary_entity_type,e.primary_entity_id,
+ COALESCE(h.original_time,e.occurred_at),COALESCE(h.original_facts,e.payload),h.event_id IS NOT NULL
+ FROM radishnexus.domain_events e LEFT JOIN radishnexus.context_import_history h ON h.workspace_id=e.workspace_id AND h.event_id=e.event_id
+ WHERE COALESCE(h.original_type,e.event_type) IN (
+ 'decision.proposed','decision.accepted','ticket.created','ticket.status-changed',
+ 'ci-run.recorded','deployment.recorded','project.created','channel.created','component.created','environment.created','document.created','document.revised',
+ 'repository.created','component.repository-linked','component.repository-unlinked','ticket.component-linked','ticket.component-unlinked')
+ ORDER BY COALESCE(h.original_time,e.occurred_at),e.event_id
+ `)
 	if err != nil {
 		return 0, fmt.Errorf("read Activity source events: %w", err)
 	}
@@ -97,6 +97,7 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
 			&event.target.ID,
 			&event.occurredAt,
 			&event.payload,
+			&event.imported,
 		); err != nil {
 			rows.Close()
 			return 0, fmt.Errorf("scan Activity source event: %w", err)
@@ -337,6 +338,9 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		if err := entityref.M0Registry().Validate(subject); err != nil {
 			return activityRecord{}, fmt.Errorf("project Activity event %s subject: %w", event.eventID, err)
 		}
+	}
+	if event.imported {
+		record.safeFacts["imported"] = "true"
 	}
 	return record, nil
 }

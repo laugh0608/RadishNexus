@@ -118,6 +118,7 @@ type collaborationRelationDTO struct {
 }
 
 type collaborationTimelineDTO struct {
+	Imported      bool                      `json:"imported,omitempty"`
 	FromStatus    string                    `json:"from_status,omitempty"`
 	ToStatus      string                    `json:"to_status,omitempty"`
 	FromRevision  int                       `json:"from_status_revision,omitempty"`
@@ -737,6 +738,14 @@ func publicCollaborationRelations(relations []goldenpath.RelationProjection) ([]
 func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborationTimelineDTO, error) {
 	dto := make([]collaborationTimelineDTO, 0, len(items))
 	for _, item := range items {
+		imported := item.SafeFacts["imported"] == "true"
+		extra := 0
+		if imported {
+			extra = 1
+		} else if _, ok := item.SafeFacts["imported"]; ok {
+			return nil, errors.New("invalid import marker")
+		}
+
 		if !validScopedID(item.EventID, "evt_") || item.Actor.Kind != "user" ||
 			!validScopedID(item.Actor.ID, "usr_") || item.OccurredAt.IsZero() ||
 			item.ProjectionVersion != goldenpath.ActivityProjectionVersion {
@@ -747,14 +756,14 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 			to, e2 := strconv.Atoi(item.SafeFacts["to_status_revision"])
 			transition := goldenpath.TicketStatusTransition{FromStatus: item.SafeFacts["from_status"], ToStatus: item.SafeFacts["to_status"], FromRevision: from, ToRevision: to}
 			if e1 != nil || e2 != nil || strconv.Itoa(from) != item.SafeFacts["from_status_revision"] || strconv.Itoa(to) != item.SafeFacts["to_status_revision"] ||
-				len(item.SafeFacts) != 4 || len(item.Subjects) != 0 || !transition.Valid() {
+				len(item.SafeFacts) != 4+extra || len(item.Subjects) != 0 || !transition.Valid() {
 				return nil, errors.New("invalid Ticket status Timeline facts")
 			}
-			dto = append(dto, collaborationTimelineDTO{ID: item.EventID, ActivityType: item.ActivityType, Actor: deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID},
+			dto = append(dto, collaborationTimelineDTO{Imported: imported, ID: item.EventID, ActivityType: item.ActivityType, Actor: deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID},
 				OccurredAt: publicTime(item.OccurredAt), Subjects: []collaborationSubjectDTO{}, FromStatus: transition.FromStatus, ToStatus: transition.ToStatus, FromRevision: from, ToRevision: to})
 			continue
 		}
-		if len(item.SafeFacts) != 1 {
+		if len(item.SafeFacts) != 1+extra {
 			return nil, errors.New("invalid collaboration Timeline facts")
 		}
 		expectedStatus, subjectType, relationState := "", "", ""
@@ -775,7 +784,7 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 		if item.SafeFacts["status"] != expectedStatus || item.SafeFacts["relation_state"] != relationState || (subjectType == "" && len(item.Subjects) != 0) || (subjectType != "" && len(item.Subjects) != 1) {
 			return nil, errors.New("invalid collaboration Timeline facts")
 		}
-		entry := collaborationTimelineDTO{
+		entry := collaborationTimelineDTO{Imported: imported,
 			ID:            item.EventID,
 			ActivityType:  item.ActivityType,
 			Actor:         deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID},

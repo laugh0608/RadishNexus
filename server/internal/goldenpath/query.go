@@ -9,7 +9,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
 
-const ActivityProjectionVersion = 7
+const ActivityProjectionVersion = 8
 
 type CurrentProjection struct {
 	Ref                entityref.Ref

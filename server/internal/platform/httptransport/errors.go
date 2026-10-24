@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 
+	cp "github.com/laugh0608/RadishNexus/server/internal/contextpackage"
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
@@ -47,7 +48,7 @@ type ErrorResponse struct {
 // separately without exposing their cause to the caller.
 func MapApplicationError(err error) ErrorMapping {
 	switch {
-	case errors.Is(err, goldenpath.ErrOwnerTransferUnconfirmed):
+	case errors.Is(err, goldenpath.ErrOwnerTransferUnconfirmed), errors.Is(err, cp.ErrUnconfirmed):
 		return ErrorMapping{StatusCode: http.StatusServiceUnavailable, Code: "result_unconfirmed", Message: "query the original operation before retrying"}
 	case errors.Is(err, authn.ErrAlreadyBootstrapped):
 		return ErrorMapping{StatusCode: http.StatusConflict, Code: "setup_complete", Message: "instance setup already complete"}

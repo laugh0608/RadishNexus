@@ -40,6 +40,10 @@ const (
 
 var (
 	includedDataTables = []string{
+		"radishnexus.context_import_batches",
+		"radishnexus.context_import_mappings",
+		"radishnexus.context_import_history",
+		"radishnexus.context_export_audit",
 		"public.radishnexus_schema_migrations",
 		"radishnexus.channel_memberships",
 		"radishnexus.channels",

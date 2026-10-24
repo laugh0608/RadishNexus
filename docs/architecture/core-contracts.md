@@ -2,7 +2,7 @@
 
 状态：M0 契约基线，已由 ADR-0002 接受
 
-日期：2026-09-26
+日期：2026-10-24
 
 [ADR-0032](../adr/0032-component-environment-configuration-and-authorization.md) 冻结 Component / Environment 创建、发现与 owner 环境授权管理：同环境 / 用户至多一条 active 授权，重新授予追加不可变代次，历史 Deployment 保留原授权 ID。命令沿用配置 receipt / Audit 与严格 Session 边界，expected ID / 状态防止旧页面覆盖；Component / Environment 创建事件同事务投影到主要对象，授权明细不进入普通 Activity。
 
@@ -247,6 +247,12 @@ request_context
 外部网络调用不得发生在业务数据库事务中。消费者按 `event_id` 幂等处理；重复、乱序和进程崩溃后的再次投递都属于正常输入。M0 仍以业务表保存当前状态，不采用 Event Sourcing。
 
 外部 Webhook 的 delivery ID 是来源作用域内接收命令的幂等身份；只有首次有效处理才创建 CI Run 和领域事件。它不能替代平台 `event_id`，也不能直接成为 EntityID。同一 Workspace、source 与 delivery ID 的 payload digest 必须一致；不一致时 fail closed，不能覆盖 receipt 或把冲突伪装成成功重复。已验证 Jenkins delivery 的精确事务与停止线见 ADR-0006。
+
+### 导入历史与外部副作用
+
+[ADR-0044](../adr/0044-portable-project-context-package.md) 将导入事实封装为 `context.history-recorded` schema 1：actor 是本次真实导入负责人，source 为 import 批次，发生时间为本次接纳时间；原事件类型、作者、发生时间、事实及因果关系保存在受约束、不可变的历史来源中。目标 ID 全部映射，原 client operation / receipt 不进入目标幂等空间。导入 receipt 绑定包摘要、目标身份、操作者、operation 与权限计划。
+
+导入历史不写历史 Outbox，数据库禁止为这些事件添加投递；不会重新发通知、调用 provider 或执行历史命令。Activity projection 8 在同事务导入和全量重建时读取来源事实，并保留 `imported` 标识；原始作者 / 时间只用于历史解释。所有来源、时间线和关系读取继续验证当前对象权限。正常 web 事件与 receipt 保持既有约束，不以导入例外伪造原生动作。
 
 ## Activity 投影
 

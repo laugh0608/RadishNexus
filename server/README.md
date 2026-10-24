@@ -14,7 +14,7 @@
 - 与业务状态同事务写入的不可变领域事件与 Outbox 投递状态；
 - 正式 Component、CI Run 与不可变 inbound delivery receipt schema；
 - 正式 Environment、环境级部署授权与不可变 Deployment schema；
-- 在业务事务内正常更新、并可从领域事件原子重建的 Activity projection version 5；
+- 在业务事务内正常更新、并可从领域事件原子重建的 Activity projection version 8；
 - 为 Thread、Decision、Ticket、Document、CI Run 和 Deployment 返回 Current、Relations 和 Timeline 的权限过滤 Nexus View query；
 - 一次性本地管理员 bootstrap、Argon2id credential、账号锁定、opaque Session、CSRF digest 与当前 Workspace membership resolver；
 - 把已验证 Session 用户转换为 application `Principal` 的认证 adapter；
@@ -94,7 +94,7 @@ python3 -c 'import getpass,json; print(json.dumps({"email":getpass.getpass("Emai
 
 [ADR-0041](../docs/adr/0041-controlled-local-account-recovery.md) 的 `nexus-account-recover` 是显式部署运维命令，常驻 server 不装配恢复 HTTP / Web 路由。仅支持已有 active 账户及 active、已映射邮箱的本地凭证；disabled、OIDC-only、legacy 未映射、目标不存在或预期邮箱 / 密码版本不一致均拒绝。暂时锁定可在成功恢复时解除。操作者须拥有目标实例运维授权，独立核实账户归属，确认影响同一 user 的所有 Workspace；产品 owner 身份本身不提供这个权限。
 
-先部署匹配当前 migration 018（含 017 恢复审计）的服务与 operations 工件，显式迁移，再按 `inspect → apply → status` 使用。三个子命令均要求 `--request-stdin`，最多 8 KiB 的单个 UTF-8 JSON object；未知 / 重复字段、null、尾随 JSON、错误类型、未配对 surrogate 和不规范标识均拒绝。不得把邮箱或密码放进 shell 参数、环境变量、普通文件、历史或日志。Compose 的无回显操作示例见[部署说明](../deploy/README.md#本地账户受控恢复)。
+先部署匹配当前 migrations（含 017 恢复审计）的服务与 operations 工件，显式迁移，再按 `inspect → apply → status` 使用。三个子命令均要求 `--request-stdin`，最多 8 KiB 的单个 UTF-8 JSON object；未知 / 重复字段、null、尾随 JSON、错误类型、未配对 surrogate 和不规范标识均拒绝。不得把邮箱或密码放进 shell 参数、环境变量、普通文件、历史或日志。Compose 的无回显操作示例见[部署说明](../deploy/README.md#本地账户受控恢复)。
 
 | 命令 | JSON 字段 | 返回 |
 | --- | --- | --- |
@@ -272,6 +272,12 @@ migration 016 只为合法旧 open 基线建立版本 1，不虚构事件；异�
 
 首次初始化可使用上文 `nexus-bootstrap`，或按 [ADR-0027](../docs/adr/0027-first-visit-administrator-setup.md) 配置 `RADISHNEXUS_SETUP_CODE_FILE`，通过 `GET /api/v1/setup` 和 `POST /api/v1/setup` 完成网页初始化。均创建 Workspace owner，复用唯一 bootstrap 事务锁，不建立全局超级权限或默认业务对象。Secret 文件须为绝对路径，保存 32 随机字节的 43 字符 base64url 编码；启动读取失败或格式错误直接失败。未配置且无账户时返回 unavailable，已有账户始终 complete。readiness 错误不能当作空实例；POST 同源、限流、4 KiB 严格正文，成功后由用户正式登录。
 
+## Project 上下文包
+
+[ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的 migration 019、`internal/contextpackage`、`goldenpath.ContextService` 与受认证 HTTP 入口提供单 Project 协作导出 / 空业务实例导入。`go build ./cmd/nexus-context` 构建独立 CLI，使用 HTTPS Session 和私有凭据文件，不读取数据库 DSN；操作、协议路由和限制见[迁移手册](../deploy/context-package.md)。该 CLI 当前面向 macOS / Linux，不包含在 Compose operations 工件中。
+
+历史身份不可登录，初始 Project restricted 并仅授予导入负责人；真实导入操作与源事实分开保存。来源 API 先验证当前对象读取权限，Web 仅展示安全导入标识。Activity 8 支持导入历史重建，四张来源 / 审计表纳入整库备份，Session 等既有排除规则不变。隔离验收见[记录](../docs/status/reviews/2026-10-24-portable-context-package.md)。
+
 ## 最小备份与恢复
 
 当前备份是 PostgreSQL 17 同 major 的整库运维工件，不是 `.nexus` 开放导出格式。工件目录包含 `manifest.json` 和 custom-format `database.dump`；源库必须完整匹配当前 migrations，所有非系统 relation 必须已经由当前二进制分类。`activity_items` 只保留 schema，不备份投影数据；恢复成功后命令从不可变领域事件重建 Activity。
@@ -304,7 +310,7 @@ go run ./cmd/nexus-restore --input /path/to/completed-backup-directory
 
 ## 最小 Markdown Document
 
-[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实；Document 切片将 Activity projection 升至版本 2；当前已由 ADR-0039 扩展为版本 7，新增事件可全量重建，旧投影不改变原有语义。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。
+[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实；Document 切片将 Activity projection 升至版本 2；当前已由 ADR-0044 扩展为版本 8，新增事件可全量重建，旧投影不改变原有语义。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。
 
 所有端点在 `/api/v1/workspaces/{workspace_id}` 下，要求当前 Session 与 Workspace membership；POST 另要求同源 CSRF。查询返回 `private, no-store`，不能通过引用授予权限。
 
@@ -353,7 +359,7 @@ migration 011 扩展既有协作 receipt 的 CHECK，保留 revision 合同。re
 
 migration 012 保留 revoked 授权，重新授予追加新 ID 与 generation，并保持每个环境 / 用户至多一条 active 记录。历史 Deployment 始终关联原授权；旧授予或撤销 receipt 不重新改变权限。事务按账户、membership、Environment、授权记录的顺序加锁；Deployment 同步重查账户状态。撤销允许清理 archived staging 与失效成员，production 不开放管理写入。
 
-创建对象、Audit、receipt、领域事件、Outbox 和 Activity 同事务提交；授权只进入窄 Audit。此切片将 Activity projection 从 2 升至 3，新增 `component.created` / `environment.created`，migration 将现有 v2 投影标为 v3，重建与恢复继续从领域事件生成。当前版本已由 ADR-0034 扩展为 5；不补造历史对象创建事件。全代次授权、成功 Audit / receipt 与旧 Deployment 引用属于既有备份权威表；升级必须显式迁移，旧二进制拒绝新 schema，不能删历史授权降级。
+创建对象、Audit、receipt、领域事件、Outbox 和 Activity 同事务提交；授权只进入窄 Audit。此切片将 Activity projection 从 2 升至 3，新增 `component.created` / `environment.created`，migration 将现有 v2 投影标为 v3，重建与恢复继续从领域事件生成。当前版本已由 ADR-0044 扩展为 8；不补造历史对象创建事件。全代次授权、成功 Audit / receipt 与旧 Deployment 引用属于既有备份权威表；升级必须显式迁移，旧二进制拒绝新 schema，不能删历史授权降级。
 
 
 ## Repository 映射与 Component 关联

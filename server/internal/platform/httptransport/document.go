@@ -93,6 +93,7 @@ type documentHistoryItemDTO struct {
 	RestoredFrom *int               `json:"restored_from_revision"`
 }
 type documentTimelineDTO struct {
+	Imported     bool                      `json:"imported,omitempty"`
 	ID           string                    `json:"id"`
 	ActivityType string                    `json:"activity_type"`
 	Actor        deploymentActorDTO        `json:"actor"`
@@ -109,7 +110,7 @@ func documentTimeline(items []goldenpath.TimelineItem) ([]documentTimelineDTO, e
 		if err != nil || rev < 1 || item.ProjectionVersion != goldenpath.ActivityProjectionVersion || (item.ActivityType != "document.created" && item.ActivityType != "document.revised") {
 			return nil, errors.New("invalid Document Timeline")
 		}
-		entry := documentTimelineDTO{ID: item.EventID, ActivityType: item.ActivityType, Actor: deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID}, OccurredAt: publicTime(item.OccurredAt), Revision: rev, Subjects: []collaborationSubjectDTO{}}
+		entry := documentTimelineDTO{Imported: item.SafeFacts["imported"] == "true", ID: item.EventID, ActivityType: item.ActivityType, Actor: deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID}, OccurredAt: publicTime(item.OccurredAt), Revision: rev, Subjects: []collaborationSubjectDTO{}}
 		if value := item.SafeFacts["restored_from_revision"]; value != "" {
 			r, e := strconv.Atoi(value)
 			if e != nil || r < 1 || r >= rev {

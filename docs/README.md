@@ -40,9 +40,12 @@
 - 根 `LICENSE` 是当前核心内容许可条款的优先真相源；许可策略文档不能替代正式许可证或单独书面授权。
 - 根 [AGENTS.md](../AGENTS.md) 与 [CLAUDE.md](../CLAUDE.md) 是逐字一致的执行入口；详细理由仍以治理专题和 ADR 为准。
 
+结构化迁移首片见 [ADR-0044](adr/0044-portable-project-context-package.md) 与[上下文迁移手册](../deploy/context-package.md)，其单 Project 范围不等于整个 Workspace 或研发上下文迁移。
+
 ## 状态与验证入口
 
 - [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
+- [2026-10-24 Project 上下文迁移](status/reviews/2026-10-24-portable-context-package.md)：版本化包、历史来源、目标权限、独立往返与部分覆盖边界。
 - [2026-10-18 提交回顾与文档收尾](status/reviews/2026-10-18-daily-closeout.md)：决策发现、账户恢复、owner 交接和试用准备设计的提交映射、源码文档核对与下一切片。
 - [2026-10-18 Workspace owner 主动交接](status/reviews/2026-10-18-workspace-owner-handoff.md)：角色代次、邀请任期、历史查询、并发与旧工件恢复。
 - [2026-10-18 本地账户受控恢复](status/reviews/2026-10-18-controlled-account-recovery.md)：独立 CLI、全账户 Session 撤销、审计与隔离恢复。
