@@ -42,9 +42,14 @@
 
 结构化迁移首片见 [ADR-0044](adr/0044-portable-project-context-package.md) 与[上下文迁移手册](../deploy/context-package.md)，其单 Project 范围不等于整个 Workspace 或研发上下文迁移。
 
+成员生命周期、Project admin 与私密对象管理责任见 [ADR-0045](adr/0045-membership-lifecycle-and-management-handoff.md)；会话准入、再加入和内容隔离由同一合同约束。
+
 ## 状态与验证入口
 
 - [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
+- [2026-10-24 提交回顾与文档收尾](status/reviews/2026-10-24-daily-closeout.md)：升级恢复、上下文迁移、成员生命周期三笔实现的源码核对及接续建议。
+- [2026-10-24 成员生命周期与管理交接](status/reviews/2026-10-24-membership-lifecycle.md)：会话代次、私密管理、并发故障、恢复和浏览器证据。
+- [2026-10-24 升级失败恢复](status/reviews/2026-10-24-upgrade-failure-recovery.md)：历史工件停写、失败诊断、空目标恢复及独立操作者缺口。
 - [2026-10-24 Project 上下文迁移](status/reviews/2026-10-24-portable-context-package.md)：版本化包、历史来源、目标权限、独立往返与部分覆盖边界。
 - [2026-10-18 提交回顾与文档收尾](status/reviews/2026-10-18-daily-closeout.md)：决策发现、账户恢复、owner 交接和试用准备设计的提交映射、源码文档核对与下一切片。
 - [2026-10-18 Workspace owner 主动交接](status/reviews/2026-10-18-workspace-owner-handoff.md)：角色代次、邀请任期、历史查询、并发与旧工件恢复。

@@ -158,13 +158,14 @@
 - 当前 PostgreSQL 工具桥接只支持显式 `sslmode=disable` 的本地或受控私有连接；TLS config 不能近似降级为较弱校验，远程 TLS 备份需要独立连接契约。
 - `activity_items` 数据不进入备份；恢复权威事实后显式执行 forward-only migration 校验，并从不可变领域事件原子重建 Activity。
 - manifest / dump 校验失败、migration 漂移、工具 major 不匹配和非空目标必须 fail closed。精确工件、恢复顺序与验证边界以 [ADR-0010](adr/0010-verified-postgresql-backup-and-restore.md) 为准。
+- 单宿主停写升级与失败恢复按 [ADR-0043](adr/0043-single-host-upgrade-failure-recovery.md) 保留逐 migration 合法前缀，先核对实际提交再选择续迁或匹配旧工件空目标恢复；不提供自动 down、覆盖恢复或滚动兼容承诺。人员、凭证与备份后写入须独立核验，隔离测试不替代目标环境和独立操作者验收。
 
 ### D-019 本地身份与服务端 Session
 
 - 保留自部署可用的本地账户，以邮箱作为私有凭证、展示名独立；按 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 接入可选 Radish OIDC，两种认证复用相同用户、membership 与服务端 Session，不自动合并账户或继承上游权限。
 - 新实例通过显式 CLI `nexus-bootstrap --credentials-stdin`，或 [ADR-0027](adr/0027-first-visit-administrator-setup.md) 的一次性初始化码保护网页入口，创建首个 user、Workspace 与 `owner` membership。二者共享事务锁，任意账户存在后关闭初始化；不随服务启动创建账户，不生成默认密码或全局超级权限。CLI 凭据只从标准输入读取，网页经同源 HTTPS 严格请求提交；Session 通过后续登录建立。
 - 本地密码使用版本化 Argon2id verifier；不存在、禁用、锁定和错误密码统一失败，连续 5 次错误锁定 15 分钟。账号锁定不替代公共 transport 的客户端 IP 限流。
-- Session 是 24 小时绝对有效的服务端 opaque token，数据库只保存 Session / CSRF token digest。Session 不固定 Workspace，业务请求必须以当前 active membership 解析 `VerifiedUser`。
+- Session 是 24 小时绝对有效的服务端 opaque token，数据库只保存 Session / CSRF token digest。Session 不固定 Workspace，业务请求必须以当前 active membership 解析 `VerifiedUser`。按 [ADR-0045](adr/0045-membership-lifecycle-and-management-handoff.md)，Workspace 生命周期代次与会话有效起点共同约束准入；暂停 / 退出后的旧 Session 在本 Workspace 不因恢复而复活，其他 Workspace 不受影响，业务事务继续复查当前准入。
 - 本地账户受控恢复按 [ADR-0041](adr/0041-controlled-local-account-recovery.md) 由具有实例运维授权的部署者通过独立 CLI 执行，仅接受已有 active 本地凭证；密码更新、全账户旧 Session 撤销与不可变 operator 审计原子提交，身份与权限保持。产品 owner 不因此获得恢复 API，历史 status 不代表当前凭证状态，旧备份恢复后须重新核验。
 - 浏览器合同固定 Secure `__Host-` Cookie、SameSite Strict、精确 HTTPS Origin、CSRF cookie + Header + digest、服务端 request ID 与 `/api/v1` 版本化安全错误对象；不提供 insecure HTTP fallback，也不信任用户身份或转发 Header。
 - 账户、密码凭证与外部身份关联纳入受控 PostgreSQL 运维备份；Session、邀请与 OIDC 授权事务只恢复 schema。旧登录名到邮箱由管理员显式映射，保留稳定用户 ID 与业务引用。变更范围以 [ADR-0023](adr/0023-local-account-and-radish-oidc-login.md) 为准，原有 [ADR-0012](adr/0012-local-identity-and-session-foundation.md) / [ADR-0013](adr/0013-public-authentication-transport.md) 的 Session 与代理安全边界继续有效。
@@ -187,7 +188,8 @@
 ### D-022 基础配置与最小 Document
 
 - 基础对象创建与首批普通成员管理按 [ADR-0026](adr/0026-foundation-configuration-and-membership.md) 实施；创建 Project 必须明确初始 admin，受限 Channel 保留窄授权，撤权清理从属权限，Audit 与 receipt 不可变。管理员交接不由普通成员配置隐式完成。
-- Workspace owner 主动交接按 [ADR-0042](adr/0042-workspace-owner-handoff.md) 由近期认证的当前 owner 明确确认，向已有 active member 原子移交，双角色代次与邀请任期绑定防止旧请求和旧邀请复活；全部对象级权限保持。当前有效成员仅可确认本人最小历史成功，不因此恢复管理权或读取其他配置审计；应急接管与 Project admin 交接仍独立设计。
+- Workspace owner 主动交接按 [ADR-0042](adr/0042-workspace-owner-handoff.md) 由近期认证的当前 owner 明确确认，向已有 active member 原子移交，双角色代次与邀请任期绑定防止旧请求和旧邀请复活；全部对象级权限保持。当前有效成员仅可确认本人最小历史成功，不因此恢复管理权或读取其他配置审计；应急接管仍未开放，Project admin 与局部管理交接由 ADR-0045 承接。
+- [ADR-0045](adr/0045-membership-lifecycle-and-management-handoff.md) 区分暂停保留尚存协作授权与正式退出清除对象授权，两者均撤销 Deployment 授权；再加入须绑定本人和退出代次的新邀请。Project 多 admin 与私密对象局部 manager 仅管理各自可读作用域，普通交接 / 退出保护管理责任，安全暂停不自动转交私密内容。管理命令先预览再明确确认，退出后本人仅可凭全局 Session 查询固定历史结果；精确合同与旧写入口退出见 ADR。
 - 最小 Document 按 [ADR-0028](adr/0028-minimal-markdown-document.md) 冻结身份、Project 权限、权威 Markdown、不可变版本、显式保存 / 冲突 / 恢复与 Ticket 来源关系；正式实现已接通，验收成熟度由[当前状态](status/current.md)维护。后续结构化编辑与 CRDT 仍按 ADR-0021 分阶段推进。
 
 ### D-023 同一官方客户端连接官方与自部署实例
@@ -197,6 +199,10 @@
 - 官方端点纳入正式交付目标，同一官方 Flutter 安装包支持运行时选择官方或用户自部署后端，无需重新编译。
 - Web 继续按各实例同源入口交付相同官方构建产物，自部署核心路径不依赖官方云，也不引入席位限制。
 - 详细连接与迁移边界见[客户端连接规划](architecture/client-server-connection-plan.md)；实现仍按 M7 门槛和当前状态推进，官方服务尚未交付。
+
+### D-024 单 Project 可移植协作上下文
+
+依据 [ADR-0044](adr/0044-portable-project-context-package.md)，`project-collaboration-v1` 迁移当前可读的单 Project 协作闭包，保留结构化关系、来源、历史作者与全部 Document revision；目标为匹配工件的空业务实例。新 ID 映射、不可登录历史身份和导入来源独立记录，不自动认领作者或导入源 ACL。目标初始 restricted，仅导入负责人取得显式访问和管理责任；其余成员通过正式授权加入。导入原子提交并保存精确结果，不产生历史 Outbox；整库备份、通用 Workspace / 研发数据迁移和附件范围保持独立。
 
 ## 尚未冻结
 
@@ -214,6 +220,8 @@
 - 是否以及何时引入 AI 能力。
 
 ## 变更记录
+
+- 2026-10-24：按已接受并实施的 ADR-0043 / 0044 / 0045 补齐停写升级失败恢复、单 Project 协作包、成员生命周期与管理交接的基线路由。migration 019 / 020、Activity 8 及验证限制由对应 ADR 和记录承载，本次文档收尾不新增权限、协议或授权决定。
 
 - 2026-10-18：按已接受 ADR-0040 / 0041 / 0042 补齐 Project 决策发现、本地账户受控恢复与 Workspace owner 主动交接的基线路由，纠正 Decision 尚无列表的过期表述。migration 017 / 018 和实现证据由对应 ADR 承载；本次收尾不新增权限或协议决定。支持 / 评估授权草案与 ADR-0043 仍待确认，不列为已接受决策。
 

@@ -50,6 +50,8 @@ SQL
 
 把完整 history 与准确工件内 `server/db/migrations/*.sql` 的连续序号、名称和完整文件 SHA-256 比较。备份 preflight 会再次验证精确 history 及表分类。history 不验证任意手工 DDL；有未知改表、未分类表或材料缺失时停止，不能修改 history 或删除对象使检查通过。
 
+本文的 017→018 命令与失败表是已验证的历史工件示例，演练脚本也固定验证该语义，不能只改 ref 就推断任意版本组合通过。当前 020 工件的成员生命周期升级与旧 019 工件恢复证据见[成员验收记录](../docs/status/reviews/2026-10-24-membership-lifecycle.md)，实际实例仍需匹配所选工件独立复验。
+
 ## S0：工件与恢复材料核对
 
 1. 记录现有 app / operations 的实际镜像身份，保留对应源码、构建配置、Web 和旧工具。用审阅后的配置指定不可变 image ID / digest，禁用隐式构建与拉取。目标 image ID 必须是本次选定工件。
@@ -106,7 +108,7 @@ readiness / liveness、Caddy 探测间隔、`depends_on` 和客户端断线都�
 "${source_compose[@]}" run --rm --no-deps -T migrate
 ```
 
-无论退出成功、超时还是连接中断，都用新的只读连接核对实际 history 和本次 schema / 数据不变量。017→018 至少核对角色未被隐式转移、`role_revision` 初始为 1、有效旧邀请绑定任期、失效邀请不复活、旧 Audit / receipt 保持、不可变约束仍存在。
+无论退出成功、超时还是连接中断，都用新的只读连接核对实际 history 和本次 schema / 数据不变量。019→020 还须核对生命周期 / 管理代次、Session 准入起点、局部管理责任、历史身份保护和邀请绑定；旧成员写接口已退出，Go / Web / schema 必须配套停写更新。017→018 至少核对角色未被隐式转移、`role_revision` 初始为 1、有效旧邀请绑定任期、失效邀请不复活、旧 Audit / receipt 保持、不可变约束仍存在。
 
 诊断锁与在途迁移时只读取元数据：
 
@@ -157,7 +159,7 @@ curl --fail --silent --show-error --cacert "$upgrade_ca" "$upgrade_origin/health
 1. 对当前源库重新停写，保留失败状态与诊断摘要。列出备份后的业务/验收写入；若原维护授权未覆盖其损失，必须重新确认取舍。
 2. 使用匹配旧工具，将验证过的备份恢复到独立空目标。新工具不能直接接旧 manifest，旧 app 也不能直接接新 schema。
 3. 核对实体、来源关系、Ticket 状态、Document 版本、Audit / receipt 与重建 Activity。Session、邀请和 OIDC 事务应为空；已有实例 setup 必须仍关闭。
-4. 旧密码 verifier、旧 owner 与缺失的后续 receipt 是快照事实。重新核实管理责任；缺失历史不能证明原操作未发生，不自动重放交接、恢复口令或重新赋权。
+4. 旧密码 verifier、旧 owner、成员状态 / 协作角色与缺失的后续 receipt 是快照事实。恢复可能带回备份时仍有效的成员资格；重新核实人员变化、管理责任和显式 Deployment 授权；缺失历史不能证明原操作未发生，不自动重放交接、恢复口令或重新赋权。
 5. 用旧 app / Web 在隔离入口完成正式用户复验，再切换唯一入口。恢复旧服务本身不附带“再次升级到 018”的决定。
 6. 若另行选择恢复后升级，重新按 S0～S5 执行，记录独立决定及新的备份点。
 

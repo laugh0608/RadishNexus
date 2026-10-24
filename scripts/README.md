@@ -125,6 +125,12 @@ npm ci
 
 增加 `--browser-review` 会构建正式 Web，保留合成源 / 目标 HTTPS fixture 等待浏览器复验者提交检查结果；必须实际完成页面流程才能写完成标记。CA 仅供该隔离浏览器 / CLI 使用，不加入系统信任。启动资源、故障注入和清理须获得当前任务授权；脚本不拉取镜像或下载依赖，退出清理自有容器和目录。步骤与限制见[迁移手册](../deploy/context-package.md)，实际结果见[记录](../docs/status/reviews/2026-10-24-portable-context-package.md)。`check-server-backup-restore.sh` 同时验证导入来源与历史身份随备份恢复，恢复后显式重建 Activity。
 
+## 成员生命周期与管理交接验证
+
+`./scripts/check-server-membership.sh` 在专属 PostgreSQL 容器运行 `TestMembership*`，覆盖迁移、生命周期 / 私密权限、并发、真实提交确认丢失、进程中断和代表性规模。`--browser-review` 使用正式 handler 与冻结的 Web 构建副本，等待复验者完成双身份页面流程并写完成标记；常规专项显式跳过该交互 fixture。只使用现有镜像和依赖，退出清理自有资源；启动与故障注入仍需当前任务授权。
+
+`RADISHNEXUS_MEMBERSHIP_LEGACY_REF=5cd7946 ./scripts/check-server-backup-restore.sh` 从本地 Git 编译旧 019 工件，验证旧工具空目标恢复后显式升级 020；未提供该 ref 时旧工件项明确跳过，同版本成员恢复项仍运行。该参数不 fetch、不切换当前分支，也不以新工具恢复旧 schema。完整命令与证据见[成员验收记录](../docs/status/reviews/2026-10-24-membership-lifecycle.md)。
+
 ## 单宿主升级失败与恢复演练
 
 [ADR-0043](../docs/adr/0043-single-host-upgrade-failure-recovery.md) 的操作步骤见[运维手册](../deploy/upgrade-recovery.md)。使用本机 Python 3.12+、Docker / Compose、Git 和已存在的固定基础镜像；仅操作新建的任务专属 project、合成账户与独立恢复副本：

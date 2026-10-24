@@ -1,6 +1,6 @@
 # Project 上下文包迁移
 
-本手册执行 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的 `project-collaboration-v1` 首片。它迁移单 Project 的当前可读协作闭包，目标为同版本、schema 019 已正常初始化的空业务实例；不替代 PostgreSQL 整库备份，不合并已有项目。
+本手册执行 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的 `project-collaboration-v1` 首片。它迁移单 Project 的当前可读协作闭包，目标为同版本、完整匹配当前 migration history（当前为 schema 020）且已正常初始化的空业务实例；不替代 PostgreSQL 整库备份，不合并已有项目。
 
 ## 准备与权限
 
@@ -42,7 +42,7 @@ nexus-context prepare \
 
 - 所有对象和事件生成新 ID，不按源 ID、邮箱或名称匹配既有对象 / 人员。
 - 历史作者生成 disabled account 与 suspended membership，没有凭据或 Session；普通账号管理不能启用它们。
-- 新 Project 强制 restricted，只有本次负责人获得 admin；包内 private Channel / Thread 初始仅负责人可见。其他既有成员之后经正式配置授权。
+- 新 Project 强制 restricted，只有本次负责人获得 admin；包内 private Channel / Thread 初始仅负责人可见，并按 [ADR-0045](../docs/adr/0045-membership-lifecycle-and-management-handoff.md) 取得局部 manager；源管理角色不迁移，历史作者不可激活或选任。其他既有成员之后经正式管理入口授权。
 - accepted Decision、Ticket 状态与原始时间是接纳的历史声明；Web 标记导入来源，不代表目标刚完成审批或执行。Markdown 文本链接原样保留，可能仍指向旧实例。
 
 明确确认 prepare 输出的精确 `plan_digest` 后应用：

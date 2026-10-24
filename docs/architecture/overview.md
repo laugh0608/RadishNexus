@@ -254,6 +254,8 @@ M0.5 已建立第一条可验证恢复路径：显式命令生成版本化 manif
 
 M0.5 / M1 已建立首个正式 Docker Compose 开发拓扑：固定 digest 的 Caddy 是唯一宿主 HTTPS 入口，Go server 同源交付 production Web build 与 API，PostgreSQL 只位于内部数据网络；migration、一次性 bootstrap、account-recover、backup 和 restore 继续使用现有显式 CLI，数据库密码通过按 service 挂载的文件 Secret 输入。该拓扑已经从全新命名 volume 验证 PostgreSQL readiness、migration、一次 bootstrap、重复 bootstrap 拒绝、HTTPS login / Session / logout、转发 Header 清洗和非公开应用/数据库端口；它仍不是公网证书、高可用或跨 major 升级方案。Go 业务就绪探针现按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 只读核对完整 migration history，缺失、漂移或版本不匹配返回不可用。2026-10-18 已验证 migration 017 工件的全新 Compose 装配、Secret 实际挂载、就绪探针、恢复 CLI 与 HTTPS / SSE；旧 016 工件备份在隔离空目标恢复后显式升级亦已验证。网页 setup overlay、Document / 交付全链、生产带流量升级和通用升级中断恢复不由本轮替代，精确范围见[恢复实施记录](../status/reviews/2026-10-18-controlled-account-recovery.md)。后续 migration 018 工件的 Compose HTTPS、owner 交接和旧 017 工件恢复证据见[交接实施记录](../status/reviews/2026-10-18-workspace-owner-handoff.md)。拓扑边界见 [ADR-0016](../adr/0016-minimal-docker-compose-self-hosting.md) 和 [`deploy/README.md`](../../deploy/README.md)。
 
+单宿主停写升级、合法 migration 前缀、提交确认丢失与旧工件空目标恢复已由 [ADR-0043](../adr/0043-single-host-upgrade-failure-recovery.md) 和[运维手册](../../deploy/upgrade-recovery.md) 承接；历史 017→018 Compose 演练与当前 019→020 数据库 / 恢复证据分别记录，独立操作者和生产环境仍另验。恢复后的成员 / 角色是备份快照，开放前须按 ADR-0045 核对人员变化，不以 schema ready 代替授权复核。
+
 ### 可移植上下文包
 
 除整库备份外，规划可移植 `.nexus` 导出包，用于项目迁移、归档和离线检查。建议包含：
