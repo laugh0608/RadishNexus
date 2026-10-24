@@ -2,7 +2,9 @@
 
 此目录实现 [ADR-0016](../docs/adr/0016-minimal-docker-compose-self-hosting.md) 的最小受控开发实例。它验证固定容器工件、显式 migration / bootstrap、唯一 HTTPS origin、持久化 PostgreSQL 和正式 Web build 的装配，不承诺公网生产证书、高可用或跨 PostgreSQL major 升级。
 
-拟议的试用支持范围见[受控试用支持说明](../docs/trial-support.md)；单机停机升级、失败分类与空目标恢复设计见 [ADR-0043](../docs/adr/0043-single-host-upgrade-failure-recovery.md)。该提案尚未实施或执行验收矩阵，不能把下述分项命令视为完整升级失败恢复手册，也不自动获得操作实例的授权。
+拟议的试用支持范围见[受控试用支持说明](../docs/trial-support.md)；单机停机升级、失败分类与空目标恢复设计见 [ADR-0043](../docs/adr/0043-single-host-upgrade-failure-recovery.md)。该方案已接受；下述分项命令仍需遵循完整操作流程，文档本身不授予实例操作权。
+
+执行单宿主升级与失败恢复时，使用[运维手册](upgrade-recovery.md)及其隔离演练入口；实际证据与未完成项见[2026-10-24 记录](../docs/status/reviews/2026-10-24-upgrade-failure-recovery.md)。
 
 ## 边界
 

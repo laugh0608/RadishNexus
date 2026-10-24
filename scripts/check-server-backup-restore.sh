@@ -51,6 +51,8 @@ env \
     GOARCH="${image_architecture}" \
     GOCACHE="${run_dir}/go-cache" \
     go test -c -tags=integration -o "${run_dir}/backuprestore.test" ./internal/backuprestore
+env CGO_ENABLED=0 GOOS=linux GOARCH="${image_architecture}" GOCACHE="${run_dir}/go-cache" \
+    go build -o "${run_dir}/nexus-restore" ./cmd/nexus-restore
 
 # Optional real pre-handoff artifact check. Resolve only a local commit; this
 # never fetches, switches branches, edits the checkout, or rewrites history.
@@ -132,9 +134,10 @@ target_database_url="postgres://${database_user}:${database_password}@${target_c
 
 docker exec \
     --env "SOURCE_DATABASE_URL=${source_database_url}" \
+    --env "RADISHNEXUS_RESTORE_TEST_BIN=/work/nexus-restore" \
     --env "RADISHNEXUS_OWNER_TRANSFER_LEGACY_BIN=${legacy_artifact_dir}" \
     --env "TARGET_DATABASE_URL=${target_database_url}" \
     "${source_container}" \
     /work/backuprestore.test \
     -test.v \
-    -test.run '^TestBackupRestore(GoldenPath|AccountRecovery|OwnerTransfer|OwnerTransferLegacy)$'
+    -test.run '^TestBackupRestore(GoldenPath|AccountRecovery|OwnerTransfer|OwnerTransferLegacy|UpgradeFailures)$'

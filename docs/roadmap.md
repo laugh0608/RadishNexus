@@ -97,7 +97,7 @@ M0～M7 表达能力范围和退出条件，不要求先补齐一个模块的全
 
 邀请外部团队前，准备[评估授权路径](licensing-strategy.md)、受支持的部署范围、备份操作、账号恢复及故障报告方式。优先使用范围受控的真实需求试用；数据范围、参与者和观察方式事先明确，私密工作区内容不进入仓库证据。
 
-首批支持范围与准入条件集中在[受控试用支持说明](trial-support.md)，授权选择集中在[评估授权待决事项](evaluation-authorization-decisions.md)；两者均待确认。单宿主停机维护的失败诊断、续迁与旧备份空目标恢复按 [ADR-0043](adr/0043-single-host-upgrade-failure-recovery.md) 提议单独验收。设计完成不等于已开放试用，不替代有效授权、目标环境复验或生产准备。
+首批支持范围与准入条件集中在[受控试用支持说明](trial-support.md)，授权选择集中在[评估授权待决事项](evaluation-authorization-decisions.md)；两者均待确认。单宿主停机维护的失败诊断、续迁与旧备份空目标恢复按已接受的 [ADR-0043](adr/0043-single-host-upgrade-failure-recovery.md) 单独验收；隔离自动化与浏览器已有[实施证据](status/reviews/2026-10-24-upgrade-failure-recovery.md)，独立操作者复验仍待完成。设计完成不等于已开放试用，不替代有效授权、目标环境复验或生产准备。
 
 从开发拓扑走向生产前，至少还需冻结并验证：数据库 schema 兼容性与 readiness、运行 / migration / backup 身份的最小权限、支持版本与升级窗口、失败中断与 forward repair / 恢复、安全 Audit 的查询和保留、数据生命周期、日志与容量观测。验收覆盖“持续使用 → 备份 → 升级 → 失败诊断 → 恢复”，不能只重跑全新安装。
 

@@ -61,7 +61,7 @@ func CurrentMigrationHistory() ([]MigrationRecord, error) {
 }
 
 // Migrate applies every pending migration in its own transaction. It refuses
-// changed history and concurrent runners. Rollback is deliberately not an
+// changed history and serializes concurrent runners. Rollback is deliberately not an
 // automated production capability: restore and forward repair are deployment
 // concerns that require their own evidence.
 func Migrate(ctx context.Context, connection *pgx.Conn) (err error) {

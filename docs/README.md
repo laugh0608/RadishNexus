@@ -22,7 +22,7 @@
 
 客户端连接方向见[官方客户端与实例连接规划](architecture/client-server-connection-plan.md)及 [ADR-0036](adr/0036-official-client-instance-connection.md)：同一官方安装包运行时支持官方端点或用户自部署后端，无需重新编译，Web 保持各实例同源交付。
 
-试用准备见[受控试用支持说明](trial-support.md)、[评估授权待决事项](evaluation-authorization-decisions.md)及 [ADR-0043：单机停机升级与失败恢复](adr/0043-single-host-upgrade-failure-recovery.md)。三者目前均为待确认设计，分别承载支持范围与准入、授权选择、运维流程与验收矩阵，不代表试用已开放或已授予运行权。
+试用准备见[受控试用支持说明](trial-support.md)、[评估授权待决事项](evaluation-authorization-decisions.md)及 [ADR-0043：单机停机升级与失败恢复](adr/0043-single-host-upgrade-failure-recovery.md)。支持与授权仍为待确认设计；ADR-0043 已接受，执行见[运维手册](../deploy/upgrade-recovery.md)，实际结果与缺口见[2026-10-24 验收记录](status/reviews/2026-10-24-upgrade-failure-recovery.md)。技术实施不代表试用已开放或已授予运行权。
 
 ## 文档职责
 

@@ -118,3 +118,20 @@ npm ci
 ```
 
 该入口不会拉取缺失镜像。它创建任务专属 Compose project、临时数据库 Secret、PostgreSQL volume、Caddy CA 和随机本机 HTTPS 端口，验证 Compose/Caddy 配置、固定 image build、PostgreSQL readiness、显式 migration、唯一一次 bootstrap、HTTPS login / Session / logout、Secure Cookie、Caddy 及时 flush 正式 Message SSE 的 `ready` / `message.created`，以及 Go server / PostgreSQL 无宿主端口。退出时只删除自己的临时 project、volume、network 与临时目录，保留本地构建出的 application / operation image cache。运行边界和人工入口见 [部署说明](../deploy/README.md)、[ADR-0016](../docs/adr/0016-minimal-docker-compose-self-hosting.md)与 [ADR-0020](../docs/adr/0020-session-scoped-single-process-message-realtime.md)。
+
+## 单宿主升级失败与恢复演练
+
+[ADR-0043](../docs/adr/0043-single-host-upgrade-failure-recovery.md) 的操作步骤见[运维手册](../deploy/upgrade-recovery.md)。使用本机 Python 3.12+、Docker / Compose、Git 和已存在的固定基础镜像；仅操作新建的任务专属 project、合成账户与独立恢复副本：
+
+```bash
+python3 scripts/check-upgrade-recovery.py --old-ref 333c4ce --new-ref 171527f \
+  --report /tmp/radishnexus-upgrade-result.json --browser-review
+```
+
+默认无网络构建。获准下载现有锁定构建依赖时才增加 `--allow-locked-downloads`，不升级版本、修改 lockfile 或拉取缺失基础镜像。脚本从本地 Git archive 构建旧/新 app、operations 与 Web，记录真实镜像身份；只读核对实例身份，明确停写，经停写后备份、匹配旧工具空目标恢复、显式升级和唯一入口切换完成验证。它不是业务实例自动升级器，不接受任意 DSN 或已有 volume。
+
+脚本验证错误目标、损坏/缺失备份、临时容器磁盘满、额外 writer、真实 migrate CLI 锁等待预算、旧 app / 新 schema 错配、缺失 Web build、备份后数据取舍、旧 Session 拒绝、恢复后单独升级及权限/来源读取。`--browser-review` 的四个阶段必须由复验者完成并写明确检查结果；没有该参数时浏览器证据标记未运行。退出仅清理任务资源和专属镜像标签，保留构建缓存与指定脱敏报告；清理失败明确报告，不自动清理真实实例。
+
+`check-server-postgres.sh` 中的 `TestUpgradeFailure*` 验证真实历史 migration 的原子回滚、合法前缀、续迁、并发、取消、连接终止、COMMIT 确认丢失及 history 漂移；readiness 不覆盖手工 DDL 的限制也显式测试。COMMIT 故障夹具位于 `server/internal/testsupport/pgfault`，仅 integration 构建使用。
+
+`check-server-backup-restore.sh` 还会编译正式 restore CLI，并运行 `TestBackupRestoreUpgradeFailures`。它在真实 pg_restore 的事务阶段注入 SQL 错误/断连，在权威恢复后注入 Activity 重建错误，证明失败不能报告完成、不能覆盖非空目标；重新恢复使用独立空目标。旧版本证据仍需显式指定 `RADISHNEXUS_OWNER_TRANSFER_LEGACY_REF=333c4ce`，不能以当前版本往返代替。

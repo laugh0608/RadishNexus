@@ -1,6 +1,6 @@
 # RadishNexus 当前状态
 
-状态日期：2026-10-18
+状态日期：2026-10-24
 
 ## 已确认待实施的客户端方向
 
@@ -31,7 +31,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | Ticket 与 Component 人工关联 | migration 014、人工 `affects`、Project 写权限、精确解除 / 重连、协作 receipt、Activity v5 | Ticket 关联区、组件稳定详情与按权限过滤的反向分页 | Go / PostgreSQL / Web、013 升级与恢复通过；正式页面创建链、关联 / 解除 / 重连、桌面 / 手机与键盘通过；浏览器后退、显式刷新撤回读 / 写权及最终截图已补验，见[补验记录](reviews/2026-10-09-delivery-continuation.md) |
 | CI Run checkout 来源 A | migration 015、sources / payload v2、不可变 binding / built-from、schema 2 CI 事件与 Activity 6 | CI Run 来源详情、完整 OID 复制、Repository 稳定页面与反向分页 | 合成签名输入、真实 PostgreSQL、014 升级 / 混合恢复与隔离浏览器验证；真实 SCM 采集 B 暂缓，见[实施记录](reviews/2026-10-13-checkout-provenance.md) |
 | EntityLink / Activity | 带来源关系、权限过滤 query、同事务 Activity 更新与版本化全量重建 | Nexus View 可读 Current / 出向与首批入向 Relations / 正常更新的 Timeline | 正常写入与双向发现已通过真实 PostgreSQL / HTTP 和浏览器；未完成持续使用观察 |
-| 自部署与恢复 | 显式 migration、只读 schema readiness、PostgreSQL 17 同 major 空目标恢复 | 健康端点拒绝 migration 缺失 / 漂移 / 版本不匹配；固定工件 Compose 开发拓扑与 HTTPS 演练已有记录 | 当前 migration 018 工件的全新 Compose / HTTPS、账号恢复、owner 交接及旧备份升级已验收；通用升级失败恢复、运维与生产容量尚未完成 |
+| 自部署与恢复 | 显式 migration、只读 schema readiness、PostgreSQL 17 同 major 空目标恢复 | 健康端点拒绝 migration 缺失 / 漂移 / 版本不匹配；固定工件 Compose 开发拓扑与 HTTPS 演练已有记录 | 单机停机升级 / 失败恢复的 PostgreSQL 故障、历史工件 Compose / HTTPS 与浏览器已有隔离证据；ADR-0043 独立操作者复验、目标环境和生产容量仍待完成 |
 | Document | migration 010、不可变版本、精确 receipt、当前 Project 权限、单一受限 Markdown parser、备份恢复 | Ticket 创建、Project 文档列表、阅读 / 编辑 / 预览、显式冲突重新应用、历史恢复 | 真实数据库及隔离 HTTPS 双标签页、恢复、手机布局、撤权已有证据；原生中文 IME、普通成员独立持续使用仍待验收 |
 
 ## 已确认缺口
@@ -40,7 +40,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 当前剩余缺口：
 
-1. **升级运维**：只读 schema readiness 已按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 完成；单机停机升级失败恢复已形成 [ADR-0043](../adr/0043-single-host-upgrade-failure-recovery.md) 提议，尚未实施或验收；跨 schema 兼容窗口与生产编排仍待建立。
+1. **升级运维**：只读 schema readiness 已按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 完成；单机停机升级失败恢复已按 [ADR-0043](../adr/0043-single-host-upgrade-failure-recovery.md) 实施手册与隔离演练，故障与浏览器证据见[记录](reviews/2026-10-24-upgrade-failure-recovery.md)；独立操作者复验尚未完成，跨 schema 兼容窗口与生产编排仍待建立。
 2. **使用入口**：首页已可直接浏览可读 Project / Channel；Team / Project / Channel 创建与首批成员配置已接通；部署后首次访问创建管理员已接通；Workspace owner 主动交接已接通，Project admin / 私密对象管理权交接和其他对象列表仍缺。Document 的原生 IME 复核和真实外部交付链仍独立推进。
 3. **关系与时间线范围**：核心 Nexus 关系仍全量读取，未建立通用分页；Repository / Component 配置和 Ticket / Component 关联已有专用双向分页和 active 反向索引。Timeline 保留事件主要对象语义，Thread 不展示后续对象 Activity，其余交付反向关系尚未开放。
 4. **证据边界**：自动化、真实数据库与本轮浏览器验收证明讨论到执行的局部闭环；Document 的剩余人工复核、真实交付链、完整 Golden Path 和真实团队持续使用仍分别验收。
@@ -54,7 +54,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | 1 | Project 下的 Ticket 只读发现 | 已按 [ADR-0038](../adr/0038-project-ticket-discovery.md) 完成；成员可从 Project 列表找回已有 Ticket，当前权限、分页与恢复验收见[记录](reviews/2026-10-13-project-ticket-discovery.md) |
 | 2 | Ticket 最小状态流转 | 已按 [ADR-0039](../adr/0039-ticket-status-transitions.md) 完成；四状态转换、独立版本、精确重试、读取兼容与恢复验收见[记录](reviews/2026-10-13-ticket-status-transitions.md) |
 | 3 | Project 下的 Decision 只读发现 | 已按 [ADR-0040](../adr/0040-project-decision-discovery.md) 完成；成员从 Project 找回两种状态，权限、分页、来源隔离与恢复见[记录](reviews/2026-10-18-project-decision-discovery.md)；拒绝、替代和复核另立写入切片 |
-| 4 | 试用所需身份与运维能力 | [本地账户受控恢复 ADR-0041](../adr/0041-controlled-local-account-recovery.md) 与 [Workspace owner 主动交接 ADR-0042](../adr/0042-workspace-owner-handoff.md) 已实施并完成隔离验收；[支持说明](../trial-support.md)、[评估授权待决事项](../evaluation-authorization-decisions.md)与[升级失败恢复 ADR-0043](../adr/0043-single-host-upgrade-failure-recovery.md) 已形成设计，待确认后分别推进；尚未执行其准入 / 故障矩阵或签发授权 |
+| 4 | 试用所需身份与运维能力 | [本地账户受控恢复 ADR-0041](../adr/0041-controlled-local-account-recovery.md) 与 [Workspace owner 主动交接 ADR-0042](../adr/0042-workspace-owner-handoff.md) 已实施并完成隔离验收；[升级失败恢复 ADR-0043](../adr/0043-single-host-upgrade-failure-recovery.md) 已实施并完成自动化 / 浏览器隔离演练，独立操作者复验待补；[支持说明](../trial-support.md)与[评估授权待决事项](../evaluation-authorization-decisions.md)仍待确认，未开放外部试用或签发授权 |
 | 5 | 受控小团队场景试用 | 满足必要条件后观察讨论—决策—工单—文档的持续使用，记录追溯、重复录入与维护者干预；真实交付链未恢复时不宣称完整 Golden Path 通过 |
 | 6 | 版本化结构化导出与全新实例导入 | 独立冻结可迁移数据、脱敏与映射合同并往返验证，不用整库备份代替 M1 退出条件 |
 | 暂缓 | 真实 Jenkins 采集与交付整链 | ADR-0035 / ADR-0037 B 继续暂缓；具体 Ticket ↔ CI Run 关系仍待 ADR-0037 约定的来源合同与 B 证据明确后独立冻结 |
@@ -62,11 +62,11 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 免费书面授权与评估说明应在邀请外部团队前准备，不能等到完整聊天或 CRDT 完成；版本化结构化导出与全新实例导入仍是 M1 的独立退出条件。账号恢复、安全审计、数据生命周期、数据库最小权限与升级演练按[路线图](../roadmap.md)的试用和生产边界推进，不因本表只列近期切片而取消。
 
-### 本轮设计：受控试用与单机升级失败恢复
+### 本轮实施：单机升级失败恢复；试用条件仍待确认
 
 2026-10-18 按所有者要求核对现有许可、migration、readiness、备份恢复、Compose 与身份合同，形成[支持说明](../trial-support.md)的 8 项准入条件、[评估授权待决事项](../evaluation-authorization-decisions.md)的 12 项选择，以及 [ADR-0043](../adr/0043-single-host-upgrade-failure-recovery.md) 的流程与 28 项验收矩阵。推荐首批采用非生产、可重建数据、单宿主 Compose 停机维护；授权先讨论指定主体免费书面评估，不改变根许可证。
 
-三份文档均待确认；准入条件和新验收矩阵全部待执行或确认。后续先确认支持边界与授权选择，再分别准备经专业复核的授权模板和获准的升级恢复演练；外部实际运行须同时满足授权与技术准入。本轮仅文档，按所有者后续要求本地提交；不实现、不启动实例、不签发授权或 push。
+2026-10-24 所有者确认 ADR-0043 的本机非生产隔离范围，已落实[操作手册](../../deploy/upgrade-recovery.md)、历史工件演练和真实数据库故障测试；017→018、空目标恢复旧服务、恢复后显式升级，以及四阶段浏览器验证通过。U01～U28 的分层结果与部分覆盖见[实施记录](reviews/2026-10-24-upgrade-failure-recovery.md)，独立操作者复验尚未完成，不宣称全矩阵退出。支持说明与授权选择仍待确认，外部实际运行须同时满足授权与技术准入。所有者随后授权本地提交本轮改动；未 push，未操作真实实例。
 
 ### 本轮完成：Workspace owner 主动交接
 
@@ -80,7 +80,7 @@ Go / race / vet、真实 PostgreSQL 并发与故障注入、017→018 升级、�
 
 Go / PostgreSQL / Web、当前 Compose / HTTPS、真实浏览器及恢复后备份已通过；016 旧备份以匹配旧工件恢复空目标后显式升级，确证旧 verifier 可能回来，必须重新核验并恢复。32 项矩阵的证据与限制见[实施记录](reviews/2026-10-18-controlled-account-recovery.md)。本轮临时资源已清理，实现、测试与文档已提交为 `333c4ce`；未 push、未操作真实账户。
 
-Workspace owner 主动交接已按上述 ADR-0042 实施；试用支持 / 评估授权及升级失败恢复已分别形成待确认设计，不扩展到自助找回、OIDC 或完整失陷处置，也不自动开始后续实现。
+Workspace owner 主动交接已按上述 ADR-0042 实施；升级失败恢复实施与缺口见上方，试用支持 / 评估授权仍待确认，不扩展到自助找回、OIDC 或完整失陷处置，也不自动开始后续实现。
 
 ### 本轮完成：Project 决策只读发现
 
@@ -128,7 +128,7 @@ Ticket 与 Component 人工关联已按 ADR-0034 实现，浏览器后退、显�
 
 ### 接下来的事项
 
-1. **下一技术切片：单机停机升级失败恢复**：先确认 [ADR-0043](../adr/0043-single-host-upgrade-failure-recovery.md) 的单机非生产范围、宿主与 `333c4ce` / 017 → `171527f` / 018 版本对。获准后编写可执行运维手册与隔离演练入口，复用 migration / backup / restore，执行 U01～U28；重点证明提交结果不明、部分迁移成功、旧备份空目标恢复及唯一可写实例。交付须包含正式用户浏览器、操作复验与分阶段耗时证据；提案仍待接受，本次不开始实现或启动资源。
+1. **收齐单机停机升级失败恢复的操作验收**：依据[手册](../../deploy/upgrade-recovery.md)与[U01～U28 记录](reviews/2026-10-24-upgrade-failure-recovery.md)，安排另一操作者复验停止 / 续迁 / 空目标恢复判断；针对实际试用候选和目标环境补验材料、工件、容量与责任边界。当前自动化和浏览器结果不替代独立操作者验收，不以历史演练工件作为外部试用候选。
 2. **同步确认试用与授权条件**：确定[支持说明](../trial-support.md)的非生产数据范围、环境、联系人、责任和退出安排，以及[授权待决事项](../evaluation-authorization-decisions.md) E01～E12 中的主体、用途、期限和到期取回范围；选择确认后另行准备授权模板并专业复核。技术准入与有效授权均完成后才进入外部受控试用，本轮不签发授权。
 3. **保留范围**：账号恢复与 Workspace owner 主动交接已交付；Project admin / 私密对象管理权交接、Decision 拒绝 / 替代 / 复核、Ticket 负责人 / 优先级 / 看板仍另立切片。结构化导出与全新实例导入仍是独立退出条件，不由整库恢复代替。
 4. **继续暂缓**：真实 Jenkins ADR-0035 / ADR-0037 B 与原生中文 IME 人工验收。真实交付关系、完整 Golden Path、生产运维与团队持续使用均不因本日测试通过而标记完成；恢复时另行明确资源和验收范围。
@@ -221,6 +221,7 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 
 ## 证据与历史
 
+- [2026-10-24 单机停机升级与失败恢复](reviews/2026-10-24-upgrade-failure-recovery.md)：真实故障、历史工件双实例恢复、浏览器与剩余操作验收。
 - [2026-10-18 提交回顾与文档收尾](reviews/2026-10-18-daily-closeout.md)：五笔提案 / 实现 / 设计提交、源码文档核对及升级失败恢复接续建议。
 - [2026-10-18 Workspace owner 主动交接](reviews/2026-10-18-workspace-owner-handoff.md)：角色代次、邀请任期、本人历史查询、并发与旧工件恢复。
 
