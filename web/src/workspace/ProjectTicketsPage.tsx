@@ -1,3 +1,7 @@
+import {
+  ticketPriorityLabels,
+  type TicketPriority,
+} from "../collaboration/ticket-priority";
 import { assigneeLabel } from "../collaboration/ticket-assignee-api";
 import { ticketStatusLabels } from "../collaboration/ticket-status";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -6,6 +10,7 @@ import { collaborationPagePath } from "../collaboration/api";
 import {
   projectTicketsClient,
   type ProjectTicketsClient,
+  type TicketFilters,
 } from "./project-tickets-api";
 
 interface Props {
@@ -41,6 +46,7 @@ function ProjectTickets({
 }: Props) {
   const [state, setState] = useState<PageState>({ status: "loading" });
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
+  const [filters, setFilters] = useState<TicketFilters>({});
   const [revision, setRevision] = useState(0);
   const activeRequest = useRef<AbortController | null>(null);
   const cursor = cursors[cursors.length - 1];
@@ -50,6 +56,10 @@ function ProjectTickets({
     setCursors(next);
     setRevision((value) => value + 1);
   }, []);
+  const changeFilters = (next: TicketFilters) => {
+    setFilters(next);
+    changePage([undefined]);
+  };
   const refresh = useCallback(() => changePage([undefined]), [changePage]);
 
   useEffect(() => {
@@ -59,7 +69,13 @@ function ProjectTickets({
     // denied/failed read of the other, nor a late response after navigation.
     void Promise.all([
       client.project(workspaceID, projectID, controller.signal),
-      client.tickets(workspaceID, projectID, cursor, controller.signal),
+      client.tickets(
+        workspaceID,
+        projectID,
+        cursor,
+        controller.signal,
+        filters,
+      ),
     ]).then(
       ([project, page]) => {
         if (!controller.signal.aborted)
@@ -80,7 +96,15 @@ function ProjectTickets({
       },
     );
     return () => controller.abort();
-  }, [client, cursor, onSessionExpired, projectID, revision, workspaceID]);
+  }, [
+    client,
+    cursor,
+    filters,
+    onSessionExpired,
+    projectID,
+    revision,
+    workspaceID,
+  ]);
 
   useEffect(() => {
     const visibility = () => {
@@ -112,8 +136,79 @@ function ProjectTickets({
       <a href="/">返回工作台</a>
       <h1>项目工单</h1>
       <button type="button" onClick={refresh}>
-        刷新工单列表
+        刷新当前筛选
       </button>
+      <fieldset className="ticket-filters">
+        <legend>筛选项目工单</legend>
+        <label>
+          状态
+          <select
+            value={filters.status ?? ""}
+            onChange={(e) =>
+              changeFilters({
+                ...filters,
+                status:
+                  e.target.value === ""
+                    ? undefined
+                    : (e.target.value as TicketFilters["status"]),
+              })
+            }
+          >
+            <option value="">全部状态</option>
+            <option value="active">未结束</option>
+            {Object.entries(ticketStatusLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          负责人
+          <select
+            value={filters.assignee ?? ""}
+            onChange={(e) =>
+              changeFilters({
+                ...filters,
+                assignee:
+                  e.target.value === ""
+                    ? undefined
+                    : (e.target.value as TicketFilters["assignee"]),
+              })
+            }
+          >
+            <option value="">全部负责人</option>
+            <option value="me">由我负责</option>
+            <option value="unassigned">未分配</option>
+          </select>
+        </label>
+        <label>
+          优先级
+          <select
+            value={filters.priority ?? ""}
+            onChange={(e) =>
+              changeFilters({
+                ...filters,
+                priority:
+                  e.target.value === ""
+                    ? undefined
+                    : (e.target.value as TicketPriority),
+              })
+            }
+          >
+            <option value="">全部优先级</option>
+            {Object.entries(ticketPriorityLabels).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="button" onClick={() => changeFilters({})}>
+          重置筛选
+        </button>
+      </fieldset>
+      <p>按稳定标识排序。工单变化后可刷新当前筛选，重新读取首页。</p>
       {state.status === "loading" ? (
         <p role="status">正在读取项目工单…</p>
       ) : state.status === "error" ? (
@@ -130,7 +225,7 @@ function ProjectTickets({
             <p>项目已归档 · 可浏览历史工单</p>
           ) : null}
           {state.page.items.length === 0 ? (
-            <p>当前项目没有可显示的工单。</p>
+            <p>当前条件下没有可显示的工单。</p>
           ) : (
             <ul className="configuration-list">
               {state.page.items.map((ticket) => (
@@ -145,6 +240,7 @@ function ProjectTickets({
                     {ticket.title}
                   </a>
                   <p>{ticketStatusLabels[ticket.status]}</p>
+                  <p>优先级：{ticketPriorityLabels[ticket.priority]}</p>
                   <p>负责人：{assigneeLabel(ticket.assignee)}</p>
                 </li>
               ))}

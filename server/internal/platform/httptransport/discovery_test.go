@@ -78,6 +78,9 @@ func TestDiscoveryRoutesReturnOnlySafeItemsAndScopedPagination(t *testing.T) {
 				status = "proposed"
 			}
 			reader := &fakeDiscoveryReader{page: goldenpath.DiscoveryPage{Items: []goldenpath.DiscoveryItem{{Ref: entityref.Ref{Type: kind, ID: id}, Title: "Visible title", Status: status}}, NextID: id}}
+			if kind == "ticket" {
+				reader.page.Items[0].Priority = "unset"
+			}
 			sessions := validMessagingSessions()
 			handler := discoveryHandlerForTest(t, sessions, reader)
 			response := httptest.NewRecorder()
@@ -94,7 +97,12 @@ func TestDiscoveryRoutesReturnOnlySafeItemsAndScopedPagination(t *testing.T) {
 			if len(payload.Data.Items) != 1 || payload.Data.NextCursor == nil || payload.Data.Items[0].Ref.ID != id || reader.project != project || reader.principal != (authz.Principal{Kind: authz.PrincipalUser, ID: "usr_reader", WorkspaceID: "wrk_main"}) || sessions.verifyCalls != 0 {
 				t.Fatal(payload, reader, sessions)
 			}
-			input, err := parseDiscoveryQuery("limit=1&after="+*payload.Data.NextCursor, discoveryCursor{Version: 1, WorkspaceID: "wrk_main", Kind: kind, ProjectID: project})
+			scope := discoveryCursor{Version: 1, WorkspaceID: "wrk_main", Kind: kind, ProjectID: project}
+			if kind == "ticket" {
+				scope.Version = 2
+				scope.ActorID = "usr_reader"
+			}
+			input, err := parseDiscoveryQuery("limit=1&after="+*payload.Data.NextCursor, scope)
 			if err != nil || input.AfterID != id {
 				t.Fatal(input, err)
 			}

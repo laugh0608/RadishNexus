@@ -1,6 +1,6 @@
 # Project 上下文包迁移
 
-本手册执行 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的单 Project 首片及 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 的负责人扩展。当前导出为 `project-collaboration-v2`；新服务继续读取严格旧 v1，旧服务拒绝 v2，不提供丢弃分配历史的降级导出。它迁移单 Project 的当前可读协作闭包，目标为同版本、完整匹配当前 migration history（当前为 schema 021）且已正常初始化的空业务实例；不替代 PostgreSQL 整库备份，不合并已有项目。
+本手册执行 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的单 Project 首片及 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 的负责人扩展及 [ADR-0047](../docs/adr/0047-ticket-priority-and-filtering.md) 的优先级扩展。当前导出为 `project-collaboration-v3`；新服务严格读取旧 v1 / v2，旧服务拒绝 v3，不提供丢弃历史的降级导出。它迁移单 Project 的当前可读协作闭包，目标为同版本、完整匹配当前 migration history（当前为 schema 022）且已正常初始化的空业务实例；不替代 PostgreSQL 整库备份，不合并已有项目。
 
 ## 准备与权限
 
@@ -99,3 +99,10 @@ apply 原子写入业务对象、历史身份、映射、历史来源、Activity
 v2 在 Ticket 中明确携带可空 `assignee_user_id` 与 `assignment_revision`，并校验从未分配 / 1 开始的连续分配历史和最终状态。分配历史涉及的身份进入包内作者闭包，导入时逐项映射为 disabled 历史身份；目标不按姓名或邮箱绑定真实成员。导入后显示“历史负责人，待重新分配”，只有当前有权成员的显式新动作才能指定目标实例成员。
 
 旧 v1 仅接受原 Ticket 三字段，不接受 v2 字段和事件；校验后在内部转换为 null / 1，计划 digest 仍绑定原 manifest。`format_version` 仍为 1，profile 区分两份合同。020→021 使用配套 Go / Web 停写升级；旧备份先由匹配 020 工件恢复空目标，再显式 migrate。
+
+
+## 优先级兼容
+
+v3 在 v2 的五个 Ticket 字段上增加必填 `priority / priority_revision`，从 unset / 1 重放连续优先级历史，校验终态禁止修改、全局时间次序、三条历史链的最终值与更新时间。旧 v1 / v2 先按各自精确字段和事件白名单校验，再在内部补 unset / 1；v1 同时补未分配 / 1。源 manifest digest 保持不变，不补造事件或改写旧时间。
+
+022 与 Activity 10、配套 Go / Web / CLI 一起停写升级。旧 021 工件恢复到空目标后才显式 migrate；新导出只能是 v3。筛选、cursor 和协作 receipt 不进入上下文包，receipt 仍保留在整库备份中。原生与导入优先级事件均参与二次导入和投影重建，历史身份仍不可登录。

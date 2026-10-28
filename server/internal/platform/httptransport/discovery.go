@@ -40,6 +40,9 @@ type DiscoveryHandler struct {
 }
 
 type discoveryCursor struct {
+	Status      string `json:"status,omitempty"`
+	Assignee    string `json:"assignee,omitempty"`
+	Priority    string `json:"priority,omitempty"`
 	ActorID     string `json:"actor_id,omitempty"`
 	CIRunID     string `json:"ci_run_id,omitempty"`
 	Version     int    `json:"v"`
@@ -49,7 +52,28 @@ type discoveryCursor struct {
 	AfterID     string `json:"after_id"`
 }
 
+// Ticket cursor v2 requires even empty filters; v1 encodings for all other
+// discovery kinds stay byte-for-byte compatible.
+func (c discoveryCursor) MarshalJSON() ([]byte, error) {
+	if c.Version == 2 {
+		return json.Marshal(struct {
+			Version     int    `json:"v"`
+			WorkspaceID string `json:"workspace_id"`
+			ProjectID   string `json:"project_id"`
+			Kind        string `json:"kind"`
+			ActorID     string `json:"actor_id"`
+			Status      string `json:"status"`
+			Assignee    string `json:"assignee"`
+			Priority    string `json:"priority"`
+			AfterID     string `json:"after_id"`
+		}{c.Version, c.WorkspaceID, c.ProjectID, c.Kind, c.ActorID, c.Status, c.Assignee, c.Priority, c.AfterID})
+	}
+	type plain discoveryCursor
+	return json.Marshal(plain(c))
+}
+
 type discoveryItemDTO struct {
+	Priority string                      `json:"priority,omitempty"`
 	Assignee **goldenpath.TicketAssignee `json:"assignee,omitempty"`
 	Ref      entityRefDTO                `json:"ref"`
 	Title    string                      `json:"title"`
@@ -129,11 +153,16 @@ func (handler *DiscoveryHandler) list(response http.ResponseWriter, request *htt
 		}
 	}
 	scope := discoveryCursor{Version: 1, WorkspaceID: workspaceID, Kind: kind, ProjectID: projectID}
+	if kind == "ticket" {
+		scope.Version = 2
+		scope.ActorID = principal.ID
+	}
 	input, err := parseDiscoveryQuery(request.URL.RawQuery, scope)
 	if err != nil {
 		handler.writeError(response, request, err)
 		return
 	}
+	scope.Status, scope.Assignee, scope.Priority = input.TicketFilters.Status, input.TicketFilters.Assignee, input.TicketFilters.Priority
 	var page goldenpath.DiscoveryPage
 	if kind == "project" {
 		page, err = handler.reader.ListProjects(request.Context(), principal, input)
@@ -178,9 +207,16 @@ func parseDiscoveryQuery(raw string, scope discoveryCursor) (goldenpath.Discover
 		return input, invalid
 	}
 	for name, values := range values {
-		if (name != "limit" && name != "after") || len(values) != 1 || values[0] == "" {
+		if (name != "limit" && name != "after" && !(scope.Version == 2 && scope.Kind == "ticket" && (name == "status" || name == "assignee" || name == "priority"))) || len(values) != 1 || values[0] == "" {
 			return input, invalid
 		}
+	}
+	if scope.Version == 2 && scope.Kind == "ticket" {
+		input.TicketFilters = goldenpath.TicketFilters{Status: values.Get("status"), Assignee: values.Get("assignee"), Priority: values.Get("priority")}
+		if !input.TicketFilters.Valid() {
+			return input, invalid
+		}
+		scope.Status, scope.Assignee, scope.Priority = input.TicketFilters.Status, input.TicketFilters.Assignee, input.TicketFilters.Priority
 	}
 	if value := values.Get("limit"); value != "" {
 		limit, err := strconv.Atoi(value)
@@ -237,7 +273,14 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 		}
 		previousID = item.Ref.ID
 		seen[item.Ref.ID] = true
-		row := discoveryItemDTO{Ref: entityRefDTO{Type: item.Ref.Type, ID: item.Ref.ID}, Title: item.Title, Status: item.Status}
+		if scope.Kind == "ticket" {
+			if !goldenpath.ValidTicketPriority(item.Priority) || (input.TicketFilters.Priority != "" && item.Priority != input.TicketFilters.Priority) || (input.TicketFilters.Status == "active" && item.Status != "open" && item.Status != "in-progress") || (input.TicketFilters.Status != "" && input.TicketFilters.Status != "active" && item.Status != input.TicketFilters.Status) || (input.TicketFilters.Assignee == "unassigned" && item.Assignee != nil) || (input.TicketFilters.Assignee == "me" && (item.Assignee == nil || item.Assignee.ID != scope.ActorID)) {
+				return dto, invalid
+			}
+		} else if item.Priority != "" {
+			return dto, invalid
+		}
+		row := discoveryItemDTO{Priority: item.Priority, Ref: entityRefDTO{Type: item.Ref.Type, ID: item.Ref.ID}, Title: item.Title, Status: item.Status}
 		if scope.Kind == "ticket" {
 			if !validAssignee(item.Assignee) {
 				return dto, invalid

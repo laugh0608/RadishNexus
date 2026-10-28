@@ -72,7 +72,7 @@ func Unpack(b Bundle) (Data, *Index, error) {
 	if len(Encode(m)) > MaxLineBytes {
 		return d, nil, invalid("manifest size")
 	}
-	if m.Format != Format || m.Version != Version || (m.Profile != Profile && m.Profile != ProfileV1) || !ValidID(m.PackageID, "pkg_") || !ValidID(m.WorkspaceID, "wrk_") || !ValidID(m.ProjectID, "prj_") || !validTime(m.CreatedAt) || !label(m.SourceVersion, 100) || len(m.Files) < len(metadataPaths) || len(m.Files) > MaxHistory+len(metadataPaths) || len(b.Files) != len(m.Files) {
+	if m.Format != Format || m.Version != Version || (m.Profile != Profile && m.Profile != ProfileV1 && m.Profile != ProfileV2) || !ValidID(m.PackageID, "pkg_") || !ValidID(m.WorkspaceID, "wrk_") || !ValidID(m.ProjectID, "prj_") || !validTime(m.CreatedAt) || !label(m.SourceVersion, 100) || len(m.Files) < len(metadataPaths) || len(m.Files) > MaxHistory+len(metadataPaths) || len(b.Files) != len(m.Files) {
 		return d, nil, invalid("manifest")
 	}
 	files := map[string][]byte{}
@@ -134,25 +134,38 @@ func Unpack(b Bundle) (Data, *Index, error) {
 			return d, nil, invalid("missing file")
 		}
 	}
-	if m.Profile == ProfileV1 {
+	if m.Profile == ProfileV1 || m.Profile == ProfileV2 {
 		for i, o := range d.Objects {
 			if o.Type != "ticket" {
 				continue
 			}
 			var fields map[string]json.RawMessage
-			if Decode(o.Data, &fields) != nil || len(fields) != 3 || fields["title"] == nil || fields["status"] == nil || fields["status_revision"] == nil {
-				return d, nil, invalid("v1 Ticket fields")
+			expected := []string{"title", "status", "status_revision"}
+			if m.Profile == ProfileV2 {
+				expected = append(expected, "assignee_user_id", "assignment_revision")
+			}
+			if Decode(o.Data, &fields) != nil || len(fields) != len(expected) {
+				return d, nil, invalid("legacy Ticket fields")
+			}
+			for _, key := range expected {
+				if fields[key] == nil {
+					return d, nil, invalid("legacy Ticket fields")
+				}
 			}
 			var t Ticket
 			if Decode(o.Data, &t) != nil {
-				return d, nil, invalid("v1 Ticket")
+				return d, nil, invalid("legacy Ticket")
 			}
-			t.AssignmentRevision = 1
+			if m.Profile == ProfileV1 {
+				t.AssignmentRevision = 1
+			}
+			t.Priority = "unset"
+			t.PriorityRevision = 1
 			d.Objects[i].Data = Encode(t)
 		}
 		for _, h := range d.History {
-			if h.Type == "ticket.assignee-changed" {
-				return d, nil, invalid("v1 assignment history")
+			if h.Type == "ticket.priority-changed" || (m.Profile == ProfileV1 && h.Type == "ticket.assignee-changed") {
+				return d, nil, invalid("unsupported legacy Ticket history")
 			}
 		}
 	}

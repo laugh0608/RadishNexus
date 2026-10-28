@@ -1,3 +1,5 @@
+import { useTicketPriorityActions } from "./TicketPriorityActions";
+import { ticketPriorityLabels } from "./ticket-priority";
 import { useTicketAssignmentActions } from "./TicketAssignmentActions";
 import { ManagementPanel } from "../workspace/ManagementPanel";
 import { ContextSourceNotice } from "../ContextSourceNotice";
@@ -184,6 +186,18 @@ function CollaborationPageContent({
     onSessionExpired,
   });
   const ticketAssignmentActions = useTicketAssignmentActions({
+    workspaceID,
+    ticketID: entityID,
+    enabled: entityType === "ticket",
+    ready: state.status === "ready",
+    versionKey: state.status === "ready" ? state.view.current.updatedAt : "",
+    unavailable: state.status === "error",
+    onRefresh: relationChanged,
+    onUnavailable: relationUnavailable,
+    onSessionExpired,
+    createOperationID,
+  });
+  const ticketPriorityActions = useTicketPriorityActions({
     workspaceID,
     ticketID: entityID,
     enabled: entityType === "ticket",
@@ -591,6 +605,7 @@ function CollaborationPageContent({
               <strong>Ticket 已进入执行上下文</strong>
               {ticketStatusActions}
               {ticketAssignmentActions}
+              {ticketPriorityActions}
               <CreateDocument
                 workspaceID={workspaceID}
                 ticketID={entityID}
@@ -869,7 +884,9 @@ function TimelineList({
                 ? `${ticketStatusLabels[item.fromStatus]} → ${ticketStatusLabels[item.toStatus]}（版本 ${item.fromRevision} → ${item.toRevision}）`
                 : "assignment" in item
                   ? `${item.assignment.fromUserID ?? "未分配"} → ${item.assignment.toUserID ?? "未分配"}（负责人版本 ${item.assignment.fromRevision} → ${item.assignment.toRevision}）`
-                  : item.status}
+                  : "priority" in item
+                    ? `${ticketPriorityLabels[item.priority.from]} → ${ticketPriorityLabels[item.priority.to]}（优先级版本 ${item.priority.fromRevision} → ${item.priority.toRevision}）`
+                    : item.status}
           </span>
           <SubjectSummary subjects={item.subjects} />
           {item.subjects.map((subject) =>

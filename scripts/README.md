@@ -153,3 +153,10 @@ python3 scripts/check-upgrade-recovery.py --old-ref 333c4ce --new-ref 171527f \
 `TestTicketAssignment*` 覆盖候选、代次冲突、精确重试、原子故障、分配历史往返和 migration 020→021。`RADISHNEXUS_ASSIGNMENT_LEGACY_REF=211f050 ./scripts/check-server-backup-restore.sh` 在自有容器构建本地 020 工件，验证旧工件恢复到空目标后显式升级；不 fetch、不切换工作分支。
 
 交互浏览器 fixture 使用 `RADISHNEXUS_ASSIGNMENT_BROWSER_STATE` 与 `RADISHNEXUS_WEB_ROOT`，运行 `go test -tags=integration ./internal/goldenpath/postgres -run '^TestTicketAssignmentHTTPSBrowser$' -count=1 -timeout=45m -v`。需明确授权的隔离 `DATABASE_URL`、冻结的 Web build 和独立浏览器；实际验收后才写 state 指定的 `.done` 检查结果。无该环境变量时显式跳过浏览器，不冒充通过；流程结束关闭浏览器及自有容器。
+
+
+### Ticket 优先级与筛选验收
+
+`TestTicketPriority*` 覆盖枚举、版本与 receipt、权限、筛选矩阵与分页、固定先后顺序、原子故障、提交确认丢失、v3 往返及 021→022 迁移。`RADISHNEXUS_PRIORITY_LEGACY_REF=ec1caf3 ./scripts/check-server-backup-restore.sh` 在隔离容器构建本地 021 工件，验证旧备份由旧工件恢复空目标再升级，不 fetch 或切换分支。
+
+浏览器 fixture 为 `TestTicketPriorityHTTPSBrowser`，需显式提供 `RADISHNEXUS_PRIORITY_BROWSER_STATE`、`RADISHNEXUS_WEB_ROOT` 和获准的隔离 `DATABASE_URL`。正式命令预建 26 条分页数据；浏览器另从 accepted Decision 创建验收 Ticket。完成真实检查后才写 state 指定的 `.done`，记录通过项与 Ticket ID；fixture 再核对优先级版本 / 事件数。未提供环境变量时明确跳过，不算浏览器通过。资源结束后清理，证据见[记录](../docs/status/reviews/2026-10-28-ticket-priority.md)。

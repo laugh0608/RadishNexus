@@ -28,7 +28,7 @@ func TestAssignmentV1ReadIsStrictAndPreservesManifest(t *testing.T) {
 	b := fixture(t)
 	b.Manifest.Profile = ProfileV1
 	if _, _, err := Unpack(b); err == nil {
-		t.Fatal("v1 accepted v2 fields")
+		t.Fatal("v1 accepted new fields")
 	}
 	rewritePackageFile(t, &b, "objects.jsonl", func(raw []byte) []byte {
 		var result []byte
@@ -40,6 +40,8 @@ func TestAssignmentV1ReadIsStrictAndPreservesManifest(t *testing.T) {
 				}
 				delete(v, "assignee_user_id")
 				delete(v, "assignment_revision")
+				delete(v, "priority")
+				delete(v, "priority_revision")
 				o.Data = Encode(v)
 			}
 			result = append(result, Encode(o)...)
@@ -62,7 +64,7 @@ func TestAssignmentV1ReadIsStrictAndPreservesManifest(t *testing.T) {
 	}
 	b.Manifest.Profile = Profile
 	if _, _, err := Unpack(b); err == nil {
-		t.Fatal("v2 accepted missing fields")
+		t.Fatal("v3 accepted missing fields")
 	}
 }
 func mustUnpackObjects(t *testing.T, raw []byte) []Object {

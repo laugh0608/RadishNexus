@@ -104,7 +104,7 @@ INSERT INTO radishnexus.tickets(id,workspace_id,governing_project_id,title,creat
 			}
 			var after string
 			var revision, events int
-			if e = conn.QueryRow(ctx, `SELECT (to_jsonb(t)-'status_revision'-'assignee_user_id'-'assignment_revision')::text,status_revision FROM radishnexus.tickets t`).Scan(&after, &revision); e != nil || before != after || revision != 1 {
+			if e = conn.QueryRow(ctx, `SELECT (to_jsonb(t)-'status_revision'-'assignee_user_id'-'assignment_revision'-'priority'-'priority_revision')::text,status_revision FROM radishnexus.tickets t`).Scan(&after, &revision); e != nil || before != after || revision != 1 {
 				t.Fatal("migration rewrote old facts", e)
 			}
 			if e = conn.QueryRow(ctx, `SELECT count(*) FROM radishnexus.domain_events`).Scan(&events); e != nil || events != 0 {

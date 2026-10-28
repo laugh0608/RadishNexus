@@ -10,12 +10,24 @@ import (
 
 const MaxDiscoveryPageSize = 50
 
+type TicketFilters struct {
+	Status   string
+	Assignee string
+	Priority string
+}
+
+func (f TicketFilters) Valid() bool {
+	return (f.Status == "" || f.Status == "active" || ValidTicketStatus(f.Status)) && (f.Assignee == "" || f.Assignee == "me" || f.Assignee == "unassigned") && (f.Priority == "" || ValidTicketPriority(f.Priority))
+}
+
 type DiscoveryPageInput struct {
-	AfterID string
-	Limit   int
+	TicketFilters TicketFilters
+	AfterID       string
+	Limit         int
 }
 
 type DiscoveryItem struct {
+	Priority string
 	Assignee *TicketAssignee
 	Ref      entityref.Ref
 	Title    string
@@ -80,6 +92,9 @@ func (service *DiscoveryService) ListProjectDecisions(ctx context.Context, princ
 func validateDiscoveryInput(principal authz.Principal, kind string, input DiscoveryPageInput) error {
 	if err := principal.ValidateUser(); err != nil {
 		return err
+	}
+	if !input.TicketFilters.Valid() || (kind != "ticket" && input.TicketFilters != (TicketFilters{})) {
+		return fmt.Errorf("%w: invalid Ticket filters", authz.ErrInvalid)
 	}
 	if input.Limit < 1 || input.Limit > MaxDiscoveryPageSize {
 		return fmt.Errorf("%w: invalid discovery page size", authz.ErrInvalid)

@@ -198,7 +198,7 @@ func writeContext(ctx context.Context, tx pgx.Tx, a goldenpath.OwnerAccess, p cp
 				}
 				e = exec(`INSERT INTO radishnexus.decisions(id,workspace_id,governing_project_id,question,outcome,status,proposer_id,decider_ids,decided_at,rationale,alternatives,consequences,review_at,created_by_kind,created_by_id,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'import',$14,$15,$16)`, id, w, project, data.Question, data.Outcome, data.Status, ids.get("actor", data.Proposer), deciders, data.DecidedAt, data.Rationale, data.Alternatives, data.Consequences, data.ReviewAt, op, o.CreatedAt, o.UpdatedAt)
 			case cp.Ticket:
-				e = exec(`INSERT INTO radishnexus.tickets(id,workspace_id,governing_project_id,title,status,status_revision,created_by,created_at,updated_at,assignee_user_id,assignment_revision) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, id, w, project, data.Title, data.Status, data.StatusRevision, actor, o.CreatedAt, o.UpdatedAt, ids.optional("actor", data.AssigneeUserID), data.AssignmentRevision)
+				e = exec(`INSERT INTO radishnexus.tickets(id,workspace_id,governing_project_id,title,status,status_revision,created_by,created_at,updated_at,assignee_user_id,assignment_revision,priority,priority_revision) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, id, w, project, data.Title, data.Status, data.StatusRevision, actor, o.CreatedAt, o.UpdatedAt, ids.optional("actor", data.AssigneeUserID), data.AssignmentRevision, data.Priority, data.PriorityRevision)
 			case cp.Document:
 				e = exec(`INSERT INTO radishnexus.documents(id,workspace_id,governing_project_id,visibility,current_revision,created_by,created_at) VALUES($1,$2,$3,'project',$4,$5,$6)`, id, w, project, data.Revision, actor, o.CreatedAt)
 			}

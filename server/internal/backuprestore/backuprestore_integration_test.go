@@ -93,6 +93,19 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 		}
 	}
 
+	priorityInputs := []goldenpath.TicketPriorityInput{}
+	priorityResults := []goldenpath.TicketPriorityResult{}
+	priorityService := goldenpath.NewTicketPriorityService(goldenpostgres.New(sourcePool), goldenpath.CryptoIDGenerator{})
+	for i, priority := range []string{"urgent", "normal"} {
+		in := goldenpath.TicketPriorityInput{TicketID: ticketID, ClientOperationID: fmt.Sprintf("backup-priority-%d", i), BasePriorityRevision: i + 1, BaseStatusRevision: 1, Priority: priority, Confirmed: true}
+		result, e := priorityService.SetTicketPriority(ctx, documentInvocation, in)
+		if e != nil {
+			t.Fatal(e)
+		}
+		priorityInputs = append(priorityInputs, in)
+		priorityResults = append(priorityResults, result)
+	}
+
 	statusInputs := []goldenpath.TicketStatusInput{}
 	statusResults := []goldenpath.TicketStatusResult{}
 	statusService := goldenpath.NewTicketStatusService(goldenpostgres.New(sourcePool), goldenpath.CryptoIDGenerator{})
@@ -114,8 +127,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rebuild source Activity projection: %v", err)
 	}
-	if projected != 20 {
-		t.Fatalf("source Activity rows = %d, want 20", projected)
+	if projected != 22 {
+		t.Fatalf("source Activity rows = %d, want 22", projected)
 	}
 	sourceSnapshot := snapshotIncludedTables(t, ctx, sourcePool)
 	sourceActivity := snapshotTable(t, ctx, sourcePool, "radishnexus.activity_items")
@@ -224,6 +237,12 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 			t.Fatal("restored Ticket Component receipt drift", i, r, e)
 		}
 	}
+	for i, in := range priorityInputs {
+		result, e := goldenpath.NewTicketPriorityService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}).SetTicketPriority(ctx, documentInvocation, in)
+		if e != nil || result != priorityResults[i] {
+			t.Fatal("restored priority receipt", result, e)
+		}
+	}
 	for i, in := range statusInputs {
 		result, e := goldenpath.NewTicketStatusService(goldenpostgres.New(targetPool), goldenpath.CryptoIDGenerator{}).ChangeTicketStatus(ctx, documentInvocation, in)
 		if e != nil || result != statusResults[i] {
@@ -291,8 +310,8 @@ func TestBackupRestoreGoldenPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rebuild target Activity projection: %v", err)
 	}
-	if projected != 20 {
-		t.Fatalf("target Activity rows = %d, want 20", projected)
+	if projected != 22 {
+		t.Fatalf("target Activity rows = %d, want 22", projected)
 	}
 	if targetActivity := snapshotTable(t, ctx, targetPool, "radishnexus.activity_items"); targetActivity != sourceActivity {
 		t.Fatalf("rebuilt Activity differs\nsource: %s\ntarget: %s", sourceActivity, targetActivity)

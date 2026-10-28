@@ -27,7 +27,7 @@ func readTicketAssignee(ctx context.Context, tx pgx.Tx, w, project, id string, a
 	}
 	return &v, nil
 }
-func assignmentScope(ctx context.Context, tx pgx.Tx, p authz.Principal, id string) (string, projectAccess, error) {
+func ticketProjectAccess(ctx context.Context, tx pgx.Tx, p authz.Principal, id string) (string, projectAccess, error) {
 	project, err := projectEntityScope(ctx, tx, p, "ticket", id)
 	if err != nil {
 		return "", projectAccess{}, err
@@ -47,7 +47,7 @@ func (s *Store) ReadTicketAssignment(ctx context.Context, p authz.Principal, id 
 		return out, err
 	}
 	defer rollback(ctx, tx, &err)
-	project, access, err := assignmentScope(ctx, tx, p, id)
+	project, access, err := ticketProjectAccess(ctx, tx, p, id)
 	if err != nil {
 		return out, err
 	}
@@ -75,7 +75,7 @@ func (s *Store) ListAssigneeCandidates(ctx context.Context, p authz.Principal, i
 		return out, err
 	}
 	defer rollback(ctx, tx, &err)
-	project, access, err := assignmentScope(ctx, tx, p, id)
+	project, access, err := ticketProjectAccess(ctx, tx, p, id)
 	if err != nil {
 		return out, err
 	}
@@ -118,7 +118,7 @@ func (s *Store) SetTicketAssignee(ctx context.Context, c goldenpath.TicketAssign
 		return out, err
 	}
 	defer rollback(ctx, tx, &err)
-	project, access, err := assignmentScope(ctx, tx, c.Principal, c.TicketID)
+	project, access, err := ticketProjectAccess(ctx, tx, c.Principal, c.TicketID)
 	if err != nil {
 		return out, err
 	}

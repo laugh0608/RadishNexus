@@ -121,6 +121,12 @@ entity://decision/dec_01K4EXAMPLE
 
 新动作绑定两个 Ticket 版本及目标 lifecycle / Project management 代次；清空明确传 null 与目标代次字符串 `"0"`。精确重试重查操作者当前写权后只返回原事实，后续终态和目标失权不重演旧分配。真实变更与事件、receipt、Outbox、Activity v9 原子提交；原始事件只保存前后身份与相邻版本，时间线仅位于 Ticket。成员失权保留记录与历史，不授予任何权限。Go、Web、schema 与 v2 导入导出须配套停写升级，不能混用旧客户端。
 
+## Ticket 优先级与筛选合同
+
+[ADR-0047](../adr/0047-ticket-priority-and-filtering.md) 增加 migration 022、独立 `priority_revision`、`ticket.priority.set` receipt 和 `ticket.priority-changed` schema 1。优先级 GET / POST 复用当前准入、写权、严格 JSON、CSRF 与 no-store；POST 绑定优先级和状态版本，原子写入事件 / receipt / Outbox / Activity 10，精确重试只确认原 applied 事实。事件 `priority` 四字段保存前后枚举与相邻版本；详情、列表和导出均严格校验枚举。
+
+Project 工单列表增加必填 `priority`，支持 `status / assignee / priority` 三组单选 AND 条件，先 SQL 筛选再按 ID 升序分页。Ticket 专用 v2 cursor 绑定 Workspace、Project、操作者及规范筛选；旧 Ticket cursor 失效，其它 discovery cursor 保持原合同。cursor 不能代替当前授权，跨页不是冻结快照。Go / Web / CLI / schema 与 v3 包配套升级，严格读取旧 v1 / v2，不降级丢失历史。
+
 ## 授权解析
 
 ### 统一入口
@@ -258,7 +264,7 @@ request_context
 
 [ADR-0044](../adr/0044-portable-project-context-package.md) 将导入事实封装为 `context.history-recorded` schema 1：actor 是本次真实导入负责人，source 为 import 批次，发生时间为本次接纳时间；原事件类型、作者、发生时间、事实及因果关系保存在受约束、不可变的历史来源中。目标 ID 全部映射，原 client operation / receipt 不进入目标幂等空间。导入 receipt 绑定包摘要、目标身份、操作者、operation 与权限计划。
 
-导入历史不写历史 Outbox，数据库禁止为这些事件添加投递；不会重新发通知、调用 provider 或执行历史命令。Activity projection 从 8 起在同事务导入和全量重建时读取来源事实（当前 9 增加负责人历史），并保留 `imported` 标识；原始作者 / 时间只用于历史解释。所有来源、时间线和关系读取继续验证当前对象权限。正常 web 事件与 receipt 保持既有约束，不以导入例外伪造原生动作。
+导入历史不写历史 Outbox，数据库禁止为这些事件添加投递；不会重新发通知、调用 provider 或执行历史命令。Activity projection 从 8 起在同事务导入和全量重建时读取来源事实（当前 10 同时支持负责人和优先级历史），并保留 `imported` 标识；原始作者 / 时间只用于历史解释。所有来源、时间线和关系读取继续验证当前对象权限。正常 web 事件与 receipt 保持既有约束，不以导入例外伪造原生动作。
 
 ## Activity 投影
 

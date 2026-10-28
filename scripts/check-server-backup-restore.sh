@@ -59,13 +59,16 @@ env CGO_ENABLED=0 GOOS=linux GOARCH="${image_architecture}" GOCACHE="${run_dir}/
 legacy_artifact_dir=""
 membership_artifact_dir=""
 assignment_artifact_dir=""
-for legacy_kind in owner_transfer membership assignment; do
+priority_artifact_dir=""
+for legacy_kind in owner_transfer membership assignment priority; do
     if [[ "${legacy_kind}" == owner_transfer ]]; then
         legacy_ref="${RADISHNEXUS_OWNER_TRANSFER_LEGACY_REF:-}"
     elif [[ "${legacy_kind}" == membership ]]; then
         legacy_ref="${RADISHNEXUS_MEMBERSHIP_LEGACY_REF:-}"
-    else
+    elif [[ "${legacy_kind}" == assignment ]]; then
         legacy_ref="${RADISHNEXUS_ASSIGNMENT_LEGACY_REF:-}"
+    else
+        legacy_ref="${RADISHNEXUS_PRIORITY_LEGACY_REF:-}"
     fi
     [[ -n "${legacy_ref}" ]] || continue
     legacy_commit="$(git -C "${repo_root}" rev-parse --verify "${legacy_ref}^{commit}")"
@@ -82,8 +85,10 @@ for legacy_kind in owner_transfer membership assignment; do
         legacy_artifact_dir="/work/${legacy_kind}-bin"
     elif [[ "${legacy_kind}" == membership ]]; then
         membership_artifact_dir="/work/${legacy_kind}-bin"
-    else
+    elif [[ "${legacy_kind}" == assignment ]]; then
         assignment_artifact_dir="/work/${legacy_kind}-bin"
+    else
+        priority_artifact_dir="/work/${legacy_kind}-bin"
     fi
 done
 
@@ -154,8 +159,9 @@ docker exec \
     --env "RADISHNEXUS_OWNER_TRANSFER_LEGACY_BIN=${legacy_artifact_dir}" \
     --env "RADISHNEXUS_MEMBERSHIP_LEGACY_BIN=${membership_artifact_dir}" \
     --env "RADISHNEXUS_ASSIGNMENT_LEGACY_BIN=${assignment_artifact_dir}" \
+    --env "RADISHNEXUS_PRIORITY_LEGACY_BIN=${priority_artifact_dir}" \
     --env "TARGET_DATABASE_URL=${target_database_url}" \
     "${source_container}" \
     /work/backuprestore.test \
     -test.v \
-    -test.run '^TestBackupRestore(GoldenPath|AccountRecovery|OwnerTransfer|OwnerTransferLegacy|UpgradeFailures|ImportedContext|MembershipLifecycle|MembershipLegacy|AssignmentLegacy)$'
+    -test.run '^TestBackupRestore(GoldenPath|AccountRecovery|OwnerTransfer|OwnerTransferLegacy|UpgradeFailures|ImportedContext|MembershipLifecycle|MembershipLegacy|AssignmentLegacy|PriorityLegacy)$'

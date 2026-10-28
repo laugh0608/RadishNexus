@@ -112,14 +112,18 @@ func (store *Store) ListProjectTickets(ctx context.Context, principal authz.Prin
 		return page, authz.ErrNotFound
 	}
 	rows, err := tx.Query(ctx, `
-		SELECT t.id,t.title,t.status, CASE WHEN t.assignee_user_id IS NULL THEN NULL ELSE jsonb_build_object('id',u.id,'display_name',u.display_name,'eligible',COALESCE(`+assigneeEligibility+`,false) AND $5,'imported',EXISTS(SELECT 1 FROM radishnexus.context_import_mappings im WHERE im.kind='actor' AND im.target_id=u.id)) END
+		SELECT t.id,t.title,t.status,t.priority, CASE WHEN t.assignee_user_id IS NULL THEN NULL ELSE jsonb_build_object('id',u.id,'display_name',u.display_name,'eligible',COALESCE(`+assigneeEligibility+`,false) AND $5,'imported',EXISTS(SELECT 1 FROM radishnexus.context_import_mappings im WHERE im.kind='actor' AND im.target_id=u.id)) END
         FROM radishnexus.tickets t
         LEFT JOIN radishnexus.users u ON u.id=t.assignee_user_id
         LEFT JOIN radishnexus.workspace_memberships m ON m.workspace_id=t.workspace_id AND m.user_id=u.id
         LEFT JOIN radishnexus.user_accounts a ON a.user_id=u.id
         LEFT JOIN radishnexus.project_memberships pm ON pm.workspace_id=t.workspace_id AND pm.project_id=t.governing_project_id AND pm.user_id=u.id
-        WHERE t.workspace_id=$1 AND t.governing_project_id=$2 AND t.id>$3 ORDER BY t.id LIMIT $4
-	`, principal.WorkspaceID, projectID, input.AfterID, input.Limit+1, access.active)
+        WHERE t.workspace_id=$1 AND t.governing_project_id=$2 AND t.id>$3
+ AND ($6='' OR ($6='active' AND t.status IN ('open','in-progress')) OR t.status=$6)
+ AND ($7='' OR ($7='me' AND t.assignee_user_id=$8) OR ($7='unassigned' AND t.assignee_user_id IS NULL))
+ AND ($9='' OR t.priority=$9)
+ ORDER BY t.id LIMIT $4
+	`, principal.WorkspaceID, projectID, input.AfterID, input.Limit+1, access.active, input.TicketFilters.Status, input.TicketFilters.Assignee, principal.ID, input.TicketFilters.Priority)
 	if err != nil {
 		return page, fmt.Errorf("query readable Tickets: %w", err)
 	}
@@ -177,7 +181,7 @@ func scanDiscoveryPage(rows pgx.Rows, kind string, limit int) (goldenpath.Discov
 		item.Ref.Type = kind
 		targets := []any{&item.Ref.ID, &item.Title, &item.Status}
 		if kind == "ticket" {
-			targets = append(targets, &item.Assignee)
+			targets = append(targets, &item.Priority, &item.Assignee)
 		}
 		if err := rows.Scan(targets...); err != nil {
 			return goldenpath.DiscoveryPage{}, fmt.Errorf("scan discovery item: %w", err)

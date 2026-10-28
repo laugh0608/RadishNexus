@@ -44,7 +44,7 @@ func TestTicketAssignmentUpgradeFrom020(t *testing.T) {
 	}
 	var target *string
 	var rev, events int
-	if err = conn.QueryRow(ctx, `SELECT (to_jsonb(t)-'assignee_user_id'-'assignment_revision')::text,assignee_user_id,assignment_revision FROM radishnexus.tickets t`).Scan(&after, &target, &rev); err != nil || after != before || target != nil || rev != 1 {
+	if err = conn.QueryRow(ctx, `SELECT (to_jsonb(t)-'assignee_user_id'-'assignment_revision'-'priority'-'priority_revision')::text,assignee_user_id,assignment_revision FROM radishnexus.tickets t`).Scan(&after, &target, &rev); err != nil || after != before || target != nil || rev != 1 {
 		t.Fatal("old responsibility inferred", after, err)
 	}
 	if err = conn.QueryRow(ctx, `SELECT count(*) FROM radishnexus.domain_events`).Scan(&events); err != nil || events != 0 {

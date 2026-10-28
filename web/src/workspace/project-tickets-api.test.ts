@@ -10,6 +10,7 @@ const ticket = {
   title: "Work",
   status: "open",
   assignee: null,
+  priority: "unset" as const,
 };
 function response(data: unknown, status = 200) {
   return new Response(JSON.stringify({ data }), {
@@ -34,7 +35,15 @@ describe("Project Ticket API", () => {
         signal,
       ),
     ).toEqual({
-      items: [{ id: "tkt_one", title: "Work", status: "open", assignee: null }],
+      items: [
+        {
+          id: "tkt_one",
+          title: "Work",
+          status: "open",
+          assignee: null,
+          priority: "unset",
+        },
+      ],
       nextCursor: null,
     });
     expect(fetch).toHaveBeenCalledWith(
@@ -50,6 +59,8 @@ describe("Project Ticket API", () => {
   it("rejects unsupported states, private metadata and invalid pagination", async () => {
     for (const data of [
       { items: [{ ...ticket, status: "unknown" }], next_cursor: null },
+      { items: [{ ...ticket, priority: "p0" }], next_cursor: null },
+      { items: [{ ...ticket, priority: undefined }], next_cursor: null },
       {
         items: [{ ...ticket, ref: { type: "decision", id: "dec_one" } }],
         next_cursor: null,
@@ -106,5 +117,22 @@ describe("Project Ticket API", () => {
         projectTicketsClient.tickets("wrk_main", "prj_main"),
       ).rejects.toMatchObject({ status });
     }
+  });
+  it("sends the complete filter alongside a scoped cursor", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(response({ items: [], next_cursor: null }));
+    vi.stubGlobal("fetch", fetch);
+    await projectTicketsClient.tickets(
+      "wrk_main",
+      "prj_main",
+      "opaque",
+      undefined,
+      { status: "active", assignee: "me", priority: "unset" },
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/v1/workspaces/wrk_main/projects/prj_main/tickets?limit=25&after=opaque&status=active&assignee=me&priority=unset",
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 });

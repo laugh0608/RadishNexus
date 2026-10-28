@@ -1,3 +1,4 @@
+import { parseTicketPriority, type TicketPriority } from "./ticket-priority";
 import {
   parseTicketStatus,
   parseTicketStatusRevision,
@@ -92,6 +93,15 @@ interface TimelineBase {
 }
 export type CollaborationTimelineItem = TimelineBase &
   (
+    | {
+        activityType: "ticket.priority-changed";
+        priority: {
+          from: TicketPriority;
+          to: TicketPriority;
+          fromRevision: number;
+          toRevision: number;
+        };
+      }
     | {
         activityType: "ticket.assignee-changed";
         assignment: {
@@ -819,6 +829,42 @@ function parseTimelineItem(
   const nativeFields = { ...raw };
   delete nativeFields.imported;
   value = nativeFields;
+  if (raw.activity_type === "ticket.priority-changed") {
+    const item = exactRecord(value, path, [
+      "id",
+      "activity_type",
+      "actor",
+      "occurred_at",
+      "subjects",
+      "priority",
+    ]);
+    const p = exactRecord(item.priority, `${path}.priority`, [
+      "from",
+      "to",
+      "from_revision",
+      "to_revision",
+    ]);
+    const from = parseTicketPriority(p.from),
+      to = parseTicketPriority(p.to),
+      fromRevision = parseTicketStatusRevision(p.from_revision),
+      toRevision = parseTicketStatusRevision(p.to_revision);
+    if (
+      expectedType !== "ticket" ||
+      array(item.subjects, `${path}.subjects`).length !== 0 ||
+      from === to ||
+      toRevision !== fromRevision + 1
+    )
+      throw new TypeError("Invalid Ticket priority timeline");
+    return {
+      ...provenance,
+      id: scopedID(item.id, `${path}.id`, "evt_"),
+      activityType: "ticket.priority-changed",
+      actor: parseActor(item.actor, `${path}.actor`),
+      occurredAt: timestamp(item.occurred_at, `${path}.occurred_at`),
+      subjects: [],
+      priority: { from, to, fromRevision, toRevision },
+    };
+  }
   if (raw.activity_type === "ticket.assignee-changed") {
     const item = exactRecord(value, path, [
       "id",
@@ -1050,7 +1096,8 @@ function validateViewShape(
         item.activityType !== "ticket.component-linked" &&
         item.activityType !== "ticket.component-unlinked" &&
         item.activityType !== "ticket.status-changed" &&
-        item.activityType !== "ticket.assignee-changed",
+        item.activityType !== "ticket.assignee-changed" &&
+        item.activityType !== "ticket.priority-changed",
     )
   ) {
     throw new TypeError("Ticket Timeline contains an unexpected item");

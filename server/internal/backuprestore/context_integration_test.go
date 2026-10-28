@@ -96,6 +96,10 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if _, e = assignments.SetTicketAssignee(ctx, invocation, goldenpath.TicketAssignmentInput{TicketID: ticket.Ticket.ID, ClientOperationID: "assignment-backup-set", BaseAssignmentRevision: 1, BaseStatusRevision: 1, AssigneeUserID: &principal.ID, TargetLifecycleRevision: candidates.Items[0].LifecycleRevision, ProjectManagementRevision: candidates.ProjectManagementRevision, Confirmed: true}); e != nil {
 		t.Fatal(e)
 	}
+	priorities := goldenpath.NewTicketPriorityService(goldenpostgres.New(original), goldenpath.CryptoIDGenerator{})
+	if _, e = priorities.SetTicketPriority(ctx, invocation, goldenpath.TicketPriorityInput{TicketID: ticket.Ticket.ID, ClientOperationID: "priority-backup-set", BasePriorityRevision: 1, BaseStatusRevision: 1, Priority: "high", Confirmed: true}); e != nil {
+		t.Fatal(e)
+	}
 	bundle, e := exporter.Export(ctx, principal, session.Token, project.Object.ID)
 	if e != nil {
 		t.Fatal(e)

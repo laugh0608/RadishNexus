@@ -361,7 +361,7 @@ func decodeObject(o Object) (any, error) {
 		return *p, nil
 	case *Ticket:
 		var fields map[string]json.RawMessage
-		if Decode(o.Data, &fields) != nil || len(fields) != 5 || fields["assignee_user_id"] == nil || fields["assignment_revision"] == nil || p.AssignmentRevision < 1 || p.AssignmentRevision > MaxHistory || (p.AssigneeUserID != nil && !ValidID(*p.AssigneeUserID, "usr_")) {
+		if Decode(o.Data, &fields) != nil || len(fields) != 7 || fields["priority"] == nil || fields["priority_revision"] == nil || !ValidPriority(p.Priority) || p.PriorityRevision < 1 || p.PriorityRevision > MaxHistory || fields["assignee_user_id"] == nil || fields["assignment_revision"] == nil || p.AssignmentRevision < 1 || p.AssignmentRevision > MaxHistory || (p.AssigneeUserID != nil && !ValidID(*p.AssigneeUserID, "usr_")) {
 			return nil, invalid("Ticket assignment fields")
 		}
 		if !label(p.Title, 800) || !oneOf(p.Status, "open", "in-progress", "done", "canceled") || p.StatusRevision < 1 || p.StatusRevision > MaxHistory {
@@ -427,6 +427,19 @@ func ValidateFacts(h History) (Facts, error) {
 		expected = []string{"status", "decision"}
 		if f.Status != "open" || !refType(f.Decision, "decision") {
 			return f, invalid("Ticket creation history")
+		}
+	case "ticket.priority-changed":
+		kind = "ticket"
+		expected = []string{"priority"}
+		var original map[string]json.RawMessage
+		var fields map[string]json.RawMessage
+		if f.Priority == nil || !f.Priority.Valid() || Decode(h.Facts, &original) != nil || Decode(original["priority"], &fields) != nil || len(fields) != 4 {
+			return f, invalid("Ticket priority")
+		}
+		for _, key := range []string{"from", "to", "from_revision", "to_revision"} {
+			if fields[key] == nil {
+				return f, invalid("Ticket priority fields")
+			}
 		}
 	case "ticket.assignee-changed":
 		kind = "ticket"
@@ -565,12 +578,12 @@ func validateObjectHistory(o Object, v any, events []History, x *Index, relation
 		if decision.Status != "accepted" || decision.DecidedAt.After(o.CreatedAt) {
 			return invalid("Ticket accepted source")
 		}
-		if !oneRelation("implements", *f.Decision) || len(events) != p.StatusRevision+p.AssignmentRevision-1 {
+		if !oneRelation("implements", *f.Decision) || len(events) != p.StatusRevision+p.AssignmentRevision+p.PriorityRevision-2 {
 			return invalid("Ticket history count")
 		}
 		changes := []History{}
 		for _, h := range events {
-			if h.Type == "ticket.status-changed" || h.Type == "ticket.assignee-changed" {
+			if h.Type == "ticket.status-changed" || h.Type == "ticket.assignee-changed" || h.Type == "ticket.priority-changed" {
 				changes = append(changes, h)
 			}
 		}
@@ -581,15 +594,23 @@ func validateObjectHistory(o Object, v any, events []History, x *Index, relation
 			return changes[i].OccurredAt.Before(changes[j].OccurredAt)
 		})
 		status, rev, assignmentRev := "open", 1, 1
-		previousAssignment := false
+		priority, priorityRev := "unset", 1
+		previousMetadata := false
 		var assignee *string
 		last := o.CreatedAt
 		for _, h := range changes {
 			f := x.Facts[h.ID]
-			if h.OccurredAt.Before(last) || ((f.Assignment != nil || previousAssignment) && h.OccurredAt.Equal(last)) {
+			if h.OccurredAt.Before(last) || ((f.Assignment != nil || f.Priority != nil || previousMetadata) && h.OccurredAt.Equal(last)) {
 				return invalid("Ticket history sequence")
 			}
-			if f.Assignment != nil {
+			if f.Priority != nil {
+				p := f.Priority
+				if !oneOf(status, "open", "in-progress") || p.FromRevision != priorityRev || p.From != priority {
+					return invalid("Ticket priority sequence")
+				}
+				priority = p.To
+				priorityRev = p.ToRevision
+			} else if f.Assignment != nil {
 				a := f.Assignment
 				if !oneOf(status, "open", "in-progress") || a.FromRevision != assignmentRev || !sameString(a.FromUserID, assignee) {
 					return invalid("Ticket assignment sequence")
@@ -603,10 +624,10 @@ func validateObjectHistory(o Object, v any, events []History, x *Index, relation
 				status = f.ToStatus
 				rev = f.ToRevision
 			}
-			previousAssignment = f.Assignment != nil
+			previousMetadata = f.Assignment != nil || f.Priority != nil
 			last = h.OccurredAt
 		}
-		if status != p.Status || rev != p.StatusRevision || assignmentRev != p.AssignmentRevision || !sameString(assignee, p.AssigneeUserID) || !last.Equal(o.UpdatedAt) {
+		if priority != p.Priority || priorityRev != p.PriorityRevision || status != p.Status || rev != p.StatusRevision || assignmentRev != p.AssignmentRevision || !sameString(assignee, p.AssigneeUserID) || !last.Equal(o.UpdatedAt) {
 			return invalid("Ticket current state")
 		}
 

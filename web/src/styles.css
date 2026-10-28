@@ -2456,7 +2456,8 @@ code {
   overflow-wrap: anywhere;
 }
 
-.ticket-assignment-actions {
+.ticket-assignment-actions,
+.ticket-priority-actions {
   display: grid;
   gap: 12px;
   margin-top: 24px;
@@ -2465,13 +2466,16 @@ code {
   overflow-wrap: anywhere;
 }
 
-.ticket-assignment-actions > div {
+.ticket-assignment-actions > div,
+.ticket-priority-actions > div {
   display: grid;
   gap: 10px;
   min-width: 0;
 }
 
-.ticket-assignment-actions select {
+.ticket-assignment-actions select,
+.ticket-priority-actions select,
+.ticket-filters select {
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -2480,4 +2484,18 @@ code {
   border-radius: 10px;
   background: #fff;
   color: var(--ink);
+}
+
+.ticket-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block: 1rem;
+}
+.ticket-filters label {
+  flex: 1 1 12rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }

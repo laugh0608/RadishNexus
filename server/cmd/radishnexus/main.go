@@ -160,7 +160,7 @@ func run() error {
 	}
 	server := &http.Server{
 		Addr:              address,
-		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler, setupHandler, documentHandler, httptransport.NewCIRunNexusViewHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), jenkinsHandler, httptransport.NewStagingDeploymentHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), httptransport.NewTicketComponentHandler(authService, goldenpath.NewTicketComponentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy), httptransport.NewRepositoryCIRunsHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), httptransport.NewTicketStatusHandler(authService, goldenpath.NewTicketStatusService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy), ownerTransferHandler, httptransport.NewContextHandler(authService, goldenpath.NewContextService(goldenpostgres.NewContextStore(pool, contextSchemaReady)), sessionPolicy, proxyPolicy), managementHandler, httptransport.NewTicketAssignmentHandler(authService, goldenpath.NewTicketAssignmentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy)),
+		Handler:           newHandler(readiness, authHandler, channelMessagesHandler, channelEventsHandler, collaborationHandler, deploymentNexusViewHandler, discoveryHandler, webHandler, identityHandler, configurationHandler, setupHandler, documentHandler, httptransport.NewCIRunNexusViewHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), jenkinsHandler, httptransport.NewStagingDeploymentHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), httptransport.NewTicketComponentHandler(authService, goldenpath.NewTicketComponentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy), httptransport.NewRepositoryCIRunsHandler(authService, nexusViewService, sessionPolicy, proxyPolicy), httptransport.NewTicketStatusHandler(authService, goldenpath.NewTicketStatusService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy), ownerTransferHandler, httptransport.NewContextHandler(authService, goldenpath.NewContextService(goldenpostgres.NewContextStore(pool, contextSchemaReady)), sessionPolicy, proxyPolicy), managementHandler, httptransport.NewTicketAssignmentHandler(authService, goldenpath.NewTicketAssignmentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy), httptransport.NewTicketPriorityHandler(authService, goldenpath.NewTicketPriorityService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
@@ -238,6 +238,9 @@ func newHandler(
 	if len(identityHandler) >= 1 {
 		mux.Handle("/api/v1/workspaces/{workspace_id}/invitations", identityHandler[0])
 		mux.Handle("/auth/complete", identityHandler[0])
+	}
+	if len(identityHandler) >= 15 {
+		httptransport.RegisterTicketPriorityRoutes(mux, identityHandler[14])
 	}
 	if len(identityHandler) >= 14 {
 		httptransport.RegisterTicketAssignmentRoutes(mux, identityHandler[13])

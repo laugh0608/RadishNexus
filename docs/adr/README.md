@@ -52,6 +52,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0044](0044-portable-project-context-package.md) | 已接受；首片隔离往返通过 | Project 结构化上下文导出与新实例导入 |
 | [ADR-0045](0045-membership-lifecycle-and-management-handoff.md) | 已接受并实施 | 成员生命周期与管理交接 |
 | [ADR-0046](0046-ticket-assignee.md) | 已接受并实施 | Ticket 最小负责人与历史迁移 |
+| [ADR-0047](0047-ticket-priority-and-filtering.md) | 已接受；已实施 | Ticket 最小优先级与项目内筛选 |
 
 ## 新建规则
 

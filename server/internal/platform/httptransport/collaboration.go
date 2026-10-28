@@ -118,6 +118,7 @@ type collaborationRelationDTO struct {
 }
 
 type collaborationTimelineDTO struct {
+	Priority      *goldenpath.TicketPriorityChange   `json:"priority,omitempty"`
 	Assignment    *goldenpath.TicketAssignmentChange `json:"assignment,omitempty"`
 	Imported      bool                               `json:"imported,omitempty"`
 	FromStatus    string                             `json:"from_status,omitempty"`
@@ -576,7 +577,7 @@ func publicTicketProjection(
 		return ticketCurrentDTO{}, errors.New("invalid Ticket Nexus View")
 	}
 	for _, item := range timeline {
-		if item.ActivityType != "ticket.created" && item.ActivityType != "ticket.component-linked" && item.ActivityType != "ticket.component-unlinked" && item.ActivityType != "ticket.status-changed" && item.ActivityType != "ticket.assignee-changed" {
+		if item.ActivityType != "ticket.created" && item.ActivityType != "ticket.component-linked" && item.ActivityType != "ticket.component-unlinked" && item.ActivityType != "ticket.status-changed" && item.ActivityType != "ticket.assignee-changed" && item.ActivityType != "ticket.priority-changed" {
 			return ticketCurrentDTO{}, errors.New("unexpected Ticket Timeline item")
 		}
 	}
@@ -751,6 +752,16 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 			!validScopedID(item.Actor.ID, "usr_") || item.OccurredAt.IsZero() ||
 			item.ProjectionVersion != goldenpath.ActivityProjectionVersion {
 			return nil, errors.New("invalid collaboration Timeline item")
+		}
+		if item.ActivityType == "ticket.priority-changed" {
+			from, e1 := strconv.Atoi(item.SafeFacts["from_revision"])
+			to, e2 := strconv.Atoi(item.SafeFacts["to_revision"])
+			change := goldenpath.TicketPriorityChange{From: item.SafeFacts["from"], To: item.SafeFacts["to"], FromRevision: from, ToRevision: to}
+			if e1 != nil || e2 != nil || strconv.Itoa(from) != item.SafeFacts["from_revision"] || strconv.Itoa(to) != item.SafeFacts["to_revision"] || len(item.SafeFacts) != 4+extra || len(item.Subjects) != 0 || !change.Valid() {
+				return nil, errors.New("invalid priority timeline facts")
+			}
+			dto = append(dto, collaborationTimelineDTO{Imported: imported, ID: item.EventID, ActivityType: item.ActivityType, Actor: deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID}, OccurredAt: publicTime(item.OccurredAt), Subjects: []collaborationSubjectDTO{}, Priority: &change})
+			continue
 		}
 		if item.ActivityType == "ticket.assignee-changed" {
 			from, e1 := strconv.Atoi(item.SafeFacts["from_revision"])

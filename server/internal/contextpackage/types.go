@@ -14,7 +14,8 @@ import (
 const (
 	Format           = "radishnexus.context"
 	ProfileV1        = "project-collaboration-v1"
-	Profile          = "project-collaboration-v2"
+	ProfileV2        = "project-collaboration-v2"
+	Profile          = "project-collaboration-v3"
 	Version          = 1
 	MaxBytes         = 64 << 20
 	MaxObjects       = 10000
@@ -97,7 +98,21 @@ type Assignment struct {
 	ToRevision   int     `json:"to_revision"`
 }
 
+type Priority struct {
+	From         string `json:"from"`
+	To           string `json:"to"`
+	FromRevision int    `json:"from_revision"`
+	ToRevision   int    `json:"to_revision"`
+}
+
+func ValidPriority(p string) bool { return oneOf(p, "unset", "low", "normal", "high", "urgent") }
+func (p Priority) Valid() bool {
+	return ValidPriority(p.From) && ValidPriority(p.To) && p.From != p.To && p.FromRevision > 0 && p.FromRevision < MaxHistory && p.ToRevision == p.FromRevision+1
+}
+
 type Ticket struct {
+	Priority           string  `json:"priority"`
+	PriorityRevision   int     `json:"priority_revision"`
 	AssigneeUserID     *string `json:"assignee_user_id"`
 	AssignmentRevision int     `json:"assignment_revision"`
 	Title              string  `json:"title"`
@@ -153,6 +168,7 @@ type History struct {
 // Facts is a whitelist. Validate rejects fields that do not belong to the
 // particular event, even when their values happen to be zero.
 type Facts struct {
+	Priority     *Priority   `json:"priority,omitempty"`
 	Assignment   *Assignment `json:"assignment,omitempty"`
 	Status       string      `json:"status,omitempty"`
 	Evidence     *Ref        `json:"evidence,omitempty"`

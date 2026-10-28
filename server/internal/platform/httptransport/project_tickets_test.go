@@ -17,10 +17,15 @@ import (
 
 func TestProjectTicketsRejectsInvalidQueriesAndForeignCursors(t *testing.T) {
 	path := "/api/v1/workspaces/wrk_main/projects/prj_main/tickets"
-	scope := discoveryCursor{Version: 1, WorkspaceID: "wrk_main", ProjectID: "prj_main", Kind: "ticket", AfterID: "tkt_previous"}
-	queries := []string{"limit=0", "limit=51", "limit=01", "limit=1&limit=2", "after=", "after=a&after=b", "status=open", "q=private", "after=bad", "limit=%zz", strings.Repeat("a", 2049)}
+	scope := discoveryCursor{Version: 2, ActorID: "usr_reader", WorkspaceID: "wrk_main", ProjectID: "prj_main", Kind: "ticket", AfterID: "tkt_previous"}
+	queries := []string{"limit=0", "limit=51", "limit=01", "limit=1&limit=2", "after=", "after=a&after=b", "status=unknown", "status=", "status=open&status=done", "assignee=usr_reader", "assignee=all", "priority=", "priority=highest", "sort=priority", "q=private", "after=bad", "limit=%zz", strings.Repeat("a", 2049)}
 	for _, change := range []func(*discoveryCursor){
 		func(c *discoveryCursor) { c.Version++ },
+		func(c *discoveryCursor) { c.Version = 1 },
+		func(c *discoveryCursor) { c.ActorID = "usr_other" },
+		func(c *discoveryCursor) { c.Status = "open" },
+		func(c *discoveryCursor) { c.Assignee = "me" },
+		func(c *discoveryCursor) { c.Priority = "high" },
 		func(c *discoveryCursor) { c.WorkspaceID = "wrk_other" },
 		func(c *discoveryCursor) { c.ProjectID = "prj_other" },
 		func(c *discoveryCursor) { c.Kind = "component-tickets" },
@@ -93,9 +98,10 @@ func TestProjectTicketsTransportAndSafeFailure(t *testing.T) {
 }
 
 func TestProjectTicketsRejectsProjectionDriftWithoutPartialResults(t *testing.T) {
-	item := goldenpath.DiscoveryItem{Ref: entityref.Ref{Type: "ticket", ID: "tkt_one"}, Title: "Visible work", Status: "open"}
+	item := goldenpath.DiscoveryItem{Ref: entityref.Ref{Type: "ticket", ID: "tkt_one"}, Title: "Visible work", Status: "open", Priority: "unset"}
 	for _, change := range []func(*goldenpath.DiscoveryItem){
 		func(i *goldenpath.DiscoveryItem) { i.Status = "unknown" },
+		func(i *goldenpath.DiscoveryItem) { i.Priority = "unknown" },
 		func(i *goldenpath.DiscoveryItem) { i.Ref.Type = "decision" },
 		func(i *goldenpath.DiscoveryItem) { i.Ref.ID = "dec_wrong" },
 		func(i *goldenpath.DiscoveryItem) { i.Title = "\x00private" },
@@ -111,8 +117,51 @@ func TestProjectTicketsRejectsProjectionDriftWithoutPartialResults(t *testing.T)
 			t.Fatal(w.Code, w.Body.String())
 		}
 	}
-	scope := discoveryCursor{Version: 1, WorkspaceID: "wrk_main", ProjectID: "prj_main", Kind: "ticket"}
+	scope := discoveryCursor{Version: 2, ActorID: "usr_reader", WorkspaceID: "wrk_main", ProjectID: "prj_main", Kind: "ticket"}
 	if _, e := publicDiscoveryPage(goldenpath.DiscoveryPage{Items: []goldenpath.DiscoveryItem{item}}, goldenpath.DiscoveryPageInput{Limit: 25, AfterID: "tkt_one"}, scope); e == nil {
 		t.Fatal("non-exclusive boundary accepted")
+	}
+}
+
+func TestProjectTicketFiltersBindCursorAndPrincipal(t *testing.T) {
+	path := "/api/v1/workspaces/wrk_main/projects/prj_main/tickets"
+	filters := goldenpath.TicketFilters{Status: "active", Assignee: "me", Priority: "high"}
+	reader := &fakeDiscoveryReader{page: goldenpath.DiscoveryPage{Items: []goldenpath.DiscoveryItem{{Ref: entityref.Ref{Type: "ticket", ID: "tkt_one"}, Title: "My work", Status: "in-progress", Priority: "high", Assignee: &goldenpath.TicketAssignee{ID: "usr_reader", DisplayName: "Reader"}}}, NextID: "tkt_one"}}
+	handler := discoveryHandlerForTest(t, validMessagingSessions(), reader)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, messagingRequest("GET", path+"?limit=1&status=active&assignee=me&priority=high", ""))
+	if w.Code != 200 || reader.input.TicketFilters != filters {
+		t.Fatal(w.Code, w.Body.String(), reader.input)
+	}
+	var body struct {
+		Data discoveryPageDTO `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || body.Data.NextCursor == nil {
+		t.Fatal(err)
+	}
+	cursor := *body.Data.NextCursor
+	scope := discoveryCursor{Version: 2, WorkspaceID: "wrk_main", ProjectID: "prj_main", Kind: "ticket", ActorID: "usr_reader"}
+	in, err := parseDiscoveryQuery("limit=50&priority=high&assignee=me&status=active&after="+cursor, scope)
+	if err != nil || in.AfterID != "tkt_one" || in.Limit != 50 || in.TicketFilters != filters {
+		t.Fatal(in, err)
+	}
+	for _, q := range []string{"status=open&assignee=me&priority=high", "status=active&assignee=unassigned&priority=high", "status=active&assignee=me&priority=normal", ""} {
+		if _, err := parseDiscoveryQuery(q+"&after="+cursor, scope); err == nil {
+			t.Fatal("foreign filters accepted", q)
+		}
+	}
+	scope.ActorID = "usr_other"
+	if _, err := parseDiscoveryQuery("status=active&assignee=me&priority=high&after="+cursor, scope); err == nil {
+		t.Fatal("foreign actor accepted")
+	}
+	for _, mutate := range []func(*goldenpath.DiscoveryItem){func(v *goldenpath.DiscoveryItem) { v.Priority = "normal" }, func(v *goldenpath.DiscoveryItem) { v.Status = "done" }, func(v *goldenpath.DiscoveryItem) { v.Assignee = nil }} {
+		original := reader.page.Items[0]
+		mutate(&reader.page.Items[0])
+		w = httptest.NewRecorder()
+		handler.ServeHTTP(w, messagingRequest("GET", path+"?limit=1&status=active&assignee=me&priority=high", ""))
+		if w.Code != 500 {
+			t.Fatal("filter drift accepted", w.Code)
+		}
+		reader.page.Items[0] = original
 	}
 }

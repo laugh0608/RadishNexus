@@ -65,7 +65,7 @@ npm run dev
 
 `workspace/ProjectTicketsPage.tsx` 与 `project-tickets-api.ts` 实现 [ADR-0038](../docs/adr/0038-project-ticket-discovery.md)。首页选中 Project 后，“查看项目工单”与文档入口并列，进入 `/workspaces/{workspace_id}/projects/{project_id}/tickets`；列表打开原 Ticket 详情，详情的 Project 区可返回列表首页。直接地址、刷新与登录后恢复原路径已接入正式 Web Shell。
 
-项目名称 / 归档状态复用现有 configuration 读取，与只读工单列表按同一请求代次加载；任一失败、撤权或 Session 失效都清空旧标题与条目，取消和迟到响应不能恢复旧内容。分页 cursor 栈仅在页面内存，刷新、焦点 / 可见性恢复和浏览器后退重读首页。按 ADR-0039 严格接受四状态并统一显示中文标签；空态不推断隐藏对象，无状态修改、筛选或排序入口。桌面、手机长标题、键盘与撤权恢复证据见[实施记录](../docs/status/reviews/2026-10-13-project-ticket-discovery.md)。
+项目名称 / 归档状态复用现有 configuration 读取，与只读工单列表按同一请求代次加载；任一失败、撤权或 Session 失效都清空旧标题与条目，取消和迟到响应不能恢复旧内容。分页 cursor 栈仅在页面内存，刷新、焦点 / 可见性恢复和浏览器后退重读首页。按 ADR-0039 严格接受四状态并统一显示中文标签；空态不推断隐藏对象；列表不提供状态修改和可变排序。筛选现由 ADR-0047 扩展为状态 / 负责人 / 优先级三组单选 AND 条件，默认全部，切换条件清空旧页并回首页。同页刷新 / 恢复保留条件，重挂载或整页重载恢复默认。桌面、手机长标题、键盘与撤权恢复证据见[实施记录](../docs/status/reviews/2026-10-13-project-ticket-discovery.md)。
 
 ## Project 决策只读发现
 
@@ -156,3 +156,7 @@ ADR-0037 A 在正式 CI Run 页面展示未采集、来源不可用、observed �
 ## Ticket 最小负责人
 
 详情页支持设置、改派、清空和“由我负责”，并在 Project 工单列表显示同一最小身份摘要。选择提示、确认与待重试操作保留成员稳定 ID，跨页同名成员不会只凭姓名确认。候选分页只向当前有分配能力者开放；终态须先重新打开。未知结果保留原操作，刷新后仍须精确重试，409 清理确认并重读；页面失权后清理候选与待确认操作。成员失权保留责任记录，历史导入身份提示重新分配。字段与版本合同见 [ADR-0046](../docs/adr/0046-ticket-assignee.md)，实际覆盖见[实施记录](../docs/status/reviews/2026-10-28-ticket-assignee.md)。
+
+## Ticket 优先级与项目筛选
+
+详情沿用当前动作生命周期，展示五级优先级并二次确认；409 重读，结果未知仅重试原 payload，终态显示只读值。Project 工单列表展示同一优先级文本，筛选与 cursor 栈只存页面内存；查询由服务端先筛选再分页，绝不对单页做客户端筛选。当前权限、取消请求、迟到响应和恢复清理沿用统一边界。正式合同见 [ADR-0047](../docs/adr/0047-ticket-priority-and-filtering.md)，浏览器与自动化范围见[实施记录](../docs/status/reviews/2026-10-28-ticket-priority.md)。

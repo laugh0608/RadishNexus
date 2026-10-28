@@ -519,3 +519,62 @@ it("returns current Ticket state on create retry but rejects non-open first crea
     }),
   ).rejects.toThrow(/契约/);
 });
+
+it("strictly parses native and imported priority history", () => {
+  const event = {
+    id: "evt_priority",
+    activity_type: "ticket.priority-changed",
+    actor: { kind: "user", id: "usr_member" },
+    occurred_at: now,
+    subjects: [],
+    priority: { from: "unset", to: "normal", from_revision: 1, to_revision: 2 },
+  };
+  const data = {
+    current: ticketCurrent,
+    capabilities: { change_status: true },
+    relations: [
+      {
+        visibility: "readable",
+        direction: "outgoing",
+        relation_type: "implements",
+        target: {
+          ref: { type: "decision", id: "dec_source" },
+          title: "Source",
+        },
+      },
+    ],
+    timeline: [event],
+  };
+  for (const imported of [undefined, true]) {
+    const v = parseCollaborationView(
+      {
+        data: {
+          ...data,
+          timeline: [{ ...event, ...(imported ? { imported } : {}) }],
+        },
+      },
+      "ticket",
+      "tkt_work",
+    );
+    expect(v.timeline[0]).toMatchObject({
+      activityType: "ticket.priority-changed",
+      priority: { from: "unset", to: "normal", fromRevision: 1, toRevision: 2 },
+    });
+  }
+  for (const bad of [
+    { ...event, priority: { ...event.priority, from: "normal" } },
+    { ...event, priority: { ...event.priority, to: "p0" } },
+    { ...event, priority: { ...event.priority, to_revision: 3 } },
+    { ...event, priority: { ...event.priority, from: undefined } },
+    { ...event, priority: { ...event.priority, private: "hidden" } },
+    { ...event, subjects: [{ visibility: "restricted" }] },
+  ]) {
+    expect(() =>
+      parseCollaborationView(
+        { data: { ...data, timeline: [bad] } },
+        "ticket",
+        "tkt_work",
+      ),
+    ).toThrow();
+  }
+});

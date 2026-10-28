@@ -118,6 +118,7 @@ describe("authenticated Web Shell", () => {
             title: "Existing work",
             status: "open",
             assignee: null,
+            priority: "unset" as const,
           },
         ],
         nextCursor: null,
