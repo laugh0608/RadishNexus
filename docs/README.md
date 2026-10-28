@@ -47,6 +47,7 @@
 ## 状态与验证入口
 
 - [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
+- [2026-10-28 上下文迁移有界补验](status/reviews/2026-10-28-context-package-supplement.md)：边界修复、进程中断、移除关系与容量证据；下一负责人设计见提议中的 [ADR-0046](adr/0046-ticket-assignee.md)。
 - [2026-10-24 提交回顾与文档收尾](status/reviews/2026-10-24-daily-closeout.md)：升级恢复、上下文迁移、成员生命周期三笔实现的源码核对及接续建议。
 - [2026-10-24 成员生命周期与管理交接](status/reviews/2026-10-24-membership-lifecycle.md)：会话代次、私密管理、并发故障、恢复和浏览器证据。
 - [2026-10-24 升级失败恢复](status/reviews/2026-10-24-upgrade-failure-recovery.md)：历史工件停写、失败诊断、空目标恢复及独立操作者缺口。

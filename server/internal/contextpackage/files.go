@@ -200,14 +200,23 @@ func allowedPath(p string) bool {
 }
 func readRegular(root *os.Root, name string, limit int64) ([]byte, error) {
 	info, err := root.Lstat(name)
-	if err != nil || !info.Mode().IsRegular() {
+	if err != nil {
+		return nil, invalid("regular file required")
+	}
+	return readRegularSnapshot(root, name, limit, info)
+}
+
+// Bind the open descriptor to the inspected inode. A nonblocking open prevents
+// a substituted FIFO from waiting for a writer; recheck the path after opening.
+func readRegularSnapshot(root *os.Root, name string, limit int64, info os.FileInfo) ([]byte, error) {
+	if !info.Mode().IsRegular() {
 		return nil, invalid("regular file required")
 	}
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok || stat.Nlink != 1 {
 		return nil, invalid("linked file")
 	}
-	file, err := root.Open(name)
+	file, err := root.OpenFile(name, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, invalid("open file")
 	}
@@ -215,6 +224,10 @@ func readRegular(root *os.Root, name string, limit int64) ([]byte, error) {
 	actual, err := file.Stat()
 	if err != nil || !actual.Mode().IsRegular() || !os.SameFile(info, actual) || actual.Size() > limit {
 		return nil, invalid("changed or oversized file")
+	}
+	current, err := root.Lstat(name)
+	if err != nil || !current.Mode().IsRegular() || !os.SameFile(actual, current) {
+		return nil, invalid("changed file path")
 	}
 	actualStat, ok := actual.Sys().(*syscall.Stat_t)
 	if !ok || actualStat.Nlink != 1 {
@@ -321,7 +334,8 @@ func WriteDirectory(directory string, b Bundle) error {
 			return err
 		}
 	}
-	return writeNew(root, "manifest.json", append(Encode(b.Manifest), '\n'))
+	// Keep the on-disk manifest equal to the bytes counted by Unpack.
+	return writeNew(root, "manifest.json", Encode(b.Manifest))
 }
 func writeNew(root *os.Root, name string, content []byte) error {
 	f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)

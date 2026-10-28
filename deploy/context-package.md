@@ -86,10 +86,10 @@ apply 原子写入业务对象、历史身份、映射、历史来源、Activity
 
 ## 自动化入口与限制
 
-`./scripts/check-server-context-package.sh` 使用本机已有 PostgreSQL 镜像和 Go 缓存，在专属临时容器内运行 `TestContext*` 数据库测试，退出时清理容器。启动资源、故障注入和清理须先获得当前任务授权；脚本不下载依赖。
+`./scripts/check-server-context-package.sh` 使用本机已有 PostgreSQL 镜像和 Go 缓存，在专属临时容器内运行 `TestContext*` 数据库测试，退出时清理容器。默认测试包含合法移除关系的二次导入、代表性规模，以及 CLI / HTTPS 服务测试子进程的 SIGKILL / 重试验证；这些进程仅承载专属合成数据。启动资源、故障注入和清理须先获得当前任务授权；脚本不下载依赖。
 
 增加 `--browser-review` 会构建正式 Web，保留合成源 / 目标与回环 HTTPS 端点等待页面复验；必须按 fixture 检查列表实际操作后才写完成标记。测试 CA 仅用于隔离会话，不加入系统信任；未使用此参数的自动化运行不计浏览器证据。
 
 首片输入上限为 64 MiB、10,000 个对象 / 历史作者、50,000 条历史 / 关系 / 文档版本、1 MiB manifest 和 JSONL 单行、256 KiB 单版 Markdown；来源链最多 8 层，导入新增一层，因果链最多 256 层。各限制同时适用，不构成生产容量承诺。profile 不包含研发实体、附件、完整 Workspace、已有项目合并、作者认领或源 ACL 等价迁移。
 
-首片仅支持现有正式协作入口产生的 proposed / accepted Decision 和四类 asserted 关系；不支持的业务形状整体拒绝，不截断成可导入成功。最多 8 层来源链的包仍可 inspect，但再次导入会新增第 9 层，因此 prepare 拒绝。实际往返、恢复及部分覆盖范围见[2026-10-24 实施记录](../docs/status/reviews/2026-10-24-portable-context-package.md)。
+首片仅支持现有正式协作入口产生的 proposed / accepted Decision 和四类 asserted 关系；不支持的业务形状整体拒绝，不截断成可导入成功。最多 8 层来源链的包仍可 inspect，但再次导入会新增第 9 层，因此 prepare 拒绝。Decision 必须保留 active evidence，Thread 必须保留 active started-from；合法移除状态不能绕过这些现有不变量。实际往返、恢复及部分覆盖范围见[2026-10-24 实施记录](../docs/status/reviews/2026-10-24-portable-context-package.md)与[2026-10-28 有界补验](../docs/status/reviews/2026-10-28-context-package-supplement.md)。64 MiB 文件解析与 1,000 条消息代表性数据库测量不构成满额数据库 / HTTPS 或生产容量保证。

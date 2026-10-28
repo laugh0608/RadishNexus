@@ -112,6 +112,14 @@ func TestPackageRoundTripAndPlanBinding(t *testing.T) {
 }
 func TestPackageRejectsBrokenHistoryAndClosure(t *testing.T) {
 	tests := map[string]func(*Data){
+		"removed only decision evidence": func(d *Data) {
+			actor, reason := "usr_a", "historical removal"
+			at := d.Links[1].UpdatedAt
+			d.Links[1].State = "removed"
+			d.Links[1].RemovedActor = &actor
+			d.Links[1].RemovedAt = &at
+			d.Links[1].RemovalReason = &reason
+		},
 		"missing document relation":   func(d *Data) { d.Links = d.Links[:3] },
 		"duplicate document relation": func(d *Data) { link := d.Links[3]; link.ID = "lnk_duplicate"; d.Links = append(d.Links, link) },
 		"premature ticket": func(d *Data) {

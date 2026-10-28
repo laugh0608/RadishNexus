@@ -499,7 +499,13 @@ func validateObjectHistory(o Object, v any, events []History, x *Index, relation
 			return invalid("Thread source Channel")
 		}
 	case Decision:
-		if p.Proposer != o.Actor || !oneRelation("derived-from", *f.Evidence) {
+		activeEvidence := false
+		for _, link := range relations[ref]["derived-from"] {
+			activeEvidence = activeEvidence || link.State == "active"
+		}
+		// The database requires every Decision to retain active evidence. Reject
+		// an invalid snapshot during inspect/prepare, before starting an import.
+		if p.Proposer != o.Actor || !oneRelation("derived-from", *f.Evidence) || !activeEvidence {
 			return invalid("Decision source")
 		}
 		n := 1

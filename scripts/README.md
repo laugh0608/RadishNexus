@@ -121,7 +121,7 @@ npm ci
 
 ## Project 上下文包往返
 
-`./scripts/check-server-context-package.sh` 用现有 Go 缓存构建独立 CLI，在专属 PostgreSQL 容器运行 `TestContext*`，包含真实 HTTPS 登录、导出 / 计划 / 导入 / 结果查询以及数据库并发和故障测试。格式 / 文件解析全量单元测试仍由 `check-server.sh` 执行。
+`./scripts/check-server-context-package.sh` 用现有 Go 缓存构建独立 CLI，在专属 PostgreSQL 容器运行 `TestContext*`，包含真实 HTTPS 登录、导出 / 计划 / 导入 / 结果查询以及数据库并发和故障测试，含专属 CLI / HTTPS 测试子进程 SIGKILL、合法移除关系二次往返及代表性规模；结果与限制见[有界补验记录](../docs/status/reviews/2026-10-28-context-package-supplement.md)。格式 / 文件解析全量单元测试仍由 `check-server.sh` 执行。
 
 增加 `--browser-review` 会构建正式 Web，保留合成源 / 目标 HTTPS fixture 等待浏览器复验者提交检查结果；必须实际完成页面流程才能写完成标记。CA 仅供该隔离浏览器 / CLI 使用，不加入系统信任。启动资源、故障注入和清理须获得当前任务授权；脚本不拉取镜像或下载依赖，退出清理自有容器和目录。步骤与限制见[迁移手册](../deploy/context-package.md)，实际结果见[记录](../docs/status/reviews/2026-10-24-portable-context-package.md)。`check-server-backup-restore.sh` 同时验证导入来源与历史身份随备份恢复，恢复后显式重建 Activity。
 
