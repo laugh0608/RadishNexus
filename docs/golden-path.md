@@ -63,6 +63,10 @@ Golden Path 用最薄的可运行产品验证 RadishNexus 的核心价值，而�
 
 系统可以生成 Decision 草案，但只有具备确认权限且能够读取全部 evidence 的人才能 Accepted。Project 管理角色不会自动穿透 restricted Thread；自动摘要不能被展示成已经确认的团队结论。
 
+### 基础执行不替代交付事实
+
+Ticket 的四状态、单一负责人和固定优先级分别遵循 [ADR-0039](adr/0039-ticket-status-transitions.md)、[ADR-0046](adr/0046-ticket-assignee.md) 与 [ADR-0047](adr/0047-ticket-priority-and-filtering.md)。责任记录不授予权限，优先级不自动确定执行顺序，done 不证明构建或部署成功。验收这些切片时须检查显式确认、冲突 / 原操作重试、失权清理及迁移后历史；通过这些局部检查不代表下述完整 Golden Path 已退出。
+
 ### 构建不等于部署
 
 CI Run 和 Deployment 是两个对象。原型只能由持有目标 Environment 显式授权的成员通过受控操作记录 staging Deployment；构建成功既不自动触发 Deployment，也不证明外部部署已经发生，更不能伪造生产部署事实。

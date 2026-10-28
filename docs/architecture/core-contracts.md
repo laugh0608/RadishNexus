@@ -119,7 +119,7 @@ entity://decision/dec_01K4EXAMPLE
 
 [ADR-0046](../adr/0046-ticket-assignee.md) 增加 migration 021、独立 `assignment_revision`、`ticket.assignee.set` receipt 和 `ticket.assignee-changed` schema 1。`GET / POST /api/v1/workspaces/{workspace_id}/tickets/{ticket_id}/assignee` 与 `/assignee/candidates` 复用当前 Workspace / Project 准入、严格 JSON、CSRF 和 no-store；候选 cursor 绑定操作者、Workspace 与 Ticket。Project Ticket 发现行增加必填可空 `assignee`，与详情使用相同资格谓词。旧创建与状态响应不承担分配响应职责。
 
-新动作绑定两个 Ticket 版本及目标 lifecycle / Project management 代次；清空明确传 null 与目标代次字符串 `"0"`。精确重试重查操作者当前写权后只返回原事实，后续终态和目标失权不重演旧分配。真实变更与事件、receipt、Outbox、Activity v9 原子提交；原始事件只保存前后身份与相邻版本，时间线仅位于 Ticket。成员失权保留记录与历史，不授予任何权限。Go、Web、schema 与 v2 导入导出须配套停写升级，不能混用旧客户端。
+新动作绑定两个 Ticket 版本及目标 lifecycle / Project management 代次；清空明确传 null 与目标代次字符串 `"0"`。精确重试重查操作者当前写权后只返回原事实，后续终态和目标失权不重演旧分配。真实变更与事件、receipt、Outbox、Activity 原子提交（本切片引入 v9，当前随 ADR-0047 升为 v10）；原始事件只保存前后身份与相邻版本，时间线仅位于 Ticket。成员失权保留记录与历史，不授予任何权限。本切片的 Go、Web、schema 与 v2 导入导出须配套停写升级；当前交付版本以紧接的 ADR-0047 v3 合同为准，不能混用旧客户端。
 
 ## Ticket 优先级与筛选合同
 
@@ -338,7 +338,7 @@ Session adapter 产生携带 `MembershipRevision` 和 `SessionID` 的受验证�
 
 暂停 / 退出递增生命周期并更新本 Workspace 的会话有效起点；恢复不让旧 Session 复活。协作授权保留或清除、Deployment 撤销、受控成功 Audit / receipt 同事务提交，不新增管理 Activity / Outbox。操作结果查询只以当前全局 Session 返回本人固定历史摘要，正式退出后仍可确认已提交事实，不恢复 Workspace 读取。管理审计在当前管理权和对象读取权过滤后分页，不返回隐藏总数。
 
-权威备份保存成员状态、代次、局部管理角色及 Audit / receipt；Session 和未兑换邀请仍排除。019 与 020 不滚动兼容，须停写升级；旧备份先以匹配旧工件恢复空目标，再显式迁移。`.nexus` 包保持原 profile，不传递源 ACL；导入目标负责人取得初始管理责任，历史作者保持不可激活。
+权威备份保存成员状态、代次、局部管理角色及 Audit / receipt；Session 和未兑换邀请仍排除。019 与 020 不滚动兼容，须停写升级；旧备份先以匹配旧工件恢复空目标，再显式迁移。该成员管理切片未改变 `.nexus` profile；当前格式由 ADR-0047 承接，仍不传递源 ACL；导入目标负责人取得初始管理责任，历史作者保持不可激活。
 
 ## Canonical Message query
 

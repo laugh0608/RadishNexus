@@ -47,6 +47,10 @@
 ## 状态与验证入口
 
 - [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
+- [2026-10-28 提交回顾与文档收尾](status/reviews/2026-10-28-daily-closeout.md)：四笔实现 / 修复的代码文档核对、验证边界与接续范围。
+- [2026-10-28 Ticket 优先级与筛选](status/reviews/2026-10-28-ticket-priority.md)：schema 022、Activity 10、v3 历史、筛选分页与运行验证。
+- [2026-10-28 Ticket 最小负责人](status/reviews/2026-10-28-ticket-assignee.md)：分配、候选、历史身份、v2 兼容与运行验证。
+- [2026-10-28 负责人有界补验](status/reviews/2026-10-28-ticket-assignee-supplement.md)：固定并发顺序、同名确认、双标签与页面恢复。
 - [2026-10-28 上下文迁移有界补验](status/reviews/2026-10-28-context-package-supplement.md)：边界修复、进程中断、移除关系与容量证据；后续负责人合同见 [ADR-0046](adr/0046-ticket-assignee.md)。
 - [2026-10-24 提交回顾与文档收尾](status/reviews/2026-10-24-daily-closeout.md)：升级恢复、上下文迁移、成员生命周期三笔实现的源码核对及接续建议。
 - [2026-10-24 成员生命周期与管理交接](status/reviews/2026-10-24-membership-lifecycle.md)：会话代次、私密管理、并发故障、恢复和浏览器证据。
@@ -72,5 +76,3 @@
 - [2026-09-03 状态快照](status/history/2026-09-03-status.md)：此前阶段事实及浏览器、数据库、部署和编辑器验收流水；旧计划不再生效。
 
 正式产品完成线只看当前状态与对应验收证据；专题中的目标模型、候选技术与历史测试通过不自动表示公共入口、团队使用或生产能力已经完成。
-
-- [2026-10-28 Ticket 优先级与筛选](status/reviews/2026-10-28-ticket-priority.md)：schema 022、Activity 10、v3 历史、筛选分页与运行验证。
