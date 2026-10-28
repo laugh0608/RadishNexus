@@ -22,16 +22,27 @@ func TestTicketAssignmentHTTPSBrowser(t *testing.T) {
 	}
 	f := contextDatabase(t)
 	f.seed(t)
+	contextSQL(t, f, `INSERT INTO radishnexus.workspaces(id,name) VALUES('wrk_assignment_other','第二合成工作区')`)
+	contextSQL(t, f, `INSERT INTO radishnexus.workspace_memberships(workspace_id,user_id,status,role) VALUES('wrk_assignment_other',$1,'active','owner')`, f.principal.ID)
 	// Only identity and grant fixtures use SQL; collaboration facts use formal commands.
 	for i := 0; i < 25; i++ {
 		id := fmt.Sprintf("usr_candidate_%02d", i)
-		contextSQL(t, f, `INSERT INTO radishnexus.users(id,display_name) VALUES($1,$2)`, id, fmt.Sprintf("合成候选成员 %02d · 长名称测试", i))
+		name := fmt.Sprintf("合成候选成员 %02d · 长名称测试", i)
+		if i == 0 {
+			id = "usr_000_duplicate"
+			name = "同名合成成员 · 跨页辨认"
+		}
+		if i == 24 {
+			id = "usr_zzz_duplicate"
+			name = "同名合成成员 · 跨页辨认"
+		}
+		contextSQL(t, f, `INSERT INTO radishnexus.users(id,display_name) VALUES($1,$2)`, id, name)
 		contextSQL(t, f, `INSERT INTO radishnexus.user_accounts(user_id,status,created_at) VALUES($1,'active',clock_timestamp())`, id)
 		contextSQL(t, f, `INSERT INTO radishnexus.workspace_memberships(workspace_id,user_id,status,role) VALUES($1,$2,'active','member')`, f.workspace, id)
 		contextSQL(t, f, `INSERT INTO radishnexus.project_memberships(workspace_id,project_id,user_id,role) VALUES($1,$2,$3,'contributor')`, f.workspace, f.project, id)
 	}
 	server, _ := contextHTTPS(t, f, webRoot)
-	state := map[string]any{"origin": server.URL, "workspace": f.workspace, "project": f.project, "channel": f.channel, "decision": f.decision, "ticket": f.ticket, "owner_id": f.principal.ID, "member_id": f.member.ID, "owner_email": "context.owner@example.test", "member_email": "context.member@example.test", "database": f.pool.Config().ConnConfig.Database, "done_file": statePath + ".done"}
+	state := map[string]any{"other_workspace": "wrk_assignment_other", "origin": server.URL, "workspace": f.workspace, "project": f.project, "channel": f.channel, "decision": f.decision, "ticket": f.ticket, "owner_id": f.principal.ID, "member_id": f.member.ID, "owner_email": "context.owner@example.test", "member_email": "context.member@example.test", "database": f.pool.Config().ConnConfig.Database, "done_file": statePath + ".done"}
 	raw, err := json.Marshal(state)
 	if err != nil {
 		t.Fatal(err)

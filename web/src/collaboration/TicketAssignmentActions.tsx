@@ -215,7 +215,9 @@ export function useTicketAssignmentActions({
       return;
     try {
       setConfirmation({
-        label: candidate?.displayName ?? "未分配",
+        label: candidate
+          ? `${candidate.displayName} · ${candidate.id}`
+          : "未分配",
         input: {
           client_operation_id: createOperationID(),
           base_assignment_revision: assignment.revision,
@@ -302,7 +304,8 @@ export function useTicketAssignmentActions({
       ) : confirmation ? (
         <div>
           <p>
-            确认将负责人从“{assigneeLabel(assignment?.assignee ?? null)}”改为“
+            确认将负责人从“{assigneeLabel(assignment?.assignee ?? null)}
+            {assignment?.assignee ? ` · ${assignment.assignee.id}` : ""}”改为“
             {confirmation.label}”？分配不会授予项目权限。
           </p>
           <button
@@ -342,6 +345,11 @@ export function useTicketAssignmentActions({
               </option>
             ))}
           </select>
+          {selected && (
+            <p>
+              已选成员标识：<code>{selected}</code>
+            </p>
+          )}
           {candidates.length === 0 && <p>当前没有可分配成员。</p>}
           <button
             type="button"

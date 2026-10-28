@@ -190,4 +190,65 @@ describe("Ticket assignment actions", () => {
     await screen.findByText(/当前不能变更负责人/);
     expect(api.candidates).not.toHaveBeenCalled();
   });
+  it("keeps cross-page identical names distinguishable in selection and confirmation", async () => {
+    const api = client();
+    const a = { id: "usr_a", displayName: "同名成员", lifecycleRevision: "1" };
+    const z = { ...a, id: "usr_z" };
+    vi.mocked(api.candidates)
+      .mockResolvedValueOnce({ ...candidates, items: [a], nextCursor: "next" })
+      .mockResolvedValueOnce({ ...candidates, items: [z] });
+    render(<Harness client={api} />);
+    fireEvent.change(await screen.findByRole("combobox"), {
+      target: { value: a.id },
+    });
+    expect(screen.getByText(a.id, { selector: "code" })).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "加载更多候选成员" }));
+    await screen.findByRole("option", { name: "同名成员 · usr_z" });
+    expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe(
+      a.id,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "设置负责人" }));
+    await screen.findByText(/确认将负责人.*同名成员 · usr_a/);
+    fireEvent.click(screen.getByRole("button", { name: "确认负责人" }));
+    await waitFor(() => expect(api.set).toHaveBeenCalled());
+    expect(vi.mocked(api.set).mock.calls[0]![2].assignee_user_id).toBe(a.id);
+  });
+  it("clears pending scope and ignores an old write completing after Workspace switch", async () => {
+    const api = client();
+    const write = deferred<{ revision: number; assigneeID: string | null }>();
+    vi.mocked(api.set).mockReturnValueOnce(write.promise);
+    const refresh = vi.fn();
+    const view = render(<Harness client={api} onRefresh={refresh} />);
+    fireEvent.click(await screen.findByRole("button", { name: "由我负责" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认负责人" }));
+    const signal = vi.mocked(api.set).mock.calls[0]![3];
+    view.rerender(
+      <Harness
+        client={api}
+        workspaceID="wrk_two"
+        ticketID="tkt_two"
+        onRefresh={refresh}
+      />,
+    );
+    await screen.findByRole("button", { name: "由我负责" });
+    expect(signal?.aborted).toBe(true);
+    await act(async () => write.resolve({ revision: 2, assigneeID: "usr_me" }));
+    expect(refresh).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", { name: "重试原负责人操作" }),
+    ).toBeNull();
+    expect(screen.queryByText(/负责人操作已确认/)).toBeNull();
+  });
+  it("clears a prepared confirmation during page reauthorization even when versions stay equal", async () => {
+    const api = client();
+    const view = render(<Harness client={api} />);
+    fireEvent.click(await screen.findByRole("button", { name: "由我负责" }));
+    expect(screen.getByRole("button", { name: "确认负责人" })).toBeDefined();
+    view.rerender(<Harness client={api} ready={false} versionKey="" />);
+    expect(screen.queryByRole("button", { name: "确认负责人" })).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    view.rerender(<Harness client={api} />);
+    await screen.findByRole("button", { name: "由我负责" });
+    expect(api.set).not.toHaveBeenCalled();
+  });
 });

@@ -62,10 +62,19 @@ func TestTicketAssignmentHistoryEligibilityAndRetry(t *testing.T) {
 	if err != nil || len(next.Items) == 0 || next.Items[0].ID <= page.NextID {
 		t.Fatal(next, err)
 	}
+	selfIncluded := false
 	for _, c := range append(page.Items, next.Items...) {
+		selfIncluded = selfIncluded || c.ID == inv.Principal.ID
 		if c.ID == "usr_viewer" || c.ID == "usr_owner" {
 			t.Fatal("ineligible candidate", c)
 		}
+	}
+	if !selfIncluded {
+		t.Fatal("active writer absent from own candidate set")
+	}
+	exhausted, err := s.ListAssigneeCandidates(ctx, inv.Principal, ticket.ID, goldenpath.DiscoveryPageInput{Limit: 25, AfterID: next.Items[len(next.Items)-1].ID})
+	if err != nil || exhausted.Items == nil || len(exhausted.Items) != 0 || exhausted.NextID != "" {
+		t.Fatal("exhausted candidate page", exhausted, err)
 	}
 	first := assignmentInput(t, ctx, s, inv, ticket.ID, "usr_contributor", "first")
 	if v, err := s.SetTicketAssignee(ctx, inv, first); err != nil || v.AssignmentRevision != 2 {
