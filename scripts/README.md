@@ -147,3 +147,9 @@ python3 scripts/check-upgrade-recovery.py --old-ref 333c4ce --new-ref 171527f \
 `check-server-postgres.sh` 中的 `TestUpgradeFailure*` 验证真实历史 migration 的原子回滚、合法前缀、续迁、并发、取消、连接终止、COMMIT 确认丢失及 history 漂移；readiness 不覆盖手工 DDL 的限制也显式测试。COMMIT 故障夹具位于 `server/internal/testsupport/pgfault`，仅 integration 构建使用。
 
 `check-server-backup-restore.sh` 还会编译正式 restore CLI，并运行 `TestBackupRestoreUpgradeFailures`。它在真实 pg_restore 的事务阶段注入 SQL 错误/断连，在权威恢复后注入 Activity 重建错误，证明失败不能报告完成、不能覆盖非空目标；重新恢复使用独立空目标。旧版本证据仍需显式指定 `RADISHNEXUS_OWNER_TRANSFER_LEGACY_REF=333c4ce`，不能以当前版本往返代替。
+
+### Ticket 负责人验收
+
+`TestTicketAssignment*` 覆盖候选、代次冲突、精确重试、原子故障、分配历史往返和 migration 020→021。`RADISHNEXUS_ASSIGNMENT_LEGACY_REF=211f050 ./scripts/check-server-backup-restore.sh` 在自有容器构建本地 020 工件，验证旧工件恢复到空目标后显式升级；不 fetch、不切换工作分支。
+
+交互浏览器 fixture 使用 `RADISHNEXUS_ASSIGNMENT_BROWSER_STATE` 与 `RADISHNEXUS_WEB_ROOT`，运行 `go test -tags=integration ./internal/goldenpath/postgres -run '^TestTicketAssignmentHTTPSBrowser$' -count=1 -timeout=45m -v`。需明确授权的隔离 `DATABASE_URL`、冻结的 Web build 和独立浏览器；实际验收后才写 state 指定的 `.done` 检查结果。无该环境变量时显式跳过浏览器，不冒充通过；流程结束关闭浏览器及自有容器。

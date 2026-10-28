@@ -1,3 +1,4 @@
+import { assigneeLabel } from "../collaboration/ticket-assignee-api";
 import { ticketStatusLabels } from "../collaboration/ticket-status";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthRequestError } from "../auth/api";
@@ -144,6 +145,7 @@ function ProjectTickets({
                     {ticket.title}
                   </a>
                   <p>{ticketStatusLabels[ticket.status]}</p>
+                  <p>负责人：{assigneeLabel(ticket.assignee)}</p>
                 </li>
               ))}
             </ul>

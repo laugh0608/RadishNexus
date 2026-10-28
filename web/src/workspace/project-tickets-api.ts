@@ -1,4 +1,8 @@
 import {
+  parseAssignee,
+  type TicketAssignee,
+} from "../collaboration/ticket-assignee-api";
+import {
   parseTicketStatus,
   type TicketStatus,
 } from "../collaboration/ticket-status";
@@ -13,6 +17,7 @@ import {
 } from "./configuration-api";
 
 export interface ProjectTicket {
+  assignee: TicketAssignee | null;
   id: string;
   title: string;
   status: TicketStatus;
@@ -58,12 +63,13 @@ export const projectTicketsClient = {
         signal,
       ),
       (value) => {
-        const row = object(value, ["ref", "title", "status"]);
+        const row = object(value, ["ref", "title", "status", "assignee"]);
         const ref = object(row.ref, ["type", "id"]);
         if (ref.type !== "ticket")
           throw new AuthRequestError("工单服务响应不符合当前契约。");
         return {
           id: requireID(ref.id, "tkt_"),
+          assignee: parseAssignee(row.assignee),
           title: text(row.title),
           status: parseTicketStatus(row.status),
         };

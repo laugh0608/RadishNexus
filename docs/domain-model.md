@@ -239,11 +239,15 @@ M0 纵向切片继续冻结 `thread` / `thr_` 与 `ticket` / `tkt_` 的稳定引
 
 ### Ticket
 
-可执行工作的统一对象。需求、任务、缺陷、事故和改进项的长期表达保持同一模型；type、workflow、负责人、优先级和看板尚未进入当前实现。
+可执行工作的统一对象。需求、任务、缺陷、事故和改进项的长期表达保持同一模型；type、自定义 workflow、优先级和看板尚未进入当前实现；最小四状态和单一可选负责人分别按 ADR-0039 / ADR-0046 实施。
 
 [ADR-0039](adr/0039-ticket-status-transitions.md) 冻结最小四状态：open 待开始、in-progress 处理中、done 已完成、canceled 已取消。前两者可转向其他状态；两个终态只能显式重新打开为 open，不能直接互转。done 只表示人工完成执行事项，不证明 Decision、CI Run 或 Deployment 结果。
 
 Ticket 初始 `status_revision=1`，只随有效状态变化递增；当前 active Workspace 与 Project 的 contributor / decider / admin 基于所见版本显式提交，创建者和 owner 不绕过该边界，也不重新要求来源私密 Thread 的读取权。旧版本或同状态冲突；精确重试重新授权后确认原操作并读取当前状态。状态、版本、时间、不可变事件、receipt、Outbox 与 Activity 同事务，关系和原创建事实保持独立。
+
+负责人按 [ADR-0046](adr/0046-ticket-assignee.md) 保存可空 `assignee_user_id` 与独立 `assignment_revision`，旧工单和新建工单均初始未分配 / 1。当前有 Project 写权者只能在 open / in-progress 设置、改派或清空；候选须同 Workspace 的 active 账户和成员，当前 Project 为 contributor / decider / admin，排除历史导入身份。分配不授予权限，也不限制其他有权成员改变工单状态。
+
+成员暂停、退出或失去写权后保留责任记录，读取时显示当前不可执行；恢复后的资格按当前权限计算。历史导入负责人保持不可登录，必须显式重新分配目标成员。新分配绑定所见负责人、状态、成员生命周期及项目管理代次；分配历史与状态历史分别递增，共用工单更新时间，原操作重试只返回原 applied 事实。负责人字段与历史随权威备份保存，跨实例格式见 ADR-0046 的 v2 合同。
 
 ### Document
 

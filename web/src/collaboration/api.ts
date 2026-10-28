@@ -93,6 +93,15 @@ interface TimelineBase {
 export type CollaborationTimelineItem = TimelineBase &
   (
     | {
+        activityType: "ticket.assignee-changed";
+        assignment: {
+          fromUserID: string | null;
+          toUserID: string | null;
+          fromRevision: number;
+          toRevision: number;
+        };
+      }
+    | {
         activityType: "ticket.status-changed";
         fromStatus: TicketStatus;
         toStatus: TicketStatus;
@@ -810,6 +819,48 @@ function parseTimelineItem(
   const nativeFields = { ...raw };
   delete nativeFields.imported;
   value = nativeFields;
+  if (raw.activity_type === "ticket.assignee-changed") {
+    const item = exactRecord(value, path, [
+      "id",
+      "activity_type",
+      "actor",
+      "occurred_at",
+      "subjects",
+      "assignment",
+    ]);
+    const a = exactRecord(item.assignment, `${path}.assignment`, [
+      "from_user_id",
+      "to_user_id",
+      "from_revision",
+      "to_revision",
+    ]);
+    const fromUserID =
+      a.from_user_id === null
+        ? null
+        : scopedID(a.from_user_id, "from_user_id", "usr_");
+    const toUserID =
+      a.to_user_id === null
+        ? null
+        : scopedID(a.to_user_id, "to_user_id", "usr_");
+    const fromRevision = parseTicketStatusRevision(a.from_revision),
+      toRevision = parseTicketStatusRevision(a.to_revision);
+    if (
+      expectedType !== "ticket" ||
+      array(item.subjects, `${path}.subjects`).length !== 0 ||
+      fromUserID === toUserID ||
+      toRevision !== fromRevision + 1
+    )
+      throw new TypeError("Invalid Ticket assignment timeline");
+    return {
+      ...provenance,
+      id: scopedID(item.id, `${path}.id`, "evt_"),
+      activityType: "ticket.assignee-changed",
+      actor: parseActor(item.actor, `${path}.actor`),
+      occurredAt: timestamp(item.occurred_at, `${path}.occurred_at`),
+      subjects: [],
+      assignment: { fromUserID, toUserID, fromRevision, toRevision },
+    };
+  }
   if (raw.activity_type === "ticket.status-changed") {
     const item = exactRecord(value, path, [
       "id",
@@ -998,7 +1049,8 @@ function validateViewShape(
         item.activityType !== "ticket.created" &&
         item.activityType !== "ticket.component-linked" &&
         item.activityType !== "ticket.component-unlinked" &&
-        item.activityType !== "ticket.status-changed",
+        item.activityType !== "ticket.status-changed" &&
+        item.activityType !== "ticket.assignee-changed",
     )
   ) {
     throw new TypeError("Ticket Timeline contains an unexpected item");

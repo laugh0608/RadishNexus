@@ -85,6 +85,7 @@ func contextHTTPS(t *testing.T, f *contextFixture, webRoot string) (*httptest.Se
 	}
 	httptransport.RegisterDocumentRoutes(mux, httptransport.NewDocumentHandler(f.auth, f.documents, policy, proxy))
 	httptransport.RegisterTicketComponentRoutes(mux, httptransport.NewTicketComponentHandler(f.auth, goldenpath.NewTicketComponentService(f.store, goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), policy, proxy))
+	httptransport.RegisterTicketAssignmentRoutes(mux, httptransport.NewTicketAssignmentHandler(f.auth, goldenpath.NewTicketAssignmentService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
 	httptransport.RegisterTicketStatusRoutes(mux, httptransport.NewTicketStatusHandler(f.auth, goldenpath.NewTicketStatusService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
 	mux.Handle("/api/v1/workspaces", httptransport.NewDeploymentNexusViewHandler(f.auth, core, policy, proxy))
 	if webRoot != "" {

@@ -1,3 +1,4 @@
+import { useTicketAssignmentActions } from "./TicketAssignmentActions";
 import { ManagementPanel } from "../workspace/ManagementPanel";
 import { ContextSourceNotice } from "../ContextSourceNotice";
 import { projectDecisionsPath } from "../workspace/project-decisions-api";
@@ -181,6 +182,18 @@ function CollaborationPageContent({
     onRefresh: relationChanged,
     onUnavailable: relationUnavailable,
     onSessionExpired,
+  });
+  const ticketAssignmentActions = useTicketAssignmentActions({
+    workspaceID,
+    ticketID: entityID,
+    enabled: entityType === "ticket",
+    ready: state.status === "ready",
+    versionKey: state.status === "ready" ? state.view.current.updatedAt : "",
+    unavailable: state.status === "error",
+    onRefresh: relationChanged,
+    onUnavailable: relationUnavailable,
+    onSessionExpired,
+    createOperationID,
   });
   const revokeVisibleState = (error: unknown): boolean => {
     if (isExpiredSession(error)) {
@@ -577,6 +590,7 @@ function CollaborationPageContent({
             <div className="collaboration-complete">
               <strong>Ticket 已进入执行上下文</strong>
               {ticketStatusActions}
+              {ticketAssignmentActions}
               <CreateDocument
                 workspaceID={workspaceID}
                 ticketID={entityID}
@@ -853,7 +867,9 @@ function TimelineList({
                 : "已解除组件关联"
               : "fromStatus" in item
                 ? `${ticketStatusLabels[item.fromStatus]} → ${ticketStatusLabels[item.toStatus]}（版本 ${item.fromRevision} → ${item.toRevision}）`
-                : item.status}
+                : "assignment" in item
+                  ? `${item.assignment.fromUserID ?? "未分配"} → ${item.assignment.toUserID ?? "未分配"}（负责人版本 ${item.assignment.fromRevision} → ${item.assignment.toRevision}）`
+                  : item.status}
           </span>
           <SubjectSummary subjects={item.subjects} />
           {item.subjects.map((subject) =>

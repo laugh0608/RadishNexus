@@ -104,7 +104,7 @@ func (store *Store) ListProjectTickets(ctx context.Context, principal authz.Prin
 	defer rollback(ctx, tx, &err)
 	// Ticket access is its governing Project access, independent of evidence
 	// Thread permissions. Keep this equivalent to entityAccess's Ticket branch.
-	_, readable, err := readProjectAccess(ctx, tx, principal, projectID)
+	access, readable, err := readProjectAccess(ctx, tx, principal, projectID)
 	if err != nil {
 		return page, err
 	}
@@ -112,10 +112,14 @@ func (store *Store) ListProjectTickets(ctx context.Context, principal authz.Prin
 		return page, authz.ErrNotFound
 	}
 	rows, err := tx.Query(ctx, `
-		SELECT id, title, status FROM radishnexus.tickets
-		WHERE workspace_id = $1 AND governing_project_id = $2 AND id > $3
-		ORDER BY id LIMIT $4
-	`, principal.WorkspaceID, projectID, input.AfterID, input.Limit+1)
+		SELECT t.id,t.title,t.status, CASE WHEN t.assignee_user_id IS NULL THEN NULL ELSE jsonb_build_object('id',u.id,'display_name',u.display_name,'eligible',COALESCE(`+assigneeEligibility+`,false) AND $5,'imported',EXISTS(SELECT 1 FROM radishnexus.context_import_mappings im WHERE im.kind='actor' AND im.target_id=u.id)) END
+        FROM radishnexus.tickets t
+        LEFT JOIN radishnexus.users u ON u.id=t.assignee_user_id
+        LEFT JOIN radishnexus.workspace_memberships m ON m.workspace_id=t.workspace_id AND m.user_id=u.id
+        LEFT JOIN radishnexus.user_accounts a ON a.user_id=u.id
+        LEFT JOIN radishnexus.project_memberships pm ON pm.workspace_id=t.workspace_id AND pm.project_id=t.governing_project_id AND pm.user_id=u.id
+        WHERE t.workspace_id=$1 AND t.governing_project_id=$2 AND t.id>$3 ORDER BY t.id LIMIT $4
+	`, principal.WorkspaceID, projectID, input.AfterID, input.Limit+1, access.active)
 	if err != nil {
 		return page, fmt.Errorf("query readable Tickets: %w", err)
 	}
@@ -171,7 +175,11 @@ func scanDiscoveryPage(rows pgx.Rows, kind string, limit int) (goldenpath.Discov
 	for rows.Next() {
 		item := goldenpath.DiscoveryItem{}
 		item.Ref.Type = kind
-		if err := rows.Scan(&item.Ref.ID, &item.Title, &item.Status); err != nil {
+		targets := []any{&item.Ref.ID, &item.Title, &item.Status}
+		if kind == "ticket" {
+			targets = append(targets, &item.Assignee)
+		}
+		if err := rows.Scan(targets...); err != nil {
 			return goldenpath.DiscoveryPage{}, fmt.Errorf("scan discovery item: %w", err)
 		}
 		page.Items = append(page.Items, item)

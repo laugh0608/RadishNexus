@@ -129,7 +129,7 @@
 - Project 首批角色为 `viewer / contributor / decider / admin`；只有 `decider` 和 `admin` 可以 Accepted Decision。
 - restricted Thread 需要显式 Thread 成员权限，Project 角色不会自动穿透；无权限关系目标只显示不含标识和展示字段的通用占位。
 - 协作 application service 只接收认证 adapter 提供的显式 Principal；本地身份与 Session 协议由 D-019 单独冻结。
-- Ticket 最小状态流转按 [ADR-0039](adr/0039-ticket-status-transitions.md) 使用独立状态版本、当前 Project 写权限与原操作精确重试；终态只允许重新打开，done 不证明 Decision、构建或部署结果。四状态语义和转换以[领域模型](domain-model.md#ticket)为准，不扩展负责人、优先级或看板。
+- Ticket 最小状态流转按 [ADR-0039](adr/0039-ticket-status-transitions.md) 使用独立状态版本、当前 Project 写权限与原操作精确重试；终态只允许重新打开，done 不证明 Decision、构建或部署结果。四状态语义和转换以[领域模型](domain-model.md#ticket)为准，优先级与看板保持独立；负责人由 [ADR-0046](adr/0046-ticket-assignee.md) 接续。
 
 ### D-016 PostgreSQL migration 基线
 
@@ -202,7 +202,7 @@
 
 ### D-024 单 Project 可移植协作上下文
 
-依据 [ADR-0044](adr/0044-portable-project-context-package.md)，`project-collaboration-v1` 迁移当前可读的单 Project 协作闭包，保留结构化关系、来源、历史作者与全部 Document revision；目标为匹配工件的空业务实例。新 ID 映射、不可登录历史身份和导入来源独立记录，不自动认领作者或导入源 ACL。目标初始 restricted，仅导入负责人取得显式访问和管理责任；其余成员通过正式授权加入。导入原子提交并保存精确结果，不产生历史 Outbox；整库备份、通用 Workspace / 研发数据迁移和附件范围保持独立。
+依据 [ADR-0044](adr/0044-portable-project-context-package.md) 和 [ADR-0046](adr/0046-ticket-assignee.md)，当前导出使用 `project-collaboration-v2`，增加历史负责人、独立分配版本及分配事件，继续读取严格旧 v1（转换为未分配 / 1）。两者迁移当前可读的单 Project 协作闭包，保留结构化关系、来源、历史作者与全部 Document revision；目标为匹配工件的空业务实例。新 ID 映射、不可登录历史身份和导入来源独立记录，不自动认领作者或导入源 ACL。目标初始 restricted，仅导入负责人取得显式访问和管理责任；其余成员通过正式授权加入。导入原子提交并保存精确结果，不产生历史 Outbox；整库备份、通用 Workspace / 研发数据迁移和附件范围保持独立。
 
 ## 尚未冻结
 

@@ -16,9 +16,10 @@ type DiscoveryPageInput struct {
 }
 
 type DiscoveryItem struct {
-	Ref    entityref.Ref
-	Title  string
-	Status string
+	Assignee *TicketAssignee
+	Ref      entityref.Ref
+	Title    string
+	Status   string
 }
 
 type DiscoveryPage struct {

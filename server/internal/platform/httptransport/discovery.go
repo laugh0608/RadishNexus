@@ -50,9 +50,10 @@ type discoveryCursor struct {
 }
 
 type discoveryItemDTO struct {
-	Ref    entityRefDTO `json:"ref"`
-	Title  string       `json:"title"`
-	Status string       `json:"status"`
+	Assignee **goldenpath.TicketAssignee `json:"assignee,omitempty"`
+	Ref      entityRefDTO                `json:"ref"`
+	Title    string                      `json:"title"`
+	Status   string                      `json:"status"`
 }
 
 type discoveryPageDTO struct {
@@ -236,7 +237,16 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 		}
 		previousID = item.Ref.ID
 		seen[item.Ref.ID] = true
-		dto.Items = append(dto.Items, discoveryItemDTO{Ref: entityRefDTO{Type: item.Ref.Type, ID: item.Ref.ID}, Title: item.Title, Status: item.Status})
+		row := discoveryItemDTO{Ref: entityRefDTO{Type: item.Ref.Type, ID: item.Ref.ID}, Title: item.Title, Status: item.Status}
+		if scope.Kind == "ticket" {
+			if !validAssignee(item.Assignee) {
+				return dto, invalid
+			}
+			row.Assignee = &item.Assignee
+		} else if item.Assignee != nil {
+			return dto, invalid
+		}
+		dto.Items = append(dto.Items, row)
 	}
 	if page.NextID != "" {
 		if len(page.Items) != input.Limit || page.NextID != page.Items[len(page.Items)-1].Ref.ID || page.NextID == input.AfterID {
@@ -257,7 +267,7 @@ func discoveryPrefix(kind string) string {
 	if strings.HasPrefix(kind, "management-") {
 		return managementCursorPrefix(kind)
 	}
-	if kind == "owner-transfer-candidates" {
+	if kind == "owner-transfer-candidates" || kind == "ticket-assignee-candidates" {
 		return "usr_"
 	}
 	if kind == "decision" {

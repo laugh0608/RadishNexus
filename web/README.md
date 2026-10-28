@@ -152,3 +152,7 @@ Document 默认集中阅读，来源 Ticket 保留标题下入口；信息展开
 ## CI Run checkout 来源
 
 ADR-0037 A 在正式 CI Run 页面展示未采集、来源不可用、observed 的完整 SHA-1 checkout revision 或无内容受限占位；支持复制完整 OID，点击 Repository 进入 `/workspaces/:workspace/repositories/:repository`，再从权限过滤的来源构建列表返回 CI Run。详情和列表刷新清除旧结果，错误或撤权不保留来源证据。Current、Relations 与 Timeline 使用同一个封闭来源合同，不输出内部 source / binding / receipt。该页面不证明完整构建输入或 Ticket 已交付；真实 Jenkins SCM 采集仍待 B。
+
+## Ticket 最小负责人
+
+详情页支持设置、改派、清空和“由我负责”，并在 Project 工单列表显示同一最小身份摘要。候选分页只向当前有分配能力者开放；终态须先重新打开。未知结果保留原操作，刷新后仍须精确重试，409 清理确认并重读；页面失权后清理候选与待确认操作。成员失权保留责任记录，历史导入身份提示重新分配。字段与版本合同见 [ADR-0046](../docs/adr/0046-ticket-assignee.md)，实际覆盖见[实施记录](../docs/status/reviews/2026-10-28-ticket-assignee.md)。

@@ -64,6 +64,38 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	core := goldenpath.NewService(goldenpostgres.New(original), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	channel, e := configuration.Configure(ctx, invocation, goldenpath.ConfigurationInput{Kind: "channel.create", ScopeID: project.Object.ID, ClientOperationID: "assignment-backup-channel", Name: "Responsibility", Visibility: "project", MemberUserIDs: []string{}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	message, e := core.CreateMessage(ctx, invocation, goldenpath.CreateMessageInput{ChannelID: channel.Object.ID, ClientOperationID: "assignment-backup-message", Body: "Synthetic responsibility source"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	thread, e := core.StartThreadFromMessage(ctx, invocation, goldenpath.StartThreadFromMessageInput{ChannelID: channel.Object.ID, MessageID: message.Message.ID, Title: "Responsibility", Visibility: "project"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	decision, e := core.CreateDecisionFromThread(ctx, invocation, goldenpath.CreateDecisionInput{ThreadID: thread.ID, ClientOperationID: "assignment-backup-proposal", Question: "Who owns this?"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = core.AcceptDecision(ctx, invocation, goldenpath.AcceptDecisionInput{DecisionID: decision.Decision.ID, ClientOperationID: "assignment-backup-accept", Outcome: "Assign", Rationale: "Keep responsibility"}); e != nil {
+		t.Fatal(e)
+	}
+	ticket, e := core.CreateTicketFromDecision(ctx, invocation, goldenpath.CreateTicketInput{DecisionID: decision.Decision.ID, ClientOperationID: "assignment-backup-ticket", Title: "Restore responsibility"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	assignments := goldenpath.NewTicketAssignmentService(goldenpostgres.New(original), goldenpath.CryptoIDGenerator{})
+	candidates, e := assignments.ListAssigneeCandidates(ctx, principal, ticket.Ticket.ID, goldenpath.DiscoveryPageInput{Limit: 25})
+	if e != nil || len(candidates.Items) != 1 {
+		t.Fatal(candidates, e)
+	}
+	if _, e = assignments.SetTicketAssignee(ctx, invocation, goldenpath.TicketAssignmentInput{TicketID: ticket.Ticket.ID, ClientOperationID: "assignment-backup-set", BaseAssignmentRevision: 1, BaseStatusRevision: 1, AssigneeUserID: &principal.ID, TargetLifecycleRevision: candidates.Items[0].LifecycleRevision, ProjectManagementRevision: candidates.ProjectManagementRevision, Confirmed: true}); e != nil {
+		t.Fatal(e)
+	}
 	bundle, e := exporter.Export(ctx, principal, session.Token, project.Object.ID)
 	if e != nil {
 		t.Fatal(e)

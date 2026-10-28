@@ -20,7 +20,14 @@ const project = {
   canManage: false,
 };
 const page = {
-  items: [{ id: "tkt_first", title: "First work", status: "open" as const }],
+  items: [
+    {
+      id: "tkt_first",
+      title: "First work",
+      status: "open" as const,
+      assignee: null,
+    },
+  ],
   nextCursor: "next_page",
 };
 const props = {
@@ -52,7 +59,14 @@ describe("Project Tickets page", () => {
     vi.mocked(api.tickets)
       .mockResolvedValueOnce(page)
       .mockResolvedValueOnce({
-        items: [{ id: "tkt_second", title: "Second work", status: "open" }],
+        items: [
+          {
+            id: "tkt_second",
+            title: "Second work",
+            status: "open",
+            assignee: null,
+          },
+        ],
         nextCursor: null,
       })
       .mockResolvedValue(page);
@@ -130,7 +144,14 @@ describe("Project Tickets page", () => {
     vi.mocked(api.tickets)
       .mockReturnValueOnce(late.promise)
       .mockResolvedValue({
-        items: [{ id: "tkt_other", title: "Other work", status: "open" }],
+        items: [
+          {
+            id: "tkt_other",
+            title: "Other work",
+            status: "open",
+            assignee: null,
+          },
+        ],
         nextCursor: null,
       });
     const view = render(<ProjectTicketsPage {...props} client={api} />);

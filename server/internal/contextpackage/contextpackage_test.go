@@ -31,7 +31,7 @@ func fixture(t *testing.T) Bundle {
 	object("thread", "thr_a", at, Thread{Title: "Discussion", Visibility: "restricted", ChannelID: &channel})
 	outcome, rationale := "Adopt", "Reason"
 	object("decision", "dec_a", at, Decision{Question: "Question?", Outcome: &outcome, Rationale: &rationale, Status: "accepted", Proposer: "usr_a", Deciders: []string{"usr_a"}, DecidedAt: &at, Alternatives: json.RawMessage(`[]`)})
-	object("ticket", "tkt_a", later, Ticket{Title: "Work", Status: "in-progress", StatusRevision: 2})
+	object("ticket", "tkt_a", later, Ticket{Title: "Work", Status: "in-progress", StatusRevision: 2, AssignmentRevision: 1})
 	object("document", "doc_a", later, Document{Revision: 2, Visibility: "project"})
 	ref := func(kind, id string) *Ref { return &Ref{kind, id} }
 	event := func(id, kind, entity string, when time.Time, f Facts) {

@@ -93,6 +93,12 @@ func Validate(d Data) (*Index, error) {
 				}
 				seen[id] = true
 			}
+		case Ticket:
+			if value.AssigneeUserID != nil {
+				if _, ok := x.Actors[*value.AssigneeUserID]; !ok {
+					return nil, invalid("Ticket assignee")
+				}
+			}
 		case Document:
 			if value.Revision > MaxHistory {
 				return nil, invalid("Document versions")
@@ -117,6 +123,15 @@ func Validate(d Data) (*Index, error) {
 		for _, r := range []*Ref{f.Evidence, f.Decision, f.Ticket, f.Channel, f.Thread, f.Message} {
 			if r != nil && (!exists(*r) || x.Objects[*r].CreatedAt.After(h.OccurredAt)) {
 				return nil, invalid("history dependency")
+			}
+		}
+		if f.Assignment != nil {
+			for _, id := range []*string{f.Assignment.FromUserID, f.Assignment.ToUserID} {
+				if id != nil {
+					if _, ok := x.Actors[*id]; !ok {
+						return nil, invalid("assignment actor")
+					}
+				}
 			}
 		}
 		x.History[h.ID] = h
@@ -259,6 +274,13 @@ func Validate(d Data) (*Index, error) {
 	}
 	for _, h := range d.History {
 		usedActors[h.Actor] = true
+		if a := x.Facts[h.ID].Assignment; a != nil {
+			for _, id := range []*string{a.FromUserID, a.ToUserID} {
+				if id != nil {
+					usedActors[*id] = true
+				}
+			}
+		}
 	}
 	for _, l := range d.Links {
 		usedActors[l.Actor] = true
@@ -338,6 +360,10 @@ func decodeObject(o Object) (any, error) {
 		}
 		return *p, nil
 	case *Ticket:
+		var fields map[string]json.RawMessage
+		if Decode(o.Data, &fields) != nil || len(fields) != 5 || fields["assignee_user_id"] == nil || fields["assignment_revision"] == nil || p.AssignmentRevision < 1 || p.AssignmentRevision > MaxHistory || (p.AssigneeUserID != nil && !ValidID(*p.AssigneeUserID, "usr_")) {
+			return nil, invalid("Ticket assignment fields")
+		}
 		if !label(p.Title, 800) || !oneOf(p.Status, "open", "in-progress", "done", "canceled") || p.StatusRevision < 1 || p.StatusRevision > MaxHistory {
 			return nil, invalid("Ticket fields")
 		}
@@ -401,6 +427,17 @@ func ValidateFacts(h History) (Facts, error) {
 		expected = []string{"status", "decision"}
 		if f.Status != "open" || !refType(f.Decision, "decision") {
 			return f, invalid("Ticket creation history")
+		}
+	case "ticket.assignee-changed":
+		kind = "ticket"
+		expected = []string{"assignment"}
+		var fields map[string]json.RawMessage
+		if f.Assignment == nil || !validAssignment(*f.Assignment) {
+			return f, invalid("Ticket assignment")
+		}
+		var original map[string]json.RawMessage
+		if Decode(h.Facts, &original) != nil || Decode(original["assignment"], &fields) != nil || len(fields) != 4 || fields["from_user_id"] == nil || fields["to_user_id"] == nil {
+			return f, invalid("Ticket assignment fields")
 		}
 	case "ticket.status-changed":
 		kind = "ticket"
@@ -528,31 +565,51 @@ func validateObjectHistory(o Object, v any, events []History, x *Index, relation
 		if decision.Status != "accepted" || decision.DecidedAt.After(o.CreatedAt) {
 			return invalid("Ticket accepted source")
 		}
-		if !oneRelation("implements", *f.Decision) || len(events) != p.StatusRevision {
+		if !oneRelation("implements", *f.Decision) || len(events) != p.StatusRevision+p.AssignmentRevision-1 {
 			return invalid("Ticket history count")
 		}
 		changes := []History{}
 		for _, h := range events {
-			if h.Type == "ticket.status-changed" {
+			if h.Type == "ticket.status-changed" || h.Type == "ticket.assignee-changed" {
 				changes = append(changes, h)
 			}
 		}
-		sort.Slice(changes, func(i, j int) bool { return x.Facts[changes[i].ID].ToRevision < x.Facts[changes[j].ID].ToRevision })
-		status := "open"
-		rev := 1
+		sort.Slice(changes, func(i, j int) bool {
+			if changes[i].OccurredAt.Equal(changes[j].OccurredAt) {
+				return x.Facts[changes[i].ID].ToRevision < x.Facts[changes[j].ID].ToRevision
+			}
+			return changes[i].OccurredAt.Before(changes[j].OccurredAt)
+		})
+		status, rev, assignmentRev := "open", 1, 1
+		previousAssignment := false
+		var assignee *string
 		last := o.CreatedAt
 		for _, h := range changes {
 			f := x.Facts[h.ID]
-			if f.FromRevision != rev || f.FromStatus != status || h.OccurredAt.Before(last) {
+			if h.OccurredAt.Before(last) || ((f.Assignment != nil || previousAssignment) && h.OccurredAt.Equal(last)) {
 				return invalid("Ticket history sequence")
 			}
-			status = f.ToStatus
-			rev = f.ToRevision
+			if f.Assignment != nil {
+				a := f.Assignment
+				if !oneOf(status, "open", "in-progress") || a.FromRevision != assignmentRev || !sameString(a.FromUserID, assignee) {
+					return invalid("Ticket assignment sequence")
+				}
+				assignee = a.ToUserID
+				assignmentRev = a.ToRevision
+			} else {
+				if f.FromRevision != rev || f.FromStatus != status {
+					return invalid("Ticket history sequence")
+				}
+				status = f.ToStatus
+				rev = f.ToRevision
+			}
+			previousAssignment = f.Assignment != nil
 			last = h.OccurredAt
 		}
-		if status != p.Status || rev != p.StatusRevision || !last.Equal(o.UpdatedAt) {
+		if status != p.Status || rev != p.StatusRevision || assignmentRev != p.AssignmentRevision || !sameString(assignee, p.AssigneeUserID) || !last.Equal(o.UpdatedAt) {
 			return invalid("Ticket current state")
 		}
+
 	case Document:
 		sourceLinks := 0
 		for _, link := range relations[*f.Ticket]["relates-to"] {
@@ -633,3 +690,8 @@ func BuildPlan(m Manifest, d Data, workspace, identity, actor, operation string)
 	return p, nil
 }
 func MappingKey(kind, id string) string { return fmt.Sprintf("%s/%s", kind, id) }
+
+func sameString(a, b *string) bool { return a == nil && b == nil || a != nil && b != nil && *a == *b }
+func validAssignment(a Assignment) bool {
+	return !sameString(a.FromUserID, a.ToUserID) && a.FromRevision >= 1 && a.FromRevision < 2147483647 && a.ToRevision == a.FromRevision+1 && (a.FromUserID == nil || ValidID(*a.FromUserID, "usr_")) && (a.ToUserID == nil || ValidID(*a.ToUserID, "usr_"))
+}

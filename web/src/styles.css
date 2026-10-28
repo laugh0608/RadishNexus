@@ -2455,3 +2455,29 @@ code {
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
+
+.ticket-assignment-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.ticket-assignment-actions > div {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ticket-assignment-actions select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+}

@@ -118,18 +118,19 @@ type collaborationRelationDTO struct {
 }
 
 type collaborationTimelineDTO struct {
-	Imported      bool                      `json:"imported,omitempty"`
-	FromStatus    string                    `json:"from_status,omitempty"`
-	ToStatus      string                    `json:"to_status,omitempty"`
-	FromRevision  int                       `json:"from_status_revision,omitempty"`
-	ToRevision    int                       `json:"to_status_revision,omitempty"`
-	ID            string                    `json:"id"`
-	ActivityType  string                    `json:"activity_type"`
-	Actor         deploymentActorDTO        `json:"actor"`
-	OccurredAt    string                    `json:"occurred_at"`
-	Status        string                    `json:"status,omitempty"`
-	RelationState string                    `json:"relation_state,omitempty"`
-	Subjects      []collaborationSubjectDTO `json:"subjects"`
+	Assignment    *goldenpath.TicketAssignmentChange `json:"assignment,omitempty"`
+	Imported      bool                               `json:"imported,omitempty"`
+	FromStatus    string                             `json:"from_status,omitempty"`
+	ToStatus      string                             `json:"to_status,omitempty"`
+	FromRevision  int                                `json:"from_status_revision,omitempty"`
+	ToRevision    int                                `json:"to_status_revision,omitempty"`
+	ID            string                             `json:"id"`
+	ActivityType  string                             `json:"activity_type"`
+	Actor         deploymentActorDTO                 `json:"actor"`
+	OccurredAt    string                             `json:"occurred_at"`
+	Status        string                             `json:"status,omitempty"`
+	RelationState string                             `json:"relation_state,omitempty"`
+	Subjects      []collaborationSubjectDTO          `json:"subjects"`
 }
 
 type collaborationSubjectDTO struct {
@@ -575,7 +576,7 @@ func publicTicketProjection(
 		return ticketCurrentDTO{}, errors.New("invalid Ticket Nexus View")
 	}
 	for _, item := range timeline {
-		if item.ActivityType != "ticket.created" && item.ActivityType != "ticket.component-linked" && item.ActivityType != "ticket.component-unlinked" && item.ActivityType != "ticket.status-changed" {
+		if item.ActivityType != "ticket.created" && item.ActivityType != "ticket.component-linked" && item.ActivityType != "ticket.component-unlinked" && item.ActivityType != "ticket.status-changed" && item.ActivityType != "ticket.assignee-changed" {
 			return ticketCurrentDTO{}, errors.New("unexpected Ticket Timeline item")
 		}
 	}
@@ -750,6 +751,28 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 			!validScopedID(item.Actor.ID, "usr_") || item.OccurredAt.IsZero() ||
 			item.ProjectionVersion != goldenpath.ActivityProjectionVersion {
 			return nil, errors.New("invalid collaboration Timeline item")
+		}
+		if item.ActivityType == "ticket.assignee-changed" {
+			from, e1 := strconv.Atoi(item.SafeFacts["from_revision"])
+			to, e2 := strconv.Atoi(item.SafeFacts["to_revision"])
+			change := goldenpath.TicketAssignmentChange{FromRevision: from, ToRevision: to}
+			if v := item.SafeFacts["from_user_id"]; v != "" {
+				change.FromUserID = &v
+			}
+			if v := item.SafeFacts["to_user_id"]; v != "" {
+				change.ToUserID = &v
+			}
+			if e1 != nil || e2 != nil || strconv.Itoa(from) != item.SafeFacts["from_revision"] || strconv.Itoa(to) != item.SafeFacts["to_revision"] || len(item.SafeFacts) != 4+extra || len(item.Subjects) != 0 || !change.Valid() {
+				return nil, errors.New("invalid assignment timeline facts")
+			}
+			if _, ok := item.SafeFacts["from_user_id"]; !ok {
+				return nil, errors.New("missing assignment identity")
+			}
+			if _, ok := item.SafeFacts["to_user_id"]; !ok {
+				return nil, errors.New("missing assignment identity")
+			}
+			dto = append(dto, collaborationTimelineDTO{Imported: imported, ID: item.EventID, ActivityType: item.ActivityType, Actor: deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID}, OccurredAt: publicTime(item.OccurredAt), Subjects: []collaborationSubjectDTO{}, Assignment: &change})
+			continue
 		}
 		if item.ActivityType == "ticket.status-changed" {
 			from, e1 := strconv.Atoi(item.SafeFacts["from_status_revision"])

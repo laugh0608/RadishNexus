@@ -115,6 +115,12 @@ entity://decision/dec_01K4EXAMPLE
 
 注册表只统一解析，不提供通用写接口。创建、修改和状态转换仍由原领域模块验证业务不变量。未注册类型、前缀不匹配、Workspace 不匹配和不允许的关系方向必须失败，不能降级成普通 URL 或无类型 metadata。
 
+## Ticket 负责人合同
+
+[ADR-0046](../adr/0046-ticket-assignee.md) 增加 migration 021、独立 `assignment_revision`、`ticket.assignee.set` receipt 和 `ticket.assignee-changed` schema 1。`GET / POST /api/v1/workspaces/{workspace_id}/tickets/{ticket_id}/assignee` 与 `/assignee/candidates` 复用当前 Workspace / Project 准入、严格 JSON、CSRF 和 no-store；候选 cursor 绑定操作者、Workspace 与 Ticket。Project Ticket 发现行增加必填可空 `assignee`，与详情使用相同资格谓词。旧创建与状态响应不承担分配响应职责。
+
+新动作绑定两个 Ticket 版本及目标 lifecycle / Project management 代次；清空明确传 null 与目标代次字符串 `"0"`。精确重试重查操作者当前写权后只返回原事实，后续终态和目标失权不重演旧分配。真实变更与事件、receipt、Outbox、Activity v9 原子提交；原始事件只保存前后身份与相邻版本，时间线仅位于 Ticket。成员失权保留记录与历史，不授予任何权限。Go、Web、schema 与 v2 导入导出须配套停写升级，不能混用旧客户端。
+
 ## 授权解析
 
 ### 统一入口
@@ -252,7 +258,7 @@ request_context
 
 [ADR-0044](../adr/0044-portable-project-context-package.md) 将导入事实封装为 `context.history-recorded` schema 1：actor 是本次真实导入负责人，source 为 import 批次，发生时间为本次接纳时间；原事件类型、作者、发生时间、事实及因果关系保存在受约束、不可变的历史来源中。目标 ID 全部映射，原 client operation / receipt 不进入目标幂等空间。导入 receipt 绑定包摘要、目标身份、操作者、operation 与权限计划。
 
-导入历史不写历史 Outbox，数据库禁止为这些事件添加投递；不会重新发通知、调用 provider 或执行历史命令。Activity projection 8 在同事务导入和全量重建时读取来源事实，并保留 `imported` 标识；原始作者 / 时间只用于历史解释。所有来源、时间线和关系读取继续验证当前对象权限。正常 web 事件与 receipt 保持既有约束，不以导入例外伪造原生动作。
+导入历史不写历史 Outbox，数据库禁止为这些事件添加投递；不会重新发通知、调用 provider 或执行历史命令。Activity projection 从 8 起在同事务导入和全量重建时读取来源事实（当前 9 增加负责人历史），并保留 `imported` 标识；原始作者 / 时间只用于历史解释。所有来源、时间线和关系读取继续验证当前对象权限。正常 web 事件与 receipt 保持既有约束，不以导入例外伪造原生动作。
 
 ## Activity 投影
 

@@ -112,7 +112,14 @@ describe("authenticated Web Shell", () => {
     const tickets = vi
       .spyOn(projectTicketsClient, "tickets")
       .mockResolvedValue({
-        items: [{ id: "tkt_work", title: "Existing work", status: "open" }],
+        items: [
+          {
+            id: "tkt_work",
+            title: "Existing work",
+            status: "open",
+            assignee: null,
+          },
+        ],
         nextCursor: null,
       });
     try {

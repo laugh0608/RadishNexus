@@ -9,6 +9,7 @@ const ticket = {
   ref: { type: "ticket", id: "tkt_one" },
   title: "Work",
   status: "open",
+  assignee: null,
 };
 function response(data: unknown, status = 200) {
   return new Response(JSON.stringify({ data }), {
@@ -33,7 +34,7 @@ describe("Project Ticket API", () => {
         signal,
       ),
     ).toEqual({
-      items: [{ id: "tkt_one", title: "Work", status: "open" }],
+      items: [{ id: "tkt_one", title: "Work", status: "open", assignee: null }],
       nextCursor: null,
     });
     expect(fetch).toHaveBeenCalledWith(
