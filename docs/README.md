@@ -24,6 +24,8 @@
 
 试用准备见[受控试用支持说明](trial-support.md)、[评估授权待决事项](evaluation-authorization-decisions.md)及 [ADR-0043：单机停机升级与失败恢复](adr/0043-single-host-upgrade-failure-recovery.md)。支持与授权仍为待确认设计；ADR-0043 已接受，执行见[运维手册](../deploy/upgrade-recovery.md)，实际结果与缺口见[2026-10-24 验收记录](status/reviews/2026-10-24-upgrade-failure-recovery.md)。技术实施不代表试用已开放或已授予运行权。
 
+能力归属与任务 / 验收来源统一见[能力专题地图](topics.md)，连接原 M0–M7 阶段与 Golden Path 整合目标，不复制合同或当前进度。
+
 ## 文档职责
 
 - 稳定产品定位只写在 `product-definition.md`。

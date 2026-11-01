@@ -1,0 +1,324 @@
+# 2026-11-01 规划整理前的状态快照
+
+来源为本次整理前的 current 正文，仅调整相对链接。旧“当前”“本轮”“今晚”和授权叙述按原记录日期理解；本页仅用于历史追溯，不作为任务顺位或新授权。现行入口见[当前状态](../current.md)，整理与验证见[本批记录](../reviews/2026-11-01-planning-alignment.md)。
+
+---
+
+# RadishNexus 当前状态
+
+状态日期：2026-10-28
+
+## 已确认待实施的客户端方向
+
+2026-10-12 已确认[客户端连接规划](../../architecture/client-server-connection-plan.md)与 [ADR-0036](../../adr/0036-official-client-instance-connection.md)：同一官方安装包运行时选择官方端点或用户自部署后端，无需重新编译。本轮仅更新文档；官方端点与 Flutter 选择能力尚未交付，当前 Web Golden Path / M1 和已有停止线继续有效。
+
+## 当前阶段
+
+M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 React Web 已建立若干真实业务切片，尚未完成可由普通成员独立操作、持续使用的完整 Golden Path。
+
+本地邮箱账户与邀请已按 [ADR-0023](../../adr/0023-local-account-and-radish-oidc-login.md) 建立。项目所有者已明确将 Radish OIDC 接入延后，schema readiness 和 Project / Channel 首批发现入口已完成，基础对象与首批成员配置已接通，部署后首次访问初始化也已接通。最小 Markdown Document 已按 ADR-0028 接入正式 Go、PostgreSQL 与 Web，自动化和隔离 HTTPS 浏览器已验证创建、保存、冲突、恢复与撤权；正式页面的 macOS 原生中文 IME 尚未验收，项目所有者现已明确暂缓人工验收，并明确视觉语言主要参考 RadishX 的 Radish 家族规范、页面重点参考 AFFiNE / Mattermost / AppFlowy；已确认使用 pen.dev 推进共享工作台与 Document 代表页，静态稿已按实际界面参考优化至 v1.1，并获所有者认可；共享工作台与 Document 代表页现已落到正式 React，验证范围见[视觉落地记录](../reviews/2026-09-26-workbench-ui.md)。长期范围与阶段退出条件见[路线图](../../roadmap.md)，产品验收见 [Golden Path](../../golden-path.md)。本页只维护当前判断和顺序，不重复完整 ADR 与历史测试流水。
+
+## 完成线与成熟度
+
+下表依据仓库实现及已有验收记录区分四类证据；公共入口或浏览器演示通过不等于真实团队日常使用通过。
+
+| 能力 | 内部契约与实现 | 公共入口与交互 | 普通用户独立操作 / 持续使用 |
+| --- | --- | --- | --- |
+| 本地身份与 Session | 账户 / 密码拆分、邮箱 bootstrap、旧账户显式映射、Session、CSRF、邀请和外部身份事务 | 同源 HTTPS 邮箱登录、Workspace 选择、账户页和一次性邀请；真实 OIDC provider 尚未装配 | 本地与迁移自动化、邮箱登录与退出浏览器已有证据；新账户邀请兑换浏览器已有证据；本地恢复已按 ADR-0041 完成 CLI / 审计迁移 / 全账户 Session 撤销与隔离验收；成员生命周期与交接已按 ADR-0045 验证；Radish 联调与团队持续使用仍待验收 |
+| Message → Thread → Decision → Ticket | migration 006 / 007、权限、来源、原子事件与幂等 receipt | canonical 页面和短请求；contributor / decider 浏览器验收已有记录 | 自动 Timeline 与首批双向关系已通过浏览器闭环；Project 工单与决策只读发现已完成；Ticket 最小状态流转、单一可选负责人及固定优先级 / 项目内筛选已完成；其余协作对象列表与更完整执行管理未闭环 |
+| Project / Channel 发现 | 当前权限过滤、归档可读、稳定 ID 分页、当前成员复核 | 首页 Workspace → Project → Channel 导航；ID 工具保留为次级入口 | 服务端、真实数据库、Web 交互与隔离浏览器验收通过，含分页、撤权刷新、Workspace 切换及桌面 / 手机布局；基础配置已有独立切片证据，见下一行 |
+| Project 工单发现 | governing Project 当前权限、稳定 ID 分页；DTO 已随 ADR-0039 接受四状态 | 首页项目入口、canonical 工单列表与详情返回入口，刷新 / 页面恢复重新授权 | 正式创建链、普通成员重新登录、25＋2 分页、来源 / 组件 / 文档跳转、桌面 / 手机及撤权刷新 / 后退已验收；状态流转见下一行；持续使用另验 |
+| Project 决策发现 | governing Project 当前权限、两种状态、稳定 ID 分页，与 evidence 可读性独立 | Project 列表入口、canonical 决策列表与详情返回，恢复时重新授权 | 正式创建链、普通成员登录、25＋2 分页、受限来源、后续 Ticket、归档、桌面 / 手机 / 键盘及撤权恢复已验收；见[记录](../reviews/2026-10-18-project-decision-discovery.md)，持续使用另验 |
+| Ticket 最小状态流转 | migration 016、独立状态版本、当前权限、精确 receipt、原子事件 / Activity 7 | 详情四状态动作与二次确认、冲突重读、原操作重试；现有列表与创建重试同步 | Go / PostgreSQL / 015 升级 / 备份恢复、Web 与正式创建链 HTTPS 浏览器通过；双标签冲突、响应丢失、桌面 / 手机 / 键盘与撤权恢复见[记录](../reviews/2026-10-13-ticket-status-transitions.md)，持续使用另验 |
+| Ticket 最小负责人 | migration 021、独立分配版本、当前候选资格、精确 receipt、原子 Activity 9；v2 包与严格 v1 读取 | 详情设置 / 改派 / 清空 / 由我负责，Project 工单列表同一摘要 | Go / PostgreSQL / 020 升级 / 旧工件恢复 / Web 与 HTTPS 浏览器证据见[记录](../reviews/2026-10-28-ticket-assignee.md)；生命周期完整组合与真实团队持续使用另验 |
+| Ticket 最小优先级与筛选 | migration 022、独立优先级版本、精确 receipt、Activity 10；v3 包严格读取旧 v1 / v2 | 详情二次确认与原操作重试，Project 内状态 / 负责人 / 优先级三组单选 AND 筛选，稳定 ID 分页 | Go / PostgreSQL / 021 升级 / 旧工件恢复、Web 和 HTTPS 双身份浏览器验证见[记录](../reviews/2026-10-28-ticket-priority.md)；实际 BFCache 命中、目标容量与团队持续使用仍独立验收 |
+| 基础对象与首批成员配置 | migration 009、明确初始 admin、普通角色 / 受限成员、配置 Audit / receipt、撤权清理、备份恢复 | owner 创建 Team / Project，Project admin 创建 Channel 与配置成员 | 从正式 bootstrap 的空业务工作区，经 Web 创建、邀请新账户、双层授权、成员发消息与撤权已验收；首次访问 Web 初始化已有独立证据；Workspace owner 主动交接已按 ADR-0042 完成；Project admin / 私密管理交接和成员生命周期已按 ADR-0045 验证 |
+| 单 Channel Message 实时 | 单进程 SSE、当前权限、有界回放、撤权与关闭 | canonical Channel 已接入 ready → history → 增量 | 有技术验收；没有目标团队规模与持续使用的容量证据 |
+| CI Run / staging Deployment | verified Jenkins delivery、终态 CI Run、显式环境授权记录 Deployment、精确重试 receipt | CI Run / Deployment 正式读取；成功构建可选择已授权 staging 环境并确认记录外部部署结果 | 真实 Jenkins 三态采集、Deployment 写入自动化与隔离浏览器已通过；Component / staging Environment 创建、发现与显式授权管理已接通，真实数据库、恢复及隔离浏览器已有证据；已落盘快照持久发送按 ADR-0035 A 完成；可信 collector 代码与离线验证已具备，显式双边清理已有离线证据，真实持续采集与交付关系仍缺 |
+| Repository 映射与 Component 关联 | migration 013、稳定外部身份、人工来源多对多关系、精确解除 / 重新关联、配置 Audit / receipt、Activity v4 | owner 创建映射与关联，成员分页发现及双向跳转 | 从正式 bootstrap 空业务工作区完成页面创建、关联、解除 / 重连、桌面 / 手机 / 键盘、成员只读及失权清空；数据库升级、并发、回滚与恢复通过；无 provider 连接或 CI 来源推导 |
+| Ticket 与 Component 人工关联 | migration 014、人工 `affects`、Project 写权限、精确解除 / 重连、协作 receipt、Activity v5 | Ticket 关联区、组件稳定详情与按权限过滤的反向分页 | Go / PostgreSQL / Web、013 升级与恢复通过；正式页面创建链、关联 / 解除 / 重连、桌面 / 手机与键盘通过；浏览器后退、显式刷新撤回读 / 写权及最终截图已补验，见[补验记录](../reviews/2026-10-09-delivery-continuation.md) |
+| CI Run checkout 来源 A | migration 015、sources / payload v2、不可变 binding / built-from、schema 2 CI 事件与 Activity 6 | CI Run 来源详情、完整 OID 复制、Repository 稳定页面与反向分页 | 合成签名输入、真实 PostgreSQL、014 升级 / 混合恢复与隔离浏览器验证；真实 SCM 采集 B 暂缓，见[实施记录](../reviews/2026-10-13-checkout-provenance.md) |
+| EntityLink / Activity | 带来源关系、权限过滤 query、同事务 Activity 更新与版本化全量重建 | Nexus View 可读 Current / 出向与首批入向 Relations / 正常更新的 Timeline | 正常写入与双向发现已通过真实 PostgreSQL / HTTP 和浏览器；未完成持续使用观察 |
+| 单 Project 上下文迁移 | migration 019、版本化包、新 ID / 历史身份映射、精确导入 receipt、Activity 8 与备份恢复 | 受认证 CLI export / inspect / prepare / apply / result，正式 Web 导入标识和继续协作 | 隔离数据库、HTTPS CLI、桌面 / 手机浏览器通过，见[记录](../reviews/2026-10-24-portable-context-package.md)；更广迁移、满额容量、独立操作者持续使用仍待验收 |
+| 自部署与恢复 | 显式 migration、只读 schema readiness、PostgreSQL 17 同 major 空目标恢复 | 健康端点拒绝 migration 缺失 / 漂移 / 版本不匹配；固定工件 Compose 开发拓扑与 HTTPS 演练已有记录 | 单机停机升级 / 失败恢复的 PostgreSQL 故障、历史工件 Compose / HTTPS 与浏览器已有隔离证据；ADR-0043 独立操作者复验按所有者要求暂缓，目标环境和生产容量仍待完成 |
+| Document | migration 010、不可变版本、精确 receipt、当前 Project 权限、单一受限 Markdown parser、备份恢复 | Ticket 创建、Project 文档列表、阅读 / 编辑 / 预览、显式冲突重新应用、历史恢复 | 真实数据库及隔离 HTTPS 双标签页、恢复、手机布局、撤权已有证据；原生中文 IME、普通成员独立持续使用仍待验收 |
+
+## 已确认缺口
+
+9 月 5 日的原始发现保留在[审阅记录](../reviews/2026-09-05-project-review.md)。9 月 10 日已按 [ADR-0022](../../adr/0022-transactional-activity-and-incoming-relations.md) 接通正常 Activity 更新及 Thread ← Decision、Decision ← Ticket 的反向发现；正式命令后的 HTTP 读取、撤权、失败回滚和重建并发已通过真实 PostgreSQL 测试，不在正常更新验收中手工重建。本轮 Chrome 浏览器已验证提案、接受、创建 Ticket、刷新后双向跳转与撤权清空，证据见[本轮记录](../reviews/2026-09-10-activity-relations.md)。
+
+当前剩余缺口：
+
+1. **升级运维**：只读 schema readiness 已按 [ADR-0024](../../adr/0024-read-only-schema-readiness.md) 完成；单机停机升级失败恢复已按 [ADR-0043](../../adr/0043-single-host-upgrade-failure-recovery.md) 实施手册与隔离演练，故障与浏览器证据见[记录](../reviews/2026-10-24-upgrade-failure-recovery.md)；独立操作者复验已按所有者要求暂缓，跨 schema 兼容窗口与生产编排仍待建立。
+2. **使用入口**：首页已可直接浏览可读 Project / Channel；Team / Project / Channel 创建与首批成员配置已接通；部署后首次访问创建管理员已接通；Workspace owner 主动交接已接通，Project admin / 私密对象管理权交接与成员生命周期已接通；其他对象列表仍缺。Document 的原生 IME 复核和真实外部交付链仍独立推进。
+3. **关系与时间线范围**：核心 Nexus 关系仍全量读取，未建立通用分页；Repository / Component 配置和 Ticket / Component 关联已有专用双向分页和 active 反向索引。Timeline 保留事件主要对象语义，Thread 不展示后续对象 Activity，其余交付反向关系尚未开放。
+4. **证据边界**：自动化、真实数据库与本轮浏览器验收证明讨论到执行的局部闭环；Document 的剩余人工复核、真实交付链、完整 Golden Path 和真实团队持续使用仍分别验收。
+
+## 近期执行顺序
+
+2026-10-13 所有者确认在真实 Jenkins B 继续暂缓期间，按“对象发现 → 基础执行 → 试用准备”的顺序推进，首片 ADR-0038 随后已获确认并完成实现与必要验证。每个切片先核对既有合同和失败边界，分别确认实现范围；Radish OIDC 仍属未来规划，不阻塞近期顺序。
+
+| 顺序 | 下一切片 | 交付与退出判据 |
+| --- | --- | --- |
+| 1 | Project 下的 Ticket 只读发现 | 已按 [ADR-0038](../../adr/0038-project-ticket-discovery.md) 完成；成员可从 Project 列表找回已有 Ticket，当前权限、分页与恢复验收见[记录](../reviews/2026-10-13-project-ticket-discovery.md) |
+| 2 | Ticket 最小状态流转 | 已按 [ADR-0039](../../adr/0039-ticket-status-transitions.md) 完成；四状态转换、独立版本、精确重试、读取兼容与恢复验收见[记录](../reviews/2026-10-13-ticket-status-transitions.md) |
+| 3 | Project 下的 Decision 只读发现 | 已按 [ADR-0040](../../adr/0040-project-decision-discovery.md) 完成；成员从 Project 找回两种状态，权限、分页、来源隔离与恢复见[记录](../reviews/2026-10-18-project-decision-discovery.md)；拒绝、替代和复核另立写入切片 |
+| 4 | 试用所需身份与运维能力 | [本地账户受控恢复 ADR-0041](../../adr/0041-controlled-local-account-recovery.md) 与 [Workspace owner 主动交接 ADR-0042](../../adr/0042-workspace-owner-handoff.md) 已实施并完成隔离验收；[升级失败恢复 ADR-0043](../../adr/0043-single-host-upgrade-failure-recovery.md) 已实施并完成自动化 / 浏览器隔离演练，独立操作者复验暂缓；[支持说明](../../trial-support.md)与[评估授权待决事项](../../evaluation-authorization-decisions.md)仍待确认，未开放外部试用或签发授权 |
+| 5 | 受控小团队场景试用 | 满足必要条件后观察讨论—决策—工单—文档的持续使用，记录追溯、重复录入与维护者干预；真实交付链未恢复时不宣称完整 Golden Path 通过 |
+| 6 | 版本化结构化导出与全新实例导入 | 所有者暂缓 ADR-0043 人工复验后已启动 [ADR-0044](../../adr/0044-portable-project-context-package.md) 首片；已完成单 Project 协作闭环、历史身份与显式目标权限重建的独立往返、后续协作、故障与恢复验证，见[记录](../reviews/2026-10-24-portable-context-package.md)；更大范围迁移及容量仍待验收 |
+| 7 | 成员生命周期与管理交接 | 所有者确认 D01～D08 后，已完成 migration 020、事务准入、生命周期 / 管理 API 与正式 Web；权限、并发故障、019 升级 / 旧工件恢复、导入互操作和双身份浏览器已验证，见[记录](../reviews/2026-10-24-membership-lifecycle.md)；真实团队持续使用另验 |
+| 暂缓 | 真实 Jenkins 采集与交付整链 | ADR-0035 / ADR-0037 B 继续暂缓；具体 Ticket ↔ CI Run 关系仍待 ADR-0037 约定的来源合同与 B 证据明确后独立冻结 |
+| 暂缓 | 最小 Markdown Document 人工验收 | 正式实现和隔离浏览器已验证；待所有者恢复人工验收时补 macOS 原生中文 IME，见[实施记录](../reviews/2026-09-26-markdown-document.md)，不阻塞上述切片 |
+
+免费书面授权与评估说明应在邀请外部团队前准备，不能等到完整聊天或 CRDT 完成；版本化结构化导出与全新实例导入仍是 M1 的独立退出条件。账号恢复、安全审计、数据生命周期、数据库最小权限与升级演练按[路线图](../../roadmap.md)的试用和生产边界推进，不因本表只列近期切片而取消。
+
+### 本轮完成：成员生命周期与管理交接
+
+2026-10-24 所有者确认 [ADR-0045](../../adr/0045-membership-lifecycle-and-management-handoff.md) D01～D08，并授权连续实现、隔离数据库 / HTTPS / 浏览器和故障验证。migration 020、Workspace 暂停 / 恢复 / 正式退出、Project admin 与私密对象局部管理、会话代次、绑定退出代次的再准入、受控 Audit / receipt 及正式 Web 已完成。暂停保留尚存协作授权，退出清空对象授权；二者均撤销 Deployment 授权，恢复不让旧 Session 复活，也不影响其他 Workspace。
+
+真实 PostgreSQL 并发与故障、019→020、同版本与旧 019 工件恢复后显式升级、导入历史身份保护、代表性规模及隔离 HTTPS 双身份 / 双标签 / 390px / 键盘浏览器已验证。G01～G22 证据、测量和限制见[记录](../reviews/2026-10-24-membership-lifecycle.md)。没有新增依赖、远程写入或真实实例迁移；本轮实现、测试与文档已按所有者要求提交为 `94da10d`，未 push。ADR-0044 的既有补验项保持独立，ADR-0043 独立操作者、原生中文 IME 和真实 Jenkins 的暂缓继续有效。
+
+### 本轮完成首片：结构化导出与新实例导入
+
+2026-10-24 所有者明确暂缓 ADR-0043 独立人工复验，并要求继续下一阶段。当前技术重点转到 [ADR-0044](../../adr/0044-portable-project-context-package.md)：单个 Project 的可读协作数据、来源与全部 Document 版本，导入到新实例的空业务 Workspace；采用新 ID 映射、不可登录历史身份、明确的 import 来源，以及默认仅向导入负责人开放的 restricted Project。所有者已确认 D01～D06 的格式 / 数据模型 / 初始权限行为，并另行授权本轮本机隔离数据库、HTTPS / Chrome 与故障测试。migration 019、严格包校验、受认证 API / CLI、原子导入与 Activity 8、Web 来源标识已实现；真实数据库往返 / 再导入、撤权顺序、取消 / COMMIT 确认丢失、备份恢复和正式 Web 桌面 / 手机后续协作已验证。精确矩阵、实际规模与部分覆盖项见[实施记录](../reviews/2026-10-24-portable-context-package.md)。所有者已授权将本轮实现、测试与文档纳入本地提交，未 push；独立操作者持续使用与生产容量未验收，不宣布全部 M1 迁移范围完成。
+
+ADR-0043 的 U27 保留未执行，恢复人工验收时再补；试用支持与授权仍待确认，不启动外部试用。
+
+### 本轮实施：单机升级失败恢复；试用条件仍待确认
+
+2026-10-18 按所有者要求核对现有许可、migration、readiness、备份恢复、Compose 与身份合同，形成[支持说明](../../trial-support.md)的 8 项准入条件、[评估授权待决事项](../../evaluation-authorization-decisions.md)的 12 项选择，以及 [ADR-0043](../../adr/0043-single-host-upgrade-failure-recovery.md) 的流程与 28 项验收矩阵。推荐首批采用非生产、可重建数据、单宿主 Compose 停机维护；授权先讨论指定主体免费书面评估，不改变根许可证。
+
+2026-10-24 所有者确认 ADR-0043 的本机非生产隔离范围，已落实[操作手册](../../../deploy/upgrade-recovery.md)、历史工件演练和真实数据库故障测试；017→018、空目标恢复旧服务、恢复后显式升级，以及四阶段浏览器验证通过。U01～U28 的分层结果与部分覆盖见[实施记录](../reviews/2026-10-24-upgrade-failure-recovery.md)，独立操作者复验尚未完成，不宣称全矩阵退出。支持说明与授权选择仍待确认，外部实际运行须同时满足授权与技术准入。所有者随后授权本地提交本轮改动；未 push，未操作真实实例。
+
+### 本轮完成：Workspace owner 主动交接
+
+2026-10-18 所有者确认并实施 [ADR-0042](../../adr/0042-workspace-owner-handoff.md)：migration 018、同事务双角色交接、角色代次与邀请任期绑定、不可变配置审计 / receipt、本人历史结果查询及首页 Web 入口。原 owner 降为 member 后仍可确认自己的历史成功；原 Project admin、私密对象与显式 Deployment 权限不转移，最后 owner 保护限定于该主动交接事务。
+
+Go / race / vet、真实 PostgreSQL 并发与故障注入、017→018 升级、同版本与旧 017 工件空目标恢复、Web、当前 Compose HTTPS 及桌面 / 手机浏览器验证通过。36 项矩阵、实际提交确认丢失与浏览器恢复边界见[实施记录](../reviews/2026-10-18-workspace-owner-handoff.md)。资源已清理；一致性核对后已按所有者要求提交为 `171527f`，未 push、未操作真实业务实例。管理员应急接管仍未开放；Project admin 交接已由 ADR-0045 承接，试用准备设计见上方。
+
+### 本轮完成：自部署本地账户受控恢复
+
+2026-10-18 所有者确认并实施 [ADR-0041](../../adr/0041-controlled-local-account-recovery.md)：独立 CLI、migration 017 operator 审计、密码版本冲突、全账户旧 Session 撤销、迟到失败登录计数修正与提交结果查询。已有 active 本地账户可由受控部署者恢复，原身份和所有权限保留；产品 owner 不获得全局恢复权，disabled / OIDC-only / 未映射账户不被启用。
+
+Go / PostgreSQL / Web、当前 Compose / HTTPS、真实浏览器及恢复后备份已通过；016 旧备份以匹配旧工件恢复空目标后显式升级，确证旧 verifier 可能回来，必须重新核验并恢复。32 项矩阵的证据与限制见[实施记录](../reviews/2026-10-18-controlled-account-recovery.md)。本轮临时资源已清理，实现、测试与文档已提交为 `333c4ce`；未 push、未操作真实账户。
+
+Workspace owner 主动交接已按上述 ADR-0042 实施；升级失败恢复实施与缺口见上方，试用支持 / 评估授权仍待确认，不扩展到自助找回、OIDC 或完整失陷处置，也不自动开始后续实现。
+
+### 本轮完成：Project 决策只读发现
+
+[ADR-0040](../../adr/0040-project-decision-discovery.md) 已接受并实施：Project 作用域只读列表仅返回 ref、问题与 proposed / accepted 状态，首页项目入口和 Decision 详情均可进入。当前 Project 权限与 evidence 可读性独立；页面名称和条目共同清理，刷新、重新登录和浏览器恢复重新读取。拒绝、替代、复核和“待我决策”未进入此片。
+
+Go、真实 PostgreSQL、Web 与隔离 HTTPS 浏览器通过。独立测量 3 个 Project / 1227 条 Decision 后，本片未新增索引、migration、依赖或写入命令。普通成员正式登录、25＋2 分页、来源脱敏、后续 Ticket、归档和撤权恢复的精确证据及环境中断修正见[实施记录](../reviews/2026-10-18-project-decision-discovery.md)。临时验收资源已清理；提案已提交为 `19290dc`，实现、测试与文档已提交为 `5ddcc1c`，未 push。
+
+近期已进入试用身份与运维准备，首片 ADR-0041 已完成实现与隔离验收；真实 Jenkins B、原生中文 IME 和真实团队持续使用仍按各自边界推进。
+
+### 本轮完成：Project 工单只读发现
+
+[ADR-0038](../../adr/0038-project-ticket-discovery.md)已确认并实施：新增 Project 作用域的 Ticket GET 列表与 canonical 页面，首页项目导航和 Ticket 详情均可进入。复用 governing Project 当前权限与稳定 ID 分页；Project 标题和列表共同清理，刷新、重新登录及页面恢复重新读取。该切片原先仅接受 open；当前已随 ADR-0039 扩展为四状态，未知状态仍拒绝。
+
+Go、真实 PostgreSQL、Web 与隔离 HTTPS 浏览器已通过；普通成员无需 ID 找回工单，并继续进入来源、组件和文档。查询证据支持本轮复用现有索引，未新增 migration、依赖、业务字段或写命令；详细证据和规模边界见[实施记录](../reviews/2026-10-13-project-ticket-discovery.md)。临时验收资源已停止并清理，没有操作真实 Jenkins 或业务实例。
+
+ADR-0038 实现与验收文档已提交为 `7ace9b4`；ADR-0039 提案已提交为 `3a2e008`，均未 push。
+
+### 本轮完成：Ticket 最小状态流转
+
+[ADR-0039](../../adr/0039-ticket-status-transitions.md) 已由所有者确认并实施。仅当前 active Workspace 与 Project 的 contributor / decider / admin 可显式流转四状态，终态须先重新打开；独立 status_revision 防止旧页面覆盖后续轮次。精确重试确认原 applied 事实，随后读取当前状态；状态、receipt、事件、Outbox 与 Activity 7 原子提交。
+
+详情、Project / Component 列表与创建重试同步支持四状态。Go、真实 PostgreSQL、015→016 正常与异常基线升级、权威备份 / 空目标恢复、Web 和隔离 HTTPS 浏览器已验证。普通 contributor 可在来源 Thread 受限时操作 Ticket；双标签冲突、已提交响应丢失后的原操作重试、手机 / 键盘、撤回写权与读权后恢复已验收。证据、首次失败修正及限制见[实施记录](../reviews/2026-10-13-ticket-status-transitions.md)。临时资源已清理；实现与验收文档已提交为 `777a363`，未 push、迁移业务实例或部署。
+
+后续 Project 下 Decision 只读发现已按 ADR-0040 完成，当前接续以本页近期顺序为准。负责人、优先级、看板不在本轮范围，真实 Jenkins B 继续暂缓，后续顺位不自动授权资源启动或外部操作。
+
+### 交付链保留完成线与恢复顺序
+
+Ticket 与 Component 人工关联已按 ADR-0034 实现，浏览器后退、显式刷新读 / 写权撤回及最终布局已补验。[ADR-0035 A](../../adr/0035-durable-jenkins-terminal-delivery.md) 已获确认并实现：单 source / 单 worker 持久发送、不可变输入、重启预算、分类失败、精确恢复、只读状态与确认记录。没有业务 migration、公共 v1 协议或依赖变化；这不代表 controller 持续采集或漏采恢复完成。
+
+以下为交付链恢复时的依赖与未完成项，不占用当前工单发现的执行顺位：
+
+1. **来源接收与发现**：[ADR-0037](../../adr/0037-ci-run-repository-checkout-provenance.md)已于 2026-10-13 确认，A 的 sources / payload v2、不可变 binding、built-from、Activity 6、正式来源展示与双向发现已实施；验收证据见下方实施记录。真实 checkout 采集 B 继续暂缓，Ticket 具体交付关系再独立冻结；不按 Component 共属推导已交付。
+2. **ADR-0035 B：真实终态采集验收（暂缓）**：独立 controller 与双边清理已具备离线证据，但本机 Docker bind mount 实测为 FUSE，超出支持范围。所有者已明确暂缓真实联调，原生 Linux 环境下的真实重启 / 挂载验收尚未完成，恢复时另行明确资源与授权，见[采集记录](../reviews/2026-10-09-jenkins-collector.md)和[清理记录](../reviews/2026-10-09-jenkins-cleanup.md)。ADR-0037 B 是已确认来源方案中的后续切片，不与既有终态采集完成线混为一谈。
+3. **真实整链验收**：正式新配置对象 → 真实 Jenkins → 浏览器记录已完成的外部 staging → 撤权阻止新记录且历史按当前权限可读。没有实际外部 staging 行为时只验收到 CI Run，不伪造 Deployment。
+
+### Checkout 来源切片 A：2026-10-13
+
+所有者确认 [ADR-0037](../../adr/0037-ci-run-repository-checkout-provenance.md) 后，先提交来源提案 `3c6fe24`，再在本地 dev 实施 A。migration 015 保存来源 capability、CI Run 状态与不可变 built-from；v1 摘要不变，按 N 严格切换 v2，事件 / Activity 与 receipt 同事务。正式 CI Run 显示完整 checkout revision 或明确未采集 / 不可用，Repository 提供来源构建反向分页；测试证据和具体限制见[实施记录](../reviews/2026-10-13-checkout-provenance.md)。
+
+真实 Jenkins checkout 采集、ADR-0035 B 原生 Linux 持续采集验收与中文 IME 继续暂缓；本批合成签名输入只证明接收与发现合同，不证明 Jenkins SCM 已采集。恢复真实验收须另行明确原生 Linux 持久目录、controller / worker / agent、固定插件依赖及清理范围，不能以本机 FUSE 替代。无 push、业务实例迁移或新增依赖。
+
+### 本轮补验与设计：2026-10-28
+
+完成 ADR-0044 五项有界补验，修复满额包写出 / 读回字节不一致、文件替换打开阻塞及 Decision 唯一 evidence 移除未提前拒绝的问题。真实 PostgreSQL / HTTPS CLI、合法移除关系二次往返、进程 SIGKILL / 精确重试、代表性容量与定向 race / vet 已验证，范围与剩余限制见[补验记录](../reviews/2026-10-28-context-package-supplement.md)。该补验批次保持 schema 020 / profile v1，已提交为 `211f050`。随后所有者确认 [ADR-0046](../../adr/0046-ticket-assignee.md) D01～D07，并授权继续实施。
+
+### 本轮完成：Ticket 最小负责人
+
+已接通单一可选负责人、候选分页、并发代次和精确重试、列表 / 详情与不可变历史；migration 021 / Activity 9、v2 上下文包及严格旧 v1 读取配套交付。成员失权保留责任记录并按当前权限显示资格，导入负责人保持历史身份。验证范围、浏览器证据与剩余限制见[实施记录](../reviews/2026-10-28-ticket-assignee.md)。首片已提交为 `c8c5658`，未 push 或迁移真实实例。后续[有界补验](../reviews/2026-10-28-ticket-assignee-supplement.md)与同名成员确认修复已提交为 `ec1caf3`。
+
+### 本轮完成：Ticket 最小优先级与筛选
+
+按所有者确认的 ADR-0047 D01～D07 完成优先级动作、严格筛选游标、正式列表 / 详情、历史与恢复合同。schema 022 / Activity 10 / v3 导出成套交付，旧 v1 / v2 严格读取。验收、查询计划与未完成的浏览器兼容范围见[实施记录](../reviews/2026-10-28-ticket-priority.md)。本轮实现与验证已提交为 `9889b50`，未 push 或迁移真实实例。
+
+### 本日收尾：2026-10-28
+
+已回顾今天四笔功能与修复提交，对照源码补齐入口、领域 / 事件合同与迁移交接说明，提交映射和文档审阅结果见[收尾记录](../reviews/2026-10-28-daily-closeout.md)。所有者要求到此收工，本轮最后仅做本地文档提交；不 push、不恢复暂缓事项、不启动后续设计或服务。
+
+### 历史收尾：2026-10-24
+
+今天三笔实现提交为升级失败恢复 `ece637b`、Project 上下文导入导出 `5cd7946`、成员生命周期与管理交接 `94da10d`。已按最终代码核对文档，修正根 README、决策基线、试用说明、迁移手册与脚本入口的过期信息，见[收尾记录](../reviews/2026-10-24-daily-closeout.md)。最后单独提交本轮文档收尾，未 push；今天不继续新功能或启动服务。10 月 18 日的收尾事实保留在[原记录](../reviews/2026-10-18-daily-closeout.md)。
+
+### 接下来的事项
+
+1. **下一产品事项先设计 Decision 生命周期**：核对现有 proposed / accepted、evidence 可读性、decider 权限及 Ticket 的 implements 来源；分别说明拒绝、替代与复核的触发条件、理由、来源和历史保留方式，再选择一个最小纵向切片。重点冻结旧确认冲突 / 精确重试、已有 Ticket 与 Document 是否受影响、Activity 与上下文包兼容；不默认撤销已建 Ticket，不自动改写原 accepted 结论。形成可评审 ADR，经所有者确认数据 / 权限 / 公共协议影响后才实现，今晚不启动设计或编码。
+2. **已完成切片转入有界观察**：上下文迁移补验、负责人及其并发 / 同名补验、优先级与项目内筛选均已交付，提交与验证映射见[当日收尾记录](../reviews/2026-10-28-daily-closeout.md)。后续遇到实际 BFCache、原生选择控件键盘、团队使用或慢查询问题时定向复验；不重复全量测试冒充持续使用，也不把单 Project 合成查询计划当成生产容量。当前 schema 022 / Activity 10 / v3 包须 Go / Web / CLI 配套升级；真实实例操作仍单独授权。
+3. **试用准备与使用观察分别验收**：确认[支持说明](../../trial-support.md)的非生产数据范围、目标环境、联系人与退出安排，以及[授权待决事项](../../evaluation-authorization-decisions.md) E01～E12；技术准入和有效授权均满足后才开放外部受控试用。届时观察讨论—决策—工单—文档追溯、维护者干预和成员交接，独立团队持续使用与生产容量不由 Agent 浏览器测试替代。
+4. **保留阶段范围与停止线**：M1 文件、通知、审计运营、Attention Item、数据库最小权限和生产运维仍有未交付范围；本日实现不宣布整个 M1 或完整 Golden Path 退出。完整聊天、CRDT、Flutter 与通用插件平台仍服从原路线图门槛；更广迁移 profile 另行规划。
+5. **继续暂缓**：ADR-0043 独立操作者 U27、真实 Jenkins ADR-0035 / ADR-0037 B 与原生中文 IME 人工验收。恢复时另行明确资源和验收范围；真实 Jenkins 恢复后再接续 Ticket 与具体构建的交付来源和结果追溯。
+
+以上为当前接续事项，不创建自动任务或启动新服务。10 月 13 日的原收尾事实见[当日记录](../reviews/2026-10-13-daily-closeout.md)，10 月 9 日的提交与原计划见[历史收尾记录](../reviews/2026-10-09-daily-closeout.md)，当前顺位以上表为准。
+
+### 本轮完成：Ticket 与 Component 人工关联
+
+所有者确认 [ADR-0034](../../adr/0034-ticket-component-relations.md) 后，基于 `f878090` 在本地 `dev` 实施。migration 014、Project contributor / decider / admin 写权限、人工 `affects` 关系、精确解除 / 重连、双向权限分页、Activity v5 与组件稳定详情入口已接通。原 Ticket 的 Decision 来源、Current 与内容时间不变。
+
+Go、真实 PostgreSQL、013→014 升级、备份恢复和 Web 全量检查通过；HTTPS 浏览器从正式空业务工作区完成 Message → Thread → Decision → Ticket、Component 创建、关联 / 解除 / 重连、双向跳转、稳定地址重载与桌面 / 手机 / 键盘操作。权限撤回和迟到响应由数据库及 Web 自动化验证；10 月 6 日浏览器环境到达时限后清理，当时未完成权限撤回与后退专项；10 月 9 日已在新建隔离环境补验，见上方记录，不将此前环境超时记为通过。原切片证据见[实施记录](../reviews/2026-10-06-ticket-component.md)。
+
+本切片已提交为 `e156a5d`，未 push 或应用业务实例迁移。本轮临时服务与隔离浏览器已清理；不代表完整 Golden Path 或真实团队持续使用完成。
+
+### 本轮完成：Repository 映射与 Component 关联
+
+2026-10-06 已核对本地 `dev`，起始 HEAD 为 `5abc6a9`，工作区干净，相对本地 `origin/dev` 领先一笔联系邮箱更新提交；未 fetch 或核验实时远端。PR #12 的 `master` 晋级已包含在当前历史中，Component / Environment 配置实现仍为 `0f9d5cf`。
+
+所有者已确认 [ADR-0033](../../adr/0033-repository-mapping-and-component-relations.md)，现已实现：外部稳定身份、URL 与默认分支边界、Workspace 当前权限、多对多 EntityLink、正式创建 / 双向发现 / 解除、Audit / receipt、migration 013 和 Activity v4。Go、真实 PostgreSQL、012 升级、备份恢复、Web 全量及隔离 HTTPS 浏览器验收通过。未知结果重试不会复活旧关系或误删新关系，成员只读与撤权清空已验证；范围与证据见[实施记录](../reviews/2026-10-06-repository-mapping.md)。临时服务已清理；实现已提交为 `f878090`，未 push 或应用业务实例迁移。
+
+Ticket ↔ Component 已按上方 ADR-0034 完成；持久发送与 checkout 来源 A 的后续进展见上方完成线。保留“新配置对象 → 真实 Jenkins → 浏览器记录 staging → 撤权后阻止新记录 / 历史仍可读”的整链验收缺口。原生中文 IME 人工验收继续暂缓；业务迁移、服务启动、依赖和外部 / 远程操作按当前任务授权执行，本节不创建自动任务。
+
+此前提交回顾与文档审阅见 [10 月 1 日收尾记录](../reviews/2026-10-01-daily-closeout.md)。
+
+### 本轮完成：最小配置与环境授权
+
+2026-10-01 从 `efa002b`（PR #12 合并）开始，本地 `dev` / `master` 与远程跟踪引用当时一致，本轮未 fetch 或核验远端设置。所有者要求提交提案并批准实施，提案已提交为 `a206be5`，实现已提交为 `0f9d5cf`。以下 9 月 26 日记录中的“未 push”保留当时含义。
+
+[ADR-0032](../../adr/0032-component-environment-configuration-and-authorization.md) 已接受并实现：owner 正式创建 Component / staging Environment，成员发现对象，owner 显式授予、撤销、重新授予记录权。migration 012 保存不可变授权代次和旧 Deployment 来源；配置成功 Audit / receipt、创建事件与 Activity v3 同步落地。创建对象、owner Team 和 Project 角色均不隐式授予部署权。
+
+Go、真实 PostgreSQL、升级、备份恢复和 Web 检查通过；HTTPS 浏览器从正式 bootstrap 空业务工作区验证 Team / Component / Environment 创建、自授权、撤销、重新授予、桌面 / 手机和键盘。正式配置对象接续 CI Run / staging 记录由数据库自动化证明；本轮没有重跑真实 Jenkins，也没有验证新配置对象从 Jenkins 到浏览器记录的整链。具体证据、修复与未覆盖项见[实施记录](../reviews/2026-10-01-delivery-configuration.md)。临时验收服务已清理，未应用业务实例 migration、push 或部署。
+
+Repository 映射已在 10 月 6 日按独立确认的 ADR-0033 完成；其余交付关系与持续采集沿近期顺序推进。原生 IME 人工验收继续暂缓，真实团队试用仍受评估授权与运维退出条件约束。
+
+### 本轮完成：CI Run、Jenkins 与 staging 记录
+
+共享工作台改版已提交为 `b19b722`。所有者随后确认 [ADR-0029](../../adr/0029-session-scoped-ci-run-nexus-view.md)，现已将 CI Run 内部安全查询接到正式 GET 接口、React 页面、Deployment 来源跳转和首页次级 ID 工具，复用当前 Component 权限与来源脱敏。服务端、真实 PostgreSQL 与 Web 自动化通过；精确范围、浏览器检查及下一段分工见[实施记录](../reviews/2026-09-26-jenkins-next-slice.md)。
+
+CI Run 读取切片已提交为 `a394ed6`，未 push。所有者随后确认 [ADR-0030](../../adr/0030-authenticated-jenkins-delivery-adapter.md)，受控来源绑定、文件 Secret、HMAC / 重放窗口、终态映射、脱敏运行记录与有限重试发送工具已实现，无数据库迁移或新依赖。Go、隔离 TLS 和真实 PostgreSQL 自动化通过，含提交后响应丢失的幂等恢复；精确证据与边界见[来源接入记录](../reviews/2026-09-26-jenkins-adapter.md)。
+
+Jenkins adapter 已提交为 `0001a82`，未 push。所有者确认本机 Docker 隔离联调后，已使用固定 controller / agent 镜像完成成功、失败与取消三类真实构建，由 controller 在 finalized 后生成快照，经现有 sender 与 HTTPS receiver 写入一次性 PostgreSQL；重复发送、Session 读取、唯一 Activity 和不自动生成 Deployment 均通过。运行配置位于所有者指定的独立 Docker 目录，持久化全部使用 Compose 同目录相对 bind mount，不使用 named volume。测试容器和网络已移除，controller 数据与快照保留；精确证据与未覆盖项见[真实 Jenkins 联调记录](../reviews/2026-09-26-real-jenkins-lab.md)和[实验操作说明](../../../experiments/jenkins-lab/README.md)。这仍是受控联调，不代表普通成员独立配置或持续交付完成。
+
+真实 Jenkins 联调已提交为 `be780b7`，未 push。所有者随后确认 [ADR-0031](../../adr/0031-session-scoped-staging-deployment-recording.md)，现已接通成功 CI Run → 已授权 staging 环境 → 显式确认外部部署终态 → Deployment 回读。新增两个 Session 端点与 migration 011，复用唯一 Deployment 事务和既有 receipt，精确重试不重复生成事实。Go、真实 PostgreSQL、备份恢复、Web 和隔离 HTTPS 浏览器验收通过；桌面 / 手机、失败结果与成功构建分离、撤权后禁止记录及历史仍可读已有证据，见[实施记录](../reviews/2026-09-26-staging-deployment-recording.md)。本轮临时服务和测试数据已清理，未启动 Jenkins 或部署到业务实例。
+
+staging 记录切片已提交为 `486a330`，未 push。下一步统一按上方近期顺序与当前接续推进；当日提交和文档核对见[收尾记录](../reviews/2026-09-26-daily-closeout.md)。
+
+### 本轮完成：最小 Markdown Document
+
+9 月 26 日接通从 Ticket 创建、Project 列表、不可变 revision、当前权限、保存冲突、恢复追加版本与双向关系；正常命令在同一事务生成 receipt、领域事件、Outbox 与 Activity。受限 Markdown 展示不使用浏览器 HTML 注入，原文除换行归一化外不被展示投影覆盖。
+
+Go、真实 PostgreSQL、备份恢复、Web 检查及隔离 HTTPS 浏览器已验证，精确范围见[本轮记录](../reviews/2026-09-26-markdown-document.md)。原生 macOS 中文 IME 尚未在正式页面复核，不引用编辑器实验结果代替。临时浏览器、数据库和代理已清理；项目所有者已要求提交本轮工作区改动，未 push 或部署。人工验收按所有者要求暂缓，保留未验收状态，不以暂缓代替通过。[视觉方向与参考分工](../../design/visual-direction.md)已记录。项目所有者随后确认使用 pen.dev，并参考 Radish、RadishFlow、RadishMind 的设计工作方式；已使用本机现有 Pen 创建[共享工作台与 Document 首轮设计稿](../../design/workbench-v1.md)，首稿提交后，所有者给出初步认可并要求继续优化；现已根据 AFFiNE 实际编辑页、AppFlowy 官方编辑器配图和 Mattermost 官方讨论串截图优化至 v1.1，包含 10 个画板，新增桌面信息展开与手机信息页。所有者认可并提交静态稿后，已授权并完成共享工作台与 Document 的有限 React 视觉落地：家族配色、桌面侧栏、手机导航、集中阅读 / 编辑及按需文档信息，详见[实施与验证记录](../reviews/2026-09-26-workbench-ui.md)。本轮浏览器使用虚构 API 数据验证实际 DOM，不替代真实后端与原生 IME 验收。后续业务切片按上方近期执行顺序推进，不扩大为富文本或 CRDT。
+
+### 本轮完成：基础配置与首次访问初始化
+
+9 月 14 日已接受并实施 [ADR-0026](../../adr/0026-foundation-configuration-and-membership.md)：owner 显式建立本人初始 Project admin，Project admin 配置其他成员的普通角色，受限 Channel 按明确成员管理。新增配置 Audit / receipt 与 migration 009，撤权清理从属私密授权，精确重试不复权。领域、HTTP、Web、备份分类和正常 Activity 更新已同步。
+
+真实 PostgreSQL、备份恢复、Go 检查和 Web 检查已通过；真实 HTTPS 浏览器已从正式 bootstrap 的空业务工作区创建 Team / Project / Channel，邀请新账户、授予 Project 与 Channel 权限，普通成员进入频道发消息并刷新读取；撤权后发现与旧地址均不可读。精确证据与未覆盖范围见 [9 月 14 日记录](../reviews/2026-09-14-foundation-configuration.md)。这不是完整 Golden Path 或真实团队持续使用结论。
+
+项目所有者已确认并实施 [ADR-0027](../../adr/0027-first-visit-administrator-setup.md)：部署者配置一次性初始化码，首次访问创建首位 Workspace owner，完成后关闭初始化并进入正式登录。网页与 CLI 复用唯一事务锁，已有或恢复账户不会重开入口；真实数据库并发 / 回滚、恢复和 HTTPS 浏览器已有证据，见[首次初始化记录](../reviews/2026-09-14-first-visit-setup.md)。没有新增实例级超级权限、默认业务对象或依赖。最小 Markdown Document 已进入上述验收收尾；管理员交接、恢复和真实 Jenkins 接入继续按独立范围推进。
+
+## Document 实施边界
+
+M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制，不引入 CRDT；已接受合同见 [ADR-0021](../../adr/0021-document-editor-and-collaboration-foundation.md) 和 [ADR-0028](../../adr/0028-minimal-markdown-document.md)。正式实现使用固定 `goldmark v1.8.6`，精确包 LICENSE、checksum、依赖图与模块漏洞公告已核验；检查方法及局限见[实施记录](../reviews/2026-09-26-markdown-document.md)。
+
+读取、预览、历史和恢复复用同一 parser 与当前权限；Project 可见性、来源、不可变版本和恢复 receipt 已纳入真实数据库与备份测试。实现细节与端点见 [server](../../../server/README.md#最小-markdown-document) 和 [Web](../../../web/README.md#最小-markdown-document) 说明。当前剩余原生 IME 人工复核已按所有者要求暂缓，不能把中文字符串填充与 jsdom 当作输入法组合事件证据。
+
+阶段 A 的 corpus、浏览器和 macOS 中文 IME 证据保留；Tiptap / ProseMirror 只是后续结构化编辑候选，未进入正式 Web 依赖。Yjs 阶段 B 延后，不阻塞最小 Document。再次启动时须说明它要解决的具体设计问题、结束条件、投入上限和依赖授权；旧预检结果不能代替届时的版本与供应链复核。详见 [ADR-0021](../../adr/0021-document-editor-and-collaboration-foundation.md)。
+
+## 停止线
+
+- 不把内部 service、静态 fixture、手工投影重建或一次浏览器验收描述成完整产品闭环。
+- 引用、反向关系、旧 membership、客户端角色和订阅状态都不授予权限；新入口继续复用既有当前权限与不可发现性。
+- SSE replay 不作权威存储，写 command 继续使用短请求；不引入隐藏 polling fallback、多副本 fan-out、独立消息中间件或新的实时 transport。
+- 近期不横向补齐完整聊天 UI、附件、表情、复杂搜索、未读与通知；对象发现只服务最小场景。Document 仅按已接受 ADR-0028 实施，正式富文本依赖、CRDT 与实时协同仍未授权。
+- 不启动 Flutter、微服务拆分、插件市场、通用多语言 SDK、完整软件目录或完整离线文档。
+- CI Run 成功不触发 Deployment；本阶段只记录外部已完成 staging 终态，不执行 production、审批或回滚，不自动确认 AI 草案。
+- 文档顺序调整不授权安装依赖、运行长期服务、改系统配置、提交、push、PR、发布、部署或发送外部消息；具体授权仍按根协作约定。
+
+## 开放问题
+
+- 关系分页、反向索引、查询容量与跨对象 Timeline；事务内 Activity 更新、重建并发及首批 direction 合同已由 ADR-0022 冻结；
+- 其他协作对象发现与超出 ADR-0041 / 0042 / 0045 的应急入口；Project admin / 私密对象管理交接及成员生命周期已由 ADR-0045 冻结；基础配置和首访 owner 初始化已由 ADR-0026 / ADR-0027 冻结；
+- Document 正式页面原生中文 IME 与持续使用证据；正式富文本与 CRDT、受控脱敏和可移植导出仍未完成；
+- Jenkins 持续终态采集与业务实例配置、持久来源管理 / 安全审计、真实 checkout 采集与其余具体交付关系；
+- PostgreSQL 支持矩阵、schema 兼容窗口、forward repair、数据库权限拆分和容量基线；
+- Decision 拒绝、替代、复核与 Ticket 基础执行状态的交互；
+- 安全 Audit、消息 / 事件 / receipt 的保留和受控脱敏边界；
+- `.nexus` 版本化格式、脱敏与导入映射；免费评估路径及授权签发 / 撤销规则；
+- 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
+
+## 证据与历史
+
+- [2026-10-28 上下文迁移有界补验](../reviews/2026-10-28-context-package-supplement.md)：数值边界、文件替换、合法移除关系、进程中断与代表性容量；负责人设计已由后续 ADR-0046 实施接续。
+- [2026-10-28 Ticket 负责人有界补验](../reviews/2026-10-28-ticket-assignee-supplement.md)：确定性并发顺序、双标签、跨页同名与页面恢复；真实 BFCache 命中仍未取得。
+- [2026-10-28 提交回顾与文档收尾](../reviews/2026-10-28-daily-closeout.md)：四笔实现 / 修复的代码文档核对与接续范围。
+- [2026-10-28 Ticket 最小负责人](../reviews/2026-10-28-ticket-assignee.md)：分配历史、当前资格、v2 / v1 兼容、升级恢复与 Web 验证。
+
+- [2026-10-24 单机停机升级与失败恢复](../reviews/2026-10-24-upgrade-failure-recovery.md)：真实故障、历史工件双实例恢复、浏览器与剩余操作验收。
+- [2026-10-18 提交回顾与文档收尾](../reviews/2026-10-18-daily-closeout.md)：五笔提案 / 实现 / 设计提交、源码文档核对及升级失败恢复接续建议。
+- [2026-10-24 提交回顾与文档收尾](../reviews/2026-10-24-daily-closeout.md)：三笔实现提交、源码与文档一致性核对及下一步顺序。
+- [2026-10-24 成员生命周期与管理交接](../reviews/2026-10-24-membership-lifecycle.md)：管理闭环、会话代次、并发故障、旧工件恢复、容量与浏览器证据。
+- [2026-10-18 Workspace owner 主动交接](../reviews/2026-10-18-workspace-owner-handoff.md)：角色代次、邀请任期、本人历史查询、并发与旧工件恢复。
+
+- [2026-10-18 本地账户受控恢复](../reviews/2026-10-18-controlled-account-recovery.md)：独立 CLI、operator 审计、Session / 并发、旧工件升级恢复与 Compose 验收。
+- [2026-10-18 Project 决策只读发现](../reviews/2026-10-18-project-decision-discovery.md)：最小列表、当前权限、分页、查询测量与隔离浏览器恢复。
+
+- [2026-10-13 提交回顾与文档收尾](../reviews/2026-10-13-daily-closeout.md)：六笔提案 / 实现提交、源码与文档核对、Decision 发现接续建议。
+- [2026-10-13 Ticket 最小状态流转](../reviews/2026-10-13-ticket-status-transitions.md)：四状态、版本冲突、精确重试、升级恢复与 HTTPS 浏览器证据。
+- [2026-10-13 Project 工单只读发现](../reviews/2026-10-13-project-ticket-discovery.md)：Project 入口、分页、来源权限与恢复；当时仅 open 的限制已由 ADR-0039 扩展。
+- [2026-10-13 checkout 来源 A](../reviews/2026-10-13-checkout-provenance.md)：不可变来源、接收与双向发现；真实采集 B 暂缓。
+
+- [2026-10-09 提交回顾与文档收尾](../reviews/2026-10-09-daily-closeout.md)：三笔实现、源码与文档核对、次日接续与停止线。
+
+- [2026-10-09 双边显式清理](../reviews/2026-10-09-jenkins-cleanup.md)：保留期、retired / compacted、精确确认、进程中断与恢复，真实联调暂缓。
+
+- [2026-10-09 可信 collector 代码与离线验证](../reviews/2026-10-09-jenkins-collector.md)：分批补采、故障与交接契约；真实联调明确暂缓；双边清理的后续证据见上方记录。
+
+- [2026-10-09 浏览器补验与持久终态发送](../reviews/2026-10-09-delivery-continuation.md)：Ticket / Component 补验、ADR-0035 A 实现和故障恢复；后续 B 见上方记录。
+
+- [2026-10-06 提交回顾与文档收尾](../reviews/2026-10-06-daily-closeout.md)：两笔实现提交、源码与文档核对及 10 月 7 日接续建议。
+
+- [2026-10-06 Ticket 与 Component 人工关联](../reviews/2026-10-06-ticket-component.md)：migration 014、Project 权限、双向分页、关系代次、升级 / 恢复和浏览器证据边界。
+
+- [2026-10-06 Repository 映射与 Component 关联](../reviews/2026-10-06-repository-mapping.md)：migration 013、关系历史、当前权限、升级 / 恢复与浏览器证据。
+
+- [2026-10-01 提交回顾与文档收尾](../reviews/2026-10-01-daily-closeout.md)：当日四笔提交、源码对应文档修正与 10 月 2 日接续建议。
+
+- [2026-10-01 组件、环境与授权管理](../reviews/2026-10-01-delivery-configuration.md)：migration 012、不可变授权代次、正式配置、并发 / 恢复与浏览器证据。
+
+- [2026-09-26 提交回顾与文档收尾](../reviews/2026-09-26-daily-closeout.md)：当日八笔实现 / 设计提交、文档漂移修正与次日接续入口。
+
+- [2026-09-26 工作台与 Document 视觉落地](../reviews/2026-09-26-workbench-ui.md)：正式 React、响应式、键盘与交互回归及证据边界。
+
+- [2026-09-26 最小 Markdown Document](../reviews/2026-09-26-markdown-document.md)：正式切片、安全解析、并发 / 备份、浏览器证据与原生 IME 待复核边界。
+
+- [2026-09-14 提交回顾与文档收尾](../reviews/2026-09-14-daily-closeout.md)：当日实现与合同提交、代码 / 文档核对、剩余验收边界和次日接续入口。
+
+- [2026-09-14 首次访问初始化](../reviews/2026-09-14-first-visit-setup.md)：一次性初始化码、首位 owner、并发关闭、恢复与浏览器证据。
+
+- [2026-09-14 基础对象与成员配置](../reviews/2026-09-14-foundation-configuration.md)：实现、数据库 / Web / 浏览器、恢复验证及首次初始化剩余边界。
+
+- [2026-09-10 提交回顾与文档收尾](../reviews/2026-09-10-daily-closeout.md)：当日四笔实现提交、源码与文档核对、验证及剩余边界。
+- [2026-09-10 Project / Channel 发现](../reviews/2026-09-10-project-channel-discovery.md)：只读列表、分页与权限、首页交互和浏览器验收边界。
+
+- [2026-09-10 schema readiness](../reviews/2026-09-10-schema-readiness.md)：只读检查、真实数据库失败矩阵、超时与恢复证据。
+
+- [2026-09-10 账户与联合登录调整](../reviews/2026-09-10-identity-alignment.md)：本地实现、旧账户迁移、协议事务证据与 OIDC 延后规划边界。
+
+- [2026-09-10 Activity 与双向关系](../reviews/2026-09-10-activity-relations.md)：本轮实现边界、自动化与数据库证据、浏览器验收状态。
+
+- [2026-09-05 项目审阅](../reviews/2026-09-05-project-review.md)：源码缺口、工程建议、本轮已执行与未执行验证。
+- [2026-09-03 状态快照](2026-09-03-status.md)：完整保留此前阶段事实及 9 月 2～3 日浏览器、PostgreSQL、Compose、编辑器验收；其中旧推进顺序已失效。
+- [编辑器实验结果](../../../experiments/document-editor/RESULTS.md)、[正式服务说明](../../../server/README.md)、[部署操作说明](../../../deploy/README.md)承载对应证据和运行方式。
+- 分支基线仍按[仓库治理](../../governance/repository-governance.md)执行。此前晋级与远端质量门结果按历史记录理解；2026-09-05 仅检查本地分支与工作区，未重新核验远端设置或晋级状态。
