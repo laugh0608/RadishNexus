@@ -233,7 +233,7 @@ func (h *DocumentHandler) write(w http.ResponseWriter, r *http.Request, p authz.
 			return
 		}
 		if dest, ok := stringsTo[key]; ok {
-			err = decodeDocumentString(value, dest)
+			err = decodeUTF8String(value, dest)
 		} else if key == "base_revision" {
 			err = json.Unmarshal(value, &in.BaseRevision)
 		} else if key == "restore_revision" {
@@ -374,9 +374,9 @@ func (h *DocumentHandler) fail(w http.ResponseWriter, r *http.Request, err error
 	h.transport.writeError(w, r, err)
 }
 
-// encoding/json replaces malformed Unicode with U+FFFD. Authoritative Markdown
-// must reject that lossy conversion, including unpaired JSON surrogate escapes.
-func decodeDocumentString(raw []byte, dest *string) error {
+// encoding/json replaces malformed Unicode with U+FFFD. Authoritative text must
+// reject that lossy conversion, including unpaired JSON surrogate escapes.
+func decodeUTF8String(raw []byte, dest *string) error {
 	if !utf8.Valid(raw) {
 		return authz.ErrInvalid
 	}

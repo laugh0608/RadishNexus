@@ -119,13 +119,19 @@ entity://decision/dec_01K4EXAMPLE
 
 [ADR-0046](../adr/0046-ticket-assignee.md) 增加 migration 021、独立 `assignment_revision`、`ticket.assignee.set` receipt 和 `ticket.assignee-changed` schema 1。`GET / POST /api/v1/workspaces/{workspace_id}/tickets/{ticket_id}/assignee` 与 `/assignee/candidates` 复用当前 Workspace / Project 准入、严格 JSON、CSRF 和 no-store；候选 cursor 绑定操作者、Workspace 与 Ticket。Project Ticket 发现行增加必填可空 `assignee`，与详情使用相同资格谓词。旧创建与状态响应不承担分配响应职责。
 
-新动作绑定两个 Ticket 版本及目标 lifecycle / Project management 代次；清空明确传 null 与目标代次字符串 `"0"`。精确重试重查操作者当前写权后只返回原事实，后续终态和目标失权不重演旧分配。真实变更与事件、receipt、Outbox、Activity 原子提交（本切片引入 v9，当前随 ADR-0047 升为 v10）；原始事件只保存前后身份与相邻版本，时间线仅位于 Ticket。成员失权保留记录与历史，不授予任何权限。本切片的 Go、Web、schema 与 v2 导入导出须配套停写升级；当前交付版本以紧接的 ADR-0047 v3 合同为准，不能混用旧客户端。
+新动作绑定两个 Ticket 版本及目标 lifecycle / Project management 代次；清空明确传 null 与目标代次字符串 `"0"`。精确重试重查操作者当前写权后只返回原事实，后续终态和目标失权不重演旧分配。真实变更与事件、receipt、Outbox、Activity 原子提交（本切片引入 v9，当前随 ADR-0048 升为 v11）；原始事件只保存前后身份与相邻版本，时间线仅位于 Ticket。成员失权保留记录与历史，不授予任何权限。本切片的 Go、Web、schema 与 v2 导入导出须配套停写升级；当前交付版本以 ADR-0048 v4 合同为准，不能混用旧客户端。
 
 ## Ticket 优先级与筛选合同
 
 [ADR-0047](../adr/0047-ticket-priority-and-filtering.md) 增加 migration 022、独立 `priority_revision`、`ticket.priority.set` receipt 和 `ticket.priority-changed` schema 1。优先级 GET / POST 复用当前准入、写权、严格 JSON、CSRF 与 no-store；POST 绑定优先级和状态版本，原子写入事件 / receipt / Outbox / Activity 10，精确重试只确认原 applied 事实。事件 `priority` 四字段保存前后枚举与相邻版本；详情、列表和导出均严格校验枚举。
 
 Project 工单列表增加必填 `priority`，支持 `status / assignee / priority` 三组单选 AND 条件，先 SQL 筛选再按 ID 升序分页。Ticket 专用 v2 cursor 绑定 Workspace、Project、操作者及规范筛选；旧 Ticket cursor 失效，其它 discovery cursor 保持原合同。cursor 不能代替当前授权，跨页不是冻结快照。Go / Web / CLI / schema 与 v3 包配套升级，严格读取旧 v1 / v2，不降级丢失历史。
+
+## Decision 最小拒绝
+
+[ADR-0048](../adr/0048-decision-lifecycle-and-rejection.md)增加唯一 decision.reject 命令与 migration 023，复用现有 rejection_reason；接受 / 拒绝先按当前账户、Workspace、Project 与全部 evidence 重新授权，再以同一 Decision 排他锁和 proposed 状态裁决。该切片无内容修改、重开或回转，旧接受 body / canonical digest / receipt 不变；提案精确重试返回同一 Decision 的真实当前状态。决定时间在锁内取数据库时间并严格递增，原状态、receipt、schema 1 decision.rejected、Outbox 与 Activity 11 原子提交。
+
+正式完整 Decision DTO 增必填 nullable rejection_reason，接受三状态；Decision Nexus View 在同一快照返回 accept / reject / create_ticket 能力，能力不授予权限，创建 Ticket 保持独立贡献权限。Project 列表只扩展 rejected，字段、稳定 ID 分页和 cursor 保留。拒绝事件只含 status，无 subject，只投影到 Decision；理由按 Decision 当前权限读取，不复制到事件。v4 包保留拒绝理由 / 历史及二次导入来源，严格读取旧 v1～v3，旧理由转换为 null；Go / Web / CLI / schema 停写配套升级。替代、复核及其版本与历史仍须独立冻结。
 
 ## 授权解析
 

@@ -49,6 +49,7 @@ func TestAssignmentV1ReadIsStrictAndPreservesManifest(t *testing.T) {
 		}
 		return result
 	})
+	stripDecisionReason(t, &b)
 	before := Digest(b.Manifest)
 	d, x, err := Unpack(b)
 	if err != nil {

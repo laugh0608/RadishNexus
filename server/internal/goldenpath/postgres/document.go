@@ -34,9 +34,16 @@ func documentProject(ctx context.Context, tx pgx.Tx, p authz.Principal, project 
 	return nil
 }
 func projectEntityScope(ctx context.Context, tx pgx.Tx, p authz.Principal, kind, id string) (string, error) {
-	table := "radishnexus.documents"
-	if kind == "ticket" {
+	var table string
+	switch kind {
+	case "document":
+		table = "radishnexus.documents"
+	case "ticket":
 		table = "radishnexus.tickets"
+	case "decision":
+		table = "radishnexus.decisions"
+	default:
+		return "", fmt.Errorf("unsupported Project entity type")
 	}
 	var project string
 	err := tx.QueryRow(ctx, "SELECT governing_project_id FROM "+table+" WHERE workspace_id=$1 AND id=$2", p.WorkspaceID, id).Scan(&project)

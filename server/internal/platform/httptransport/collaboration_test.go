@@ -17,6 +17,10 @@ import (
 )
 
 type fakeCollaborationApplication struct {
+	rejectionResult  goldenpath.RejectDecisionResult
+	rejectionInput   goldenpath.RejectDecisionInput
+	rejectionCalls   int
+	rejectionErr     error
 	view             goldenpath.NexusView
 	decisionResult   goldenpath.CreateDecisionResult
 	acceptanceResult goldenpath.AcceptDecisionResult
@@ -57,6 +61,13 @@ func (application *fakeCollaborationApplication) CreateDecisionFromThread(
 	application.invocation = invocation
 	application.decisionInput = input
 	return application.decisionResult, application.decisionErr
+}
+
+func (application *fakeCollaborationApplication) RejectDecision(_ context.Context, invocation goldenpath.Invocation, input goldenpath.RejectDecisionInput) (goldenpath.RejectDecisionResult, error) {
+	application.rejectionCalls++
+	application.invocation = invocation
+	application.rejectionInput = input
+	return application.rejectionResult, application.rejectionErr
 }
 
 func (application *fakeCollaborationApplication) AcceptDecision(
@@ -279,6 +290,7 @@ func TestCollaborationHandlerKeepsRestrictedDecisionEvidenceOpaque(t *testing.T)
 	t.Parallel()
 	now := time.Date(2026, 9, 2, 1, 7, 0, 0, time.UTC)
 	application := &fakeCollaborationApplication{view: goldenpath.NexusView{
+		DecisionCapabilities: &goldenpath.DecisionCapabilities{},
 		Current: goldenpath.CurrentProjection{
 			Ref: entityref.Ref{Type: "decision", ID: "dec_target"}, GoverningProjectID: "prj_main",
 			Title: "Adopt Session collaboration?", Status: "proposed", ProposerID: "usr_writer",
@@ -308,6 +320,7 @@ func TestCollaborationViewIncomingContract(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC)
 	view := goldenpath.NexusView{
+		DecisionCapabilities: &goldenpath.DecisionCapabilities{},
 		Current: goldenpath.CurrentProjection{
 			Ref: entityref.Ref{Type: "decision", ID: "dec_target"}, GoverningProjectID: "prj_main",
 			Title: "Choose boundary", Status: "proposed", ProposerID: "usr_writer",

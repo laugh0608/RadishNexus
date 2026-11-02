@@ -11,7 +11,7 @@ import {
 export interface ProjectDecision {
   id: string;
   title: string;
-  status: "proposed" | "accepted";
+  status: "proposed" | "accepted" | "rejected";
 }
 
 export function projectDecisionsPath(workspaceID: string, projectID: string) {
@@ -57,7 +57,11 @@ export const projectDecisionsClient = {
         const ref = object(row.ref, ["type", "id"]);
         if (ref.type !== "decision")
           throw new AuthRequestError("决策服务响应不符合当前契约。");
-        if (row.status !== "proposed" && row.status !== "accepted")
+        if (
+          row.status !== "proposed" &&
+          row.status !== "accepted" &&
+          row.status !== "rejected"
+        )
           throw new AuthRequestError("决策服务响应不符合当前契约。");
         const title = text(row.title);
         // JSON may contain unpaired UTF-16 surrogates, which cannot represent

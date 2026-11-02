@@ -33,6 +33,7 @@ func TestPriorityV2ReadIsStrictAndPreservesManifest(t *testing.T) {
 		t.Fatal("v2 accepted v3 fields")
 	}
 	stripPriorityFields(t, &b)
+	stripDecisionReason(t, &b)
 	before := Digest(b.Manifest)
 	d, x, err := Unpack(b)
 	if err != nil {

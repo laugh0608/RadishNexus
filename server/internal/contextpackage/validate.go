@@ -348,14 +348,22 @@ func decodeObject(o Object) (any, error) {
 		}
 		return *p, nil
 	case *Decision:
-		if !textValue(p.Question, 16384, true) || !oneOf(p.Status, "proposed", "accepted") || p.Deciders == nil || !bytes.Equal(bytes.TrimSpace(p.Alternatives), []byte("[]")) || p.Consequences != nil || p.ReviewAt != nil {
+		var fields map[string]json.RawMessage
+		if Decode(o.Data, &fields) != nil || len(fields) != 11 || fields["rejection_reason"] == nil {
+			return nil, invalid("Decision fields")
+		}
+		if !textValue(p.Question, 16384, true) || !oneOf(p.Status, "proposed", "accepted", "rejected") || p.Deciders == nil || !bytes.Equal(bytes.TrimSpace(p.Alternatives), []byte("[]")) || p.Consequences != nil || p.ReviewAt != nil {
 			return nil, invalid("unsupported Decision fields")
 		}
 		if p.Status == "accepted" {
-			if p.Outcome == nil || p.Rationale == nil || !textValue(*p.Outcome, 32768, true) || !textValue(*p.Rationale, 32768, true) || len(p.Deciders) != 1 || p.DecidedAt == nil || !validTime(*p.DecidedAt) {
+			if p.RejectionReason != nil || p.Outcome == nil || p.Rationale == nil || !textValue(*p.Outcome, 32768, true) || !textValue(*p.Rationale, 32768, true) || len(p.Deciders) != 1 || p.DecidedAt == nil || !validTime(*p.DecidedAt) {
 				return nil, invalid("accepted Decision")
 			}
-		} else if p.Outcome != nil || p.Rationale != nil || len(p.Deciders) != 0 || p.DecidedAt != nil {
+		} else if p.Status == "rejected" {
+			if p.RejectionReason == nil || !textValue(*p.RejectionReason, 32768, true) || p.Outcome != nil || p.Rationale != nil || len(p.Deciders) != 1 || p.DecidedAt == nil || !validTime(*p.DecidedAt) {
+				return nil, invalid("rejected Decision")
+			}
+		} else if p.RejectionReason != nil || p.Outcome != nil || p.Rationale != nil || len(p.Deciders) != 0 || p.DecidedAt != nil {
 			return nil, invalid("proposed Decision")
 		}
 		return *p, nil
@@ -416,10 +424,10 @@ func ValidateFacts(h History) (Facts, error) {
 		if f.Status != "proposed" || !refType(f.Evidence, "thread") {
 			return f, invalid("proposal history")
 		}
-	case "decision.accepted":
+	case "decision.accepted", "decision.rejected":
 		kind = "decision"
 		expected = []string{"status"}
-		if f.Status != "accepted" {
+		if f.Status != strings.TrimPrefix(h.Type, "decision.") {
 			return f, invalid("acceptance history")
 		}
 	case "ticket.created":
@@ -559,13 +567,13 @@ func validateObjectHistory(o Object, v any, events []History, x *Index, relation
 			return invalid("Decision source")
 		}
 		n := 1
-		if p.Status == "accepted" {
+		if p.Status == "accepted" || p.Status == "rejected" {
 			n = 2
-			if counts["decision.accepted"] != 1 || !p.DecidedAt.Equal(o.UpdatedAt) {
+			if counts["decision."+p.Status] != 1 || !p.DecidedAt.Equal(o.UpdatedAt) {
 				return invalid("acceptance history count")
 			}
 			for _, h := range events {
-				if h.Type == "decision.accepted" && (h.Actor != p.Deciders[0] || !h.OccurredAt.Equal(*p.DecidedAt)) {
+				if h.Type == "decision."+p.Status && (h.Actor != p.Deciders[0] || !h.OccurredAt.Equal(*p.DecidedAt)) {
 					return invalid("acceptance actor/time")
 				}
 			}

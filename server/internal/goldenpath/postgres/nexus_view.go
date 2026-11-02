@@ -31,7 +31,7 @@ func (store *Store) GetNexusView(
 	}
 	defer rollback(ctx, tx, &err)
 
-	if target.Type == "ticket" {
+	if target.Type == "ticket" || target.Type == "decision" {
 		if _, err = configurationActor(ctx, tx, principal); err != nil {
 			return view, err
 		}
@@ -57,6 +57,24 @@ func (store *Store) GetNexusView(
 			return view, authz.ErrNotFound
 		}
 		view.TicketCapabilities = &goldenpath.TicketCapabilities{ChangeStatus: access.active && authz.RequireContribute(access.role) == nil && view.Current.StatusRevision < goldenpath.MaxTicketStatusRevision}
+	}
+	if target.Type == "decision" {
+		access, readable, e := readProjectAccess(ctx, tx, principal, view.Current.GoverningProjectID)
+		if e != nil {
+			return view, e
+		}
+		if !readable {
+			return view, authz.ErrNotFound
+		}
+		caps := &goldenpath.DecisionCapabilities{CreateTicket: view.Current.Status == "accepted" && access.active && access.role.CanContribute()}
+		if view.Current.Status == "proposed" && access.active && access.role.CanAcceptDecision() {
+			e = requireReadableDecisionEvidence(ctx, tx, principal, target.ID)
+			if e != nil && !errors.Is(e, authz.ErrForbidden) {
+				return view, e
+			}
+			caps.Accept, caps.Reject = e == nil, e == nil
+		}
+		view.DecisionCapabilities = caps
 	}
 	view.Relations, err = listRelationProjections(ctx, tx, principal, target)
 	if err != nil {
@@ -118,7 +136,7 @@ func loadCurrentProjection(
 		err = tx.QueryRow(ctx, `
 			SELECT governing_project_id, question, status,
 				COALESCE(outcome, ''), COALESCE(rationale, ''), proposer_id,
-				decider_ids, decided_at, created_at, updated_at
+				decider_ids, decided_at, created_at, updated_at, COALESCE(rejection_reason, '')
 			FROM radishnexus.decisions
 			WHERE workspace_id = $1 AND id = $2
 		`, principal.WorkspaceID, target.ID).Scan(
@@ -132,6 +150,7 @@ func loadCurrentProjection(
 			&current.DecidedAt,
 			&current.CreatedAt,
 			&current.UpdatedAt,
+			&current.RejectionReason,
 		)
 	case "ticket":
 		err = tx.QueryRow(ctx, `

@@ -158,6 +158,13 @@ func TestContextCLIHTTPSAndBrowser(t *testing.T) {
 	}
 	source := contextDatabase(t)
 	source.seed(t)
+	rejected, e := source.core.CreateDecisionFromThread(source.ctx, contextInvocation(source.principal), goldenpath.CreateDecisionInput{ThreadID: source.thread, ClientOperationID: "cli-rejected-proposal", Question: "CLI rejected proposal"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = source.core.RejectDecision(source.ctx, contextInvocation(source.principal), goldenpath.RejectDecisionInput{DecisionID: rejected.Decision.ID, ClientOperationID: "cli-rejection", RejectionReason: "Portable CLI rejection reason"}); e != nil {
+		t.Fatal(e)
+	}
 	target := contextDatabase(t)
 	outsiderSession, outsider := target.invite(t, "context.outsider@example.test")
 	webRoot := os.Getenv("RADISHNEXUS_WEB_ROOT")
@@ -201,6 +208,12 @@ func TestContextCLIHTTPSAndBrowser(t *testing.T) {
 		}
 		contextHTTPRead(t, targetHTTP, outsiderSession, base+"/"+kind+"s/"+ids[kind]+"/nexus-view", 404)
 	}
+	rejectedID := contextMapping(t, plan, "decision", rejected.Decision.ID)
+	rejectedView := contextHTTPRead(t, targetHTTP, target.owner, base+"/decisions/"+rejectedID+"/nexus-view", 200)
+	if !strings.Contains(string(rejectedView), `"rejection_reason":"Portable CLI rejection reason"`) || !strings.Contains(string(rejectedView), `"activity_type":"decision.rejected"`) {
+		t.Fatal("CLI lost rejected reason or imported history")
+	}
+	contextHTTPRead(t, targetHTTP, outsiderSession, base+"/decisions/"+rejectedID+"/nexus-view", 404)
 	for _, kind := range []string{"project", "channel", "thread", "decision", "ticket", "document"} {
 		raw := contextHTTPRead(t, targetHTTP, target.owner, base+"/context-source/"+kind+"/"+ids[kind], 200)
 		if !strings.Contains(string(raw), `"imported":true`) {

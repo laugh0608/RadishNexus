@@ -11,6 +11,7 @@ import (
 )
 
 type recordingStore struct {
+	rejectDecisionCommand   RejectDecisionCommand
 	createMessageCommand    CreateMessageCommand
 	createMessageResult     CreateMessageResult
 	listMessagesPrincipal   authz.Principal
@@ -88,6 +89,11 @@ func (store *recordingStore) CreateDecisionFromThread(_ context.Context, command
 		Decision: Decision{ID: command.DecisionID, Question: command.Question},
 		Created:  true,
 	}, nil
+}
+
+func (store *recordingStore) RejectDecision(_ context.Context, c RejectDecisionCommand) (RejectDecisionResult, error) {
+	store.rejectDecisionCommand = c
+	return RejectDecisionResult{}, nil
 }
 
 func (*recordingStore) AcceptDecision(context.Context, AcceptDecisionCommand) (AcceptDecisionResult, error) {

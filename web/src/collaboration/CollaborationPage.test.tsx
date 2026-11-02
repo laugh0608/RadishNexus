@@ -32,6 +32,7 @@ const proposedDecision: DecisionCurrent = {
   status: "proposed",
   outcome: null,
   rationale: null,
+  rejectionReason: null,
   proposer: { kind: "user", id: "usr_contributor" },
   deciders: [],
   decidedAt: null,
@@ -66,6 +67,7 @@ const threadView: CollaborationView<ThreadCurrent> = {
 
 const decisionView: CollaborationView<DecisionCurrent> = {
   current: proposedDecision,
+  capabilities: { accept: true, reject: true, createTicket: false },
   relations: [{ visibility: "restricted" }],
   timeline: [],
 };
@@ -217,7 +219,14 @@ describe("CollaborationPage", () => {
       "decision",
       "dec_choice",
       testClient({
-        loadView: vi.fn().mockResolvedValue(decisionView),
+        loadView: vi
+          .fn()
+          .mockResolvedValueOnce(decisionView)
+          .mockResolvedValue({
+            ...decisionView,
+            current: acceptedDecision,
+            capabilities: { accept: false, reject: false, createTicket: true },
+          }),
         acceptDecision,
         createTicket,
       }),
@@ -250,12 +259,17 @@ describe("CollaborationPage", () => {
 
     expect(await screen.findByText("Accepted outcome")).toBeDefined();
     expect(screen.getByText("Use the Session boundary.")).toBeDefined();
-    expect(acceptDecision).toHaveBeenCalledWith("wrk_main", "dec_choice", {
-      clientOperationID: "web:accept",
-      outcome: "Use the Session boundary.",
-      rationale: "It preserves current authority.",
-      confirmed: true,
-    });
+    expect(acceptDecision).toHaveBeenCalledWith(
+      "wrk_main",
+      "dec_choice",
+      {
+        clientOperationID: "web:accept",
+        outcome: "Use the Session boundary.",
+        rationale: "It preserves current authority.",
+        confirmed: true,
+      },
+      expect.any(AbortSignal),
+    );
 
     fireEvent.change(screen.getByLabelText("Ticket 标题"), {
       target: { value: "Implement collaboration UI" },
@@ -267,6 +281,110 @@ describe("CollaborationPage", () => {
         .getByRole("link", { name: "打开 canonical Ticket" })
         .getAttribute("href"),
     ).toBe("/workspaces/wrk_main/tickets/tkt_work");
+  });
+
+  it("preserves the exact rejected operation across an unknown result and focus refresh", async () => {
+    const rejected: DecisionCurrent = {
+      ...proposedDecision,
+      status: "rejected",
+      rejectionReason: "Reason kept",
+      deciders: [{ kind: "user", id: "usr_decider" }],
+      decidedAt: now,
+    };
+    let committed = false;
+    const rejectDecision = vi
+      .fn()
+      .mockRejectedValueOnce(new CollaborationRequestError("unknown"))
+      .mockImplementation(async () => {
+        committed = true;
+        return rejected;
+      });
+    const loadView = vi.fn().mockImplementation(async () =>
+      committed
+        ? {
+            ...decisionView,
+            current: rejected,
+            capabilities: {
+              accept: false,
+              reject: false,
+              createTicket: false,
+            },
+          }
+        : decisionView,
+    );
+    const id = vi.fn().mockReturnValue("web:rejection-stable");
+    renderPage(
+      "decision",
+      "dec_choice",
+      testClient({ loadView, rejectDecision }),
+      { createOperationID: id },
+    );
+    fireEvent.click(await screen.findByLabelText("拒绝提案"));
+    fireEvent.change(screen.getByLabelText(/拒绝理由/), {
+      target: { value: "Reason kept" },
+    });
+    fireEvent.click(
+      screen.getByLabelText("我正在以当前用户身份明确拒绝这个 Decision。"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "拒绝 Decision" }));
+    await screen.findByRole("button", { name: "重试原决定操作" });
+    expect(screen.queryByLabelText("拒绝提案")).toBeNull();
+    fireEvent.focus(window);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "重试原决定操作" }),
+    );
+    await screen.findByRole("heading", { name: "已拒绝" });
+    expect(id).toHaveBeenCalledOnce();
+    expect(rejectDecision).toHaveBeenCalledTimes(2);
+    for (const call of rejectDecision.mock.calls)
+      expect(call.slice(0, 3)).toEqual([
+        "wrk_main",
+        "dec_choice",
+        {
+          clientOperationID: "web:rejection-stable",
+          rejectionReason: "Reason kept",
+          confirmed: true,
+        },
+      ]);
+    expect(screen.queryByRole("button", { name: "创建 Ticket" })).toBeNull();
+  });
+
+  it("clears a rejection confirmation when the reason changes or evidence is revoked", async () => {
+    const loadView = vi
+      .fn()
+      .mockResolvedValueOnce(decisionView)
+      .mockResolvedValue({
+        ...decisionView,
+        capabilities: { accept: false, reject: false, createTicket: false },
+      });
+    const rejectDecision = vi.fn();
+    renderPage(
+      "decision",
+      "dec_choice",
+      testClient({ loadView, rejectDecision }),
+    );
+    fireEvent.click(await screen.findByLabelText("拒绝提案"));
+    fireEvent.change(screen.getByLabelText(/拒绝理由/), {
+      target: { value: "First reason" },
+    });
+    fireEvent.click(
+      screen.getByLabelText("我正在以当前用户身份明确拒绝这个 Decision。"),
+    );
+    fireEvent.change(screen.getByLabelText(/拒绝理由/), {
+      target: { value: "Changed reason" },
+    });
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "拒绝 Decision",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    fireEvent.focus(window);
+    await screen.findByText(/当前仅可读取提案/);
+    expect(screen.queryByRole("button", { name: "拒绝 Decision" })).toBeNull();
+    expect(screen.queryByDisplayValue("Changed reason")).toBeNull();
+    expect(rejectDecision).not.toHaveBeenCalled();
   });
 
   it("removes the rendered object and drafts when a write proves access revoked", async () => {
@@ -342,6 +460,7 @@ function testClient(
     loadView: vi.fn().mockResolvedValue(threadView),
     proposeDecision: vi.fn(),
     acceptDecision: vi.fn(),
+    rejectDecision: vi.fn(),
     createTicket: vi.fn(),
     ...overrides,
   };

@@ -37,7 +37,7 @@ collaboration migration 007 以 `(workspace, actor, command, target, client_oper
 
 协作 Nexus View 的 readable relation 明确 `direction: outgoing | incoming`，支持 Thread 发现后续 Decision、Decision 发现后续 Ticket；不可读反向目标完全隐藏，原 evidence 占位不带方向。完整合同、全量关系读取限制与 Go / Web 同步升级要求见 [ADR-0022](../docs/adr/0022-transactional-activity-and-incoming-relations.md)。
 
-当前 Activity 白名单包含 `project.created`、`channel.created`、`decision.proposed`、`decision.accepted`、`ticket.created`、`ci-run.recorded`、`deployment.recorded`、`document.created`、`document.revised`、`component.created`、`environment.created`、`repository.created`、`component.repository-linked`、`component.repository-unlinked`、`ticket.component-linked` 和 `ticket.component-unlinked`。正常写入在同一事务投影，并将对应 `activity-projector` delivery 标记完成；命令成功返回后的重新读取立即可见，投影错误整单回滚。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，先锁定投影表再取得源事件快照，不依赖 Outbox 投递状态；当前不需要常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
+当前 Activity 白名单包含 `project.created`、`channel.created`、`decision.proposed`、`decision.accepted`、`decision.rejected`、`ticket.created`、`ci-run.recorded`、`deployment.recorded`、`document.created`、`document.revised`、`component.created`、`environment.created`、`repository.created`、`component.repository-linked`、`component.repository-unlinked`、`ticket.component-linked` 和 `ticket.component-unlinked`。正常写入在同一事务投影，并将对应 `activity-projector` delivery 标记完成；命令成功返回后的重新读取立即可见，投影错误整单回滚。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，先锁定投影表再取得源事件快照，不依赖 Outbox 投递状态；当前不需要常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
 
 CI Run 的 M0 用户读取由所属 Component 控制：同一 Workspace 的活跃成员可读，非成员、暂停成员和跨 Workspace 主体得到 not-found；owner Team 和 Jenkins source 都不授予读取权。CI Run Current 返回 status、受控时间、当前 Component 与按当前 Repository 权限过滤的 checkout 摘要，Timeline 隐藏 plugin/source ID，并且不返回 external run key、receipt、digest、Secret、原始 payload 或外部 URL。该 query 已按 ADR-0029 接入 Session 作用域的正式 HTTP DTO 与 Web 页面。
 
@@ -217,7 +217,7 @@ Deployment Nexus View 只读路由为：
 
 [ADR-0040](../docs/adr/0040-project-decision-discovery.md) 增加 `GET /api/v1/workspaces/{workspace_id}/projects/{project_id}/decisions`。复用 `DiscoveryService`、同源 Session 与 repeatable-read 事务；按 governing Project 当前权限读取，与 evidence Thread / origin Channel 的可读性独立。active Workspace 成员可读 workspace 可见项目，restricted Project 必须有当前 membership，owner 不穿透；归档仍可读。
 
-响应仅为 `data.items[{ref,title,status}] / next_cursor`，title 保留 question 原文，状态严格为 `proposed / accepted`。仅接受 `limit`（默认 25、最大 50）与 `after`；v1 cursor 绑定 Workspace、Project、kind=`decision`，按稳定 ID 升序、排他边界翻页，不与其他列表互用。待返回页含非法状态、ref、问题或顺序时整页失败；不以状态过滤隐藏异常。列表不展开来源、结论、理由、能力或计数，不改变业务事实。401 / 404、错误 envelope、`private, no-store` 与 `Vary: Cookie` 沿用发现合同。
+响应仅为 `data.items[{ref,title,status}] / next_cursor`，title 保留 question 原文，状态严格为 `proposed / accepted / rejected`。仅接受 `limit`（默认 25、最大 50）与 `after`；v1 cursor 绑定 Workspace、Project、kind=`decision`，按稳定 ID 升序、排他边界翻页，不与其他列表互用。待返回页含非法状态、ref、问题或顺序时整页失败；不以状态过滤隐藏异常。列表不展开来源、结论、理由、能力或计数，不改变业务事实。401 / 404、错误 envelope、`private, no-store` 与 `Vary: Cookie` 沿用发现合同。
 
 独立查询测量支持本片不新增索引或 migration，无依赖和写入协议变化；规模、权限与浏览器证据见[实施记录](../docs/status/reviews/2026-10-18-project-decision-discovery.md)。
 
@@ -258,11 +258,19 @@ Deployment Nexus View 只读路由为：
 
 Thread DTO 只通过结构化 ref 返回 origin Channel 和 `started-from` Message，不返回 Message 正文；Decision restricted evidence 只形成无类型、ID、关系名、标题和时间的占位；Ticket 通过 `implements` 保留 Source Decision。所有响应均为 `private, no-store`，不返回 receipt、digest、operation ID、角色、membership、事件或 Outbox。完整边界见 [ADR-0019](../docs/adr/0019-session-scoped-thread-decision-ticket-transport.md)。同源 Web Shell 已接入三个 canonical 页面与对应写动作；production Web handler 只开放精确协作路径，未知或多余嵌套路由继续 `404`。
 
+## Decision 最小拒绝
+
+[ADR-0048](../docs/adr/0048-decision-lifecycle-and-rejection.md)增加 `POST /api/v1/workspaces/{workspace_id}/decisions/{decision_id}/rejection`，严格必填 client_operation_id、rejection_reason、confirmed=true；理由 trim 后保存为纯文本，原始值上限 32 KiB、body 64 KiB。当前 active Project 的 decider / admin 且全部 evidence 可读才可拒绝；accepted 不能拒绝，rejected 不重新打开或修改理由，不影响已有 Ticket / Document。
+
+接受 / 拒绝共用授权、Decision 排他锁和原子 receipt / 事件 / Outbox / Activity。旧 acceptance body / digest 保留，精确重试先复核当前权限；新提案返回 proposed，提案重试返回同一 Decision 的真实当前状态。新决定时间在锁内取数据库时间，旧事件和时间不重写。
+
+所有完整 Decision DTO 增必填 nullable rejection_reason，支持 proposed / accepted / rejected；Decision Nexus View 增 `capabilities: {accept,reject,create_ticket}`。能力来自同一权限快照，创建 Ticket 不额外依赖 evidence 权限。新 schema 1 decision.rejected 只含 status、无 subject、只投影到 Decision；普通更新和重建一致，理由不进入事件。migration 023 / Activity 11 / v4 包与 Go / Web / CLI 配套停写升级，旧 022 工件备份须以匹配工件恢复空目标后再显式迁移；完整验证与限制见[实施记录](../docs/status/reviews/2026-11-02-decision-rejection.md)。
+
 ## Ticket 最小负责人
 
 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 由 `TicketAssignmentService` 承载 Ticket 作用域的读取、候选分页和显式写入。详情支持设置、改派、清空、由我负责及原操作重试；Project 列表显示相同摘要。仅 open / in-progress 接受新分配，关闭工单保留责任；成员暂停、退出或失权显示不可执行，不自动清空或授予权限。
 
-migration 021 与 Activity v9 配套部署；负责人字段和不可变历史随备份恢复。当前导出默认 `project-collaboration-v3`，仍严格读取 v1 / v2；历史身份不绑定登录账户。接口字段、并发代次和精确重试见 ADR，验收范围见[本轮记录](../docs/status/reviews/2026-10-28-ticket-assignee.md)。
+migration 021 与 Activity v9 配套部署；负责人字段和不可变历史随备份恢复。当前导出默认 `project-collaboration-v4`，仍严格读取 v1～v3；历史身份不绑定登录账户。接口字段、并发代次和精确重试见 ADR，验收范围见[本轮记录](../docs/status/reviews/2026-10-28-ticket-assignee.md)。
 
 ## Ticket 最小状态流转
 
@@ -294,7 +302,7 @@ apply 只接受已确认 proposal、UUID operation ID 与计划摘要；等待�
 
 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的 migration 019、`internal/contextpackage`、`goldenpath.ContextService` 与受认证 HTTP 入口提供单 Project 协作导出 / 空业务实例导入。`go build ./cmd/nexus-context` 构建独立 CLI，使用 HTTPS Session 和私有凭据文件，不读取数据库 DSN；操作、协议路由和限制见[迁移手册](../deploy/context-package.md)。该 CLI 当前面向 macOS / Linux，不包含在 Compose operations 工件中。
 
-历史身份不可登录，初始 Project restricted 并仅授予导入负责人；真实导入操作与源事实分开保存。来源 API 先验证当前对象读取权限，Web 仅展示安全导入标识。Activity 10 支持含负责人和优先级变更的导入历史重建，四张来源 / 审计表纳入整库备份，Session 等既有排除规则不变。隔离验收见[记录](../docs/status/reviews/2026-10-24-portable-context-package.md)。
+历史身份不可登录，初始 Project restricted 并仅授予导入负责人；真实导入操作与源事实分开保存。来源 API 先验证当前对象读取权限，Web 仅展示安全导入标识。Activity 11 支持含负责人、优先级与 Decision 拒绝的导入历史重建，四张来源 / 审计表纳入整库备份，Session 等既有排除规则不变。隔离验收见[记录](../docs/status/reviews/2026-10-24-portable-context-package.md)。
 
 ## 最小备份与恢复
 
@@ -377,7 +385,7 @@ migration 011 扩展既有协作 receipt 的 CHECK，保留 revision 合同。re
 
 migration 012 保留 revoked 授权，重新授予追加新 ID 与 generation，并保持每个环境 / 用户至多一条 active 记录。历史 Deployment 始终关联原授权；旧授予或撤销 receipt 不重新改变权限。事务按账户、membership、Environment、授权记录的顺序加锁；Deployment 同步重查账户状态。撤销允许清理 archived staging 与失效成员，production 不开放管理写入。
 
-创建对象、Audit、receipt、领域事件、Outbox 和 Activity 同事务提交；授权只进入窄 Audit。此切片将 Activity projection 从 2 升至 3，新增 `component.created` / `environment.created`，migration 将现有 v2 投影标为 v3，重建与恢复继续从领域事件生成。当前版本已由 ADR-0047 扩展为 10；不补造历史对象创建事件。全代次授权、成功 Audit / receipt 与旧 Deployment 引用属于既有备份权威表；升级必须显式迁移，旧二进制拒绝新 schema，不能删历史授权降级。
+创建对象、Audit、receipt、领域事件、Outbox 和 Activity 同事务提交；授权只进入窄 Audit。此切片将 Activity projection 从 2 升至 3，新增 `component.created` / `environment.created`，migration 将现有 v2 投影标为 v3，重建与恢复继续从领域事件生成。当前版本已由 ADR-0048 扩展为 11；不补造历史对象创建事件。全代次授权、成功 Audit / receipt 与旧 Deployment 引用属于既有备份权威表；升级必须显式迁移，旧二进制拒绝新 schema，不能删历史授权降级。
 
 
 ## Repository 映射与 Component 关联

@@ -15,6 +15,7 @@ import (
 const (
 	commandDecisionPropose = "decision.propose"
 	commandDecisionAccept  = "decision.accept"
+	commandDecisionReject  = "decision.reject"
 	commandTicketCreate    = "ticket.create"
 )
 
@@ -113,7 +114,7 @@ func loadDecision(
 	err = tx.QueryRow(ctx, `
 		SELECT id, workspace_id, governing_project_id, question,
 			COALESCE(outcome, ''), COALESCE(rationale, ''), status,
-			proposer_id, decider_ids, decided_at, created_at, updated_at
+			proposer_id, decider_ids, decided_at, created_at, updated_at, COALESCE(rejection_reason, '')
 		FROM radishnexus.decisions
 		WHERE workspace_id = $1 AND id = $2
 	`, workspaceID, decisionID).Scan(
@@ -129,6 +130,7 @@ func loadDecision(
 		&decision.DecidedAt,
 		&decision.CreatedAt,
 		&decision.UpdatedAt,
+		&decision.RejectionReason,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return goldenpath.Decision{}, errors.New("collaboration command receipt Decision is missing")

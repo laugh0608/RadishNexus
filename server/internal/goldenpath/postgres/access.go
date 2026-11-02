@@ -274,13 +274,12 @@ func requireReadableDecisionEvidence(
 	decisionID string,
 ) error {
 	rows, err := tx.Query(ctx, `
-		SELECT to_id
+		SELECT to_type, to_id
 		FROM radishnexus.entity_links
 		WHERE workspace_id = $1
 		  AND from_type = 'decision'
 		  AND from_id = $2
 		  AND relation_type = 'derived-from'
-		  AND to_type = 'thread'
 		  AND state = 'active'
 		ORDER BY id
 	`, principal.WorkspaceID, decisionID)
@@ -289,10 +288,14 @@ func requireReadableDecisionEvidence(
 	}
 	var threadIDs []string
 	for rows.Next() {
-		var threadID string
-		if err := rows.Scan(&threadID); err != nil {
+		var threadID, evidenceType string
+		if err := rows.Scan(&evidenceType, &threadID); err != nil {
 			rows.Close()
 			return fmt.Errorf("scan Decision evidence access facts: %w", err)
+		}
+		if evidenceType != "thread" {
+			rows.Close()
+			return errors.New("unsupported Decision evidence type")
 		}
 		threadIDs = append(threadIDs, threadID)
 	}

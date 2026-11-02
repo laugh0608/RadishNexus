@@ -1,8 +1,8 @@
 # RadishNexus 当前状态
 
-状态事实日期：2026-10-28；规划导航整理：2026-11-01。
+状态事实日期：2026-11-02；最近功能交付：2026-11-02；规划导航整理：2026-11-01。
 
-整体目标与阶段范围见[路线图](../roadmap.md)，能力归属与任务 / 验收来源见[专题地图](../topics.md)。本次仅整理规划；完整历史流水保留于[原状态快照](history/planning-structure-2026-11-01.md)，不恢复旧运行授权。
+整体目标与阶段范围见[路线图](../roadmap.md)，能力归属与任务 / 验收来源见[专题地图](../topics.md)。完整历史流水保留于[原状态快照](history/planning-structure-2026-11-01.md)，不恢复旧运行授权。
 
 ## 已确认待实施的客户端方向
 
@@ -10,14 +10,14 @@
 
 ## 当前阶段
 
-M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 React Web 已建立若干真实业务切片；完整 Golden Path、普通成员独立操作及真实团队持续使用尚未整体验收。当前下一产品事项为 Decision 生命周期设计，须先冻结影响再实施；本批规划整理不启动该功能。
+M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 React Web 已建立若干真实业务切片；完整 Golden Path、普通成员独立操作及真实团队持续使用尚未整体验收。Decision 最小拒绝已按 [ADR-0048](../adr/0048-decision-lifecycle-and-rejection.md)实施并通过定向数据库、迁移 / 备份和正式 Web 验收；替代与复核仍须独立冻结。
 
 ## 完成线与成熟度
 
 | 能力主线 | 当前基线与未关闭范围 | 正式来源 |
 | --- | --- | --- |
 | 身份与管理 | 本地账户、邀请、初始化、恢复、owner / 成员管理交接已有技术证据；真实 OIDC / Radish 联调与团队持续使用仍未验收 | [身份专题](../topics.md#identity) |
-| 沟通与决策 | 讨论创建 / 确认 Decision、Project 决策发现已交付；拒绝、替代与复核待设计 | [沟通与决策专题](../topics.md#communication-decisions) |
+| 沟通与决策 | 讨论创建 / 确认 Decision、Project 决策发现已交付；最小拒绝及三状态读取已交付，替代与复核待独立冻结 | [沟通与决策专题](../topics.md#communication-decisions) |
 | 工单与上下文 | 工单发现、四状态、负责人、优先级 / 筛选、首批关系和 Activity 已有证据；完整执行管理、通用关系分页与持续使用未闭合 | [工单与上下文专题](../topics.md#tickets-context) |
 | 文档协作 | 最小 Markdown 正式保存、冲突、版本 / 恢复及隔离浏览器已有证据；原生中文 IME 暂缓、持续使用未验收 | [文档专题](../topics.md#documents) |
 | 交付集成 | 受认证接入、显式 staging 记录、配置、持久发送及 checkout 接收已有相应证据；ADR-0035 / 0037 B 真实采集与整链暂缓 | [交付专题](../topics.md#delivery-integration) |
@@ -42,8 +42,8 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **下一产品事项先设计 Decision 生命周期**：核对现有 proposed / accepted、evidence 可读性、decider 权限及 Ticket 的 implements 来源；分别说明拒绝、替代与复核的触发条件、理由、来源和历史保留方式，再选择一个最小纵向切片。重点冻结旧确认冲突 / 精确重试、已有 Ticket 与 Document 是否受影响、Activity 与上下文包兼容；不默认撤销已建 Ticket，不自动改写原 accepted 结论。形成可评审 ADR，经所有者确认数据 / 权限 / 公共协议影响后才实现，今晚不启动设计或编码。
-2. **已完成切片转入有界观察**：上下文迁移补验、负责人及其并发 / 同名补验、优先级与项目内筛选均已交付，提交与验证映射见[当日收尾记录](reviews/2026-10-28-daily-closeout.md)。后续遇到实际 BFCache、原生选择控件键盘、团队使用或慢查询问题时定向复验；不重复全量测试冒充持续使用，也不把单 Project 合成查询计划当成生产容量。当前 schema 022 / Activity 10 / v3 包须 Go / Web / CLI 配套升级；真实实例操作仍单独授权。
+1. **Decision 最小拒绝已完成，接续替代 / 复核设计**：[ADR-0048](../adr/0048-decision-lifecycle-and-rejection.md)的 proposed → rejected、正式三状态读取、当前权限、旧确认冲突 / 精确重试、Activity 与上下文 v4 已实施，具体证据和限制见[本轮记录](reviews/2026-11-02-decision-rejection.md)。后续先独立选择并冻结替代或复核的最小切片，明确理由存储、版本、替代链 / 历史与已有 Ticket / Document 的影响，再经所有者确认后实现；不自动改写 accepted 或已建执行对象。
+2. **已完成切片转入有界观察**：上下文迁移补验、负责人及其并发 / 同名补验、优先级与项目内筛选均已交付，提交与验证映射见[当日收尾记录](reviews/2026-10-28-daily-closeout.md)。后续遇到实际 BFCache、原生选择控件键盘、团队使用或慢查询问题时定向复验；不重复全量测试冒充持续使用，也不把单 Project 合成查询计划当成生产容量。当前 schema 023 / Activity 11 / v4 包须 Go / Web / CLI 配套升级；真实实例操作仍单独授权。
 3. **试用准备与使用观察分别验收**：确认[支持说明](../trial-support.md)的非生产数据范围、目标环境、联系人与退出安排，以及[授权待决事项](../evaluation-authorization-decisions.md) E01～E12；技术准入和有效授权均满足后才开放外部受控试用。届时观察讨论—决策—工单—文档追溯、维护者干预和成员交接，独立团队持续使用与生产容量不由 Agent 浏览器测试替代。
 4. **保留阶段范围与停止线**：M1 文件、通知、审计运营、Attention Item、数据库最小权限和生产运维仍有未交付范围；本日实现不宣布整个 M1 或完整 Golden Path 退出。完整聊天、CRDT、Flutter 与通用插件平台仍服从原路线图门槛；更广迁移 profile 另行规划。
 5. **继续暂缓**：ADR-0043 独立操作者 U27、真实 Jenkins ADR-0035 / ADR-0037 B 与原生中文 IME 人工验收。恢复时另行明确资源和验收范围；真实 Jenkins 恢复后再接续 Ticket 与具体构建的交付来源和结果追溯。
@@ -85,14 +85,14 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - Document 正式页面原生中文 IME 与持续使用证据；正式富文本与 CRDT、受控脱敏和可移植导出仍未完成；
 - Jenkins 持续终态采集与业务实例配置、持久来源管理 / 安全审计、真实 checkout 采集与其余具体交付关系；
 - PostgreSQL 支持矩阵、schema 兼容窗口、forward repair、数据库权限拆分和容量基线；
-- Decision 拒绝、替代、复核与 Ticket 基础执行状态的交互；
+- Decision 替代、复核的独立历史、版本与 Ticket 执行状态交互；最小拒绝已按 ADR-0048 实施；
 - 安全 Audit、消息 / 事件 / receipt 的保留和受控脱敏边界；
 - `.nexus` 版本化格式、脱敏与导入映射；免费评估路径及授权签发 / 撤销规则；
 - 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
 
 ## 证据与历史
 
-[2026-10-28 收尾记录](reviews/2026-10-28-daily-closeout.md)保留最近功能批次的提交与验证映射；[本批规划记录](reviews/2026-11-01-planning-alignment.md)记录本次整理及检查。此前详细流水和完整证据目录见[原状态快照](history/planning-structure-2026-11-01.md#证据与历史)；[2026-09-03 快照](history/2026-09-03-status.md)继续保留原历史边界。
+[2026-11-02 Decision 拒绝实施记录](reviews/2026-11-02-decision-rejection.md)保留本轮交付与分层验收；[2026-11-02 Decision 设计记录](reviews/2026-11-02-decision-lifecycle-design.md)保留本轮源码核对、首片取舍与确认边界；[2026-10-28 收尾记录](reviews/2026-10-28-daily-closeout.md)保留最近功能批次的提交与验证映射；[规划整理记录](reviews/2026-11-01-planning-alignment.md)记录导航整理及检查。此前详细流水和完整证据目录见[原状态快照](history/planning-structure-2026-11-01.md#证据与历史)；[2026-09-03 快照](history/2026-09-03-status.md)继续保留原历史边界。
 
 以下旧标题作为历史跳转保留，不再提供当前排期：
 

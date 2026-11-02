@@ -57,7 +57,7 @@ describe("Project Decision API", () => {
         items: [{ ...decision, title }],
         next_cursor: null,
       })),
-      ...["rejected", "superseded", "open", null, 1].map((status) => ({
+      ...["superseded", "open", null, 1].map((status) => ({
         items: [{ ...decision, status }],
         next_cursor: null,
       })),

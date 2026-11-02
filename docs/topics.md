@@ -31,7 +31,7 @@
 | --- | --- | --- |
 | [讨论到决策 / 工单的传输：ADR-0019](adr/0019-session-scoped-thread-decision-ticket-transport.md) | M0.5 / M2；原允许路径、Session 与权限矩阵；Ticket 创建是跨主线交接 | 身份、工单 |
 | [Project 决策发现：ADR-0040](adr/0040-project-decision-discovery.md) | 原只读切片及[验收记录](status/reviews/2026-10-18-project-decision-discovery.md) | Project 导航、工单来源 |
-| Decision 拒绝、替代与复核 | [当前接续](status/current.md#接下来的事项)负责待设计范围；尚无新 Accepted 合同，不给未来切片预造编号或完成状态 | 已建 Ticket、Document、Activity 与上下文包兼容 |
+| [Decision 生命周期与最小拒绝：ADR-0048](adr/0048-decision-lifecycle-and-rejection.md) | 首片拒绝合同与 R01～R10，[实际证据](status/reviews/2026-11-02-decision-rejection.md)分别记录验证层次；替代 / 复核仅设计约束，当前动作见[接续](status/current.md#接下来的事项) | 已建 Ticket、Document、Activity 与上下文包兼容 |
 
 完整聊天、通知、复杂搜索等仍按路线图范围推进。Decision 生命周期先明确触发、理由、历史与兼容，再通过正式决策；本次归属整理不授予实现权。
 

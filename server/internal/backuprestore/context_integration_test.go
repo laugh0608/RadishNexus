@@ -100,6 +100,13 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if _, e = priorities.SetTicketPriority(ctx, invocation, goldenpath.TicketPriorityInput{TicketID: ticket.Ticket.ID, ClientOperationID: "priority-backup-set", BasePriorityRevision: 1, BaseStatusRevision: 1, Priority: "high", Confirmed: true}); e != nil {
 		t.Fatal(e)
 	}
+	rejected, e := core.CreateDecisionFromThread(ctx, invocation, goldenpath.CreateDecisionInput{ThreadID: thread.ID, ClientOperationID: "rejection-backup-proposal", Question: "Rejected source must survive"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = core.RejectDecision(ctx, invocation, goldenpath.RejectDecisionInput{DecisionID: rejected.Decision.ID, ClientOperationID: "rejection-backup-original", RejectionReason: "Retain rejected history in backup"}); e != nil {
+		t.Fatal(e)
+	}
 	bundle, e := exporter.Export(ctx, principal, session.Token, project.Object.ID)
 	if e != nil {
 		t.Fatal(e)
@@ -114,6 +121,22 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 		t.Fatal(e)
 	}
 	if _, e = importer.Export(ctx, actor, owner.Token, result.ProjectID); e != nil {
+		t.Fatal(e)
+	}
+	var importedThread string
+	for _, m := range plan.Mappings {
+		if m.Kind == "thread" && m.SourceID == thread.ID {
+			importedThread = m.TargetID
+		}
+	}
+	importedCore := goldenpath.NewService(goldenpostgres.New(imported), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	currentInvocation := goldenpath.Invocation{Principal: actor, SourceKind: "web", CorrelationID: "cor_restored_rejection"}
+	native, e := importedCore.CreateDecisionFromThread(ctx, currentInvocation, goldenpath.CreateDecisionInput{ThreadID: importedThread, ClientOperationID: "native-backup-proposal", Question: "Native rejection receipt must survive"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	rejectInput := goldenpath.RejectDecisionInput{DecisionID: native.Decision.ID, ClientOperationID: "native-backup-reject", RejectionReason: "Original native rejection"}
+	if _, e = importedCore.RejectDecision(ctx, currentInvocation, rejectInput); e != nil {
 		t.Fatal(e)
 	}
 	baseline := snapshotIncludedTables(t, ctx, imported)
@@ -147,6 +170,11 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	fresh, e := auth.Login(ctx, authn.LoginInput{Email: "context-backup@example.test", Password: password})
 	if e != nil {
 		t.Fatal(e)
+	}
+	restoredCore := goldenpath.NewService(goldenpostgres.New(restored), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	retried, e := restoredCore.RejectDecision(ctx, currentInvocation, rejectInput)
+	if e != nil || retried.Rejected || retried.Decision.RejectionReason != rejectInput.RejectionReason {
+		t.Fatal("restored rejection receipt", e)
 	}
 	restoredContext := goldenpath.NewContextService(goldenpostgres.NewContextStore(restored, schema))
 	status, e := restoredContext.Result(ctx, actor, fresh.Token, plan.OperationID)

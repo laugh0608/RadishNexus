@@ -619,7 +619,7 @@ func TestProjectDecisionDiscoveryPermissionsPaginationAndHTTP(t *testing.T) {
 	// D06: reserved statuses are corruption probes, never supported transitions.
 	// The corrupt record is outside page one: no global pre-scan is permitted.
 	corrupt := decisions[26]
-	for _, status := range []string{"rejected", "superseded"} {
+	for _, status := range []string{"superseded"} {
 		// Start from a formally accepted record to retain all reserved-state fields.
 		// superseded additionally requires an active replacement relation. This
 		// explicit anomaly fixture respects that database invariant; it does not
@@ -629,7 +629,7 @@ func TestProjectDecisionDiscoveryPermissionsPaginationAndHTTP(t *testing.T) {
 				(id,workspace_id,from_type,from_id,relation_type,to_type,to_id,assertion,origin,created_by_kind,created_by_id)
 				VALUES('lnk_decision_reserved_probe',$1,'decision',$2,'supersedes','decision',$3,'asserted','user','user',$4)`, owner.WorkspaceID, decisions[0].ID, corrupt.ID, owner.ID)
 		}
-		f.exec(t, `UPDATE radishnexus.decisions SET status=$1,rejection_reason='anomaly probe' WHERE id=$2`, status, corrupt.ID)
+		f.exec(t, `UPDATE radishnexus.decisions SET status=$1,rejection_reason=NULL WHERE id=$2`, status, corrupt.ID)
 		if w := f.get(t, h, "owner", project, "?limit=1"); w.Code != 200 {
 			t.Fatal("unreached corruption rejected first page", w.Code, w.Body.String())
 		}

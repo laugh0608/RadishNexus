@@ -49,6 +49,8 @@
 ## 状态与验证入口
 
 - [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
+- [2026-11-02 Decision 最小拒绝](status/reviews/2026-11-02-decision-rejection.md)：三状态读写、并发 / 重试、v4 历史与隔离浏览器验收。
+- [2026-11-02 Decision 生命周期设计](status/reviews/2026-11-02-decision-lifecycle-design.md)：最小拒绝 ADR 的原设计、源码核对与确认边界；后续实施见上条记录。
 - [2026-10-28 提交回顾与文档收尾](status/reviews/2026-10-28-daily-closeout.md)：四笔实现 / 修复的代码文档核对、验证边界与接续范围。
 - [2026-10-28 Ticket 优先级与筛选](status/reviews/2026-10-28-ticket-priority.md)：schema 022、Activity 10、v3 历史、筛选分页与运行验证。
 - [2026-10-28 Ticket 最小负责人](status/reviews/2026-10-28-ticket-assignee.md)：分配、候选、历史身份、v2 兼容与运行验证。

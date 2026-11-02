@@ -72,7 +72,7 @@ func Unpack(b Bundle) (Data, *Index, error) {
 	if len(Encode(m)) > MaxLineBytes {
 		return d, nil, invalid("manifest size")
 	}
-	if m.Format != Format || m.Version != Version || (m.Profile != Profile && m.Profile != ProfileV1 && m.Profile != ProfileV2) || !ValidID(m.PackageID, "pkg_") || !ValidID(m.WorkspaceID, "wrk_") || !ValidID(m.ProjectID, "prj_") || !validTime(m.CreatedAt) || !label(m.SourceVersion, 100) || len(m.Files) < len(metadataPaths) || len(m.Files) > MaxHistory+len(metadataPaths) || len(b.Files) != len(m.Files) {
+	if m.Format != Format || m.Version != Version || (m.Profile != Profile && m.Profile != ProfileV1 && m.Profile != ProfileV2 && m.Profile != ProfileV3) || !ValidID(m.PackageID, "pkg_") || !ValidID(m.WorkspaceID, "wrk_") || !ValidID(m.ProjectID, "prj_") || !validTime(m.CreatedAt) || !label(m.SourceVersion, 100) || len(m.Files) < len(metadataPaths) || len(m.Files) > MaxHistory+len(metadataPaths) || len(b.Files) != len(m.Files) {
 		return d, nil, invalid("manifest")
 	}
 	files := map[string][]byte{}
@@ -132,6 +132,28 @@ func Unpack(b Bundle) (Data, *Index, error) {
 	for _, name := range metadataPaths {
 		if !seen[name] {
 			return d, nil, invalid("missing file")
+		}
+	}
+	if m.Profile != Profile {
+		for i, o := range d.Objects {
+			if o.Type != "decision" {
+				continue
+			}
+			var fields map[string]json.RawMessage
+			if Decode(o.Data, &fields) != nil || len(fields) != 10 || fields["rejection_reason"] != nil {
+				return d, nil, invalid("legacy Decision fields")
+			}
+			var status string
+			if Decode(fields["status"], &status) != nil || (status != "proposed" && status != "accepted") {
+				return d, nil, invalid("legacy Decision fields")
+			}
+			fields["rejection_reason"] = json.RawMessage("null")
+			d.Objects[i].Data = Encode(fields)
+		}
+		for _, h := range d.History {
+			if h.Type == "decision.rejected" {
+				return d, nil, invalid("legacy rejection history")
+			}
 		}
 	}
 	if m.Profile == ProfileV1 || m.Profile == ProfileV2 {

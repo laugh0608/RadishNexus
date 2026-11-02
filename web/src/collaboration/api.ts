@@ -10,7 +10,7 @@ import { csrfTokenFromCookie } from "../auth/api";
 
 export type CollaborationEntityType = "thread" | "decision" | "ticket";
 export type ThreadVisibility = "project" | "restricted";
-export type DecisionStatus = "proposed" | "accepted";
+export type DecisionStatus = "proposed" | "accepted" | "rejected";
 
 export interface EntityRef<T extends string = string> {
   type: T;
@@ -45,6 +45,7 @@ export interface DecisionCurrent {
   status: DecisionStatus;
   outcome: string | null;
   rationale: string | null;
+  rejectionReason: string | null;
   proposer: UserActor;
   deciders: readonly UserActor[];
   decidedAt: string | null;
@@ -120,8 +121,11 @@ export type CollaborationTimelineItem = TimelineBase &
       }
     | {
         activityType:
-          "decision.proposed" | "decision.accepted" | "ticket.created";
-        status: "proposed" | "accepted" | "open";
+          | "decision.proposed"
+          | "decision.accepted"
+          | "decision.rejected"
+          | "ticket.created";
+        status: "proposed" | "accepted" | "rejected" | "open";
       }
     | {
         activityType: "ticket.component-linked" | "ticket.component-unlinked";
@@ -133,7 +137,19 @@ export interface CollaborationView<
   T extends CollaborationCurrent = CollaborationCurrent,
 > {
   current: T;
-  capabilities?: { changeStatus: boolean };
+  capabilities?:
+    | {
+        changeStatus: boolean;
+        accept?: never;
+        reject?: never;
+        createTicket?: never;
+      }
+    | {
+        accept: boolean;
+        reject: boolean;
+        createTicket: boolean;
+        changeStatus?: never;
+      };
   relations: readonly CollaborationRelation[];
   timeline: readonly CollaborationTimelineItem[];
 }
@@ -153,6 +169,12 @@ export interface AcceptDecisionInput {
   clientOperationID: string;
   outcome: string;
   rationale: string;
+  confirmed: true;
+}
+
+export interface RejectDecisionInput {
+  clientOperationID: string;
+  rejectionReason: string;
   confirmed: true;
 }
 
@@ -198,6 +220,12 @@ export interface CollaborationClient {
     input: ProposeDecisionInput,
     signal?: AbortSignal,
   ): Promise<ProposeDecisionOutcome>;
+  rejectDecision(
+    workspaceID: string,
+    decisionID: string,
+    input: RejectDecisionInput,
+    signal?: AbortSignal,
+  ): Promise<DecisionCurrent>;
   acceptDecision(
     workspaceID: string,
     decisionID: string,
@@ -263,6 +291,7 @@ export const browserCollaborationClient: CollaborationClient = {
   loadView,
   proposeDecision,
   acceptDecision,
+  rejectDecision,
   createTicket,
 };
 
@@ -392,6 +421,55 @@ async function proposeDecision(
   } catch (error) {
     throw contractError(
       "服务返回的 Decision 提案不符合当前契约，请稍后重试。",
+      response.status,
+      error,
+    );
+  }
+}
+
+async function rejectDecision(
+  workspaceID: string,
+  decisionID: string,
+  input: RejectDecisionInput,
+  signal?: AbortSignal,
+): Promise<DecisionCurrent> {
+  requireLocation(workspaceID, "decision", decisionID);
+  if (
+    !validOperationID(input.clientOperationID) ||
+    input.confirmed !== true ||
+    !validRejectionReason(input.rejectionReason)
+  )
+    throw new CollaborationRequestError("请明确确认有效的拒绝理由。", {
+      code: "invalid",
+      status: 400,
+    });
+  const response = await collaborationFetch(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/decisions/${encodeURIComponent(decisionID)}/rejection`,
+    writeRequest(
+      {
+        client_operation_id: input.clientOperationID,
+        rejection_reason: input.rejectionReason,
+        confirmed: true,
+      },
+      signal,
+    ),
+  );
+  if (response.status !== 200)
+    throw contractError("拒绝服务返回了意外状态。", response.status);
+  const payload = await responseJSON(response, "Decision 拒绝");
+  try {
+    const envelope = exactRecord(payload, "response", ["data"]);
+    const decision = parseDecisionCurrent(envelope.data, "response.data");
+    if (
+      decision.ref.id !== decisionID ||
+      decision.status !== "rejected" ||
+      decision.rejectionReason !== trimRejectionReason(input.rejectionReason)
+    )
+      throw new TypeError("rejected Decision does not match request");
+    return decision;
+  } catch (error) {
+    throw contractError(
+      "服务返回的拒绝结果不符合当前契约。",
       response.status,
       error,
     );
@@ -567,7 +645,7 @@ export function parseCollaborationView(
     "current",
     "relations",
     "timeline",
-    ...(expectedType === "ticket" ? ["capabilities"] : []),
+    ...(expectedType !== "thread" ? ["capabilities"] : []),
   ]);
   const current = parseCurrent(data.current, expectedType);
   if (current.ref.id !== expectedID) {
@@ -596,6 +674,33 @@ export function parseCollaborationView(
       relations,
       timeline,
       capabilities: { changeStatus: cap.change_status },
+    };
+  }
+  if (expectedType === "decision") {
+    const cap = exactRecord(data.capabilities, "response.data.capabilities", [
+      "accept",
+      "reject",
+      "create_ticket",
+    ]);
+    if (
+      typeof cap.accept !== "boolean" ||
+      typeof cap.reject !== "boolean" ||
+      typeof cap.create_ticket !== "boolean" ||
+      cap.accept !== cap.reject ||
+      !("status" in current) ||
+      ((cap.accept || cap.reject) && current.status !== "proposed") ||
+      (cap.create_ticket && current.status !== "accepted")
+    )
+      throw new TypeError("Invalid Decision capability");
+    return {
+      current,
+      relations,
+      timeline,
+      capabilities: {
+        accept: cap.accept,
+        reject: cap.reject,
+        createTicket: cap.create_ticket,
+      },
     };
   }
   return { current, relations, timeline };
@@ -657,6 +762,7 @@ function parseDecisionCurrent(value: unknown, path: string): DecisionCurrent {
     "status",
     "outcome",
     "rationale",
+    "rejection_reason",
     "proposer",
     "deciders",
     "decided_at",
@@ -664,25 +770,38 @@ function parseDecisionCurrent(value: unknown, path: string): DecisionCurrent {
     "updated_at",
   ]);
   const status = string(current.status, `${path}.status`);
-  if (status !== "proposed" && status !== "accepted") {
+  if (status !== "proposed" && status !== "accepted" && status !== "rejected") {
     throw new TypeError(`${path}.status is invalid`);
   }
   const outcome = nullableText(current.outcome, `${path}.outcome`);
   const rationale = nullableText(current.rationale, `${path}.rationale`);
+  const rejectionReason =
+    current.rejection_reason === null
+      ? null
+      : string(current.rejection_reason, `${path}.rejection_reason`);
   const deciders = array(current.deciders, `${path}.deciders`).map(
     (actor, index) => parseActor(actor, `${path}.deciders[${index}]`),
   );
   const decidedAt = nullableTimestamp(current.decided_at, `${path}.decided_at`);
   if (
     (status === "proposed" &&
-      (outcome !== null ||
+      (rejectionReason !== null ||
+        outcome !== null ||
         rationale !== null ||
         deciders.length !== 0 ||
         decidedAt !== null)) ||
     (status === "accepted" &&
-      (outcome === null ||
+      (rejectionReason !== null ||
+        outcome === null ||
         rationale === null ||
         deciders.length === 0 ||
+        decidedAt === null)) ||
+    (status === "rejected" &&
+      (outcome !== null ||
+        rationale !== null ||
+        rejectionReason === null ||
+        !validRejectionReason(rejectionReason) ||
+        deciders.length !== 1 ||
         decidedAt === null))
   ) {
     throw new TypeError(`${path} acceptance fields do not match status`);
@@ -694,6 +813,7 @@ function parseDecisionCurrent(value: unknown, path: string): DecisionCurrent {
     status,
     outcome,
     rationale,
+    rejectionReason,
     proposer: parseActor(current.proposer, `${path}.proposer`),
     deciders,
     decidedAt,
@@ -994,7 +1114,8 @@ function parseTimelineItem(
   const valid =
     expectedType === "decision"
       ? (activityType === "decision.proposed" && status === "proposed") ||
-        (activityType === "decision.accepted" && status === "accepted")
+        (activityType === "decision.accepted" && status === "accepted") ||
+        (activityType === "decision.rejected" && status === "rejected")
       : expectedType === "ticket"
         ? activityType === "ticket.created" && status === "open"
         : false;
@@ -1005,7 +1126,10 @@ function parseTimelineItem(
     ...provenance,
     id: scopedID(item.id, `${path}.id`, "evt_"),
     activityType: activityType as
-      "decision.proposed" | "decision.accepted" | "ticket.created",
+      | "decision.proposed"
+      | "decision.accepted"
+      | "decision.rejected"
+      | "ticket.created",
     actor: parseActor(item.actor, `${path}.actor`),
     occurredAt: timestamp(item.occurred_at, `${path}.occurred_at`),
     status: status as "proposed" | "accepted" | "open",
@@ -1083,7 +1207,8 @@ function validateViewShape(
     timeline.some(
       (item) =>
         item.activityType !== "decision.proposed" &&
-        item.activityType !== "decision.accepted",
+        item.activityType !== "decision.accepted" &&
+        item.activityType !== "decision.rejected",
     )
   ) {
     throw new TypeError("Decision Timeline contains an unexpected item");
@@ -1325,12 +1450,26 @@ function validText(value: string): boolean {
   return value.trim() !== "" && !value.includes("\0") && wellFormed(value);
 }
 
+// Match Go strings.TrimSpace, including U+0085 and excluding U+FEFF.
+function trimRejectionReason(value: string): string {
+  return value.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "");
+}
+
+export function validRejectionReason(value: string): boolean {
+  return (
+    trimRejectionReason(value) !== "" &&
+    !value.includes("\0") &&
+    wellFormed(value) &&
+    new TextEncoder().encode(value).length <= 32768
+  );
+}
+
 function wellFormed(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index);
     if (code >= 0xd800 && code <= 0xdbff) {
       const next = value.charCodeAt(index + 1);
-      if (next < 0xdc00 || next > 0xdfff) {
+      if (!(next >= 0xdc00 && next <= 0xdfff)) {
         return false;
       }
       index += 1;

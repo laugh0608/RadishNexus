@@ -145,7 +145,13 @@ function ProjectDecisions({
                   >
                     {decision.title}
                   </a>
-                  <p>{decision.status === "proposed" ? "待确认" : "已确认"}</p>
+                  <p>
+                    {decision.status === "proposed"
+                      ? "待确认"
+                      : decision.status === "accepted"
+                        ? "已确认"
+                        : "已拒绝"}
+                  </p>
                 </li>
               ))}
             </ul>

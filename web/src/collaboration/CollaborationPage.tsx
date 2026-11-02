@@ -1,3 +1,4 @@
+import { useDecisionActions } from "./DecisionActions";
 import { useTicketPriorityActions } from "./TicketPriorityActions";
 import { ticketPriorityLabels } from "./ticket-priority";
 import { useTicketAssignmentActions } from "./TicketAssignmentActions";
@@ -56,12 +57,6 @@ interface PendingProposal {
   question: string;
 }
 
-interface PendingAcceptance {
-  id: string;
-  outcome: string;
-  rationale: string;
-}
-
 interface PendingTicket {
   id: string;
   title: string;
@@ -89,14 +84,9 @@ function CollaborationPageContent({
   const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState<PageState>({ status: "loading" });
   const [question, setQuestion] = useState("");
-  const [outcome, setOutcome] = useState("");
-  const [rationale, setRationale] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
   const [ticketTitle, setTicketTitle] = useState("");
   const [pendingProposal, setPendingProposal] =
     useState<PendingProposal | null>(null);
-  const [pendingAcceptance, setPendingAcceptance] =
-    useState<PendingAcceptance | null>(null);
   const [pendingTicket, setPendingTicket] = useState<PendingTicket | null>(
     null,
   );
@@ -168,6 +158,22 @@ function CollaborationPageContent({
       window.removeEventListener("pagehide", relationChanged);
     };
   }, [relationChanged]);
+  const decisionActions = useDecisionActions({
+    workspaceID,
+    decisionID: entityID,
+    current:
+      state.status === "ready" && isDecisionCurrent(state.view.current)
+        ? state.view.current
+        : undefined,
+    canDecide:
+      state.status === "ready" && state.view.capabilities?.accept === true,
+    unavailable: state.status === "error",
+    client,
+    createOperationID,
+    onRefresh: relationChanged,
+    onUnavailable: relationUnavailable,
+    onSessionExpired,
+  });
   const ticketStatusActions = useTicketStatusActions({
     workspaceID,
     ticketID: entityID,
@@ -216,12 +222,8 @@ function CollaborationPageContent({
     }
     if (error instanceof CollaborationRequestError && error.status === 404) {
       setQuestion("");
-      setOutcome("");
-      setRationale("");
-      setConfirmed(false);
       setTicketTitle("");
       setPendingProposal(null);
-      setPendingAcceptance(null);
       setPendingTicket(null);
       setProposalResult(null);
       setTicketResult(null);
@@ -262,60 +264,6 @@ function CollaborationPageContent({
         result.created
           ? "Proposed Decision 已创建，并保留当前 Thread 作为 evidence。"
           : "已确认此前重试创建的同一 Decision。",
-      );
-    } catch (error) {
-      if (!revokeVisibleState(error)) {
-        setActionError(collaborationError(error));
-      }
-    } finally {
-      setSubmitting(null);
-    }
-  };
-
-  const acceptDecision = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (entityType !== "decision" || state.status !== "ready" || !confirmed) {
-      return;
-    }
-    setSubmitting("acceptance");
-    setActionError(null);
-    setActionNotice(null);
-    let operation = pendingAcceptance;
-    if (
-      operation === null ||
-      operation.outcome !== outcome ||
-      operation.rationale !== rationale
-    ) {
-      try {
-        operation = { id: createOperationID(), outcome, rationale };
-        setPendingAcceptance(operation);
-      } catch (error) {
-        setActionError(collaborationError(error));
-        setSubmitting(null);
-        return;
-      }
-    }
-    try {
-      const accepted = await client.acceptDecision(workspaceID, entityID, {
-        clientOperationID: operation.id,
-        outcome: operation.outcome,
-        rationale: operation.rationale,
-        confirmed: true,
-      });
-      setState((current) =>
-        current.status === "ready"
-          ? {
-              status: "ready",
-              view: { ...current.view, current: accepted },
-            }
-          : current,
-      );
-      setOutcome("");
-      setRationale("");
-      setConfirmed(false);
-      setPendingAcceptance(null);
-      setActionNotice(
-        "Decision 已由当前用户明确接受；服务端仍按当前 evidence 权限完成确认。",
       );
     } catch (error) {
       if (!revokeVisibleState(error)) {
@@ -568,38 +516,21 @@ function CollaborationPageContent({
               </button>
             </form>
           ) : isDecisionCurrent(current) ? (
-            <DecisionActions
-              confirmed={confirmed}
-              decision={current}
-              outcome={outcome}
-              rationale={rationale}
-              submitting={submitting}
-              ticketTitle={ticketTitle}
-              onAccept={acceptDecision}
-              onCreateTicket={createTicket}
-              onConfirmedChange={setConfirmed}
-              onOutcomeChange={(value) => {
-                setOutcome(value);
-                setActionNotice(null);
-                if (pendingAcceptance?.outcome !== value) {
-                  setPendingAcceptance(null);
-                }
-              }}
-              onRationaleChange={(value) => {
-                setRationale(value);
-                setActionNotice(null);
-                if (pendingAcceptance?.rationale !== value) {
-                  setPendingAcceptance(null);
-                }
-              }}
-              onTicketTitleChange={(value) => {
-                setTicketTitle(value);
-                setActionNotice(null);
-                if (pendingTicket?.title !== value) {
-                  setPendingTicket(null);
-                }
-              }}
-            />
+            <>
+              {decisionActions}
+              {current.status === "accepted" && (
+                <DecisionActions
+                  decision={current}
+                  ticketTitle={ticketTitle}
+                  submitting={submitting}
+                  onCreateTicket={createTicket}
+                  onTicketTitleChange={setTicketTitle}
+                  canCreateTicket={
+                    state.view.capabilities?.createTicket === true
+                  }
+                />
+              )}
+            </>
           ) : (
             <div className="collaboration-complete">
               <strong>Ticket 已进入执行上下文</strong>
@@ -664,79 +595,19 @@ function CollaborationPageContent({
 
 function DecisionActions({
   decision,
-  outcome,
-  rationale,
-  confirmed,
   ticketTitle,
   submitting,
-  onAccept,
   onCreateTicket,
-  onOutcomeChange,
-  onRationaleChange,
-  onConfirmedChange,
   onTicketTitleChange,
+  canCreateTicket,
 }: {
   decision: DecisionCurrent;
-  outcome: string;
-  rationale: string;
-  confirmed: boolean;
   ticketTitle: string;
   submitting: "proposal" | "acceptance" | "ticket" | null;
-  onAccept: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   onCreateTicket: (event: FormEvent<HTMLFormElement>) => Promise<void>;
-  onOutcomeChange: (value: string) => void;
-  onRationaleChange: (value: string) => void;
-  onConfirmedChange: (value: boolean) => void;
   onTicketTitleChange: (value: string) => void;
+  canCreateTicket: boolean;
 }) {
-  if (decision.status === "proposed") {
-    return (
-      <form onSubmit={(event) => void onAccept(event)}>
-        <label>
-          <span>明确结论</span>
-          <textarea
-            disabled={submitting !== null}
-            onChange={(event) => onOutcomeChange(event.target.value)}
-            required
-            rows={4}
-            value={outcome}
-          />
-        </label>
-        <label>
-          <span>理由</span>
-          <textarea
-            disabled={submitting !== null}
-            onChange={(event) => onRationaleChange(event.target.value)}
-            required
-            rows={5}
-            value={rationale}
-          />
-        </label>
-        <label className="confirmation-control">
-          <input
-            checked={confirmed}
-            disabled={submitting !== null}
-            onChange={(event) => onConfirmedChange(event.target.checked)}
-            required
-            type="checkbox"
-          />
-          <span>我正在以当前用户身份明确接受这个 Decision。</span>
-        </label>
-        <button
-          className="primary-button"
-          disabled={
-            submitting !== null ||
-            outcome.trim() === "" ||
-            rationale.trim() === "" ||
-            !confirmed
-          }
-          type="submit"
-        >
-          {submitting === "acceptance" ? "正在确认…" : "接受 Decision"}
-        </button>
-      </form>
-    );
-  }
   return (
     <>
       <div className="accepted-decision">
@@ -744,25 +615,27 @@ function DecisionActions({
         <strong>{decision.outcome}</strong>
         <p>{decision.rationale}</p>
       </div>
-      <form onSubmit={(event) => void onCreateTicket(event)}>
-        <label>
-          <span>Ticket 标题</span>
-          <input
-            disabled={submitting !== null}
-            onChange={(event) => onTicketTitleChange(event.target.value)}
-            placeholder="把已接受结论转成可执行工作"
-            required
-            value={ticketTitle}
-          />
-        </label>
-        <button
-          className="primary-button"
-          disabled={submitting !== null || ticketTitle.trim() === ""}
-          type="submit"
-        >
-          {submitting === "ticket" ? "正在创建…" : "创建 Ticket"}
-        </button>
-      </form>
+      {canCreateTicket && (
+        <form onSubmit={(event) => void onCreateTicket(event)}>
+          <label>
+            <span>Ticket 标题</span>
+            <input
+              disabled={submitting !== null}
+              onChange={(event) => onTicketTitleChange(event.target.value)}
+              placeholder="把已接受结论转成可执行工作"
+              required
+              value={ticketTitle}
+            />
+          </label>
+          <button
+            className="primary-button"
+            disabled={submitting !== null || ticketTitle.trim() === ""}
+            type="submit"
+          >
+            {submitting === "ticket" ? "正在创建…" : "创建 Ticket"}
+          </button>
+        </form>
+      )}
     </>
   );
 }
@@ -977,7 +850,9 @@ function currentSummary(current: CollaborationView["current"]): string {
   if (isDecisionCurrent(current)) {
     return current.status === "proposed"
       ? "这是待人工确认的 Decision 草案；自动摘要不能替代接受动作。"
-      : "这个 Decision 已由明确用户确认，可继续形成实施 Ticket。";
+      : current.status === "accepted"
+        ? "这个 Decision 已由明确用户确认，可继续形成实施 Ticket。"
+        : "这个提案已被明确拒绝；理由、决定主体和原始来源保留。";
   }
   return "这是从 Accepted Decision 形成的最小执行对象，来源通过 implements 关系保留。";
 }

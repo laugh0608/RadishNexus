@@ -9,9 +9,10 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
 
-const ActivityProjectionVersion = 10
+const ActivityProjectionVersion = 11
 
 type CurrentProjection struct {
+	RejectionReason    string
 	Ref                entityref.Ref
 	GoverningProjectID string
 	Title              string
@@ -63,11 +64,18 @@ type TicketCapabilities struct {
 	ChangeStatus bool
 }
 
+type DecisionCapabilities struct {
+	Accept       bool `json:"accept"`
+	Reject       bool `json:"reject"`
+	CreateTicket bool `json:"create_ticket"`
+}
+
 type NexusView struct {
-	TicketCapabilities *TicketCapabilities
-	Current            CurrentProjection
-	Relations          []RelationProjection
-	Timeline           []TimelineItem
+	DecisionCapabilities *DecisionCapabilities
+	TicketCapabilities   *TicketCapabilities
+	Current              CurrentProjection
+	Relations            []RelationProjection
+	Timeline             []TimelineItem
 }
 
 func (service *Service) GetNexusView(

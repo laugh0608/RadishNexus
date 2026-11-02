@@ -15,7 +15,8 @@ const (
 	Format           = "radishnexus.context"
 	ProfileV1        = "project-collaboration-v1"
 	ProfileV2        = "project-collaboration-v2"
-	Profile          = "project-collaboration-v3"
+	ProfileV3        = "project-collaboration-v3"
+	Profile          = "project-collaboration-v4"
 	Version          = 1
 	MaxBytes         = 64 << 20
 	MaxObjects       = 10000
@@ -80,16 +81,17 @@ type Thread struct {
 	ChannelID  *string `json:"channel_id"`
 }
 type Decision struct {
-	Question     string          `json:"question"`
-	Outcome      *string         `json:"outcome"`
-	Rationale    *string         `json:"rationale"`
-	Status       string          `json:"status"`
-	Proposer     string          `json:"proposer"`
-	Deciders     []string        `json:"deciders"`
-	DecidedAt    *time.Time      `json:"decided_at"`
-	Alternatives json.RawMessage `json:"alternatives"`
-	Consequences *string         `json:"consequences"`
-	ReviewAt     *time.Time      `json:"review_at"`
+	RejectionReason *string         `json:"rejection_reason"`
+	Question        string          `json:"question"`
+	Outcome         *string         `json:"outcome"`
+	Rationale       *string         `json:"rationale"`
+	Status          string          `json:"status"`
+	Proposer        string          `json:"proposer"`
+	Deciders        []string        `json:"deciders"`
+	DecidedAt       *time.Time      `json:"decided_at"`
+	Alternatives    json.RawMessage `json:"alternatives"`
+	Consequences    *string         `json:"consequences"`
+	ReviewAt        *time.Time      `json:"review_at"`
 }
 type Assignment struct {
 	FromUserID   *string `json:"from_user_id"`

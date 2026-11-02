@@ -619,6 +619,7 @@ function testCollaborationClient(
     loadView: vi.fn().mockResolvedValue(threadView),
     proposeDecision: vi.fn(),
     acceptDecision: vi.fn(),
+    rejectDecision: vi.fn(),
     createTicket: vi.fn(),
     ...overrides,
   };

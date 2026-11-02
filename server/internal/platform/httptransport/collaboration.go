@@ -19,6 +19,7 @@ const (
 	threadViewPattern         = "/api/v1/workspaces/{workspace_id}/threads/{thread_id}/nexus-view"
 	threadDecisionsPattern    = "/api/v1/workspaces/{workspace_id}/threads/{thread_id}/decisions"
 	decisionViewPattern       = "/api/v1/workspaces/{workspace_id}/decisions/{decision_id}/nexus-view"
+	decisionRejectionPattern  = "/api/v1/workspaces/{workspace_id}/decisions/{decision_id}/rejection"
 	decisionAcceptancePattern = "/api/v1/workspaces/{workspace_id}/decisions/{decision_id}/acceptance"
 	decisionTicketsPattern    = "/api/v1/workspaces/{workspace_id}/decisions/{decision_id}/tickets"
 	ticketViewPattern         = "/api/v1/workspaces/{workspace_id}/tickets/{ticket_id}/nexus-view"
@@ -32,6 +33,7 @@ type CollaborationApplication interface {
 	GetNexusView(context.Context, authz.Principal, entityref.Ref) (goldenpath.NexusView, error)
 	CreateDecisionFromThread(context.Context, goldenpath.Invocation, goldenpath.CreateDecisionInput) (goldenpath.CreateDecisionResult, error)
 	AcceptDecision(context.Context, goldenpath.Invocation, goldenpath.AcceptDecisionInput) (goldenpath.AcceptDecisionResult, error)
+	RejectDecision(context.Context, goldenpath.Invocation, goldenpath.RejectDecisionInput) (goldenpath.RejectDecisionResult, error)
 	CreateTicketFromDecision(context.Context, goldenpath.Invocation, goldenpath.CreateTicketInput) (goldenpath.CreateTicketResult, error)
 }
 
@@ -68,7 +70,7 @@ type ticketCapabilitiesDTO struct {
 }
 
 type collaborationViewDTO struct {
-	Capabilities *ticketCapabilitiesDTO     `json:"capabilities,omitempty"`
+	Capabilities any                        `json:"capabilities,omitempty"`
 	Current      any                        `json:"current"`
 	Relations    []collaborationRelationDTO `json:"relations"`
 	Timeline     []collaborationTimelineDTO `json:"timeline"`
@@ -86,17 +88,18 @@ type threadCurrentDTO struct {
 }
 
 type decisionCurrentDTO struct {
-	Ref       entityRefDTO         `json:"ref"`
-	Project   entityRefDTO         `json:"project"`
-	Question  string               `json:"question"`
-	Status    string               `json:"status"`
-	Outcome   *string              `json:"outcome"`
-	Rationale *string              `json:"rationale"`
-	Proposer  deploymentActorDTO   `json:"proposer"`
-	Deciders  []deploymentActorDTO `json:"deciders"`
-	DecidedAt *string              `json:"decided_at"`
-	CreatedAt string               `json:"created_at"`
-	UpdatedAt string               `json:"updated_at"`
+	RejectionReason *string              `json:"rejection_reason"`
+	Ref             entityRefDTO         `json:"ref"`
+	Project         entityRefDTO         `json:"project"`
+	Question        string               `json:"question"`
+	Status          string               `json:"status"`
+	Outcome         *string              `json:"outcome"`
+	Rationale       *string              `json:"rationale"`
+	Proposer        deploymentActorDTO   `json:"proposer"`
+	Deciders        []deploymentActorDTO `json:"deciders"`
+	DecidedAt       *string              `json:"decided_at"`
+	CreatedAt       string               `json:"created_at"`
+	UpdatedAt       string               `json:"updated_at"`
 }
 
 type ticketCurrentDTO struct {
@@ -178,6 +181,7 @@ func NewCollaborationHandler(
 	mux.HandleFunc("POST "+threadDecisionsPattern, handler.proposeDecision)
 	mux.HandleFunc("GET "+decisionViewPattern, handler.getDecision)
 	mux.HandleFunc("POST "+decisionAcceptancePattern, handler.acceptDecision)
+	mux.HandleFunc("POST "+decisionRejectionPattern, handler.rejectDecision)
 	mux.HandleFunc("POST "+decisionTicketsPattern, handler.createTicket)
 	mux.HandleFunc("GET "+ticketViewPattern, handler.getTicket)
 	for _, pattern := range []string{
@@ -185,6 +189,7 @@ func NewCollaborationHandler(
 		threadDecisionsPattern,
 		decisionViewPattern,
 		decisionAcceptancePattern,
+		decisionRejectionPattern,
 		decisionTicketsPattern,
 		ticketViewPattern,
 	} {
@@ -455,6 +460,15 @@ func publicCollaborationView(target entityref.Ref, view goldenpath.NexusView) (c
 	} else if view.TicketCapabilities != nil || view.Current.StatusRevision != 0 {
 		return collaborationViewDTO{}, errors.New("unexpected Ticket state fields")
 	}
+	if target.Type == "decision" {
+		c := view.DecisionCapabilities
+		if c == nil || c.Accept != c.Reject || ((c.Accept || c.Reject) && view.Current.Status != "proposed") || (c.CreateTicket && view.Current.Status != "accepted") {
+			return collaborationViewDTO{}, errors.New("invalid Decision capabilities")
+		}
+		dto.Capabilities = c
+	} else if view.DecisionCapabilities != nil {
+		return collaborationViewDTO{}, errors.New("unexpected Decision capabilities")
+	}
 	switch target.Type {
 	case "thread":
 		current, err := publicThreadCurrent(view.Current, sources, view.Timeline)
@@ -489,7 +503,7 @@ func publicThreadCurrent(
 		(current.Visibility != "project" && current.Visibility != "restricted") ||
 		current.CreatedBy.Kind != "user" || !validScopedID(current.CreatedBy.ID, "usr_") ||
 		current.CreatedAt.IsZero() || current.UpdatedAt.IsZero() || current.UpdatedAt.Before(current.CreatedAt) ||
-		current.Status != "" || current.Outcome != "" || current.Rationale != "" ||
+		current.Status != "" || current.Outcome != "" || current.Rationale != "" || current.RejectionReason != "" ||
 		current.ProposerID != "" || len(current.DeciderIDs) != 0 || current.DecidedAt != nil ||
 		len(timeline) != 0 {
 		return threadCurrentDTO{}, errors.New("invalid Thread Nexus View Current projection")
@@ -542,7 +556,7 @@ func publicDecisionProjection(
 		return decisionCurrentDTO{}, errors.New("Decision requires a derived-from Thread relation")
 	}
 	for _, item := range timeline {
-		if item.ActivityType != "decision.proposed" && item.ActivityType != "decision.accepted" {
+		if item.ActivityType != "decision.proposed" && item.ActivityType != "decision.accepted" && item.ActivityType != "decision.rejected" {
 			return decisionCurrentDTO{}, errors.New("unexpected Decision Timeline item")
 		}
 	}
@@ -553,6 +567,7 @@ func publicDecisionProjection(
 		Question:           current.Title,
 		Outcome:            current.Outcome,
 		Rationale:          current.Rationale,
+		RejectionReason:    current.RejectionReason,
 		Status:             current.Status,
 		ProposerID:         current.ProposerID,
 		DeciderIDs:         current.DeciderIDs,
@@ -568,7 +583,7 @@ func publicTicketProjection(
 	timeline []goldenpath.TimelineItem,
 ) (ticketCurrentDTO, error) {
 	if current.Visibility != "" || current.CreatedBy.Kind != "user" || current.OriginChannel != nil || current.Outcome != "" ||
-		current.Rationale != "" || current.ProposerID != "" || len(current.DeciderIDs) != 0 ||
+		current.Rationale != "" || current.RejectionReason != "" || current.ProposerID != "" || len(current.DeciderIDs) != 0 ||
 		current.DecidedAt != nil || current.Component != nil || current.Environment != nil ||
 		current.CIRun != nil || current.StartedAt != nil || current.CompletedAt != nil ||
 		current.RecordedAt != nil || len(relations) != 1 ||
@@ -619,19 +634,28 @@ func publicDecision(decision goldenpath.Decision) (decisionCurrentDTO, error) {
 	}
 	switch decision.Status {
 	case "proposed":
-		if decision.Outcome != "" || decision.Rationale != "" || len(decision.DeciderIDs) != 0 || decision.DecidedAt != nil {
+		if decision.RejectionReason != "" || decision.Outcome != "" || decision.Rationale != "" || len(decision.DeciderIDs) != 0 || decision.DecidedAt != nil {
 			return decisionCurrentDTO{}, errors.New("proposed Decision has accepted fields")
 		}
-	case "accepted":
-		if decision.Outcome == "" || decision.Rationale == "" || len(decision.DeciderIDs) == 0 || decision.DecidedAt == nil {
+	case "accepted", "rejected":
+		if len(decision.DeciderIDs) == 0 || decision.DecidedAt == nil || decision.DecidedAt.Before(decision.CreatedAt) || !decision.DecidedAt.Equal(decision.UpdatedAt) {
 			return decisionCurrentDTO{}, errors.New("accepted Decision is missing confirmation fields")
 		}
-		outcome := decision.Outcome
-		rationale := decision.Rationale
 		decidedAt := publicTime(*decision.DecidedAt)
-		dto.Outcome = &outcome
-		dto.Rationale = &rationale
 		dto.DecidedAt = &decidedAt
+		if decision.Status == "accepted" {
+			if decision.Outcome == "" || decision.Rationale == "" || decision.RejectionReason != "" {
+				return decisionCurrentDTO{}, errors.New("invalid accepted Decision fields")
+			}
+			outcome, rationale := decision.Outcome, decision.Rationale
+			dto.Outcome, dto.Rationale = &outcome, &rationale
+		} else {
+			if decision.Outcome != "" || decision.Rationale != "" || len(decision.DeciderIDs) != 1 || !goldenpath.ValidRejectionReason(decision.RejectionReason) {
+				return decisionCurrentDTO{}, errors.New("invalid rejected Decision fields")
+			}
+			reason := decision.RejectionReason
+			dto.RejectionReason = &reason
+		}
 		for _, id := range decision.DeciderIDs {
 			if !validScopedID(id, "usr_") {
 				return decisionCurrentDTO{}, errors.New("invalid Decision decider")
@@ -806,6 +830,8 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 			expectedStatus, subjectType = "proposed", "thread"
 		case "decision.accepted":
 			expectedStatus = "accepted"
+		case "decision.rejected":
+			expectedStatus = "rejected"
 		case "ticket.created":
 			expectedStatus, subjectType = "open", "decision"
 		case "ticket.component-linked":

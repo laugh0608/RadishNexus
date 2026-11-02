@@ -74,7 +74,7 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
  COALESCE(h.original_time,e.occurred_at),COALESCE(h.original_facts,e.payload),h.event_id IS NOT NULL
  FROM radishnexus.domain_events e LEFT JOIN radishnexus.context_import_history h ON h.workspace_id=e.workspace_id AND h.event_id=e.event_id
  WHERE COALESCE(h.original_type,e.event_type) IN (
- 'decision.proposed','decision.accepted','ticket.created','ticket.status-changed','ticket.assignee-changed','ticket.priority-changed',
+ 'decision.proposed','decision.accepted','decision.rejected','ticket.created','ticket.status-changed','ticket.assignee-changed','ticket.priority-changed',
  'ci-run.recorded','deployment.recorded','project.created','channel.created','component.created','environment.created','document.created','document.revised',
  'repository.created','component.repository-linked','component.repository-unlinked','ticket.component-linked','ticket.component-unlinked')
  ORDER BY COALESCE(h.original_time,e.occurred_at),e.event_id
@@ -306,6 +306,11 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 	case "decision.accepted":
 		if event.target.Type != "decision" || payload.Status != "accepted" {
 			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid decision.accepted facts", event.eventID)
+		}
+	case "decision.rejected":
+		var fields map[string]json.RawMessage
+		if event.target.Type != "decision" || payload.Status != "rejected" || json.Unmarshal(event.payload, &fields) != nil || len(fields) != 1 {
+			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid decision.rejected facts", event.eventID)
 		}
 	case "ticket.created":
 		if event.target.Type != "ticket" || payload.Status != "open" || payload.Decision == nil {

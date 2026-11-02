@@ -266,7 +266,7 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 		if scope.Kind == "ticket" {
 			validStatus = goldenpath.ValidTicketStatus(item.Status)
 		} else if scope.Kind == "decision" {
-			validStatus = item.Status == "proposed" || item.Status == "accepted"
+			validStatus = item.Status == "proposed" || item.Status == "accepted" || item.Status == "rejected"
 		}
 		if item.Ref.Type != scope.Kind || !validScopedID(item.Ref.ID, discoveryPrefix(scope.Kind)) || seen[item.Ref.ID] || !utf8.ValidString(item.Title) || strings.TrimSpace(item.Title) == "" || strings.ContainsRune(item.Title, '\x00') || !validStatus || ((scope.Kind == "ticket" || scope.Kind == "decision") && item.Ref.ID <= previousID) {
 			return dto, invalid

@@ -31,6 +31,7 @@ const proposedDecision = {
   status: "proposed",
   outcome: null,
   rationale: null,
+  rejection_reason: null,
   proposer: { kind: "user", id: "usr_contributor" },
   deciders: [],
   decided_at: null,
@@ -43,6 +44,14 @@ const acceptedDecision = {
   status: "accepted",
   outcome: "Use the Session boundary.",
   rationale: "It preserves current authority.",
+  deciders: [{ kind: "user", id: "usr_decider" }],
+  decided_at: now,
+};
+
+const rejectedDecision = {
+  ...proposedDecision,
+  status: "rejected",
+  rejection_reason: "Reason",
   deciders: [{ kind: "user", id: "usr_decider" }],
   decided_at: now,
 };
@@ -239,6 +248,89 @@ describe("Collaboration API adapter", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("rejects malformed reasons locally and preserves normalized rejection retries", async () => {
+    setCSRFCookie();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    for (const reason of [
+      "",
+      " \n\u0085",
+      "bad\0",
+      "bad\ud800",
+      "bad\udc00",
+      "x".repeat(32769),
+    ]) {
+      await expect(
+        browserCollaborationClient.rejectDecision("wrk_main", "dec_choice", {
+          clientOperationID: "web:reject",
+          rejectionReason: reason,
+          confirmed: true,
+        }),
+      ).rejects.toMatchObject({ code: "invalid", status: 400 });
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+    for (const [raw, normalized] of [
+      ["\u0085 Reason 🥕 \u0085", "Reason 🥕"],
+      ["\ufeff", "\ufeff"],
+    ]) {
+      fetchMock.mockResolvedValueOnce(
+        jsonResponse({
+          data: { ...rejectedDecision, rejection_reason: normalized },
+        }),
+      );
+      const result = await browserCollaborationClient.rejectDecision(
+        "wrk_main",
+        "dec_choice",
+        {
+          clientOperationID: "web:reject",
+          rejectionReason: raw,
+          confirmed: true,
+        },
+      );
+      expect(result.rejectionReason).toBe(normalized);
+      expect(JSON.parse(fetchMock.mock.lastCall![1].body)).toEqual({
+        client_operation_id: "web:reject",
+        rejection_reason: raw,
+        confirmed: true,
+      });
+    }
+  });
+
+  it("reads rejected Decisions with opaque evidence and rejects incompatible capabilities", () => {
+    const parse = (current: unknown, capabilities: unknown) =>
+      parseCollaborationView(
+        {
+          data: {
+            current,
+            capabilities,
+            relations: [{ visibility: "restricted" }],
+            timeline: [],
+          },
+        },
+        "decision",
+        "dec_choice",
+      );
+    const capabilities = { accept: false, reject: false, create_ticket: false };
+    expect(parse(rejectedDecision, capabilities).current).toMatchObject({
+      status: "rejected",
+      rejectionReason: "Reason",
+    });
+    for (const invalid of [
+      { ...rejectedDecision, rejection_reason: null },
+      { ...rejectedDecision, rejection_reason: "bad\ud800" },
+      { ...rejectedDecision, outcome: "Cannot accept too" },
+      { ...rejectedDecision, status: "superseded" },
+      { ...rejectedDecision, deciders: [] },
+    ])
+      expect(() => parse(invalid, capabilities)).toThrow();
+    for (const invalid of [
+      { ...capabilities, accept: true, reject: true },
+      { ...capabilities, create_ticket: true },
+      { accept: false, reject: false },
+    ])
+      expect(() => parse(rejectedDecision, invalid)).toThrow();
+  });
+
   it("accepts incoming results and rejects direction, source and duplicate drift", () => {
     const incoming = {
       visibility: "readable",
@@ -251,6 +343,7 @@ describe("Collaboration API adapter", () => {
         {
           data: {
             current: proposedDecision,
+            capabilities: { accept: true, reject: true, create_ticket: false },
             relations,
             timeline: [],
           },
@@ -285,6 +378,7 @@ describe("Collaboration API adapter", () => {
     const safe = {
       data: {
         current: proposedDecision,
+        capabilities: { accept: true, reject: true, create_ticket: false },
         relations: [{ visibility: "restricted" }],
         timeline: [
           {

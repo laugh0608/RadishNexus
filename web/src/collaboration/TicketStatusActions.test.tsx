@@ -43,6 +43,7 @@ function setup(change = vi.fn(), load = vi.fn().mockResolvedValue(view())) {
     changeTicketStatus: change,
     proposeDecision: vi.fn(),
     acceptDecision: vi.fn(),
+    rejectDecision: vi.fn(),
     createTicket: vi.fn(),
   };
   const expired = vi.fn(),

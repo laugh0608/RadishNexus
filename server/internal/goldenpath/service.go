@@ -26,6 +26,7 @@ type Invocation struct {
 }
 
 type Decision struct {
+	RejectionReason    string
 	ID                 string
 	WorkspaceID        string
 	GoverningProjectID string
@@ -43,6 +44,26 @@ type Decision struct {
 type CreateDecisionResult struct {
 	Decision Decision
 	Created  bool
+}
+
+type RejectDecisionResult struct {
+	Decision Decision
+	Rejected bool
+}
+
+type RejectDecisionInput struct {
+	DecisionID        string
+	ClientOperationID string
+	RejectionReason   string
+}
+
+type RejectDecisionCommand struct {
+	Invocation
+	DecisionID        string
+	ClientOperationID string
+	RejectionReason   string
+	PayloadSHA256     string
+	EventID           string
 }
 
 type AcceptDecisionResult struct {
@@ -149,6 +170,7 @@ type Store interface {
 	StartThreadFromMessage(context.Context, StartThreadFromMessageCommand) (Thread, error)
 	CreateDecisionFromThread(context.Context, CreateDecisionCommand) (CreateDecisionResult, error)
 	AcceptDecision(context.Context, AcceptDecisionCommand) (AcceptDecisionResult, error)
+	RejectDecision(context.Context, RejectDecisionCommand) (RejectDecisionResult, error)
 	CreateTicketFromDecision(context.Context, CreateTicketCommand) (CreateTicketResult, error)
 	RecordCompletedCIRun(context.Context, RecordCompletedCIRunCommand) (CIRunReceipt, error)
 	ListRepositoryCIRuns(context.Context, authz.Principal, string, DiscoveryPageInput) (RepositoryCIRunPage, error)

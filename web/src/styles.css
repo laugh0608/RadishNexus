@@ -1573,6 +1573,37 @@ code {
   text-transform: none !important;
 }
 
+.decision-actions fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+}
+
+.decision-actions fieldset label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.decision-actions input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.decision-actions p {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.decision-result {
+  margin-top: 16px;
+}
+
 .accepted-decision,
 .created-object,
 .collaboration-complete {
