@@ -42,7 +42,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **最小替代已实施，接续复核设计**：按所有者确认的 [ADR-0049](../adr/0049-decision-supersession.md)完成同 Project 单链替代、双方版本、旧接受 / Ticket 精确重试及执行历史迁移；schema 024 / Activity 12 / v5 的数据库、升级 / 备份、实际 CLI 与正式 Web 证据见[实施记录](reviews/2026-11-02-decision-supersession.md)。拒绝和替代设计分别提交为 `6f9e8b6` / `29bf809`，本次替代实现尚未提交或推送。下一产品切片先设计复核记录、人工结论和后续动作的最小合同，明确 review_at 是否进入首片；不得先加字段 / 定时器冒充复核闭环，改变模型 / 协议后须确认范围再实现。
+1. **下一步：Decision 最小复核合同设计（尚未开始）**：拒绝与单链替代已交付；schema 024 / Activity 12 / v5 的分层证据见[替代实施记录](reviews/2026-11-02-decision-supersession.md)，今天的三笔设计 / 实现提交与文档核对见[收尾记录](reviews/2026-11-02-daily-closeout.md)。接续先围绕“现有结论是否仍适用”比较最小人工复核方案，明确复核对象、触发、证据、结论和后续动作，判断 review_at 是否进入首片。依赖现有 evidence 权限、Decision 版本 / 替代链与历史重试；须说明 Ticket / Document 原来源、Activity、上下文包和恢复兼容影响。下一动作是形成可审阅 ADR 与验收矩阵，涉及模型 / 权限 / 公共协议的范围确认后再实现；不先启动自动调度、提醒或状态回转。
 2. **已完成切片转入有界观察**：上下文迁移补验、负责人及其并发 / 同名补验、优先级与项目内筛选均已交付，提交与验证映射见[当日收尾记录](reviews/2026-10-28-daily-closeout.md)。后续遇到实际 BFCache、原生选择控件键盘、团队使用或慢查询问题时定向复验；不重复全量测试冒充持续使用，也不把单 Project 合成查询计划当成生产容量。当前 schema 024 / Activity 12 / v5 包须 Go / Web / CLI 配套升级；真实实例操作仍单独授权。
 3. **试用准备与使用观察分别验收**：确认[支持说明](../trial-support.md)的非生产数据范围、目标环境、联系人与退出安排，以及[授权待决事项](../evaluation-authorization-decisions.md) E01～E12；技术准入和有效授权均满足后才开放外部受控试用。届时观察讨论—决策—工单—文档追溯、维护者干预和成员交接，独立团队持续使用与生产容量不由 Agent 浏览器测试替代。
 4. **保留阶段范围与停止线**：M1 文件、通知、审计运营、Attention Item、数据库最小权限和生产运维仍有未交付范围；本日实现不宣布整个 M1 或完整 Golden Path 退出。完整聊天、CRDT、Flutter 与通用插件平台仍服从原路线图门槛；更广迁移 profile 另行规划。
@@ -92,7 +92,7 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 
 ## 证据与历史
 
-[2026-11-02 替代实施记录](reviews/2026-11-02-decision-supersession.md)保留四状态、单链、双对象历史、恢复 / 往返与浏览器验收限制；[2026-11-02 替代设计与提交记录](reviews/2026-11-02-decision-supersession-design.md)保留拒绝提交映射、后续提案与源码判断；[2026-11-02 Decision 拒绝实施记录](reviews/2026-11-02-decision-rejection.md)保留本轮交付与分层验收；[2026-11-02 Decision 设计记录](reviews/2026-11-02-decision-lifecycle-design.md)保留本轮源码核对、首片取舍与确认边界；[2026-10-28 收尾记录](reviews/2026-10-28-daily-closeout.md)保留最近功能批次的提交与验证映射；[规划整理记录](reviews/2026-11-01-planning-alignment.md)记录导航整理及检查。此前详细流水和完整证据目录见[原状态快照](history/planning-structure-2026-11-01.md#证据与历史)；[2026-09-03 快照](history/2026-09-03-status.md)继续保留原历史边界。
+[2026-11-02 收尾记录](reviews/2026-11-02-daily-closeout.md)保留当日三笔设计 / 实现提交、代码与文档核对及接续边界；[2026-11-02 替代实施记录](reviews/2026-11-02-decision-supersession.md)保留四状态、单链、双对象历史、恢复 / 往返与浏览器验收限制；[2026-11-02 替代设计与提交记录](reviews/2026-11-02-decision-supersession-design.md)保留拒绝提交映射、后续提案与源码判断；[2026-11-02 Decision 拒绝实施记录](reviews/2026-11-02-decision-rejection.md)保留本轮交付与分层验收；[2026-11-02 Decision 设计记录](reviews/2026-11-02-decision-lifecycle-design.md)保留本轮源码核对、首片取舍与确认边界；[2026-10-28 收尾记录](reviews/2026-10-28-daily-closeout.md)保留上一功能批次的提交与验证映射；[规划整理记录](reviews/2026-11-01-planning-alignment.md)记录导航整理及检查。此前详细流水和完整证据目录见[原状态快照](history/planning-structure-2026-11-01.md#证据与历史)；[2026-09-03 快照](history/2026-09-03-status.md)继续保留原历史边界。
 
 以下旧标题作为历史跳转保留，不再提供当前排期：
 

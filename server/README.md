@@ -254,7 +254,7 @@ Deployment Nexus View 只读路由为：
 - `POST /api/v1/workspaces/{workspace_id}/decisions/{decision_id}/tickets`；
 - `GET /api/v1/workspaces/{workspace_id}/tickets/{ticket_id}/nexus-view`。
 
-三个 GET 每次重新检查当前 Workspace、Project、Channel 与 restricted Thread 权限；三个 POST 还要求精确 Origin、double-submit + 存储态 CSRF。写请求携带 printable ASCII `client_operation_id`；首次 Decision / Ticket 创建返回 `201`，精确重试返回 `200`，变化重放返回 `409`。acceptance 只允许 decider / admin、要求当前可读全部 evidence 和显式 `confirmed=true`，首次与精确重试均返回 `200`。
+首批三个 GET 每次重新检查当前 Workspace、Project、Channel 与 restricted Thread 权限；首批三个 POST 还要求精确 Origin、double-submit + 存储态 CSRF，后续 rejection / supersession 复用相同边界。写请求携带 printable ASCII `client_operation_id`；首次 Decision / Ticket 创建返回 `201`，精确重试返回 `200`，变化重放返回 `409`。acceptance 只允许 decider / admin、要求当前可读全部 evidence 和显式 `confirmed=true`，首次与精确重试均返回 `200`。
 
 Thread DTO 只通过结构化 ref 返回 origin Channel 和 `started-from` Message，不返回 Message 正文；Decision restricted evidence 只形成无类型、ID、关系名、标题和时间的占位；Ticket 通过 `implements` 保留 Source Decision。所有响应均为 `private, no-store`，不返回 receipt、digest、operation ID、角色、membership、事件或 Outbox。完整边界见 [ADR-0019](../docs/adr/0019-session-scoped-thread-decision-ticket-transport.md)。同源 Web Shell 已接入三个 canonical 页面与对应写动作；production Web handler 只开放精确协作路径，未知或多余嵌套路由继续 `404`。
 
@@ -312,7 +312,7 @@ apply 只接受已确认 proposal、UUID operation ID 与计划摘要；等待�
 
 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的 migration 019、`internal/contextpackage`、`goldenpath.ContextService` 与受认证 HTTP 入口提供单 Project 协作导出 / 空业务实例导入。`go build ./cmd/nexus-context` 构建独立 CLI，使用 HTTPS Session 和私有凭据文件，不读取数据库 DSN；操作、协议路由和限制见[迁移手册](../deploy/context-package.md)。该 CLI 当前面向 macOS / Linux，不包含在 Compose operations 工件中。
 
-历史身份不可登录，初始 Project restricted 并仅授予导入负责人；真实导入操作与源事实分开保存。来源 API 先验证当前对象读取权限，Web 仅展示安全导入标识。Activity 12 支持含负责人、优先级、Decision 拒绝与替代的导入历史重建，四张来源 / 审计表纳入整库备份，Session 等既有排除规则不变。隔离验收见[记录](../docs/status/reviews/2026-10-24-portable-context-package.md)。
+历史身份不可登录，初始 Project restricted 并仅授予导入负责人；真实导入操作与源事实分开保存。来源 API 先验证当前对象读取权限，Web 仅展示安全导入标识。Activity 12 支持含负责人、优先级、Decision 拒绝与替代的导入历史重建，四张来源 / 审计表纳入整库备份，Session 等既有排除规则不变。首片隔离验收见[原记录](../docs/status/reviews/2026-10-24-portable-context-package.md)，当前 v5 与替代历史的往返、恢复和 CLI 证据见[增量记录](../docs/status/reviews/2026-11-02-decision-supersession.md)。
 
 ## 最小备份与恢复
 

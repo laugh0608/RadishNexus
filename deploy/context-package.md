@@ -43,7 +43,7 @@ nexus-context prepare \
 - 所有对象和事件生成新 ID，不按源 ID、邮箱或名称匹配既有对象 / 人员。
 - 历史作者生成 disabled account 与 suspended membership，没有凭据或 Session；普通账号管理不能启用它们。
 - 新 Project 强制 restricted，只有本次负责人获得 admin；包内 private Channel / Thread 初始仅负责人可见，并按 [ADR-0045](../docs/adr/0045-membership-lifecycle-and-management-handoff.md) 取得局部 manager；源管理角色不迁移，历史作者不可激活或选任。其他既有成员之后经正式管理入口授权。
-- accepted Decision、Ticket 状态与原始时间是接纳的历史声明；Web 标记导入来源，不代表目标刚完成审批或执行。Markdown 文本链接原样保留，可能仍指向旧实例。
+- Decision 的接受 / 拒绝 / 替代、Ticket 状态与原始时间是接纳的历史声明；Web 标记导入来源，不代表目标刚完成决定、审批或执行。Markdown 文本链接原样保留，可能仍指向旧实例。
 
 明确确认 prepare 输出的精确 `plan_digest` 后应用：
 
@@ -82,7 +82,7 @@ apply 原子写入业务对象、历史身份、映射、历史来源、Activity
 
 输出路径必须不存在，不覆盖原包 / 计划。输出中断会保留不完整工件；manifest 最后写入，不把半包标成成功。清理由操作者针对已确认的专属路径执行，CLI 不自动删除输入、目标数据或失败输出。
 
-交接前在正式 Web 验证：负责人登录并发现项目、Channel / Thread 与来源关系、accepted / proposed / rejected Decision 及拒绝理由、Ticket 状态 / 分配 / 优先级历史、文档所有版本及恢复来源；普通成员默认拒绝，经正式邀请 / 授权后能继续发消息、改状态、显式分配负责人 / 修改优先级和保存文档，撤权后不保留可操作页面。只有实际完成这些验证后再开放目标使用。
+交接前在正式 Web 验证：负责人登录并发现项目、Channel / Thread 与来源关系、四状态 Decision 及拒绝理由 / 替代链、双向关系和双方 Activity、Ticket 状态 / 分配 / 优先级历史、文档所有版本及恢复来源。普通成员默认拒绝，经正式邀请 / 授权后，按当前权限继续发消息、决定或明确替代、改工单状态、显式分配负责人 / 修改优先级和保存文档；替代不换已有执行来源，撤权后不保留可操作页面。只有实际完成目标实例的对应验证后再开放使用，合成迁移测试不代替交接验收。
 
 ## 自动化入口与限制
 

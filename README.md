@@ -8,6 +8,8 @@ RadishNexus 是 Radish 家族中的团队协作项目。它把私聊、团队频
 
 已确认[客户端连接规划](docs/architecture/client-server-connection-plan.md)：同一个官方安装包运行时支持官方端点和用户自部署后端，无需重新编译；官方服务是后续交付目标，自部署核心路径不依赖官方云。当前尚未实现 Flutter 服务器选择或完成官方端点交付。
 
+Decision 已支持人工接受、明确拒绝和同 Project 单链替代，保留原结论、来源与执行历史；被替代后的已有 Ticket / Document 继续按自身权限维护。正式 Web、双向关系 / Activity、原操作重试及上下文迁移的合同与证据见[沟通与决策专题](docs/topics.md#communication-decisions)；复核仍待独立设计。
+
 ## 已确认基线
 
 - 自部署版不按成员、频道、项目或插件数量设置席位限制。
