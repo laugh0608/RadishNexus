@@ -1,3 +1,5 @@
+import { useDecisionSupersession } from "./DecisionSupersession";
+import { useDecisionTicketCreation } from "./DecisionTicketCreation";
 import { useDecisionActions } from "./DecisionActions";
 import { useTicketPriorityActions } from "./TicketPriorityActions";
 import { ticketPriorityLabels } from "./ticket-priority";
@@ -57,11 +59,6 @@ interface PendingProposal {
   question: string;
 }
 
-interface PendingTicket {
-  id: string;
-  title: string;
-}
-
 export function CollaborationPage(props: CollaborationPageProps) {
   return (
     <CollaborationPageContent
@@ -84,12 +81,8 @@ function CollaborationPageContent({
   const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState<PageState>({ status: "loading" });
   const [question, setQuestion] = useState("");
-  const [ticketTitle, setTicketTitle] = useState("");
   const [pendingProposal, setPendingProposal] =
     useState<PendingProposal | null>(null);
-  const [pendingTicket, setPendingTicket] = useState<PendingTicket | null>(
-    null,
-  );
   const [proposalResult, setProposalResult] =
     useState<ProposeDecisionOutcome | null>(null);
   const [ticketResult, setTicketResult] = useState<CreateTicketOutcome | null>(
@@ -167,6 +160,45 @@ function CollaborationPageContent({
         : undefined,
     canDecide:
       state.status === "ready" && state.view.capabilities?.accept === true,
+    canRetry:
+      state.status === "ready" &&
+      state.view.capabilities?.retryDecision === true,
+    unavailable: state.status === "error",
+    client,
+    createOperationID,
+    onRefresh: relationChanged,
+    onUnavailable: relationUnavailable,
+    onSessionExpired,
+  });
+  const decisionCurrent =
+    state.status === "ready" && isDecisionCurrent(state.view.current)
+      ? state.view.current
+      : undefined;
+  const decisionTicketCreation = useDecisionTicketCreation({
+    workspaceID,
+    current: decisionCurrent,
+    canCreate:
+      state.status === "ready" &&
+      state.view.capabilities?.createTicket === true,
+    canRetry:
+      state.status === "ready" &&
+      state.view.capabilities?.retryTicketCreation === true,
+    unavailable: state.status === "error",
+    client,
+    createOperationID,
+    onRefresh: relationChanged,
+    onUnavailable: relationUnavailable,
+    onSessionExpired,
+    onCreated: setTicketResult,
+  });
+  const decisionSupersession = useDecisionSupersession({
+    workspaceID,
+    current: decisionCurrent,
+    canSupersede:
+      state.status === "ready" && state.view.capabilities?.supersede === true,
+    canRetry:
+      state.status === "ready" &&
+      state.view.capabilities?.retryDecision === true,
     unavailable: state.status === "error",
     client,
     createOperationID,
@@ -222,9 +254,7 @@ function CollaborationPageContent({
     }
     if (error instanceof CollaborationRequestError && error.status === 404) {
       setQuestion("");
-      setTicketTitle("");
       setPendingProposal(null);
-      setPendingTicket(null);
       setProposalResult(null);
       setTicketResult(null);
       setState({ status: "error", message: error.userMessage });
@@ -264,47 +294,6 @@ function CollaborationPageContent({
         result.created
           ? "Proposed Decision 已创建，并保留当前 Thread 作为 evidence。"
           : "已确认此前重试创建的同一 Decision。",
-      );
-    } catch (error) {
-      if (!revokeVisibleState(error)) {
-        setActionError(collaborationError(error));
-      }
-    } finally {
-      setSubmitting(null);
-    }
-  };
-
-  const createTicket = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (entityType !== "decision" || state.status !== "ready") {
-      return;
-    }
-    setSubmitting("ticket");
-    setActionError(null);
-    setActionNotice(null);
-    let operation = pendingTicket;
-    if (operation === null || operation.title !== ticketTitle) {
-      try {
-        operation = { id: createOperationID(), title: ticketTitle };
-        setPendingTicket(operation);
-      } catch (error) {
-        setActionError(collaborationError(error));
-        setSubmitting(null);
-        return;
-      }
-    }
-    try {
-      const result = await client.createTicket(workspaceID, entityID, {
-        clientOperationID: operation.id,
-        title: operation.title,
-      });
-      setTicketResult(result);
-      setTicketTitle("");
-      setPendingTicket(null);
-      setActionNotice(
-        result.created
-          ? "Ticket 已创建，并以 implements 关系保留当前 Decision。"
-          : "已确认此前重试创建的同一 Ticket。",
       );
     } catch (error) {
       if (!revokeVisibleState(error)) {
@@ -518,18 +507,20 @@ function CollaborationPageContent({
           ) : isDecisionCurrent(current) ? (
             <>
               {decisionActions}
-              {current.status === "accepted" && (
-                <DecisionActions
-                  decision={current}
-                  ticketTitle={ticketTitle}
-                  submitting={submitting}
-                  onCreateTicket={createTicket}
-                  onTicketTitleChange={setTicketTitle}
-                  canCreateTicket={
-                    state.view.capabilities?.createTicket === true
-                  }
-                />
+              {(current.status === "accepted" ||
+                current.status === "superseded") && (
+                <div className="accepted-decision">
+                  <span>
+                    {current.status === "superseded"
+                      ? "原接受结论 · 已被替代"
+                      : "已确认结论"}
+                  </span>
+                  <strong>{current.outcome}</strong>
+                  <p>{current.rationale}</p>
+                </div>
               )}
+              {decisionTicketCreation}
+              {decisionSupersession}
             </>
           ) : (
             <div className="collaboration-complete">
@@ -593,53 +584,6 @@ function CollaborationPageContent({
   );
 }
 
-function DecisionActions({
-  decision,
-  ticketTitle,
-  submitting,
-  onCreateTicket,
-  onTicketTitleChange,
-  canCreateTicket,
-}: {
-  decision: DecisionCurrent;
-  ticketTitle: string;
-  submitting: "proposal" | "acceptance" | "ticket" | null;
-  onCreateTicket: (event: FormEvent<HTMLFormElement>) => Promise<void>;
-  onTicketTitleChange: (value: string) => void;
-  canCreateTicket: boolean;
-}) {
-  return (
-    <>
-      <div className="accepted-decision">
-        <span>Accepted outcome</span>
-        <strong>{decision.outcome}</strong>
-        <p>{decision.rationale}</p>
-      </div>
-      {canCreateTicket && (
-        <form onSubmit={(event) => void onCreateTicket(event)}>
-          <label>
-            <span>Ticket 标题</span>
-            <input
-              disabled={submitting !== null}
-              onChange={(event) => onTicketTitleChange(event.target.value)}
-              placeholder="把已接受结论转成可执行工作"
-              required
-              value={ticketTitle}
-            />
-          </label>
-          <button
-            className="primary-button"
-            disabled={submitting !== null || ticketTitle.trim() === ""}
-            type="submit"
-          >
-            {submitting === "ticket" ? "正在创建…" : "创建 Ticket"}
-          </button>
-        </form>
-      )}
-    </>
-  );
-}
-
 function RelationList({
   workspaceID,
   relations,
@@ -678,6 +622,15 @@ function RelationList({
               · {relation.relationType}
             </span>
             <strong>{relation.target.title}</strong>
+            {relation.supersession && (
+              <div className="supersession-reason">
+                <p>{relation.supersession.reason}</p>
+                <p>
+                  替代人：{relation.supersession.actor.id} ·{" "}
+                  {formatTimestamp(relation.supersession.occurredAt)}
+                </p>
+              </div>
+            )}
             <code>
               entity://{relation.target.ref.type}/{relation.target.ref.id}
             </code>
@@ -759,7 +712,9 @@ function TimelineList({
                   ? `${item.assignment.fromUserID ?? "未分配"} → ${item.assignment.toUserID ?? "未分配"}（负责人版本 ${item.assignment.fromRevision} → ${item.assignment.toRevision}）`
                   : "priority" in item
                     ? `${ticketPriorityLabels[item.priority.from]} → ${ticketPriorityLabels[item.priority.to]}（优先级版本 ${item.priority.fromRevision} → ${item.priority.toRevision}）`
-                    : item.status}
+                    : "supersession" in item
+                      ? `${item.supersession.side === "superseded" ? "已被替代" : "替代了旧结论"}（版本 ${item.supersession.fromRevision} → ${item.supersession.toRevision}）`
+                      : item.status}
           </span>
           <SubjectSummary subjects={item.subjects} />
           {item.subjects.map((subject) =>
@@ -850,9 +805,11 @@ function currentSummary(current: CollaborationView["current"]): string {
   if (isDecisionCurrent(current)) {
     return current.status === "proposed"
       ? "这是待人工确认的 Decision 草案；自动摘要不能替代接受动作。"
-      : current.status === "accepted"
-        ? "这个 Decision 已由明确用户确认，可继续形成实施 Ticket。"
-        : "这个提案已被明确拒绝；理由、决定主体和原始来源保留。";
+      : current.status === "superseded"
+        ? "这个结论已被替代；原接受事实与已有执行来源保持可追溯。"
+        : current.status === "accepted"
+          ? "这个 Decision 已由明确用户确认，可继续形成实施 Ticket。"
+          : "这个提案已被明确拒绝；理由、决定主体和原始来源保留。";
   }
   return "这是从 Accepted Decision 形成的最小执行对象，来源通过 implements 关系保留。";
 }

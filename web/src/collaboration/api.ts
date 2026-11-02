@@ -10,7 +10,8 @@ import { csrfTokenFromCookie } from "../auth/api";
 
 export type CollaborationEntityType = "thread" | "decision" | "ticket";
 export type ThreadVisibility = "project" | "restricted";
-export type DecisionStatus = "proposed" | "accepted" | "rejected";
+export type DecisionStatus =
+  "proposed" | "accepted" | "rejected" | "superseded";
 
 export interface EntityRef<T extends string = string> {
   type: T;
@@ -39,6 +40,7 @@ export interface ThreadCurrent {
 }
 
 export interface DecisionCurrent {
+  decisionRevision: number;
   ref: EntityRef<"decision">;
   project: EntityRef<"project">;
   question: string;
@@ -77,7 +79,9 @@ export type CollaborationRelation =
         | "derived-from"
         | "implements"
         | "relates-to"
-        | "affects";
+        | "affects"
+        | "supersedes";
+      supersession?: { reason: string; actor: UserActor; occurredAt: string };
       target: VisibleEntity;
     };
 
@@ -94,6 +98,14 @@ interface TimelineBase {
 }
 export type CollaborationTimelineItem = TimelineBase &
   (
+    | {
+        activityType: "decision.superseded";
+        supersession: {
+          side: "superseded" | "replacement";
+          fromRevision: number;
+          toRevision: number;
+        };
+      }
     | {
         activityType: "ticket.priority-changed";
         priority: {
@@ -143,11 +155,17 @@ export interface CollaborationView<
         accept?: never;
         reject?: never;
         createTicket?: never;
+        supersede?: never;
+        retryDecision?: never;
+        retryTicketCreation?: never;
       }
     | {
         accept: boolean;
         reject: boolean;
         createTicket: boolean;
+        supersede: boolean;
+        retryDecision: boolean;
+        retryTicketCreation: boolean;
         changeStatus?: never;
       };
   relations: readonly CollaborationRelation[];
@@ -178,6 +196,25 @@ export interface RejectDecisionInput {
   confirmed: true;
 }
 
+export interface SupersedeDecisionInput {
+  clientOperationID: string;
+  replacementDecisionID: string;
+  baseDecisionRevision: number;
+  baseReplacementRevision: number;
+  supersessionReason: string;
+  confirmed: true;
+}
+export interface SupersedeDecisionOutcome {
+  superseded: EntityRef<"decision">;
+  replacement: EntityRef<"decision">;
+  relation: EntityRef<"entity-link">;
+  supersessionReason: string;
+  fromRevision: number;
+  toRevision: number;
+  replacementFromRevision: number;
+  replacementToRevision: number;
+  occurredAt: string;
+}
 export interface CreateTicketInput {
   clientOperationID: string;
   title: string;
@@ -201,6 +238,12 @@ export interface TicketStatusOutcome {
   appliedStatusRevision: number;
 }
 export interface CollaborationClient {
+  supersedeDecision(
+    workspaceID: string,
+    decisionID: string,
+    input: SupersedeDecisionInput,
+    signal?: AbortSignal,
+  ): Promise<SupersedeDecisionOutcome>;
   changeTicketStatus(
     workspaceID: string,
     ticketID: string,
@@ -272,6 +315,7 @@ const entityPrefixes: Readonly<Record<string, string>> = {
   ticket: "tkt_",
   document: "doc_",
   component: "cmp_",
+  "entity-link": "lnk_",
 };
 
 const pageSegments: Readonly<Record<CollaborationEntityType, string>> = {
@@ -292,6 +336,7 @@ export const browserCollaborationClient: CollaborationClient = {
   proposeDecision,
   acceptDecision,
   rejectDecision,
+  supersedeDecision,
   createTicket,
 };
 
@@ -427,6 +472,98 @@ async function proposeDecision(
   }
 }
 
+async function supersedeDecision(
+  workspaceID: string,
+  decisionID: string,
+  input: SupersedeDecisionInput,
+  signal?: AbortSignal,
+): Promise<SupersedeDecisionOutcome> {
+  requireLocation(workspaceID, "decision", decisionID);
+  requireLocation(workspaceID, "decision", input.replacementDecisionID);
+  if (
+    !validOperationID(input.clientOperationID) ||
+    input.confirmed !== true ||
+    !validRejectionReason(input.supersessionReason) ||
+    !Number.isInteger(input.baseDecisionRevision) ||
+    input.baseDecisionRevision < 1 ||
+    input.baseDecisionRevision > 2147483647 ||
+    !Number.isInteger(input.baseReplacementRevision) ||
+    input.baseReplacementRevision < 1 ||
+    input.baseReplacementRevision > 2147483647
+  )
+    throw new CollaborationRequestError("请核对双方版本并明确确认替代理由。", {
+      code: "invalid",
+      status: 400,
+    });
+  const response = await collaborationFetch(
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/decisions/${encodeURIComponent(decisionID)}/supersession`,
+    writeRequest(
+      {
+        client_operation_id: input.clientOperationID,
+        replacement_decision_id: input.replacementDecisionID,
+        base_decision_revision: input.baseDecisionRevision,
+        base_replacement_revision: input.baseReplacementRevision,
+        supersession_reason: input.supersessionReason,
+        confirmed: true,
+      },
+      signal,
+    ),
+  );
+  if (response.status !== 200)
+    throw contractError("替代服务返回意外状态。", response.status);
+  const payload = await responseJSON(response, "Decision 替代");
+  try {
+    const envelope = exactRecord(payload, "response", ["data"]),
+      data = exactRecord(envelope.data, "response.data", [
+        "superseded",
+        "replacement",
+        "relation",
+        "supersession_reason",
+        "from_revision",
+        "to_revision",
+        "replacement_from_revision",
+        "replacement_to_revision",
+        "occurred_at",
+      ]);
+    const result: SupersedeDecisionOutcome = {
+      superseded: parseRef(data.superseded, "superseded", "decision"),
+      replacement: parseRef(data.replacement, "replacement", "decision"),
+      relation: parseRef(data.relation, "relation", "entity-link"),
+      supersessionReason: string(
+        data.supersession_reason,
+        "supersession_reason",
+      ),
+      fromRevision: parseTicketStatusRevision(data.from_revision),
+      toRevision: parseTicketStatusRevision(data.to_revision),
+      replacementFromRevision: parseTicketStatusRevision(
+        data.replacement_from_revision,
+      ),
+      replacementToRevision: parseTicketStatusRevision(
+        data.replacement_to_revision,
+      ),
+      occurredAt: timestamp(data.occurred_at, "occurred_at"),
+    };
+    if (
+      result.superseded.id !== decisionID ||
+      result.replacement.id !== input.replacementDecisionID ||
+      result.supersessionReason !==
+        trimRejectionReason(input.supersessionReason) ||
+      result.fromRevision !== input.baseDecisionRevision ||
+      result.replacementFromRevision !== input.baseReplacementRevision ||
+      result.toRevision !== result.fromRevision + 1 ||
+      result.replacementToRevision !== result.replacementFromRevision + 1
+    )
+      throw new TypeError("Supersession result differs from original request");
+    return result;
+  } catch (error) {
+    throw contractError(
+      "服务返回的替代结果不符合当前契约。",
+      response.status,
+      error,
+    );
+  }
+}
+
 async function rejectDecision(
   workspaceID: string,
   decisionID: string,
@@ -510,7 +647,10 @@ async function acceptDecision(
   try {
     const envelope = exactRecord(payload, "response", ["data"]);
     const decision = parseDecisionCurrent(envelope.data, "response.data");
-    if (decision.ref.id !== decisionID || decision.status !== "accepted") {
+    if (
+      decision.ref.id !== decisionID ||
+      (decision.status !== "accepted" && decision.status !== "superseded")
+    ) {
       throw new TypeError(
         "accepted Decision does not match requested Decision",
       );
@@ -681,15 +821,30 @@ export function parseCollaborationView(
       "accept",
       "reject",
       "create_ticket",
+      "supersede",
+      "retry_decision",
+      "retry_ticket_creation",
     ]);
     if (
       typeof cap.accept !== "boolean" ||
       typeof cap.reject !== "boolean" ||
       typeof cap.create_ticket !== "boolean" ||
+      typeof cap.supersede !== "boolean" ||
+      typeof cap.retry_decision !== "boolean" ||
+      typeof cap.retry_ticket_creation !== "boolean" ||
       cap.accept !== cap.reject ||
       !("status" in current) ||
       ((cap.accept || cap.reject) && current.status !== "proposed") ||
-      (cap.create_ticket && current.status !== "accepted")
+      (cap.create_ticket && current.status !== "accepted") ||
+      ((cap.accept || cap.reject || cap.supersede) && !cap.retry_decision) ||
+      (cap.create_ticket && !cap.retry_ticket_creation) ||
+      (cap.supersede &&
+        (current.status !== "accepted" ||
+          !("decisionRevision" in current) ||
+          current.decisionRevision !== 2)) ||
+      (cap.retry_ticket_creation &&
+        current.status !== "accepted" &&
+        current.status !== "superseded")
     )
       throw new TypeError("Invalid Decision capability");
     return {
@@ -700,6 +855,9 @@ export function parseCollaborationView(
         accept: cap.accept,
         reject: cap.reject,
         createTicket: cap.create_ticket,
+        supersede: cap.supersede,
+        retryDecision: cap.retry_decision,
+        retryTicketCreation: cap.retry_ticket_creation,
       },
     };
   }
@@ -763,6 +921,7 @@ function parseDecisionCurrent(value: unknown, path: string): DecisionCurrent {
     "outcome",
     "rationale",
     "rejection_reason",
+    "decision_revision",
     "proposer",
     "deciders",
     "decided_at",
@@ -770,7 +929,12 @@ function parseDecisionCurrent(value: unknown, path: string): DecisionCurrent {
     "updated_at",
   ]);
   const status = string(current.status, `${path}.status`);
-  if (status !== "proposed" && status !== "accepted" && status !== "rejected") {
+  if (
+    status !== "proposed" &&
+    status !== "accepted" &&
+    status !== "rejected" &&
+    status !== "superseded"
+  ) {
     throw new TypeError(`${path}.status is invalid`);
   }
   const outcome = nullableText(current.outcome, `${path}.outcome`);
@@ -790,7 +954,7 @@ function parseDecisionCurrent(value: unknown, path: string): DecisionCurrent {
         rationale !== null ||
         deciders.length !== 0 ||
         decidedAt !== null)) ||
-    (status === "accepted" &&
+    ((status === "accepted" || status === "superseded") &&
       (rejectionReason !== null ||
         outcome === null ||
         rationale === null ||
@@ -806,7 +970,30 @@ function parseDecisionCurrent(value: unknown, path: string): DecisionCurrent {
   ) {
     throw new TypeError(`${path} acceptance fields do not match status`);
   }
+  const decisionRevision = parseTicketStatusRevision(current.decision_revision);
+  const createdAt = timestamp(current.created_at, `${path}.created_at`),
+    updatedAt = timestamp(current.updated_at, `${path}.updated_at`);
+  const same =
+    updatedAt === decidedAt ||
+    (decidedAt !== null && compareTimestamps(updatedAt, decidedAt) === 0);
+  if (!(
+    (status === "proposed" &&
+      decisionRevision === 1 &&
+      compareTimestamps(updatedAt, createdAt) >= 0) ||
+    (status === "rejected" && decisionRevision === 2 && same) ||
+    (status === "accepted" &&
+      ((decisionRevision === 2 && same) ||
+        (decisionRevision === 3 &&
+          decidedAt !== null &&
+          compareTimestamps(updatedAt, decidedAt) > 0))) ||
+    (status === "superseded" &&
+      (decisionRevision === 3 || decisionRevision === 4) &&
+      decidedAt !== null &&
+      compareTimestamps(updatedAt, decidedAt) > 0)
+  ))
+    throw new TypeError("Decision revision or time mismatch");
   return {
+    decisionRevision,
     ref: parseRef(current.ref, `${path}.ref`, "decision"),
     project: parseRef(current.project, `${path}.project`, "project"),
     question: nonEmptyText(current.question, `${path}.question`),
@@ -864,6 +1051,7 @@ function parseRelation(
     "direction",
     "relation_type",
     "target",
+    ...(relation.relation_type === "supersedes" ? ["supersession"] : []),
   ]);
   if (relation.visibility !== "readable") {
     throw new TypeError(`${path}.visibility is invalid`);
@@ -871,6 +1059,32 @@ function parseRelation(
   const direction = relation.direction;
   if (direction !== "outgoing" && direction !== "incoming") {
     throw new TypeError(`${path}.direction is invalid`);
+  }
+  if (relation.relation_type === "supersedes") {
+    if (expectedType !== "decision")
+      throw new TypeError("Supersession only belongs to Decision");
+    const sup = exactRecord(relation.supersession, `${path}.supersession`, [
+      "reason",
+      "actor",
+      "occurred_at",
+    ]);
+    const reason = string(sup.reason, `${path}.supersession.reason`);
+    if (!validRejectionReason(reason))
+      throw new TypeError("Invalid supersession reason");
+    return {
+      visibility: "readable",
+      direction,
+      relationType: "supersedes",
+      target: parseVisibleEntity(relation.target, `${path}.target`, "decision"),
+      supersession: {
+        reason,
+        actor: parseActor(sup.actor, `${path}.supersession.actor`),
+        occurredAt: timestamp(
+          sup.occurred_at,
+          `${path}.supersession.occurred_at`,
+        ),
+      },
+    };
   }
   if (direction === "incoming" && expectedType === "ticket") {
     throw new TypeError(`${path} cannot be incoming for Ticket`);
@@ -949,6 +1163,51 @@ function parseTimelineItem(
   const nativeFields = { ...raw };
   delete nativeFields.imported;
   value = nativeFields;
+  if (raw.activity_type === "decision.superseded") {
+    const item = exactRecord(value, path, [
+      "id",
+      "activity_type",
+      "actor",
+      "occurred_at",
+      "subjects",
+      "supersession",
+    ]);
+    const sup = exactRecord(item.supersession, `${path}.supersession`, [
+      "side",
+      "from_revision",
+      "to_revision",
+    ]);
+    const from = parseTicketStatusRevision(sup.from_revision),
+      to = parseTicketStatusRevision(sup.to_revision);
+    if (
+      expectedType !== "decision" ||
+      to !== from + 1 ||
+      !(
+        (sup.side === "superseded" && (from === 2 || from === 3)) ||
+        (sup.side === "replacement" && from === 2)
+      )
+    )
+      throw new TypeError("Invalid supersession Timeline");
+    const subjects = array(item.subjects, `${path}.subjects`).map((v, i) =>
+      parseSubject(v, `${path}.subjects[${i}]`),
+    );
+    if (
+      subjects.length !== 1 ||
+      subjects.some(
+        (v) => v.visibility === "readable" && v.entity.ref.type !== "decision",
+      )
+    )
+      throw new TypeError("Invalid supersession subject");
+    return {
+      ...provenance,
+      id: scopedID(item.id, `${path}.id`, "evt_"),
+      activityType: "decision.superseded",
+      actor: parseActor(item.actor, `${path}.actor`),
+      occurredAt: timestamp(item.occurred_at, `${path}.occurred_at`),
+      subjects,
+      supersession: { side: sup.side, fromRevision: from, toRevision: to },
+    };
+  }
   if (raw.activity_type === "ticket.priority-changed") {
     const item = exactRecord(value, path, [
       "id",
@@ -1179,7 +1438,8 @@ function validateViewShape(
       (relation.visibility === "readable" &&
         relation.direction === "outgoing" &&
         relation.relationType !== "relates-to" &&
-        relation.relationType !== "affects"),
+        relation.relationType !== "affects" &&
+        relation.relationType !== "supersedes"),
   );
   if (isThreadCurrent(current)) {
     if (timeline.length !== 0) {
@@ -1208,7 +1468,8 @@ function validateViewShape(
       (item) =>
         item.activityType !== "decision.proposed" &&
         item.activityType !== "decision.accepted" &&
-        item.activityType !== "decision.rejected",
+        item.activityType !== "decision.rejected" &&
+        item.activityType !== "decision.superseded",
     )
   ) {
     throw new TypeError("Decision Timeline contains an unexpected item");
@@ -1512,6 +1773,18 @@ function scopedID(value: unknown, path: string, prefix: string): string {
   return id;
 }
 
+function compareTimestamps(a: string, b: string): number {
+  const instant = (v: string) =>
+    BigInt(Date.parse(v)) * 1000000n +
+    BigInt(
+      (
+        (/\.(\d+)(?:Z|[+-]\d\d:\d\d)$/u.exec(v)?.[1] ?? "").slice(3) + "000000"
+      ).slice(0, 6),
+    );
+  const x = instant(a),
+    y = instant(b);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
 function timestamp(value: unknown, path: string): string {
   const result = string(value, path);
   if (

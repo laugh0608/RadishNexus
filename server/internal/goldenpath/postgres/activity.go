@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	cp "github.com/laugh0608/RadishNexus/server/internal/contextpackage"
 
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
@@ -74,7 +75,7 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
  COALESCE(h.original_time,e.occurred_at),COALESCE(h.original_facts,e.payload),h.event_id IS NOT NULL
  FROM radishnexus.domain_events e LEFT JOIN radishnexus.context_import_history h ON h.workspace_id=e.workspace_id AND h.event_id=e.event_id
  WHERE COALESCE(h.original_type,e.event_type) IN (
- 'decision.proposed','decision.accepted','decision.rejected','ticket.created','ticket.status-changed','ticket.assignee-changed','ticket.priority-changed',
+ 'decision.proposed','decision.accepted','decision.rejected','decision.superseded','ticket.created','ticket.status-changed','ticket.assignee-changed','ticket.priority-changed',
  'ci-run.recorded','deployment.recorded','project.created','channel.created','component.created','environment.created','document.created','document.revised',
  'repository.created','component.repository-linked','component.repository-unlinked','ticket.component-linked','ticket.component-unlinked')
  ORDER BY COALESCE(h.original_time,e.occurred_at),e.event_id
@@ -188,6 +189,20 @@ func insertActivityRecord(ctx context.Context, tx pgx.Tx, record activityRecord)
 		record.occurredAt, subjects, goldenpath.ActivityProjectionVersion, safeFacts)
 	if err != nil {
 		return fmt.Errorf("insert Activity projection for event %s: %w", record.eventID, err)
+	}
+	if record.eventType == "decision.superseded" && record.safeFacts["side"] == "superseded" {
+		f, e := cp.DecodeSupersession(record.payload)
+		if e != nil {
+			return e
+		}
+		other := record
+		other.target = entityref.Ref{Type: "decision", ID: f.Replacement.ID}
+		other.subjects = []entityref.Ref{record.target}
+		other.safeFacts = map[string]string{"side": "replacement", "from_revision": strconv.Itoa(f.ReplacementFromRevision), "to_revision": strconv.Itoa(f.ReplacementToRevision)}
+		if record.safeFacts["imported"] == "true" {
+			other.safeFacts["imported"] = "true"
+		}
+		return insertActivityRecord(ctx, tx, other)
 	}
 	return nil
 }
@@ -307,6 +322,13 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		if event.target.Type != "decision" || payload.Status != "accepted" {
 			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid decision.accepted facts", event.eventID)
 		}
+	case "decision.superseded":
+		f, err := cp.DecodeSupersession(event.payload)
+		if err != nil || event.target.Type != "decision" || event.target.ID == f.Replacement.ID || event.actorKind != "user" || event.actorID == nil {
+			return activityRecord{}, fmt.Errorf("invalid supersession Activity event %s", event.eventID)
+		}
+		record.subjects = []entityref.Ref{{Type: "decision", ID: f.Replacement.ID}}
+		record.safeFacts = map[string]string{"side": "superseded", "from_revision": strconv.Itoa(f.FromRevision), "to_revision": strconv.Itoa(f.ToRevision)}
 	case "decision.rejected":
 		var fields map[string]json.RawMessage
 		if event.target.Type != "decision" || payload.Status != "rejected" || json.Unmarshal(event.payload, &fields) != nil || len(fields) != 1 {

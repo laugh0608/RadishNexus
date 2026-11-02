@@ -616,38 +616,21 @@ func TestProjectDecisionDiscoveryPermissionsPaginationAndHTTP(t *testing.T) {
 	if w := f.get(t, h, "contributor", project, ""); w.Code != 401 {
 		t.Fatal("revoked Session", w.Code)
 	}
-	// D06: reserved statuses are corruption probes, never supported transitions.
-	// The corrupt record is outside page one: no global pre-scan is permitted.
+	// ADR-0049 makes superseded public and guards its provenance in PostgreSQL.
+	// An unsupported direct edit must fail before any discovery response exists.
 	corrupt := decisions[26]
-	for _, status := range []string{"superseded"} {
-		// Start from a formally accepted record to retain all reserved-state fields.
-		// superseded additionally requires an active replacement relation. This
-		// explicit anomaly fixture respects that database invariant; it does not
-		// exercise or claim a supported public supersession command.
-		if status == "superseded" {
-			f.exec(t, `INSERT INTO radishnexus.entity_links
-				(id,workspace_id,from_type,from_id,relation_type,to_type,to_id,assertion,origin,created_by_kind,created_by_id)
-				VALUES('lnk_decision_reserved_probe',$1,'decision',$2,'supersedes','decision',$3,'asserted','user','user',$4)`, owner.WorkspaceID, decisions[0].ID, corrupt.ID, owner.ID)
-		}
-		f.exec(t, `UPDATE radishnexus.decisions SET status=$1,rejection_reason=NULL WHERE id=$2`, status, corrupt.ID)
-		if w := f.get(t, h, "owner", project, "?limit=1"); w.Code != 200 {
-			t.Fatal("unreached corruption rejected first page", w.Code, w.Body.String())
-		}
-		if w := f.get(t, h, "owner", project, "?limit=50"); w.Code != 500 || strings.Contains(w.Body.String(), "\"items\"") || strings.Contains(w.Body.String(), corrupt.ID) {
-			t.Fatal("invalid status partially exposed", status, w.Code, w.Body.String())
-		}
-		f.exec(t, `UPDATE radishnexus.decisions SET status='accepted',rejection_reason=NULL WHERE id=$1`, corrupt.ID)
-		if status == "superseded" {
-			f.exec(t, `UPDATE radishnexus.entity_links SET state='removed',removed_by_kind='user',removed_by_id=$1,
-				removed_at=clock_timestamp(),updated_at=clock_timestamp(),removal_reason='reserved-state probe complete'
-				WHERE id='lnk_decision_reserved_probe'`, owner.ID)
-		}
+	if _, err := f.pool.Exec(f.ctx, `INSERT INTO radishnexus.entity_links(id,workspace_id,from_type,from_id,relation_type,to_type,to_id,assertion,origin,created_by_kind,created_by_id) VALUES('lnk_decision_reserved_probe',$1,'decision',$2,'supersedes','decision',$3,'asserted','user','user',$4)`, owner.WorkspaceID, decisions[0].ID, corrupt.ID, owner.ID); err == nil {
+		t.Fatal("supersession without metadata/provenance accepted")
 	}
-	f.exec(t, `UPDATE radishnexus.decisions SET question='' WHERE id=$1`, ids[0])
-	if w := f.get(t, h, "owner", project, "?limit=50"); w.Code != 500 || strings.Contains(w.Body.String(), "\"items\"") {
-		t.Fatal("invalid question partially exposed", w.Code, w.Body.String())
+	if _, err := f.pool.Exec(f.ctx, `UPDATE radishnexus.decisions SET status='superseded' WHERE id=$1`, corrupt.ID); err == nil {
+		t.Fatal("unsupported superseded mutation accepted")
 	}
-	f.exec(t, `UPDATE radishnexus.decisions SET question=$1 WHERE id=$2`, question, ids[0])
+	if _, err := f.pool.Exec(f.ctx, `UPDATE radishnexus.decisions SET question='' WHERE id=$1`, ids[0]); err == nil {
+		t.Fatal("immutable proposal question changed")
+	}
+	if w := f.get(t, h, "owner", project, "?limit=50"); w.Code != 200 {
+		t.Fatal("failed mutation damaged readable page", w.Code, w.Body.String())
+	}
 	// R04: compare full serialized row sets, catching mutation as well as inserts.
 	before := f.businessSnapshot(t)
 	for range 3 {

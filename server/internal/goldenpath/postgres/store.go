@@ -139,6 +139,7 @@ func (store *Store) CreateDecisionFromThread(
 	}
 
 	result.Decision = goldenpath.Decision{
+		DecisionRevision:   1,
 		ID:                 command.DecisionID,
 		WorkspaceID:        command.Principal.WorkspaceID,
 		GoverningProjectID: projectID,
@@ -178,11 +179,12 @@ func (store *Store) CreateTicketFromDecision(
 		return result, err
 	}
 	var decisionStatus string
-	if err = tx.QueryRow(ctx, `SELECT status FROM radishnexus.decisions WHERE workspace_id=$1 AND id=$2 FOR SHARE`, command.Principal.WorkspaceID, command.DecisionID).Scan(&decisionStatus); err != nil {
+	var decisionUpdated time.Time
+	if err = tx.QueryRow(ctx, `SELECT status,updated_at FROM radishnexus.decisions WHERE workspace_id=$1 AND id=$2 FOR SHARE`, command.Principal.WorkspaceID, command.DecisionID).Scan(&decisionStatus, &decisionUpdated); err != nil {
 		return result, fmt.Errorf("lock Decision for Ticket: %w", err)
 	}
-	if decisionStatus != "accepted" {
-		return result, fmt.Errorf("%w: Ticket requires an accepted Decision", authz.ErrConflict)
+	if err = tx.QueryRow(ctx, `SELECT GREATEST(clock_timestamp(),$1::timestamptz+interval '1 microsecond')`, decisionUpdated).Scan(&command.OccurredAt); err != nil {
+		return result, fmt.Errorf("read Ticket creation time: %w", err)
 	}
 
 	receipt, duplicate, err := claimCollaborationCommand(
@@ -212,10 +214,22 @@ func (store *Store) CreateTicketFromDecision(
 		if err != nil {
 			return result, err
 		}
+		var exact bool
+		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM radishnexus.domain_events e JOIN radishnexus.entity_links l ON l.workspace_id=e.workspace_id AND l.source_event_id=e.event_id JOIN radishnexus.collaboration_command_receipts r ON r.workspace_id=e.workspace_id AND r.event_id=e.event_id WHERE e.workspace_id=$1 AND e.event_id=$2 AND e.event_type='ticket.created' AND e.primary_entity_type='ticket' AND e.primary_entity_id=$3 AND e.project_id=$4 AND e.actor_kind='user' AND e.actor_id=$5 AND e.payload=jsonb_build_object('status','open','decision',jsonb_build_object('type','decision','id',$6::text)) AND l.from_type='ticket' AND l.from_id=$3 AND l.to_type='decision' AND l.to_id=$6 AND l.relation_type='implements' AND e.occurred_at=l.created_at AND e.occurred_at=r.created_at AND r.command_kind='ticket.create' AND r.actor_id=$5 AND r.target_id=$6 AND r.result_id=$3 AND r.client_operation_id=$7)`, command.Principal.WorkspaceID, receipt.eventID, receipt.resultID, projectID, command.Principal.ID, command.DecisionID, command.ClientOperationID).Scan(&exact)
+		if err != nil {
+			return result, fmt.Errorf("verify Ticket creation receipt: %w", err)
+		}
+		if !exact {
+			return result, fmt.Errorf("invalid Ticket creation receipt provenance")
+		}
 		if err := tx.Commit(ctx); err != nil {
 			return result, fmt.Errorf("commit duplicate Ticket creation lookup: %w", err)
 		}
 		return result, nil
+	}
+
+	if decisionStatus != "accepted" {
+		return result, fmt.Errorf("%w: Ticket requires an accepted Decision", authz.ErrConflict)
 	}
 
 	_, err = tx.Exec(ctx, `

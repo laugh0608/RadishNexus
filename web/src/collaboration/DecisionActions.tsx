@@ -20,6 +20,7 @@ export function useDecisionActions({
   decisionID,
   current,
   canDecide,
+  canRetry,
   unavailable,
   client,
   createOperationID,
@@ -31,6 +32,7 @@ export function useDecisionActions({
   decisionID: string;
   current?: DecisionCurrent;
   canDecide: boolean;
+  canRetry: boolean;
   unavailable: boolean;
   client: CollaborationClient;
   createOperationID: () => string;
@@ -47,16 +49,22 @@ export function useDecisionActions({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const active = useRef<AbortController | null>(null);
-  const [observed, setObserved] = useState({ current, canDecide, unavailable });
+  const [observed, setObserved] = useState({
+    current,
+    canDecide,
+    canRetry,
+    unavailable,
+  });
   if (
     observed.current !== current ||
     observed.canDecide !== canDecide ||
+    observed.canRetry !== canRetry ||
     observed.unavailable !== unavailable
   ) {
-    setObserved({ current, canDecide, unavailable });
+    setObserved({ current, canDecide, canRetry, unavailable });
     setConfirmed(false);
     setBusy(false);
-    if (unavailable || (current?.status === "proposed" && !canDecide)) {
+    if (unavailable || (current && !canRetry)) {
       setPending(null);
       setOutcome("");
       setRationale("");
@@ -69,7 +77,7 @@ export function useDecisionActions({
       active.current?.abort();
       active.current = null;
     },
-    [current, canDecide, unavailable],
+    [current, canDecide, canRetry, unavailable],
   );
 
   const submit = async (retry?: Pending) => {
@@ -129,7 +137,7 @@ export function useDecisionActions({
       setReason("");
       setMessage(
         operation.action === "accept"
-          ? "Decision 已由当前用户明确接受。"
+          ? "原接受操作已确认，以当前状态为准。"
           : "Decision 已明确拒绝，理由和来源已保留。",
       );
       onRefresh();

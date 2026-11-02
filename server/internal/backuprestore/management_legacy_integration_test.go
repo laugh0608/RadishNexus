@@ -22,6 +22,10 @@ func TestBackupRestoreAssignmentLegacy(t *testing.T) {
 	testBackupRestoreLegacy(t, "RADISHNEXUS_ASSIGNMENT_LEGACY_BIN", 20)
 }
 
+func TestBackupRestoreSupersessionLegacy(t *testing.T) {
+	testBackupRestoreLegacy(t, "RADISHNEXUS_SUPERSESSION_LEGACY_BIN", 23)
+}
+
 func TestBackupRestoreDecisionLegacy(t *testing.T) {
 	testBackupRestoreLegacy(t, "RADISHNEXUS_DECISION_LEGACY_BIN", 22)
 }

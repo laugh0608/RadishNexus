@@ -119,7 +119,7 @@ entity://decision/dec_01K4EXAMPLE
 
 [ADR-0046](../adr/0046-ticket-assignee.md) 增加 migration 021、独立 `assignment_revision`、`ticket.assignee.set` receipt 和 `ticket.assignee-changed` schema 1。`GET / POST /api/v1/workspaces/{workspace_id}/tickets/{ticket_id}/assignee` 与 `/assignee/candidates` 复用当前 Workspace / Project 准入、严格 JSON、CSRF 和 no-store；候选 cursor 绑定操作者、Workspace 与 Ticket。Project Ticket 发现行增加必填可空 `assignee`，与详情使用相同资格谓词。旧创建与状态响应不承担分配响应职责。
 
-新动作绑定两个 Ticket 版本及目标 lifecycle / Project management 代次；清空明确传 null 与目标代次字符串 `"0"`。精确重试重查操作者当前写权后只返回原事实，后续终态和目标失权不重演旧分配。真实变更与事件、receipt、Outbox、Activity 原子提交（本切片引入 v9，当前随 ADR-0048 升为 v11）；原始事件只保存前后身份与相邻版本，时间线仅位于 Ticket。成员失权保留记录与历史，不授予任何权限。本切片的 Go、Web、schema 与 v2 导入导出须配套停写升级；当前交付版本以 ADR-0048 v4 合同为准，不能混用旧客户端。
+新动作绑定两个 Ticket 版本及目标 lifecycle / Project management 代次；清空明确传 null 与目标代次字符串 `"0"`。精确重试重查操作者当前写权后只返回原事实，后续终态和目标失权不重演旧分配。真实变更与事件、receipt、Outbox、Activity 原子提交（本切片引入 v9，当前随 ADR-0049 升为 v12）；原始事件只保存前后身份与相邻版本，时间线仅位于 Ticket。成员失权保留记录与历史，不授予任何权限。本切片的 Go、Web、schema 与 v2 导入导出须配套停写升级；当前交付版本以 ADR-0049 v5 合同为准，不能混用旧客户端。
 
 ## Ticket 优先级与筛选合同
 
@@ -131,7 +131,17 @@ Project 工单列表增加必填 `priority`，支持 `status / assignee / priori
 
 [ADR-0048](../adr/0048-decision-lifecycle-and-rejection.md)增加唯一 decision.reject 命令与 migration 023，复用现有 rejection_reason；接受 / 拒绝先按当前账户、Workspace、Project 与全部 evidence 重新授权，再以同一 Decision 排他锁和 proposed 状态裁决。该切片无内容修改、重开或回转，旧接受 body / canonical digest / receipt 不变；提案精确重试返回同一 Decision 的真实当前状态。决定时间在锁内取数据库时间并严格递增，原状态、receipt、schema 1 decision.rejected、Outbox 与 Activity 11 原子提交。
 
-正式完整 Decision DTO 增必填 nullable rejection_reason，接受三状态；Decision Nexus View 在同一快照返回 accept / reject / create_ticket 能力，能力不授予权限，创建 Ticket 保持独立贡献权限。Project 列表只扩展 rejected，字段、稳定 ID 分页和 cursor 保留。拒绝事件只含 status，无 subject，只投影到 Decision；理由按 Decision 当前权限读取，不复制到事件。v4 包保留拒绝理由 / 历史及二次导入来源，严格读取旧 v1～v3，旧理由转换为 null；Go / Web / CLI / schema 停写配套升级。替代、复核及其版本与历史仍须独立冻结。
+ADR-0048 引入 nullable rejection_reason、三状态和 v4 拒绝历史；拒绝事件只含 status，无 subject，只投影到 Decision，理由按 Decision 当前权限读取。当前完整读取与迁移增量以下节 ADR-0049 为准；复核继续独立设计。
+
+## Decision 最小替代
+
+[ADR-0049](../adr/0049-decision-supersession.md) 增加 migration 024 和唯一 `decision.supersede` 命令。`POST /api/v1/workspaces/{workspace_id}/decisions/{old_decision_id}/supersession` 严格绑定 operation、新 Decision、双方 base revision、理由和明确确认。同 Workspace / Project 的两个 accepted Decision 通过当前决策权与双方全部 evidence 权限后，按 ID 升序锁住双方；新 → 旧建立不可变 active supersedes，旧变 superseded、新保持 accepted，双方 decision_revision 各 +1。每个端点至多一个前驱 / 后继，不分叉、成环、移除或改写。
+
+proposed / accepted / rejected 初始版本分别为 1 / 2 / 2；参与替代后 accepted 为 3，superseded 为 3 或 4。原接受字段与 decided_at 不改，updated_at 由替代历史解释。理由权威存于 EntityLink 严格 metadata，双方可读才展示；不进入事件。旧状态、双方版本、link / metadata、receipt、单条 schema 1 decision.superseded、Outbox 与双方 Activity 12 原子提交。事件 primary 为旧 Decision，显式投影双方各自版本和另一端 subject，不向其它邻居传播。
+
+完整 DTO 增必填 decision_revision 和第四状态；Nexus View 六能力为 accept / reject / create_ticket / supersede / retry_decision / retry_ticket_creation。首次资格与原未知请求重试权限独立；每次写入仍检查当前权限。原接受 body / digest 不变，精确重试可返回当前 superseded；Ticket 创建先核验原 receipt，新 operation 才要求 accepted。已有执行对象不换来源，新创建 / 替代的事实时间在 Decision 锁内确定。
+
+当前默认 v5 包保留版本、关系理由、双对象历史和创建时有效的 Ticket 来源，严格读取旧 v1～v4，原 digest 不变；历史导入不伪造原生 receipt 或 Outbox。Go / Web / CLI / schema 024 / Activity 12 配套停写升级，旧 023 备份只能使用匹配工件恢复空目标后再显式迁移。验证与限制见[实施记录](../status/reviews/2026-11-02-decision-supersession.md)。
 
 ## 授权解析
 
@@ -270,7 +280,7 @@ request_context
 
 [ADR-0044](../adr/0044-portable-project-context-package.md) 将导入事实封装为 `context.history-recorded` schema 1：actor 是本次真实导入负责人，source 为 import 批次，发生时间为本次接纳时间；原事件类型、作者、发生时间、事实及因果关系保存在受约束、不可变的历史来源中。目标 ID 全部映射，原 client operation / receipt 不进入目标幂等空间。导入 receipt 绑定包摘要、目标身份、操作者、operation 与权限计划。
 
-导入历史不写历史 Outbox，数据库禁止为这些事件添加投递；不会重新发通知、调用 provider 或执行历史命令。Activity projection 从 8 起在同事务导入和全量重建时读取来源事实（当前 10 同时支持负责人和优先级历史），并保留 `imported` 标识；原始作者 / 时间只用于历史解释。所有来源、时间线和关系读取继续验证当前对象权限。正常 web 事件与 receipt 保持既有约束，不以导入例外伪造原生动作。
+导入历史不写历史 Outbox，数据库禁止为这些事件添加投递；不会重新发通知、调用 provider 或执行历史命令。Activity projection 从 8 起在同事务导入和全量重建时读取来源事实（当前 12 同时支持负责人、优先级、Decision 拒绝与替代历史），并保留 `imported` 标识；原始作者 / 时间只用于历史解释。所有来源、时间线和关系读取继续验证当前对象权限。正常 web 事件与 receipt 保持既有约束，不以导入例外伪造原生动作。
 
 ## Activity 投影
 
@@ -310,7 +320,7 @@ safe_facts
 
 [ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md) 将首批五类 Activity 事件接入同一业务事务；投影完成与业务提交一致，失败整单回滚。显式重建先取得投影表写入排他锁，再读取新的源事件快照，保留完整版本并避免覆盖并发提交。后续基础配置与 Document 扩展事件映射；当前投影版本为 5，包含 `document.created` 与 `document.revised`，以及 ADR-0032 的 `component.created` / `environment.created`；恢复历史通过 revised 事件记录来源版本。ADR-0033 增加 `repository.created`、`component.repository-linked` 与 `component.repository-unlinked`；创建投影到 Repository，关系事件的主要对象为 Component，Activity 只投影状态与受控对象引用，精确 link ID 保存在源事件中，不复制外部 URL / 身份。ADR-0034 增加 `ticket.component-linked` 与 `ticket.component-unlinked`，只投影到 Ticket，使用 `relation_state` 和受控 Component subject，不扩散到共享组件时间线。授权管理明细只进入配置 Audit，不进入普通 Activity。旧数据仍由显式重建补齐，不随启动自动执行。
 
-Thread ← Decision、Decision ← Ticket 从同一权威 EntityLink 反向读取，不复制镜像关系。协作 readable relation 明确 `direction`，不可读反向目标完全隐藏；原 evidence restricted 占位不携带方向或目标信息。结果排序、全量读取成本和 Go / Web 同步升级边界见 ADR-0022。Timeline 仍投影到原事件主要对象，不自动向所有关系端点传播。
+Thread ← Decision、Decision ← Ticket 从同一权威 EntityLink 反向读取，不复制镜像关系。协作 readable relation 明确 `direction`，不可读反向目标完全隐藏；原 evidence restricted 占位不携带方向或目标信息。结果排序、全量读取成本和 Go / Web 同步升级边界见 ADR-0022。Timeline 默认投影到原事件主要对象；ADR-0049 的替代命令显式投影到双方 Decision，不自动向所有关系端点传播。
 
 ## Outbox、Activity 与 Audit 分工
 

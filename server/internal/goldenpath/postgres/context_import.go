@@ -89,7 +89,7 @@ func (ids contextIDs) facts(f cp.Facts) cp.Facts {
 		a.ToUserID = ids.optional("actor", a.ToUserID)
 		f.Assignment = &a
 	}
-	for _, ptr := range []**cp.Ref{&f.Evidence, &f.Decision, &f.Ticket, &f.Channel, &f.Thread, &f.Message} {
+	for _, ptr := range []**cp.Ref{&f.Evidence, &f.Decision, &f.Ticket, &f.Channel, &f.Thread, &f.Message, &f.Replacement, &f.Relation} {
 		if *ptr != nil {
 			r := **ptr
 			r.ID = ids.get(r.Type, r.ID)
@@ -196,7 +196,7 @@ func writeContext(ctx context.Context, tx pgx.Tx, a goldenpath.OwnerAccess, p cp
 				for _, v := range data.Deciders {
 					deciders = append(deciders, ids.get("actor", v))
 				}
-				e = exec(`INSERT INTO radishnexus.decisions(id,workspace_id,governing_project_id,question,outcome,status,proposer_id,decider_ids,decided_at,rationale,alternatives,consequences,review_at,rejection_reason,created_by_kind,created_by_id,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$17,'import',$14,$15,$16)`, id, w, project, data.Question, data.Outcome, data.Status, ids.get("actor", data.Proposer), deciders, data.DecidedAt, data.Rationale, data.Alternatives, data.Consequences, data.ReviewAt, op, o.CreatedAt, o.UpdatedAt, data.RejectionReason)
+				e = exec(`INSERT INTO radishnexus.decisions(id,workspace_id,governing_project_id,question,outcome,status,proposer_id,decider_ids,decided_at,rationale,alternatives,consequences,review_at,rejection_reason,decision_revision,created_by_kind,created_by_id,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$17,$18,'import',$14,$15,$16)`, id, w, project, data.Question, data.Outcome, data.Status, ids.get("actor", data.Proposer), deciders, data.DecidedAt, data.Rationale, data.Alternatives, data.Consequences, data.ReviewAt, op, o.CreatedAt, o.UpdatedAt, data.RejectionReason, data.DecisionRevision)
 			case cp.Ticket:
 				e = exec(`INSERT INTO radishnexus.tickets(id,workspace_id,governing_project_id,title,status,status_revision,created_by,created_at,updated_at,assignee_user_id,assignment_revision,priority,priority_revision) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, id, w, project, data.Title, data.Status, data.StatusRevision, actor, o.CreatedAt, o.UpdatedAt, ids.optional("actor", data.AssigneeUserID), data.AssignmentRevision, data.Priority, data.PriorityRevision)
 			case cp.Document:
@@ -238,12 +238,16 @@ func writeContext(ctx context.Context, tx pgx.Tx, a goldenpath.OwnerAccess, p cp
 		}
 	}
 	for _, l := range d.Links {
+		metadata := map[string]string{}
+		if l.SupersessionReason != nil {
+			metadata["supersession_reason"] = *l.SupersessionReason
+		}
 		var removedKind *string
 		if l.RemovedActor != nil {
 			v := "user"
 			removedKind = &v
 		}
-		if e := exec(`INSERT INTO radishnexus.entity_links(id,workspace_id,from_type,from_id,relation_type,to_type,to_id,assertion,origin,origin_ref,created_by_kind,created_by_id,created_at,updated_at,source_event_id,metadata,state,removed_by_kind,removed_by_id,removed_at,removal_reason) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'import',$9,'import',$9,$10,$11,$12,'{}',$13,$14,$15,$16,$17)`, ids.get("entity-link", l.ID), w, l.From.Type, ids.get(l.From.Type, l.From.ID), l.Relation, l.To.Type, ids.get(l.To.Type, l.To.ID), l.Assertion, op, l.CreatedAt, l.UpdatedAt, ids.get("event", l.EventID), l.State, removedKind, ids.optional("actor", l.RemovedActor), l.RemovedAt, l.RemovalReason); e != nil {
+		if e := exec(`INSERT INTO radishnexus.entity_links(id,workspace_id,from_type,from_id,relation_type,to_type,to_id,assertion,origin,origin_ref,created_by_kind,created_by_id,created_at,updated_at,source_event_id,metadata,state,removed_by_kind,removed_by_id,removed_at,removal_reason) VALUES($1,$2,$3,$4,$5,$6,$7,$8,'import',$9,'import',$9,$10,$11,$12,$18,$13,$14,$15,$16,$17)`, ids.get("entity-link", l.ID), w, l.From.Type, ids.get(l.From.Type, l.From.ID), l.Relation, l.To.Type, ids.get(l.To.Type, l.To.ID), l.Assertion, op, l.CreatedAt, l.UpdatedAt, ids.get("event", l.EventID), l.State, removedKind, ids.optional("actor", l.RemovedActor), l.RemovedAt, l.RemovalReason, cp.Encode(metadata)); e != nil {
 			return e
 		}
 	}

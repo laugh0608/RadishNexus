@@ -202,11 +202,15 @@
 
 ### D-024 单 Project 可移植协作上下文
 
-依据 [ADR-0044](adr/0044-portable-project-context-package.md)、[ADR-0046](adr/0046-ticket-assignee.md)、[ADR-0047](adr/0047-ticket-priority-and-filtering.md) 与 [ADR-0048](adr/0048-decision-lifecycle-and-rejection.md)，当前导出使用 `project-collaboration-v4`，携带负责人、优先级及各自连续历史，并增加 Decision 拒绝理由和事件。严格读取旧 v1～v3，旧 Decision 理由转换为 null；v1 / v2 优先级转换为 unset / 1，v1 同时转换未分配 / 1。各 profile 迁移当前可读的单 Project 协作闭包，保留结构化关系、来源、历史作者与全部 Document revision；目标为匹配工件的空业务实例。新 ID 映射、不可登录历史身份和导入来源独立记录，不自动认领作者或导入源 ACL。目标初始 restricted，仅导入负责人取得显式访问和管理责任；其余成员通过正式授权加入。导入原子提交并保存精确结果，不产生历史 Outbox；整库备份、通用 Workspace / 研发数据迁移和附件范围保持独立。
+依据 [ADR-0044](adr/0044-portable-project-context-package.md) 及 ADR-0046～0049 的增量，当前导出使用 `project-collaboration-v5`，携带负责人、优先级、Decision 拒绝和替代的完整历史。严格读取旧 v1～v4：旧 Decision 版本回填 proposed 1 / 终态 2，旧 Link 理由为 null，早期字段按原合同转换；源 manifest digest 不变。各 profile 迁移当前可读的单 Project 协作闭包，保留结构化关系、来源、历史作者与全部 Document revision；目标为匹配工件的空业务实例。新 ID 映射、不可登录历史身份和导入来源独立记录，不自动认领作者或导入源 ACL。目标初始 restricted，仅导入负责人取得显式访问和管理责任；其余成员通过正式授权加入。导入原子提交并保存精确结果，不产生历史 Outbox；整库备份、通用 Workspace / 研发数据迁移和附件范围保持独立。
 
 ### D-025 Decision 最小拒绝
 
-2026-11-02 接受 [ADR-0048](adr/0048-decision-lifecycle-and-rejection.md) D01～D07：仅 proposed 可由当前有决策权且可读全部 evidence 的成员明确拒绝，保留理由、主体、时间和来源；accepted / rejected 在本片不回转，旧接受 digest / receipt 不改写。接受与拒绝共享事务 / 对象锁，竞争只产生一次决定；新增 decision.reject、schema 1 decision.rejected 与 Activity 11，理由不复制到事件或时间线。三状态公共读取及服务端能力、schema 023 与上下文 v4 配套升级；已有 Ticket / Document 不隐式改变，替代 / 复核仍独立冻结。
+2026-11-02 接受 [ADR-0048](adr/0048-decision-lifecycle-and-rejection.md) D01～D07：仅 proposed 可由当前有决策权且可读全部 evidence 的成员明确拒绝，保留理由、主体、时间和来源；accepted / rejected 在本片不回转，旧接受 digest / receipt 不改写。接受与拒绝共享事务 / 对象锁，竞争只产生一次决定；新增 decision.reject、schema 1 decision.rejected 与 Activity 11，理由不复制到事件或时间线。三状态公共读取及服务端能力、schema 023 与上下文 v4 配套升级；已有 Ticket / Document 不隐式改变；替代增量见 D-026，复核仍独立设计。
+
+### D-026 Decision 最小替代
+
+2026-11-02 接受 [ADR-0049](adr/0049-decision-supersession.md) D01～D07：同 Project 两条已接受结论由当前有决策权、可读双方全部 evidence 的成员明确确认替代，形成不可变单链。双方版本同时增加，原接受内容、责任、时间与执行来源保留；原未知接受 / 已建 Ticket 请求按当前权限核验原事实，新的 Ticket 请求要求来源仍 accepted。单事件显式投影到双方，理由保存在关系 metadata 并按双方读取权限返回。schema 024 / Activity 12 / v5 与 Go / Web / CLI 配套升级；复核、编辑、重开、分叉与跨 Project 替代不在本片。
 
 ## 尚未冻结
 
@@ -224,6 +228,8 @@
 - 是否以及何时引入 AI 能力。
 
 ## 变更记录
+
+- 2026-11-02：按所有者确认的 ADR-0049 增补 D-026、双方版本、不可变替代链及原操作 / 执行历史兼容；分层证据见[实施记录](status/reviews/2026-11-02-decision-supersession.md)。
 
 - 2026-11-02：按所有者确认的 ADR-0048 增补 Decision 最小拒绝、正式三状态读取、schema 023 / Activity 11 / v4 包兼容；具体实现和验证边界见[本轮记录](status/reviews/2026-11-02-decision-rejection.md)。
 

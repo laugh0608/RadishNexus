@@ -264,13 +264,23 @@ Thread DTO 只通过结构化 ref 返回 origin Channel 和 `started-from` Messa
 
 接受 / 拒绝共用授权、Decision 排他锁和原子 receipt / 事件 / Outbox / Activity。旧 acceptance body / digest 保留，精确重试先复核当前权限；新提案返回 proposed，提案重试返回同一 Decision 的真实当前状态。新决定时间在锁内取数据库时间，旧事件和时间不重写。
 
-所有完整 Decision DTO 增必填 nullable rejection_reason，支持 proposed / accepted / rejected；Decision Nexus View 增 `capabilities: {accept,reject,create_ticket}`。能力来自同一权限快照，创建 Ticket 不额外依赖 evidence 权限。新 schema 1 decision.rejected 只含 status、无 subject、只投影到 Decision；普通更新和重建一致，理由不进入事件。migration 023 / Activity 11 / v4 包与 Go / Web / CLI 配套停写升级，旧 022 工件备份须以匹配工件恢复空目标后再显式迁移；完整验证与限制见[实施记录](../docs/status/reviews/2026-11-02-decision-rejection.md)。
+ADR-0048 引入必填 nullable rejection_reason 和三状态；schema 1 decision.rejected 只含 status、无 subject、只投影到 Decision，理由不进入事件。该切片的原始验证见[实施记录](../docs/status/reviews/2026-11-02-decision-rejection.md)，当前完整 DTO、版本及兼容增量以下节为准。
+
+## Decision 最小替代
+
+[ADR-0049](../docs/adr/0049-decision-supersession.md) 增加 `POST /api/v1/workspaces/{workspace_id}/decisions/{old_decision_id}/supersession`。严格六字段：client_operation_id、replacement_decision_id、base_decision_revision、base_replacement_revision、supersession_reason、confirmed=true；body 64 KiB，理由按 Go TrimSpace 规范化，原始与规范值均不超过 32 KiB、有效 Unicode 且无 NUL。双方必须为同 Project 的不同 accepted Decision，当前 active decider / admin 且双方全部 evidence 可读；按 ID 排序锁住双方，单链无分叉、无环，不允许撤销或改写。
+
+完整 Decision DTO 包含必填 decision_revision 和 proposed / accepted / rejected / superseded。proposed 为 1、接受 / 拒绝为 2，替代双方各 +1；原接受内容、deciders 与 decided_at 保留。Nexus View 六能力为 accept / reject / create_ticket / supersede / retry_decision / retry_ticket_creation，后两项只服务页面内已有的未知原请求。原 acceptance body / digest 不变，精确重试可返回当前 superseded；原 Ticket 创建 receipt 先于新请求 accepted 资格检查，已有 Ticket / Document 独立维护。
+
+200 替代响应只返回原操作的双方 ref、relation ref、规范理由、双方前后版本和时间，不冒充当前快照。原子写入旧状态、双方版本、不可变 link / metadata、receipt、单条 schema 1 decision.superseded、Outbox 和双方 Activity；理由只在双方均可读的 relation 返回，不复制到事件。正常投影、导入和重建复用相同分支。
+
+migration 024 / Activity 12 / 默认 v5 包须与 Go / Web / CLI 配套停写升级；严格读取 v1～v4，旧版本与 Link 理由在内部转换，不改源 digest。023 备份须以匹配工件恢复全新空目标，再显式迁移。原生 / 导入继续替代、整库恢复与 CLI 验证见[实施记录](../docs/status/reviews/2026-11-02-decision-supersession.md)。
 
 ## Ticket 最小负责人
 
 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 由 `TicketAssignmentService` 承载 Ticket 作用域的读取、候选分页和显式写入。详情支持设置、改派、清空、由我负责及原操作重试；Project 列表显示相同摘要。仅 open / in-progress 接受新分配，关闭工单保留责任；成员暂停、退出或失权显示不可执行，不自动清空或授予权限。
 
-migration 021 与 Activity v9 配套部署；负责人字段和不可变历史随备份恢复。当前导出默认 `project-collaboration-v4`，仍严格读取 v1～v3；历史身份不绑定登录账户。接口字段、并发代次和精确重试见 ADR，验收范围见[本轮记录](../docs/status/reviews/2026-10-28-ticket-assignee.md)。
+migration 021 与 Activity v9 配套部署；负责人字段和不可变历史随备份恢复。当前导出默认 `project-collaboration-v5`，仍严格读取 v1～v4；历史身份不绑定登录账户。接口字段、并发代次和精确重试见 ADR，验收范围见[本轮记录](../docs/status/reviews/2026-10-28-ticket-assignee.md)。
 
 ## Ticket 最小状态流转
 
@@ -302,7 +312,7 @@ apply 只接受已确认 proposal、UUID operation ID 与计划摘要；等待�
 
 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的 migration 019、`internal/contextpackage`、`goldenpath.ContextService` 与受认证 HTTP 入口提供单 Project 协作导出 / 空业务实例导入。`go build ./cmd/nexus-context` 构建独立 CLI，使用 HTTPS Session 和私有凭据文件，不读取数据库 DSN；操作、协议路由和限制见[迁移手册](../deploy/context-package.md)。该 CLI 当前面向 macOS / Linux，不包含在 Compose operations 工件中。
 
-历史身份不可登录，初始 Project restricted 并仅授予导入负责人；真实导入操作与源事实分开保存。来源 API 先验证当前对象读取权限，Web 仅展示安全导入标识。Activity 11 支持含负责人、优先级与 Decision 拒绝的导入历史重建，四张来源 / 审计表纳入整库备份，Session 等既有排除规则不变。隔离验收见[记录](../docs/status/reviews/2026-10-24-portable-context-package.md)。
+历史身份不可登录，初始 Project restricted 并仅授予导入负责人；真实导入操作与源事实分开保存。来源 API 先验证当前对象读取权限，Web 仅展示安全导入标识。Activity 12 支持含负责人、优先级、Decision 拒绝与替代的导入历史重建，四张来源 / 审计表纳入整库备份，Session 等既有排除规则不变。隔离验收见[记录](../docs/status/reviews/2026-10-24-portable-context-package.md)。
 
 ## 最小备份与恢复
 

@@ -189,7 +189,7 @@ func TestTicketPriorityPortableHistoryAndNativeContinuation(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundle := source.bundle(t)
-	if bundle.Manifest.Profile != "project-collaboration-v4" {
+	if bundle.Manifest.Profile != "project-collaboration-v5" {
 		t.Fatal(bundle.Manifest.Profile)
 	}
 	target := contextDatabase(t)

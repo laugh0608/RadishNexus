@@ -247,11 +247,11 @@ Ticket 初始 `status_revision=1`，只随有效状态变化递增；当前 acti
 
 负责人按 [ADR-0046](adr/0046-ticket-assignee.md) 保存可空 `assignee_user_id` 与独立 `assignment_revision`，旧工单和新建工单均初始未分配 / 1。当前有 Project 写权者只能在 open / in-progress 设置、改派或清空；候选须同 Workspace 的 active 账户和成员，当前 Project 为 contributor / decider / admin，排除历史导入身份。分配不授予权限，也不限制其他有权成员改变工单状态。
 
-成员暂停、退出或失去写权后保留责任记录，读取时显示当前不可执行；恢复后的资格按当前权限计算。历史导入负责人保持不可登录，必须显式重新分配目标成员。新分配绑定所见负责人、状态、成员生命周期及项目管理代次；分配历史与状态历史分别递增，共用工单更新时间，原操作重试只返回原 applied 事实。负责人字段与历史随权威备份保存，负责人格式起于 ADR-0046 的 v2 合同，优先级扩展起于 ADR-0047 的 v3；当前统一由 ADR-0048 的 v4 承载这些 Ticket 字段。
+成员暂停、退出或失去写权后保留责任记录，读取时显示当前不可执行；恢复后的资格按当前权限计算。历史导入负责人保持不可登录，必须显式重新分配目标成员。新分配绑定所见负责人、状态、成员生命周期及项目管理代次；分配历史与状态历史分别递增，共用工单更新时间，原操作重试只返回原 applied 事实。负责人字段与历史随权威备份保存，负责人格式起于 ADR-0046 的 v2 合同，优先级扩展起于 ADR-0047 的 v3；当前统一由 ADR-0049 的 v5 承载这些 Ticket 字段。
 
 优先级按 [ADR-0047](adr/0047-ticket-priority-and-filtering.md) 使用 `unset / low / normal / high / urgent`，初始 unset / 1，不把未设置当成普通优先级。当前有 Project 写权的成员只在 open / in-progress 显式修改；独立 `priority_revision` 与所见状态版本共同防止旧确认覆盖，负责人变化不制造无关冲突。优先级不代表严重性、SLA、执行顺序或权限，终态保留结项值，须先重开后修改。
 
-Project 内状态、负责人（本人 / 未分配）和优先级三组单选条件按 AND 组合，默认全部，继续稳定 ID 分页。本人筛选表达责任记录，不暗示可执行资格；未分配仅指 SQL NULL，历史身份不算未分配。优先级历史自 v3 起承载，当前 v4 同时校验状态、分配、优先级连续历史；旧 v1 / v2 的转换沿 ADR-0047，Decision 拒绝扩展沿 ADR-0048。
+Project 内状态、负责人（本人 / 未分配）和优先级三组单选条件按 AND 组合，默认全部，继续稳定 ID 分页。本人筛选表达责任记录，不暗示可执行资格；未分配仅指 SQL NULL，历史身份不算未分配。优先级历史自 v3 起承载，当前 v5 同时校验状态、分配、优先级连续历史；旧 v1 / v2 的转换沿 ADR-0047，Decision 拒绝与替代扩展沿 ADR-0048 / 0049。
 
 ### Document
 
@@ -270,10 +270,11 @@ M0 最小字段：
 | `question` | 需要回答的问题 |
 | `outcome` | 最终结论；`accepted` 时必填 |
 | `status` | `proposed / accepted / rejected / superseded` |
+| `decision_revision` | 提案为 1，接受 / 拒绝为 2；一次替代使双方各增加 1 |
 | `proposer_id` | 提议人 |
 | `decider_ids` | 实际作出接受或拒绝结论的用户集合 |
-| `decided_at` | `accepted / rejected` 时必填 |
-| `rationale` | 采用结论的理由；`accepted` 时必填 |
+| `decided_at` | `accepted / rejected / superseded` 时必填；被替代后保留原决定时间 |
+| `rationale` | 采用结论的理由；`accepted / superseded` 时保留 |
 | `alternatives` | 被评估的主要方案及取舍 |
 | `consequences` | 已知影响和后续动作 |
 | `rejection_reason` | `rejected` 时必填 |
@@ -292,9 +293,9 @@ M0 最小字段：
 
 正式最小生命周期按 [ADR-0048](adr/0048-decision-lifecycle-and-rejection.md)开放 proposed → accepted / rejected。拒绝与接受都需要当前 active Project 的 decider / admin、全部 evidence 当前可读和人工明确确认；拒绝保留 rejection_reason、实际决策人与时间，来源不授予权限。accepted 不能被拒绝，rejected 不编辑或重开；重新考虑从原讨论提出新 Decision。现有 Ticket / Document 的状态与来源不随拒绝隐式变化。
 
-接受 / 拒绝在同一 Decision 锁下裁决，先复核当前权限再处理原 receipt；终态不回转且提案内容 / evidence 不开放修改，因此本片不新增状态版本，旧接受 digest 保持不变。后续内容编辑、状态回转、替代和复核须独立冻结版本及历史合同。三状态及 nullable 拒绝理由进入正式读取，理由遵循 Decision 自身权限；superseded 与 review_at 的正式操作仍未交付。
+接受 / 拒绝在同一 Decision 锁下裁决，先复核当前权限再处理原 receipt，旧接受 body / digest 保持不变。[ADR-0049](adr/0049-decision-supersession.md) 增加同 Workspace / Project 的单链替代：双方必须已接受、全部 evidence 当前可读，并由当前 decider / admin 对照后明确确认。新 → 旧建立不可变 active `supersedes`，旧变为 superseded，新仍为 accepted，双方版本各 +1；不分叉、不成环、不撤销或重开。替代理由仅存于该关系的严格 metadata，双方 Decision 均可读才返回；原结论、接受主体、时间和已有执行来源不变。
 
-当前上下文导出使用 v4，新增 Decision 拒绝理由及 rejected 事件，严格兼容 v1～v3 并将旧理由转换为 null，不补造历史；已确认结论与拒绝历史的导入均不代表目标成员刚执行一次决定。精确字段、时间和往返校验见 ADR-0048。
+完整 Decision 读取包含第四状态和版本。原接受精确重试返回真实当前 accepted / superseded；已创建 Ticket 的原操作仍可按当前贡献权核验，新 operation 不能从 superseded 创建 Ticket。已有 Ticket / Document 继续按自身权限维护，不自动迁移到新结论。当前上下文导出使用 v5，以双对象历史重放保留替代链，并按 Ticket 创建当时的 accepted 事实校验来源；严格读取 v1～v4，保留原 manifest digest，不补造事件或源 receipt。复核、到期和内容编辑继续独立设计。
 
 首期产品动作：
 

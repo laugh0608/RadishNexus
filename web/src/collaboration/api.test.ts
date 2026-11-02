@@ -25,6 +25,7 @@ const threadCurrent = {
 };
 
 const proposedDecision = {
+  decision_revision: 1,
   ref: { type: "decision", id: "dec_choice" },
   project: { type: "project", id: "prj_main" },
   question: "Adopt the collaboration boundary?",
@@ -42,6 +43,7 @@ const proposedDecision = {
 const acceptedDecision = {
   ...proposedDecision,
   status: "accepted",
+  decision_revision: 2,
   outcome: "Use the Session boundary.",
   rationale: "It preserves current authority.",
   deciders: [{ kind: "user", id: "usr_decider" }],
@@ -51,6 +53,7 @@ const acceptedDecision = {
 const rejectedDecision = {
   ...proposedDecision,
   status: "rejected",
+  decision_revision: 2,
   rejection_reason: "Reason",
   deciders: [{ kind: "user", id: "usr_decider" }],
   decided_at: now,
@@ -310,9 +313,17 @@ describe("Collaboration API adapter", () => {
         "decision",
         "dec_choice",
       );
-    const capabilities = { accept: false, reject: false, create_ticket: false };
+    const capabilities = {
+      accept: false,
+      reject: false,
+      create_ticket: false,
+      supersede: false,
+      retry_decision: false,
+      retry_ticket_creation: false,
+    };
     expect(parse(rejectedDecision, capabilities).current).toMatchObject({
       status: "rejected",
+      decisionRevision: 2,
       rejectionReason: "Reason",
     });
     for (const invalid of [
@@ -331,6 +342,173 @@ describe("Collaboration API adapter", () => {
       expect(() => parse(rejectedDecision, invalid)).toThrow();
   });
 
+  it("preserves microsecond supersession history and independent replay capabilities", () => {
+    const current = {
+      ...acceptedDecision,
+      status: "superseded",
+      decision_revision: 3,
+      updated_at: "2026-09-02T03:04:05.123001Z",
+    };
+    const capabilities = {
+      accept: false,
+      reject: false,
+      create_ticket: false,
+      supersede: false,
+      retry_decision: true,
+      retry_ticket_creation: true,
+    };
+    const relation = {
+      visibility: "readable",
+      direction: "incoming",
+      relation_type: "supersedes",
+      target: {
+        ref: { type: "decision", id: "dec_new" },
+        title: "New conclusion",
+      },
+      supersession: {
+        reason: "Reviewed replacement",
+        actor: { kind: "user", id: "usr_decider" },
+        occurred_at: current.updated_at,
+      },
+    };
+    const timeline = {
+      id: "evt_supersession",
+      activity_type: "decision.superseded",
+      actor: { kind: "user", id: "usr_decider" },
+      occurred_at: current.updated_at,
+      subjects: [{ visibility: "restricted" }],
+      supersession: { side: "superseded", from_revision: 2, to_revision: 3 },
+    };
+    const parse = (
+      item: unknown,
+      caps = capabilities,
+      event: unknown = timeline,
+    ) =>
+      parseCollaborationView(
+        {
+          data: {
+            current: item,
+            capabilities: caps,
+            relations: [{ visibility: "restricted" }, relation],
+            timeline: [event],
+          },
+        },
+        "decision",
+        "dec_choice",
+      );
+    expect(parse(current)).toMatchObject({
+      current: {
+        status: "superseded",
+        decisionRevision: 3,
+        outcome: acceptedDecision.outcome,
+      },
+      capabilities: { retryDecision: true, retryTicketCreation: true },
+      timeline: [
+        {
+          supersession: { side: "superseded", fromRevision: 2, toRevision: 3 },
+        },
+      ],
+    });
+    expect(() => parse({ ...current, updated_at: now })).toThrow();
+    expect(() =>
+      parse(current, { ...capabilities, create_ticket: true }),
+    ).toThrow();
+    expect(() =>
+      parse(current, capabilities, {
+        ...timeline,
+        supersession: { side: "superseded", from_revision: 2, to_revision: 4 },
+      }),
+    ).toThrow();
+    // Legacy proposed objects may have a later valid updated_at without a decision.
+    expect(
+      parseCollaborationView(
+        {
+          data: {
+            current: { ...proposedDecision, updated_at: current.updated_at },
+            capabilities: {
+              accept: false,
+              reject: false,
+              create_ticket: false,
+              supersede: false,
+              retry_decision: false,
+              retry_ticket_creation: false,
+            },
+            relations: [{ visibility: "restricted" }],
+            timeline: [],
+          },
+        },
+        "decision",
+        "dec_choice",
+      ).current,
+    ).toMatchObject({ decisionRevision: 1 });
+  });
+
+  it("sends the exact paired operation and rejects a mismatched supersession receipt", async () => {
+    setCSRFCookie();
+    const input = {
+      clientOperationID: "web:supersession",
+      replacementDecisionID: "dec_new",
+      baseDecisionRevision: 2,
+      baseReplacementRevision: 2,
+      supersessionReason: "  Reviewed replacement  ",
+      confirmed: true as const,
+    };
+    const data = {
+      superseded: { type: "decision", id: "dec_choice" },
+      replacement: { type: "decision", id: "dec_new" },
+      relation: { type: "entity-link", id: "lnk_supersession" },
+      supersession_reason: "Reviewed replacement",
+      from_revision: 2,
+      to_revision: 3,
+      replacement_from_revision: 2,
+      replacement_to_revision: 3,
+      occurred_at: now,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ data }))
+      .mockResolvedValueOnce(
+        jsonResponse({ data: { ...data, replacement_to_revision: 4 } }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    expect(
+      await browserCollaborationClient.supersedeDecision(
+        "wrk_main",
+        "dec_choice",
+        input,
+      ),
+    ).toMatchObject({
+      fromRevision: 2,
+      toRevision: 3,
+      supersessionReason: "Reviewed replacement",
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/workspaces/wrk_main/decisions/dec_choice/supersession",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "X-CSRF-Token": csrfToken }),
+        body: JSON.stringify({
+          client_operation_id: input.clientOperationID,
+          replacement_decision_id: input.replacementDecisionID,
+          base_decision_revision: 2,
+          base_replacement_revision: 2,
+          supersession_reason: input.supersessionReason,
+          confirmed: true,
+        }),
+      }),
+    );
+    await expect(
+      browserCollaborationClient.supersedeDecision(
+        "wrk_main",
+        "dec_choice",
+        input,
+      ),
+    ).rejects.toMatchObject({
+      userMessage: "服务返回的替代结果不符合当前契约。",
+    });
+  });
+
   it("accepts incoming results and rejects direction, source and duplicate drift", () => {
     const incoming = {
       visibility: "readable",
@@ -343,7 +521,14 @@ describe("Collaboration API adapter", () => {
         {
           data: {
             current: proposedDecision,
-            capabilities: { accept: true, reject: true, create_ticket: false },
+            capabilities: {
+              accept: true,
+              reject: true,
+              create_ticket: false,
+              supersede: false,
+              retry_decision: true,
+              retry_ticket_creation: false,
+            },
             relations,
             timeline: [],
           },
@@ -378,7 +563,14 @@ describe("Collaboration API adapter", () => {
     const safe = {
       data: {
         current: proposedDecision,
-        capabilities: { accept: true, reject: true, create_ticket: false },
+        capabilities: {
+          accept: true,
+          reject: true,
+          create_ticket: false,
+          supersede: false,
+          retry_decision: true,
+          retry_ticket_creation: false,
+        },
         relations: [{ visibility: "restricted" }],
         timeline: [
           {

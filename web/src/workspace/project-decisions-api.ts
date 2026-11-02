@@ -11,7 +11,7 @@ import {
 export interface ProjectDecision {
   id: string;
   title: string;
-  status: "proposed" | "accepted" | "rejected";
+  status: "proposed" | "accepted" | "rejected" | "superseded";
 }
 
 export function projectDecisionsPath(workspaceID: string, projectID: string) {
@@ -60,7 +60,8 @@ export const projectDecisionsClient = {
         if (
           row.status !== "proposed" &&
           row.status !== "accepted" &&
-          row.status !== "rejected"
+          row.status !== "rejected" &&
+          row.status !== "superseded"
         )
           throw new AuthRequestError("决策服务响应不符合当前契约。");
         const title = text(row.title);

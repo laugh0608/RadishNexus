@@ -13,7 +13,7 @@ import (
 
 func TestDecisionRejectionTransportAndProjection(t *testing.T) {
 	now := time.Date(2026, 11, 2, 1, 0, 0, 0, time.UTC)
-	d := goldenpath.Decision{ID: "dec_target", WorkspaceID: "wrk_main", GoverningProjectID: "prj_main", Question: "Choose?", Status: "rejected", RejectionReason: "Reason", ProposerID: "usr_writer", DeciderIDs: []string{"usr_reader"}, DecidedAt: &now, CreatedAt: now.Add(-time.Second), UpdatedAt: now}
+	d := goldenpath.Decision{DecisionRevision: 2, ID: "dec_target", WorkspaceID: "wrk_main", GoverningProjectID: "prj_main", Question: "Choose?", Status: "rejected", RejectionReason: "Reason", ProposerID: "usr_writer", DeciderIDs: []string{"usr_reader"}, DecidedAt: &now, CreatedAt: now.Add(-time.Second), UpdatedAt: now}
 	a := &fakeCollaborationApplication{rejectionResult: goldenpath.RejectDecisionResult{Decision: d, Rejected: true}}
 	h := testCollaborationHandler(t, validMessagingSessions(), a)
 	path := "/api/v1/workspaces/wrk_main/decisions/dec_target/rejection"
@@ -76,7 +76,7 @@ func TestDecisionRejectionTransportAndProjection(t *testing.T) {
 	if w.Code != 405 || w.Header().Get("Allow") != "POST" {
 		t.Fatal("method", w.Code, w.Header())
 	}
-	view := goldenpath.NexusView{Current: goldenpath.CurrentProjection{Ref: entityref.Ref{Type: "decision", ID: d.ID}, GoverningProjectID: d.GoverningProjectID, Title: d.Question, Status: d.Status, RejectionReason: d.RejectionReason, ProposerID: d.ProposerID, DeciderIDs: d.DeciderIDs, DecidedAt: d.DecidedAt, CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt}, DecisionCapabilities: &goldenpath.DecisionCapabilities{}, Relations: []goldenpath.RelationProjection{{State: goldenpath.ProjectionRestricted}}, Timeline: []goldenpath.TimelineItem{{EventID: "evt_rejected", ActivityType: "decision.rejected", Actor: goldenpath.ActorRef{Kind: "user", ID: "usr_reader"}, OccurredAt: now, ProjectionVersion: goldenpath.ActivityProjectionVersion, SafeFacts: map[string]string{"status": "rejected"}}}}
+	view := goldenpath.NexusView{Current: goldenpath.CurrentProjection{DecisionRevision: d.DecisionRevision, Ref: entityref.Ref{Type: "decision", ID: d.ID}, GoverningProjectID: d.GoverningProjectID, Title: d.Question, Status: d.Status, RejectionReason: d.RejectionReason, ProposerID: d.ProposerID, DeciderIDs: d.DeciderIDs, DecidedAt: d.DecidedAt, CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt}, DecisionCapabilities: &goldenpath.DecisionCapabilities{}, Relations: []goldenpath.RelationProjection{{State: goldenpath.ProjectionRestricted}}, Timeline: []goldenpath.TimelineItem{{EventID: "evt_rejected", ActivityType: "decision.rejected", Actor: goldenpath.ActorRef{Kind: "user", ID: "usr_reader"}, OccurredAt: now, ProjectionVersion: goldenpath.ActivityProjectionVersion, SafeFacts: map[string]string{"status": "rejected"}}}}
 	if _, e := publicCollaborationView(view.Current.Ref, view); e != nil {
 		t.Fatal("rejected view", e)
 	}

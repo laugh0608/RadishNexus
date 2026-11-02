@@ -32,7 +32,7 @@
 | [讨论到决策 / 工单的传输：ADR-0019](adr/0019-session-scoped-thread-decision-ticket-transport.md) | M0.5 / M2；原允许路径、Session 与权限矩阵；Ticket 创建是跨主线交接 | 身份、工单 |
 | [Project 决策发现：ADR-0040](adr/0040-project-decision-discovery.md) | 原只读切片及[验收记录](status/reviews/2026-10-18-project-decision-discovery.md) | Project 导航、工单来源 |
 | [Decision 生命周期与最小拒绝：ADR-0048](adr/0048-decision-lifecycle-and-rejection.md) | 首片拒绝合同与 R01～R10，[实际证据](status/reviews/2026-11-02-decision-rejection.md)分别记录验证层次；替代 / 复核仅设计约束，当前动作见[接续](status/current.md#接下来的事项) | 已建 Ticket、Document、Activity 与上下文包兼容 |
-| [Decision 最小替代：ADR-0049 提案](adr/0049-decision-supersession.md) | 后续单链替代的版本、旧重试、执行历史与迁移要求；[源码核对](status/reviews/2026-11-02-decision-supersession-design.md)不代表实现或运行验收 | 当前权限、Ticket / Document 来源、双对象 Activity 与上下文包 |
+| [Decision 最小替代：ADR-0049](adr/0049-decision-supersession.md) | 单链替代、双方版本、原重试与执行历史、v5 迁移已实施；[分层证据](status/reviews/2026-11-02-decision-supersession.md)保留验收限制 | 当前权限、Ticket / Document 来源、双对象 Activity 与上下文包 |
 
 完整聊天、通知、复杂搜索等仍按路线图范围推进。Decision 生命周期先明确触发、理由、历史与兼容，再通过正式决策；本次归属整理不授予实现权。
 

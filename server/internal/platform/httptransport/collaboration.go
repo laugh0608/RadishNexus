@@ -16,13 +16,14 @@ import (
 )
 
 const (
-	threadViewPattern         = "/api/v1/workspaces/{workspace_id}/threads/{thread_id}/nexus-view"
-	threadDecisionsPattern    = "/api/v1/workspaces/{workspace_id}/threads/{thread_id}/decisions"
-	decisionViewPattern       = "/api/v1/workspaces/{workspace_id}/decisions/{decision_id}/nexus-view"
-	decisionRejectionPattern  = "/api/v1/workspaces/{workspace_id}/decisions/{decision_id}/rejection"
-	decisionAcceptancePattern = "/api/v1/workspaces/{workspace_id}/decisions/{decision_id}/acceptance"
-	decisionTicketsPattern    = "/api/v1/workspaces/{workspace_id}/decisions/{decision_id}/tickets"
-	ticketViewPattern         = "/api/v1/workspaces/{workspace_id}/tickets/{ticket_id}/nexus-view"
+	threadViewPattern           = "/api/v1/workspaces/{workspace_id}/threads/{thread_id}/nexus-view"
+	threadDecisionsPattern      = "/api/v1/workspaces/{workspace_id}/threads/{thread_id}/decisions"
+	decisionViewPattern         = "/api/v1/workspaces/{workspace_id}/decisions/{decision_id}/nexus-view"
+	decisionSupersessionPattern = "/api/v1/workspaces/{workspace_id}/decisions/{decision_id}/supersession"
+	decisionRejectionPattern    = "/api/v1/workspaces/{workspace_id}/decisions/{decision_id}/rejection"
+	decisionAcceptancePattern   = "/api/v1/workspaces/{workspace_id}/decisions/{decision_id}/acceptance"
+	decisionTicketsPattern      = "/api/v1/workspaces/{workspace_id}/decisions/{decision_id}/tickets"
+	ticketViewPattern           = "/api/v1/workspaces/{workspace_id}/tickets/{ticket_id}/nexus-view"
 
 	maxProposeDecisionBodyBytes = 32 * 1024
 	maxAcceptDecisionBodyBytes  = 64 * 1024
@@ -34,6 +35,7 @@ type CollaborationApplication interface {
 	CreateDecisionFromThread(context.Context, goldenpath.Invocation, goldenpath.CreateDecisionInput) (goldenpath.CreateDecisionResult, error)
 	AcceptDecision(context.Context, goldenpath.Invocation, goldenpath.AcceptDecisionInput) (goldenpath.AcceptDecisionResult, error)
 	RejectDecision(context.Context, goldenpath.Invocation, goldenpath.RejectDecisionInput) (goldenpath.RejectDecisionResult, error)
+	SupersedeDecision(context.Context, goldenpath.Invocation, goldenpath.SupersedeDecisionInput) (goldenpath.SupersedeDecisionResult, error)
 	CreateTicketFromDecision(context.Context, goldenpath.Invocation, goldenpath.CreateTicketInput) (goldenpath.CreateTicketResult, error)
 }
 
@@ -88,18 +90,19 @@ type threadCurrentDTO struct {
 }
 
 type decisionCurrentDTO struct {
-	RejectionReason *string              `json:"rejection_reason"`
-	Ref             entityRefDTO         `json:"ref"`
-	Project         entityRefDTO         `json:"project"`
-	Question        string               `json:"question"`
-	Status          string               `json:"status"`
-	Outcome         *string              `json:"outcome"`
-	Rationale       *string              `json:"rationale"`
-	Proposer        deploymentActorDTO   `json:"proposer"`
-	Deciders        []deploymentActorDTO `json:"deciders"`
-	DecidedAt       *string              `json:"decided_at"`
-	CreatedAt       string               `json:"created_at"`
-	UpdatedAt       string               `json:"updated_at"`
+	DecisionRevision int                  `json:"decision_revision"`
+	RejectionReason  *string              `json:"rejection_reason"`
+	Ref              entityRefDTO         `json:"ref"`
+	Project          entityRefDTO         `json:"project"`
+	Question         string               `json:"question"`
+	Status           string               `json:"status"`
+	Outcome          *string              `json:"outcome"`
+	Rationale        *string              `json:"rationale"`
+	Proposer         deploymentActorDTO   `json:"proposer"`
+	Deciders         []deploymentActorDTO `json:"deciders"`
+	DecidedAt        *string              `json:"decided_at"`
+	CreatedAt        string               `json:"created_at"`
+	UpdatedAt        string               `json:"updated_at"`
 }
 
 type ticketCurrentDTO struct {
@@ -114,13 +117,15 @@ type ticketCurrentDTO struct {
 }
 
 type collaborationRelationDTO struct {
-	Direction    string            `json:"direction,omitempty"`
-	Visibility   string            `json:"visibility"`
-	RelationType string            `json:"relation_type,omitempty"`
-	Target       *visibleEntityDTO `json:"target,omitempty"`
+	Supersession *supersessionRelationDTO `json:"supersession,omitempty"`
+	Direction    string                   `json:"direction,omitempty"`
+	Visibility   string                   `json:"visibility"`
+	RelationType string                   `json:"relation_type,omitempty"`
+	Target       *visibleEntityDTO        `json:"target,omitempty"`
 }
 
 type collaborationTimelineDTO struct {
+	Supersession  *supersessionTimelineDTO           `json:"supersession,omitempty"`
 	Priority      *goldenpath.TicketPriorityChange   `json:"priority,omitempty"`
 	Assignment    *goldenpath.TicketAssignmentChange `json:"assignment,omitempty"`
 	Imported      bool                               `json:"imported,omitempty"`
@@ -182,6 +187,7 @@ func NewCollaborationHandler(
 	mux.HandleFunc("GET "+decisionViewPattern, handler.getDecision)
 	mux.HandleFunc("POST "+decisionAcceptancePattern, handler.acceptDecision)
 	mux.HandleFunc("POST "+decisionRejectionPattern, handler.rejectDecision)
+	mux.HandleFunc("POST "+decisionSupersessionPattern, handler.supersedeDecision)
 	mux.HandleFunc("POST "+decisionTicketsPattern, handler.createTicket)
 	mux.HandleFunc("GET "+ticketViewPattern, handler.getTicket)
 	for _, pattern := range []string{
@@ -190,6 +196,7 @@ func NewCollaborationHandler(
 		decisionViewPattern,
 		decisionAcceptancePattern,
 		decisionRejectionPattern,
+		decisionSupersessionPattern,
 		decisionTicketsPattern,
 		ticketViewPattern,
 	} {
@@ -351,7 +358,7 @@ func (handler *CollaborationHandler) acceptDecision(response http.ResponseWriter
 		return
 	}
 	if result.Decision.WorkspaceID != workspaceID || result.Decision.ID != decisionID ||
-		result.Decision.Status != "accepted" ||
+		(result.Decision.Status != "accepted" && (result.Accepted || result.Decision.Status != "superseded")) ||
 		result.Decision.Outcome != strings.TrimSpace(body.Outcome) ||
 		result.Decision.Rationale != strings.TrimSpace(body.Rationale) ||
 		len(result.Decision.DeciderIDs) != 1 || result.Decision.DeciderIDs[0] != principal.ID {
@@ -462,11 +469,11 @@ func publicCollaborationView(target entityref.Ref, view goldenpath.NexusView) (c
 	}
 	if target.Type == "decision" {
 		c := view.DecisionCapabilities
-		if c == nil || c.Accept != c.Reject || ((c.Accept || c.Reject) && view.Current.Status != "proposed") || (c.CreateTicket && view.Current.Status != "accepted") {
+		if c == nil || c.Accept != c.Reject || ((c.Accept || c.Reject) && view.Current.Status != "proposed") || (c.CreateTicket && view.Current.Status != "accepted") || ((c.Accept || c.Reject || c.Supersede) && !c.RetryDecision) || (c.Supersede && (view.Current.Status != "accepted" || view.Current.DecisionRevision != 2)) || (c.CreateTicket && !c.RetryTicketCreation) || (c.RetryTicketCreation && view.Current.Status != "accepted" && view.Current.Status != "superseded") {
 			return collaborationViewDTO{}, errors.New("invalid Decision capabilities")
 		}
 		dto.Capabilities = c
-	} else if view.DecisionCapabilities != nil {
+	} else if view.DecisionCapabilities != nil || view.Current.DecisionRevision != 0 {
 		return collaborationViewDTO{}, errors.New("unexpected Decision capabilities")
 	}
 	switch target.Type {
@@ -556,11 +563,12 @@ func publicDecisionProjection(
 		return decisionCurrentDTO{}, errors.New("Decision requires a derived-from Thread relation")
 	}
 	for _, item := range timeline {
-		if item.ActivityType != "decision.proposed" && item.ActivityType != "decision.accepted" && item.ActivityType != "decision.rejected" {
+		if item.ActivityType != "decision.proposed" && item.ActivityType != "decision.accepted" && item.ActivityType != "decision.rejected" && item.ActivityType != "decision.superseded" {
 			return decisionCurrentDTO{}, errors.New("unexpected Decision Timeline item")
 		}
 	}
 	return publicDecision(goldenpath.Decision{
+		DecisionRevision:   current.DecisionRevision,
 		ID:                 current.Ref.ID,
 		WorkspaceID:        "projection",
 		GoverningProjectID: current.GoverningProjectID,
@@ -623,27 +631,28 @@ func publicDecision(decision goldenpath.Decision) (decisionCurrentDTO, error) {
 		return decisionCurrentDTO{}, errors.New("invalid Decision application projection")
 	}
 	dto := decisionCurrentDTO{
-		Ref:       publicRef(ref),
-		Project:   publicRef(project),
-		Question:  decision.Question,
-		Status:    decision.Status,
-		Proposer:  deploymentActorDTO{Kind: "user", ID: decision.ProposerID},
-		Deciders:  make([]deploymentActorDTO, 0, len(decision.DeciderIDs)),
-		CreatedAt: publicTime(decision.CreatedAt),
-		UpdatedAt: publicTime(decision.UpdatedAt),
+		DecisionRevision: decision.DecisionRevision,
+		Ref:              publicRef(ref),
+		Project:          publicRef(project),
+		Question:         decision.Question,
+		Status:           decision.Status,
+		Proposer:         deploymentActorDTO{Kind: "user", ID: decision.ProposerID},
+		Deciders:         make([]deploymentActorDTO, 0, len(decision.DeciderIDs)),
+		CreatedAt:        publicTime(decision.CreatedAt),
+		UpdatedAt:        publicTime(decision.UpdatedAt),
 	}
 	switch decision.Status {
 	case "proposed":
 		if decision.RejectionReason != "" || decision.Outcome != "" || decision.Rationale != "" || len(decision.DeciderIDs) != 0 || decision.DecidedAt != nil {
 			return decisionCurrentDTO{}, errors.New("proposed Decision has accepted fields")
 		}
-	case "accepted", "rejected":
-		if len(decision.DeciderIDs) == 0 || decision.DecidedAt == nil || decision.DecidedAt.Before(decision.CreatedAt) || !decision.DecidedAt.Equal(decision.UpdatedAt) {
+	case "accepted", "rejected", "superseded":
+		if len(decision.DeciderIDs) == 0 || decision.DecidedAt == nil || decision.DecidedAt.Before(decision.CreatedAt) || decision.DecidedAt.After(decision.UpdatedAt) {
 			return decisionCurrentDTO{}, errors.New("accepted Decision is missing confirmation fields")
 		}
 		decidedAt := publicTime(*decision.DecidedAt)
 		dto.DecidedAt = &decidedAt
-		if decision.Status == "accepted" {
+		if decision.Status == "accepted" || decision.Status == "superseded" {
 			if decision.Outcome == "" || decision.Rationale == "" || decision.RejectionReason != "" {
 				return decisionCurrentDTO{}, errors.New("invalid accepted Decision fields")
 			}
@@ -664,6 +673,13 @@ func publicDecision(decision goldenpath.Decision) (decisionCurrentDTO, error) {
 		}
 	default:
 		return decisionCurrentDTO{}, fmt.Errorf("unsupported public Decision status %q", decision.Status)
+	}
+	validRevision := (decision.Status == "proposed" && decision.DecisionRevision == 1) ||
+		(decision.Status == "rejected" && decision.DecisionRevision == 2 && decision.DecidedAt != nil && decision.UpdatedAt.Equal(*decision.DecidedAt)) ||
+		(decision.Status == "accepted" && decision.DecidedAt != nil && ((decision.DecisionRevision == 2 && decision.UpdatedAt.Equal(*decision.DecidedAt)) || (decision.DecisionRevision == 3 && decision.UpdatedAt.After(*decision.DecidedAt)))) ||
+		(decision.Status == "superseded" && (decision.DecisionRevision == 3 || decision.DecisionRevision == 4) && decision.DecidedAt != nil && decision.UpdatedAt.After(*decision.DecidedAt))
+	if !validRevision {
+		return decisionCurrentDTO{}, errors.New("Decision revision or time mismatch")
 	}
 	return dto, nil
 }
@@ -699,6 +715,13 @@ func collaborationSourceRelations(entityType string, relations []goldenpath.Rela
 	sources := make([]goldenpath.RelationProjection, 0, 1)
 	seen := make(map[entityref.Ref]bool)
 	for _, relation := range relations {
+		if relation.RelationType == "supersedes" {
+			if entityType != "decision" || relation.State != goldenpath.ProjectionVisible || relation.Target.Type != "decision" || seen[relation.Target] {
+				return nil, errors.New("invalid supersession context relation")
+			}
+			seen[relation.Target] = true
+			continue
+		}
 		if entityType == "ticket" && relation.State == goldenpath.ProjectionRestricted {
 			continue
 		}
@@ -728,7 +751,7 @@ func publicCollaborationRelations(relations []goldenpath.RelationProjection) ([]
 	for _, relation := range relations {
 		switch relation.State {
 		case goldenpath.ProjectionRestricted:
-			if relation.Direction != "" || relation.RelationType != "" || relation.Target != (entityref.Ref{}) || relation.Title != "" {
+			if relation.Direction != "" || relation.RelationType != "" || relation.Target != (entityref.Ref{}) || relation.Title != "" || relation.Supersession != nil {
 				return nil, errors.New("restricted relation leaks fields")
 			}
 			dto = append(dto, collaborationRelationDTO{Visibility: "restricted"})
@@ -745,10 +768,21 @@ func publicCollaborationRelations(relations []goldenpath.RelationProjection) ([]
 				return nil, err
 			}
 			if relation.RelationType != "started-from" && relation.RelationType != "derived-from" &&
-				relation.RelationType != "implements" && relation.RelationType != "relates-to" && relation.RelationType != "affects" {
+				relation.RelationType != "implements" && relation.RelationType != "relates-to" && relation.RelationType != "affects" && relation.RelationType != "supersedes" {
 				return nil, fmt.Errorf("unsupported collaboration relation %q", relation.RelationType)
 			}
+			var sup *supersessionRelationDTO
+			if relation.RelationType == "supersedes" {
+				v := relation.Supersession
+				if v == nil || !goldenpath.ValidRejectionReason(v.Reason) || v.Actor.Kind != "user" || !validScopedID(v.Actor.ID, "usr_") || v.OccurredAt.IsZero() {
+					return nil, errors.New("invalid supersession relation details")
+				}
+				sup = &supersessionRelationDTO{Reason: v.Reason, Actor: deploymentActorDTO{Kind: v.Actor.Kind, ID: v.Actor.ID}, OccurredAt: publicTime(v.OccurredAt)}
+			} else if relation.Supersession != nil {
+				return nil, errors.New("unexpected supersession metadata")
+			}
 			dto = append(dto, collaborationRelationDTO{
+				Supersession: sup,
 				Visibility:   "readable",
 				Direction:    relation.Direction,
 				RelationType: relation.RelationType,
@@ -821,7 +855,17 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 				OccurredAt: publicTime(item.OccurredAt), Subjects: []collaborationSubjectDTO{}, FromStatus: transition.FromStatus, ToStatus: transition.ToStatus, FromRevision: from, ToRevision: to})
 			continue
 		}
-		if len(item.SafeFacts) != 1+extra {
+		var sup *supersessionTimelineDTO
+		if item.ActivityType == "decision.superseded" {
+			from, e1 := strconv.Atoi(item.SafeFacts["from_revision"])
+			to, e2 := strconv.Atoi(item.SafeFacts["to_revision"])
+			side := item.SafeFacts["side"]
+			if e1 != nil || e2 != nil || strconv.Itoa(from) != item.SafeFacts["from_revision"] || strconv.Itoa(to) != item.SafeFacts["to_revision"] || len(item.SafeFacts) != 3+extra || to != from+1 || !((side == "superseded" && (from == 2 || from == 3)) || (side == "replacement" && from == 2)) {
+				return nil, errors.New("invalid supersession timeline facts")
+			}
+			sup = &supersessionTimelineDTO{Side: side, FromRevision: from, ToRevision: to}
+		}
+		if sup == nil && len(item.SafeFacts) != 1+extra {
 			return nil, errors.New("invalid collaboration Timeline facts")
 		}
 		expectedStatus, subjectType, relationState := "", "", ""
@@ -832,6 +876,8 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 			expectedStatus = "accepted"
 		case "decision.rejected":
 			expectedStatus = "rejected"
+		case "decision.superseded":
+			subjectType = "decision"
 		case "ticket.created":
 			expectedStatus, subjectType = "open", "decision"
 		case "ticket.component-linked":
@@ -844,7 +890,7 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 		if item.SafeFacts["status"] != expectedStatus || item.SafeFacts["relation_state"] != relationState || (subjectType == "" && len(item.Subjects) != 0) || (subjectType != "" && len(item.Subjects) != 1) {
 			return nil, errors.New("invalid collaboration Timeline facts")
 		}
-		entry := collaborationTimelineDTO{Imported: imported,
+		entry := collaborationTimelineDTO{Imported: imported, Supersession: sup,
 			ID:            item.EventID,
 			ActivityType:  item.ActivityType,
 			Actor:         deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID},

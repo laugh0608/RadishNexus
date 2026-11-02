@@ -2530,3 +2530,25 @@ code {
   flex-direction: column;
   gap: 0.25rem;
 }
+
+.decision-comparison {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+}
+.decision-comparison article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+.supersession-reason p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .decision-comparison {
+    grid-template-columns: 1fr;
+  }
+}

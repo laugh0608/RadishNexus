@@ -105,7 +105,7 @@ func TestProjectDecisionsRejectsProjectionDriftWithoutPartialResults(t *testing.
 	item := goldenpath.DiscoveryItem{Ref: entityref.Ref{Type: "decision", ID: "dec_one"}, Title: "Visible question", Status: "proposed"}
 	for _, change := range []func(*goldenpath.DiscoveryItem){
 		func(i *goldenpath.DiscoveryItem) { i.Status = "unknown" },
-		func(i *goldenpath.DiscoveryItem) { i.Status = "superseded" },
+		func(i *goldenpath.DiscoveryItem) { i.Status = "reviewing" },
 		func(i *goldenpath.DiscoveryItem) { i.Status = "active" },
 		func(i *goldenpath.DiscoveryItem) { i.Ref.ID = "dec_one" },
 		func(i *goldenpath.DiscoveryItem) { i.Ref.ID = "dec_aaa" },

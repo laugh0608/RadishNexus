@@ -69,15 +69,23 @@ npm run dev
 
 ## Project 决策只读发现
 
-`workspace/ProjectDecisionsPage.tsx` 与 `project-decisions-api.ts` 实现 [ADR-0040](../docs/adr/0040-project-decision-discovery.md)。首页 Project 的“查看项目决策”进入 `/workspaces/{workspace_id}/projects/{project_id}/decisions`；列表按 ADR-0048 显示问题原文及“待确认 / 已确认 / 已拒绝”，打开既有 canonical Decision 详情，详情按自身 Project 返回列表首页。支持直接地址、刷新和退出后重新登录恢复。
+`workspace/ProjectDecisionsPage.tsx` 与 `project-decisions-api.ts` 实现 [ADR-0040](../docs/adr/0040-project-decision-discovery.md)。首页 Project 的“查看项目决策”进入 `/workspaces/{workspace_id}/projects/{project_id}/decisions`；列表按 ADR-0048 / 0049 显示问题原文及“待确认 / 已确认 / 已拒绝 / 已被替代”，打开既有 canonical Decision 详情，详情按自身 Project 返回列表首页。支持直接地址、刷新和退出后重新登录恢复。
 
-Project 名称 / 归档状态与列表共用请求代次；任一失败清空二者，取消或迟到响应不能恢复旧数据。cursor 栈仅存于页面内存，刷新、focus / 可见性恢复、popstate 和 BFCache pageshow 重读首页，pagehide 清理旧内容。错误、空态和加载状态分开；401 返回登录，404 不残留项目名。严格校验 ref、三个状态、问题文本、顺序和分页结构；HTML / Markdown 样式问题只作为纯文本显示。列表无接受动作、筛选或来源展开。桌面、390px 手机、键盘、分页、证据隔离及撤权恢复见[实施记录](../docs/status/reviews/2026-10-18-project-decision-discovery.md)。
+Project 名称 / 归档状态与列表共用请求代次；任一失败清空二者，取消或迟到响应不能恢复旧数据。cursor 栈仅存于页面内存，刷新、focus / 可见性恢复、popstate 和 BFCache pageshow 重读首页，pagehide 清理旧内容。错误、空态和加载状态分开；401 返回登录，404 不残留项目名。严格校验 ref、四个状态、问题文本、顺序和分页结构；HTML / Markdown 样式问题只作为纯文本显示。列表无接受动作、筛选或来源展开。桌面、390px 手机、键盘、分页、证据隔离及撤权恢复见[实施记录](../docs/status/reviews/2026-10-18-project-decision-discovery.md)。
 
 ## Decision 接受与拒绝
 
-`collaboration/DecisionActions.tsx` 在同一详情按服务端 accept / reject 能力显示动作；拒绝需要可公开的理由和明确确认，修改理由或动作即清除旧确认。三状态严格渲染，拒绝保留主体、时间、理由、来源和 Activity，不提供创建 Ticket；accepted 继续按独立 create_ticket 能力显示工单创建。
+`collaboration/DecisionActions.tsx` 在同一详情按服务端 accept / reject 能力显示动作；拒绝需要可公开的理由和明确确认，修改理由或动作即清除旧确认。四状态严格渲染，拒绝保留主体、时间、理由、来源和 Activity，不提供创建 Ticket；accepted 继续按独立 create_ticket 能力显示工单创建。
 
-未确认请求保留在页面内存；网络未知只允许原 payload / operation 重试，刷新 / 焦点复核不能换成另一个决定。409 清理确认并重读，切换对象、撤权和失效 Session 清理旧内容，取消与迟到响应不能恢复旧对象；整页重载不承诺保存未确认请求。详情 / 提案 / 接受 / 拒绝完整 DTO 统一增加 nullable rejection_reason，与 Go / schema 023 / Activity 11 / v4 包配套升级，无新依赖或浏览器持久化。桌面、390px、键盘、双标签、网络故障与撤权证据见[实施记录](../docs/status/reviews/2026-11-02-decision-rejection.md)。
+未确认请求保留在页面内存；网络未知只允许原 payload / operation 重试，刷新 / 焦点复核不能换成另一个决定。409 清理确认并重读，切换对象、撤权和失效 Session 清理旧内容，取消与迟到响应不能恢复旧对象；整页重载不承诺保存未确认请求。原接受请求在来源随后 superseded 后仍按 retry_decision 核验，成功提示“原接受操作已确认，以当前状态为准”。拒绝原始证据见[实施记录](../docs/status/reviews/2026-11-02-decision-rejection.md)。
+
+## Decision 最小替代
+
+`collaboration/DecisionSupersession.tsx` 从新 accepted 详情按 supersede 能力开放入口，复用同 Project 列表分页，保留四状态但仅可选择另一条 accepted；读取旧详情后显示双方结论、理由、来源和当前版本。编辑对象、理由或读取代次会清除确认；提交绑定双方版本，成功后重新读取。双向 relation 展示理由、操作者与时间，双方 Timeline 分别解释“被替代 / 替代了旧结论”。superseded 保留原接受内容，不允许新接受、拒绝或创建 Ticket。
+
+未知替代保留原双方、版本、理由和 operation，双方 retry_decision 当前仍有权才允许精确重试；不能因首次动作不再可用而丢弃原请求。`DecisionTicketCreation.tsx` 同样保留未知的原创建请求，按 retry_ticket_creation 核验同一 Ticket。双方读取、取消、撤权与迟到响应保护保持页面内存范围，无新依赖或持久化。完整 Decision DTO 必填 nullable rejection_reason 与 decision_revision；微秒时间比较保留锁内 +1µs 的合法差异。
+
+Go / Web / CLI / schema 024 / Activity 12 / v5 包配套升级；桌面、390px、键盘、真实 409、已提交后丢响应的三类重试、撤权与执行继续的分层证据及焦点 / BFCache 限制见[实施记录](../docs/status/reviews/2026-11-02-decision-supersession.md)。
 
 ## Ticket 状态操作
 

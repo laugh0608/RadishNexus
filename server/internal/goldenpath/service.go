@@ -26,6 +26,7 @@ type Invocation struct {
 }
 
 type Decision struct {
+	DecisionRevision   int
 	RejectionReason    string
 	ID                 string
 	WorkspaceID        string
@@ -98,7 +99,14 @@ const (
 
 // RelationProjection deliberately leaves all target fields empty when State
 // is restricted. Hidden relations are omitted by the Store.
+type SupersessionProjection struct {
+	Reason     string
+	Actor      ActorRef
+	OccurredAt time.Time
+}
+
 type RelationProjection struct {
+	Supersession *SupersessionProjection
 	Direction    string
 	State        ProjectionState
 	RelationType string
@@ -171,6 +179,7 @@ type Store interface {
 	CreateDecisionFromThread(context.Context, CreateDecisionCommand) (CreateDecisionResult, error)
 	AcceptDecision(context.Context, AcceptDecisionCommand) (AcceptDecisionResult, error)
 	RejectDecision(context.Context, RejectDecisionCommand) (RejectDecisionResult, error)
+	SupersedeDecision(context.Context, SupersedeDecisionCommand) (SupersedeDecisionResult, error)
 	CreateTicketFromDecision(context.Context, CreateTicketCommand) (CreateTicketResult, error)
 	RecordCompletedCIRun(context.Context, RecordCompletedCIRunCommand) (CIRunReceipt, error)
 	ListRepositoryCIRuns(context.Context, authz.Principal, string, DiscoveryPageInput) (RepositoryCIRunPage, error)

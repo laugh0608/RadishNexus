@@ -11,23 +11,24 @@ import (
 )
 
 type recordingStore struct {
-	rejectDecisionCommand   RejectDecisionCommand
-	createMessageCommand    CreateMessageCommand
-	createMessageResult     CreateMessageResult
-	listMessagesPrincipal   authz.Principal
-	listMessagesInput       ListChannelMessagesInput
-	messagePage             MessagePage
-	listMessagesCalled      bool
-	authorizeChannelID      string
-	channelMessageID        string
-	channelMessage          MessageProjection
-	startThreadCommand      StartThreadFromMessageCommand
-	createDecisionCommand   CreateDecisionCommand
-	recordCIRunCommand      RecordCompletedCIRunCommand
-	recordDeploymentCommand RecordStagingDeploymentCommand
-	nexusPrincipal          authz.Principal
-	nexusTarget             entityref.Ref
-	nexusView               NexusView
+	rejectDecisionCommand    RejectDecisionCommand
+	supersedeDecisionCommand SupersedeDecisionCommand
+	createMessageCommand     CreateMessageCommand
+	createMessageResult      CreateMessageResult
+	listMessagesPrincipal    authz.Principal
+	listMessagesInput        ListChannelMessagesInput
+	messagePage              MessagePage
+	listMessagesCalled       bool
+	authorizeChannelID       string
+	channelMessageID         string
+	channelMessage           MessageProjection
+	startThreadCommand       StartThreadFromMessageCommand
+	createDecisionCommand    CreateDecisionCommand
+	recordCIRunCommand       RecordCompletedCIRunCommand
+	recordDeploymentCommand  RecordStagingDeploymentCommand
+	nexusPrincipal           authz.Principal
+	nexusTarget              entityref.Ref
+	nexusView                NexusView
 }
 
 func (store *recordingStore) ListChannelMessages(
@@ -481,4 +482,9 @@ func TestStagingConfirmationTimesAndOperationIdentity(t *testing.T) {
 
 func (*recordingStore) ListRepositoryCIRuns(context.Context, authz.Principal, string, DiscoveryPageInput) (RepositoryCIRunPage, error) {
 	return RepositoryCIRunPage{}, nil
+}
+
+func (s *recordingStore) SupersedeDecision(_ context.Context, c SupersedeDecisionCommand) (SupersedeDecisionResult, error) {
+	s.supersedeDecisionCommand = c
+	return SupersedeDecisionResult{}, nil
 }

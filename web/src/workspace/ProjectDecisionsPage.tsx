@@ -150,7 +150,9 @@ function ProjectDecisions({
                       ? "待确认"
                       : decision.status === "accepted"
                         ? "已确认"
-                        : "已拒绝"}
+                        : decision.status === "rejected"
+                          ? "已拒绝"
+                          : "已被替代"}
                   </p>
                 </li>
               ))}

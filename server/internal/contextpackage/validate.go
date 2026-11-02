@@ -8,23 +8,25 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
 type Index struct {
-	Objects   map[Ref]Object
-	Actors    map[string]Actor
-	History   map[string]History
-	Facts     map[string]Facts
-	Decoded   map[Ref]any
-	Revisions map[string][]Revision
+	SupersededAt map[Ref]time.Time
+	Objects      map[Ref]Object
+	Actors       map[string]Actor
+	History      map[string]History
+	Facts        map[string]Facts
+	Decoded      map[Ref]any
+	Revisions    map[string][]Revision
 }
 
 func Validate(d Data) (*Index, error) {
 	if len(d.Objects) < 2 || len(d.Objects) > MaxObjects || len(d.History) > MaxHistory || len(d.Revisions) > MaxHistory || len(d.Actors) > MaxObjects || len(d.Links) > MaxHistory {
 		return nil, invalid("record limits")
 	}
-	x := &Index{Objects: map[Ref]Object{}, Actors: map[string]Actor{}, History: map[string]History{}, Facts: map[string]Facts{}, Decoded: map[Ref]any{}, Revisions: map[string][]Revision{}}
+	x := &Index{SupersededAt: map[Ref]time.Time{}, Objects: map[Ref]Object{}, Actors: map[string]Actor{}, History: map[string]History{}, Facts: map[string]Facts{}, Decoded: map[Ref]any{}, Revisions: map[string][]Revision{}}
 	for _, a := range d.Actors {
 		if !ValidID(a.ID, "usr_") || !validateLineage(a.Lineage) {
 			return nil, invalid("actor")
@@ -121,7 +123,7 @@ func Validate(d Data) (*Index, error) {
 			return nil, err
 		}
 		for _, r := range []*Ref{f.Evidence, f.Decision, f.Ticket, f.Channel, f.Thread, f.Message} {
-			if r != nil && (!exists(*r) || x.Objects[*r].CreatedAt.After(h.OccurredAt)) {
+			if r != nil && (r.Type != "entity-link" && (!exists(*r) || x.Objects[*r].CreatedAt.After(h.OccurredAt))) {
 				return nil, invalid("history dependency")
 			}
 		}
@@ -186,6 +188,9 @@ func Validate(d Data) (*Index, error) {
 		var wanted *Ref
 		var event string
 		var primary Ref
+		if (l.Relation == "supersedes" && (l.SupersessionReason == nil || !textValue(*l.SupersessionReason, 32768, true) || strings.TrimSpace(*l.SupersessionReason) != *l.SupersessionReason || l.State != "active")) || (l.Relation != "supersedes" && l.SupersessionReason != nil) {
+			return nil, invalid("supersession reason")
+		}
 		switch l.From.Type + "/" + l.Relation + "/" + l.To.Type {
 		case "thread/started-from/message":
 			wanted = f.Message
@@ -198,6 +203,13 @@ func Validate(d Data) (*Index, error) {
 			wanted = f.Evidence
 			event = "decision.proposed"
 			primary = l.From
+		case "decision/supersedes/decision":
+			wanted = f.Replacement
+			event = "decision.superseded"
+			primary = l.To
+			if f.Relation == nil || *f.Relation != (Ref{"entity-link", l.ID}) || l.From == l.To {
+				return nil, invalid("supersession relation facts")
+			}
 		case "ticket/implements/decision":
 			wanted = f.Decision
 			event = "ticket.created"
@@ -210,7 +222,7 @@ func Validate(d Data) (*Index, error) {
 			return nil, invalid("unsupported relation")
 		}
 		target := l.To
-		if l.Relation == "relates-to" {
+		if l.Relation == "relates-to" || l.Relation == "supersedes" {
 			target = l.From
 		}
 		if wanted == nil || *wanted != target || h.Type != event || h.Entity != primary {
@@ -220,6 +232,9 @@ func Validate(d Data) (*Index, error) {
 			relations[l.From] = map[string][]Link{}
 		}
 		relations[l.From][l.Relation] = append(relations[l.From][l.Relation], l)
+	}
+	if err := validateSupersessionHistory(d, x); err != nil {
+		return nil, err
 	}
 	usedBodies := map[string]bool{}
 	for _, r := range d.Revisions {
@@ -349,13 +364,13 @@ func decodeObject(o Object) (any, error) {
 		return *p, nil
 	case *Decision:
 		var fields map[string]json.RawMessage
-		if Decode(o.Data, &fields) != nil || len(fields) != 11 || fields["rejection_reason"] == nil {
+		if Decode(o.Data, &fields) != nil || len(fields) != 12 || fields["rejection_reason"] == nil || fields["decision_revision"] == nil {
 			return nil, invalid("Decision fields")
 		}
-		if !textValue(p.Question, 16384, true) || !oneOf(p.Status, "proposed", "accepted", "rejected") || p.Deciders == nil || !bytes.Equal(bytes.TrimSpace(p.Alternatives), []byte("[]")) || p.Consequences != nil || p.ReviewAt != nil {
+		if !textValue(p.Question, 16384, true) || !oneOf(p.Status, "proposed", "accepted", "rejected", "superseded") || p.Deciders == nil || !bytes.Equal(bytes.TrimSpace(p.Alternatives), []byte("[]")) || p.Consequences != nil || p.ReviewAt != nil {
 			return nil, invalid("unsupported Decision fields")
 		}
-		if p.Status == "accepted" {
+		if p.Status == "accepted" || p.Status == "superseded" {
 			if p.RejectionReason != nil || p.Outcome == nil || p.Rationale == nil || !textValue(*p.Outcome, 32768, true) || !textValue(*p.Rationale, 32768, true) || len(p.Deciders) != 1 || p.DecidedAt == nil || !validTime(*p.DecidedAt) {
 				return nil, invalid("accepted Decision")
 			}
@@ -429,6 +444,12 @@ func ValidateFacts(h History) (Facts, error) {
 		expected = []string{"status"}
 		if f.Status != strings.TrimPrefix(h.Type, "decision.") {
 			return f, invalid("acceptance history")
+		}
+	case "decision.superseded":
+		kind = "decision"
+		expected = []string{"status", "replacement", "relation", "from_revision", "to_revision", "replacement_from_revision", "replacement_to_revision"}
+		if _, err := DecodeSupersession(h.Facts); err != nil {
+			return f, err
 		}
 	case "ticket.created":
 		kind = "ticket"
@@ -566,24 +587,9 @@ func validateObjectHistory(o Object, v any, events []History, x *Index, relation
 		if p.Proposer != o.Actor || !oneRelation("derived-from", *f.Evidence) || !activeEvidence {
 			return invalid("Decision source")
 		}
-		n := 1
-		if p.Status == "accepted" || p.Status == "rejected" {
-			n = 2
-			if counts["decision."+p.Status] != 1 || !p.DecidedAt.Equal(o.UpdatedAt) {
-				return invalid("acceptance history count")
-			}
-			for _, h := range events {
-				if h.Type == "decision."+p.Status && (h.Actor != p.Deciders[0] || !h.OccurredAt.Equal(*p.DecidedAt)) {
-					return invalid("acceptance actor/time")
-				}
-			}
-		}
-		if len(events) != n {
-			return invalid("Decision history count")
-		}
 	case Ticket:
 		decision := x.Decoded[*f.Decision].(Decision)
-		if decision.Status != "accepted" || decision.DecidedAt.After(o.CreatedAt) {
+		if (decision.Status != "accepted" && decision.Status != "superseded") || decision.DecidedAt.After(o.CreatedAt) || (decision.Status == "superseded" && !o.CreatedAt.Before(x.SupersededAt[*f.Decision])) {
 			return invalid("Ticket accepted source")
 		}
 		if !oneRelation("implements", *f.Decision) || len(events) != p.StatusRevision+p.AssignmentRevision+p.PriorityRevision-2 {

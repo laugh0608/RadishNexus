@@ -8,6 +8,22 @@ import (
 
 func stripDecisionReason(t *testing.T, b *Bundle) {
 	t.Helper()
+	rewritePackageFile(t, b, "links.jsonl", func(raw []byte) []byte {
+		var out []byte
+		for _, line := range bytes.Split(bytes.TrimSpace(raw), []byte("\n")) {
+			if len(line) == 0 {
+				continue
+			}
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal(line, &fields); err != nil {
+				t.Fatal(err)
+			}
+			delete(fields, "supersession_reason")
+			out = append(out, Encode(fields)...)
+			out = append(out, '\n')
+		}
+		return out
+	})
 	rewritePackageFile(t, b, "objects.jsonl", func(raw []byte) []byte {
 		var out []byte
 		for _, o := range mustUnpackObjects(t, raw) {
@@ -17,6 +33,7 @@ func stripDecisionReason(t *testing.T, b *Bundle) {
 					t.Fatal(err)
 				}
 				delete(f, "rejection_reason")
+				delete(f, "decision_revision")
 				o.Data = Encode(f)
 			}
 			out = append(out, Encode(o)...)

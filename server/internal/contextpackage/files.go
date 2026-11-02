@@ -72,7 +72,7 @@ func Unpack(b Bundle) (Data, *Index, error) {
 	if len(Encode(m)) > MaxLineBytes {
 		return d, nil, invalid("manifest size")
 	}
-	if m.Format != Format || m.Version != Version || (m.Profile != Profile && m.Profile != ProfileV1 && m.Profile != ProfileV2 && m.Profile != ProfileV3) || !ValidID(m.PackageID, "pkg_") || !ValidID(m.WorkspaceID, "wrk_") || !ValidID(m.ProjectID, "prj_") || !validTime(m.CreatedAt) || !label(m.SourceVersion, 100) || len(m.Files) < len(metadataPaths) || len(m.Files) > MaxHistory+len(metadataPaths) || len(b.Files) != len(m.Files) {
+	if m.Format != Format || m.Version != Version || (m.Profile != Profile && m.Profile != ProfileV1 && m.Profile != ProfileV2 && m.Profile != ProfileV3 && m.Profile != ProfileV4) || !ValidID(m.PackageID, "pkg_") || !ValidID(m.WorkspaceID, "wrk_") || !ValidID(m.ProjectID, "prj_") || !validTime(m.CreatedAt) || !label(m.SourceVersion, 100) || len(m.Files) < len(metadataPaths) || len(m.Files) > MaxHistory+len(metadataPaths) || len(b.Files) != len(m.Files) {
 		return d, nil, invalid("manifest")
 	}
 	files := map[string][]byte{}
@@ -107,8 +107,24 @@ func Unpack(b Bundle) (Data, *Index, error) {
 				return d, nil, err
 			}
 		case "links.jsonl":
-			if err := readLines(content, desc.Lines, &d.Links, MaxHistory); err != nil {
+			var lines []json.RawMessage
+			if err := readLines(content, desc.Lines, &lines, MaxHistory); err != nil {
 				return d, nil, err
+			}
+			for _, raw := range lines {
+				var fields map[string]json.RawMessage
+				count := 16
+				if m.Profile != Profile {
+					count = 15
+				}
+				if Decode(raw, &fields) != nil || len(fields) != count || (m.Profile == Profile && fields["supersession_reason"] == nil) || (m.Profile != Profile && fields["supersession_reason"] != nil) {
+					return d, nil, invalid("Link profile fields")
+				}
+				var l Link
+				if Decode(raw, &l) != nil || (m.Profile != Profile && l.Relation == "supersedes") {
+					return d, nil, invalid("legacy Link")
+				}
+				d.Links = append(d.Links, l)
 			}
 		case "history.jsonl":
 			if err := readLines(content, desc.Lines, &d.History, MaxHistory); err != nil {
@@ -134,7 +150,7 @@ func Unpack(b Bundle) (Data, *Index, error) {
 			return d, nil, invalid("missing file")
 		}
 	}
-	if m.Profile != Profile {
+	if m.Profile != Profile && m.Profile != ProfileV4 {
 		for i, o := range d.Objects {
 			if o.Type != "decision" {
 				continue
@@ -156,6 +172,33 @@ func Unpack(b Bundle) (Data, *Index, error) {
 			}
 		}
 	}
+	if m.Profile != Profile {
+		for i, o := range d.Objects {
+			if o.Type != "decision" {
+				continue
+			}
+			var fields map[string]json.RawMessage
+			if Decode(o.Data, &fields) != nil || len(fields) != 11 || fields["decision_revision"] != nil {
+				return d, nil, invalid("legacy Decision revision")
+			}
+			var status string
+			if Decode(fields["status"], &status) != nil || (status != "proposed" && status != "accepted" && status != "rejected") {
+				return d, nil, invalid("legacy Decision status")
+			}
+			rev := 2
+			if status == "proposed" {
+				rev = 1
+			}
+			fields["decision_revision"] = Encode(rev)
+			d.Objects[i].Data = Encode(fields)
+		}
+		for _, h := range d.History {
+			if h.Type == "decision.superseded" {
+				return d, nil, invalid("legacy supersession history")
+			}
+		}
+	}
+
 	if m.Profile == ProfileV1 || m.Profile == ProfileV2 {
 		for i, o := range d.Objects {
 			if o.Type != "ticket" {

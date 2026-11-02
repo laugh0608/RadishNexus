@@ -17,28 +17,32 @@ import (
 )
 
 type fakeCollaborationApplication struct {
-	rejectionResult  goldenpath.RejectDecisionResult
-	rejectionInput   goldenpath.RejectDecisionInput
-	rejectionCalls   int
-	rejectionErr     error
-	view             goldenpath.NexusView
-	decisionResult   goldenpath.CreateDecisionResult
-	acceptanceResult goldenpath.AcceptDecisionResult
-	ticketResult     goldenpath.CreateTicketResult
-	viewErr          error
-	decisionErr      error
-	acceptanceErr    error
-	ticketErr        error
-	viewCalls        int
-	decisionCalls    int
-	acceptanceCalls  int
-	ticketCalls      int
-	principal        authz.Principal
-	target           entityref.Ref
-	invocation       goldenpath.Invocation
-	decisionInput    goldenpath.CreateDecisionInput
-	acceptanceInput  goldenpath.AcceptDecisionInput
-	ticketInput      goldenpath.CreateTicketInput
+	supersessionResult goldenpath.SupersedeDecisionResult
+	supersessionInput  goldenpath.SupersedeDecisionInput
+	supersessionCalls  int
+	supersessionErr    error
+	rejectionResult    goldenpath.RejectDecisionResult
+	rejectionInput     goldenpath.RejectDecisionInput
+	rejectionCalls     int
+	rejectionErr       error
+	view               goldenpath.NexusView
+	decisionResult     goldenpath.CreateDecisionResult
+	acceptanceResult   goldenpath.AcceptDecisionResult
+	ticketResult       goldenpath.CreateTicketResult
+	viewErr            error
+	decisionErr        error
+	acceptanceErr      error
+	ticketErr          error
+	viewCalls          int
+	decisionCalls      int
+	acceptanceCalls    int
+	ticketCalls        int
+	principal          authz.Principal
+	target             entityref.Ref
+	invocation         goldenpath.Invocation
+	decisionInput      goldenpath.CreateDecisionInput
+	acceptanceInput    goldenpath.AcceptDecisionInput
+	ticketInput        goldenpath.CreateTicketInput
 }
 
 func (application *fakeCollaborationApplication) GetNexusView(
@@ -146,7 +150,7 @@ func TestCollaborationHandlerProposesDecisionWithIdempotentWebCommand(t *testing
 	application := &fakeCollaborationApplication{decisionResult: goldenpath.CreateDecisionResult{
 		Created: true,
 		Decision: goldenpath.Decision{
-			ID: "dec_created", WorkspaceID: "wrk_main", GoverningProjectID: "prj_main",
+			DecisionRevision: 1, ID: "dec_created", WorkspaceID: "wrk_main", GoverningProjectID: "prj_main",
 			Question: "Adopt Session collaboration?", Status: "proposed", ProposerID: "usr_reader",
 			DeciderIDs: []string{}, CreatedAt: now, UpdatedAt: now,
 		},
@@ -177,7 +181,7 @@ func TestCollaborationHandlerReturnsExistingDecisionForExactRetry(t *testing.T) 
 	now := time.Date(2026, 9, 2, 1, 4, 0, 0, time.UTC)
 	application := &fakeCollaborationApplication{decisionResult: goldenpath.CreateDecisionResult{
 		Decision: goldenpath.Decision{
-			ID: "dec_existing", WorkspaceID: "wrk_main", GoverningProjectID: "prj_main",
+			DecisionRevision: 2, ID: "dec_existing", WorkspaceID: "wrk_main", GoverningProjectID: "prj_main",
 			Question: "Adopt Session collaboration?", Outcome: "Yes", Rationale: "It preserves authority.",
 			Status: "accepted", ProposerID: "usr_reader", DeciderIDs: []string{"usr_reader"},
 			DecidedAt: &now, CreatedAt: now.Add(-time.Minute), UpdatedAt: now,
@@ -203,7 +207,7 @@ func TestCollaborationHandlerRequiresHumanConfirmationAndAcceptsDecision(t *test
 	application := &fakeCollaborationApplication{acceptanceResult: goldenpath.AcceptDecisionResult{
 		Accepted: true,
 		Decision: goldenpath.Decision{
-			ID: "dec_target", WorkspaceID: "wrk_main", GoverningProjectID: "prj_main",
+			DecisionRevision: 2, ID: "dec_target", WorkspaceID: "wrk_main", GoverningProjectID: "prj_main",
 			Question: "Adopt Session collaboration?", Outcome: "Yes", Rationale: "Keeps one authority.",
 			Status: "accepted", ProposerID: "usr_writer", DeciderIDs: []string{"usr_reader"},
 			DecidedAt: &now, CreatedAt: now.Add(-time.Minute), UpdatedAt: now,
@@ -292,7 +296,7 @@ func TestCollaborationHandlerKeepsRestrictedDecisionEvidenceOpaque(t *testing.T)
 	application := &fakeCollaborationApplication{view: goldenpath.NexusView{
 		DecisionCapabilities: &goldenpath.DecisionCapabilities{},
 		Current: goldenpath.CurrentProjection{
-			Ref: entityref.Ref{Type: "decision", ID: "dec_target"}, GoverningProjectID: "prj_main",
+			DecisionRevision: 1, Ref: entityref.Ref{Type: "decision", ID: "dec_target"}, GoverningProjectID: "prj_main",
 			Title: "Adopt Session collaboration?", Status: "proposed", ProposerID: "usr_writer",
 			DeciderIDs: []string{}, CreatedAt: now, UpdatedAt: now,
 		},
@@ -322,7 +326,7 @@ func TestCollaborationViewIncomingContract(t *testing.T) {
 	view := goldenpath.NexusView{
 		DecisionCapabilities: &goldenpath.DecisionCapabilities{},
 		Current: goldenpath.CurrentProjection{
-			Ref: entityref.Ref{Type: "decision", ID: "dec_target"}, GoverningProjectID: "prj_main",
+			DecisionRevision: 1, Ref: entityref.Ref{Type: "decision", ID: "dec_target"}, GoverningProjectID: "prj_main",
 			Title: "Choose boundary", Status: "proposed", ProposerID: "usr_writer",
 			CreatedAt: now, UpdatedAt: now,
 		},
@@ -522,4 +526,11 @@ func TestCollaborationHandlerMapsApplicationErrors(t *testing.T) {
 		strings.Contains(response.Body.String(), "database unavailable") {
 		t.Fatalf("response = %d %q", response.Code, response.Body.String())
 	}
+}
+
+func (a *fakeCollaborationApplication) SupersedeDecision(_ context.Context, inv goldenpath.Invocation, in goldenpath.SupersedeDecisionInput) (goldenpath.SupersedeDecisionResult, error) {
+	a.invocation = inv
+	a.supersessionInput = in
+	a.supersessionCalls++
+	return a.supersessionResult, a.supersessionErr
 }

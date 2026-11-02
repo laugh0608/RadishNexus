@@ -1,6 +1,6 @@
 # Project 上下文包迁移
 
-本手册执行 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的单 Project 首片及 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 的负责人扩展及 [ADR-0047](../docs/adr/0047-ticket-priority-and-filtering.md) 的优先级扩展，以及 [ADR-0048](../docs/adr/0048-decision-lifecycle-and-rejection.md) 的 Decision 拒绝扩展。当前导出为 `project-collaboration-v4`；新服务严格读取旧 v1～v3，旧服务拒绝 v4，不提供丢弃历史的降级导出。它迁移单 Project 的当前可读协作闭包，目标为同版本、完整匹配当前 migration history（当前为 schema 023）且已正常初始化的空业务实例；不替代 PostgreSQL 整库备份，不合并已有项目。
+本手册执行 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的单 Project 首片及 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 的负责人扩展及 [ADR-0047](../docs/adr/0047-ticket-priority-and-filtering.md) 的优先级扩展，以及 [ADR-0048](../docs/adr/0048-decision-lifecycle-and-rejection.md) 的 Decision 拒绝扩展及 [ADR-0049](../docs/adr/0049-decision-supersession.md) 的替代扩展。当前导出为 `project-collaboration-v5`；新服务严格读取旧 v1～v4，旧服务拒绝 v5，不提供丢弃历史的降级导出。它迁移单 Project 的当前可读协作闭包，目标为同版本、完整匹配当前 migration history（当前为 schema 024）且已正常初始化的空业务实例；不替代 PostgreSQL 整库备份，不合并已有项目。
 
 ## 准备与权限
 
@@ -92,25 +92,35 @@ apply 原子写入业务对象、历史身份、映射、历史来源、Activity
 
 首片输入上限为 64 MiB、10,000 个对象 / 历史作者、50,000 条历史 / 关系 / 文档版本、1 MiB manifest 和 JSONL 单行、256 KiB 单版 Markdown；来源链最多 8 层，导入新增一层，因果链最多 256 层。各限制同时适用，不构成生产容量承诺。profile 不包含研发实体、附件、完整 Workspace、已有项目合并、作者认领或源 ACL 等价迁移。
 
-首片仅支持现有正式协作入口产生的 proposed / accepted / rejected Decision 和四类 asserted 关系；不支持的业务形状整体拒绝，不截断成可导入成功。最多 8 层来源链的包仍可 inspect，但再次导入会新增第 9 层，因此 prepare 拒绝。Decision 必须保留 active evidence，Thread 必须保留 active started-from；合法移除状态不能绕过这些现有不变量。实际往返、恢复及部分覆盖范围见[2026-10-24 实施记录](../docs/status/reviews/2026-10-24-portable-context-package.md)与[2026-10-28 有界补验](../docs/status/reviews/2026-10-28-context-package-supplement.md)。64 MiB 文件解析与 1,000 条消息代表性数据库测量不构成满额数据库 / HTTPS 或生产容量保证。
+当前支持现有正式协作入口产生的 proposed / accepted / rejected / superseded Decision 和五类 asserted 关系；不支持的业务形状整体拒绝，不截断成可导入成功。最多 8 层来源链的包仍可 inspect，但再次导入会新增第 9 层，因此 prepare 拒绝。Decision 必须保留 active evidence，Thread 必须保留 active started-from；合法移除状态不能绕过这些现有不变量。实际往返、恢复及部分覆盖范围见[2026-10-24 实施记录](../docs/status/reviews/2026-10-24-portable-context-package.md)与[2026-10-28 有界补验](../docs/status/reviews/2026-10-28-context-package-supplement.md)。64 MiB 文件解析与 1,000 条消息代表性数据库测量不构成满额数据库 / HTTPS 或生产容量保证。
 
 ## 负责人兼容
 
 v2 在 Ticket 中明确携带可空 `assignee_user_id` 与 `assignment_revision`，并校验从未分配 / 1 开始的连续分配历史和最终状态。分配历史涉及的身份进入包内作者闭包，导入时逐项映射为 disabled 历史身份；目标不按姓名或邮箱绑定真实成员。导入后显示“历史负责人，待重新分配”，只有当前有权成员的显式新动作才能指定目标实例成员。
 
-旧 v1 仅接受原 Ticket 三字段，不接受 v2 字段和事件；校验后在内部转换为 null / 1，计划 digest 仍绑定原 manifest。`format_version` 仍为 1；v1 / v2 的差异由 profile 区分，优先级自 v3 起扩展，当前 Decision v4 兼容规则见末节。020→021 使用配套 Go / Web 停写升级；旧备份先由匹配 020 工件恢复空目标，再显式 migrate。
+旧 v1 仅接受原 Ticket 三字段，不接受 v2 字段和事件；校验后在内部转换为 null / 1，计划 digest 仍绑定原 manifest。`format_version` 仍为 1；v1 / v2 的差异由 profile 区分，优先级自 v3 起扩展，当前 Decision v4 / v5 兼容规则见末两节。020→021 使用配套 Go / Web 停写升级；旧备份先由匹配 020 工件恢复空目标，再显式 migrate。
 
 
 ## 优先级兼容
 
 v3 在 v2 的五个 Ticket 字段上增加必填 `priority / priority_revision`，从 unset / 1 重放连续优先级历史，校验终态禁止修改、全局时间次序、三条历史链的最终值与更新时间。旧 v1 / v2 先按各自精确字段和事件白名单校验，再在内部补 unset / 1；v1 同时补未分配 / 1。源 manifest digest 保持不变，不补造事件或改写旧时间。
 
-022 与 Activity 10、配套 Go / Web / CLI 一起停写升级。旧 021 工件恢复到空目标后才显式 migrate；优先级字段由 v3 引入，当前新导出使用下节 v4。筛选、cursor 和协作 receipt 不进入上下文包，receipt 仍保留在整库备份中。原生与导入优先级事件均参与二次导入和投影重建，历史身份仍不可登录。
+022 与 Activity 10、配套 Go / Web / CLI 一起停写升级。旧 021 工件恢复到空目标后才显式 migrate；优先级字段由 v3 引入，当前新导出使用后述 v5。筛选、cursor 和协作 receipt 不进入上下文包，receipt 仍保留在整库备份中。原生与导入优先级事件均参与二次导入和投影重建，历史身份仍不可登录。
 
 ## Decision 拒绝兼容
 
 [ADR-0048](../docs/adr/0048-decision-lifecycle-and-rejection.md) 的 v4 在 v3 基础上只增 Decision 必填 nullable rejection_reason 与 decision.rejected 历史。proposed 没有决定字段；accepted 保留原确认事实，理由为 null；rejected 必须保留拒绝理由、实际决策人与时间，不能伪造 accepted 的 Ticket 来源。历史导入不会使目标成员刚执行一次拒绝，也不补造源 receipt 或分发历史 Outbox。
 
-旧 v1～v3 先按精确原字段 / 事件白名单校验，再在内部将 Decision 理由转换为 null；不接受旧 profile 夹带新字段 / 事件，不改变源 manifest digest 或补造历史。旧合法 accepted 的决定时间与创建时间相等仍可保留并导出 v4；新原生接受 / 拒绝在锁内产生严格递增时间。二次导出 / 导入须保留拒绝来源链，当前包不支持 superseded、复核、内容编辑或重新打开。
+旧 v1～v3 先按精确原字段 / 事件白名单校验，再在内部将 Decision 理由转换为 null；不接受旧 profile 夹带新字段 / 事件，不改变源 manifest digest 或补造历史。旧合法 accepted 的决定时间与创建时间相等仍可保留；新原生接受 / 拒绝在锁内产生严格递增时间。二次导出 / 导入须保留拒绝来源链，v4 本身不支持 superseded；当前 v5 的替代兼容见下节，复核、内容编辑与重新打开仍不支持。
 
 023 / Activity 11 与 Go / Web / CLI 配套停写升级。旧 022 备份用匹配工件恢复全新空目标，再显式 migrate；新旧 schema 不混用，也不提供丢弃拒绝历史的降级导出。权威整库备份保留理由、事件与 receipt；恢复旧备份会失去备份后的新写入，须在目标实例操作前另行确认。验证范围见[本轮记录](../docs/status/reviews/2026-11-02-decision-rejection.md)。
+
+## Decision 替代兼容
+
+[ADR-0049](../docs/adr/0049-decision-supersession.md) 的 v5 增加 Decision 必填 decision_revision、Link 必填 nullable supersession_reason 和 decision.superseded 双对象历史。理由仅在 supersedes 为非空；复用既有端点、actor、时间、事件和 lineage，不导出源 command receipt。替代链必须完整可读，并与事件中双方相邻版本、历史状态及当前更新时间一致；缺事实、缺端点、分叉或环整体拒绝。
+
+Ticket 根据创建当时来源已 accepted 的事实校验，若来源后来 superseded，创建必须严格早于替代。之后 Ticket 状态和 Document 版本可继续变化，不把合法执行历史改到新结论。两轮独立往返、导入后继续原生替代和实际 HTTPS CLI 已验收；历史身份仍不可登录，导入历史不补造原生 receipt 或历史 Outbox。
+
+旧 v1～v4 先按各自精确字段 / 事件白名单读取，再在内部补 Decision 版本（proposed 1、accepted / rejected 2）和 Link 的 null 理由。原 digest 和旧事实时间保留，包括 updated_at 晚于 created_at 的合法 proposed；旧 profile 不接受替代字段 / 状态 / 事件。不提供丢弃历史的降级导出。
+
+当前 schema 024 / Activity 12 / v5 与 Go / Web / CLI 配套停写升级。023 备份先使用匹配的 023 工件恢复全新空目标，再显式 migrate 至 024；旧工件不能直接读取或恢复新 schema。权威整库备份保留原生 supersession receipt 和理由，恢复后按当前权限核验原操作。合成实例验证及范围限制见[实施记录](../docs/status/reviews/2026-11-02-decision-supersession.md)，不代表真实实例已升级。

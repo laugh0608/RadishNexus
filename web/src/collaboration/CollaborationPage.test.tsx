@@ -26,6 +26,7 @@ const thread: ThreadCurrent = {
 };
 
 const proposedDecision: DecisionCurrent = {
+  decisionRevision: 1,
   ref: { type: "decision", id: "dec_choice" },
   project: { type: "project", id: "prj_main" },
   question: "Adopt the collaboration boundary?",
@@ -43,6 +44,7 @@ const proposedDecision: DecisionCurrent = {
 const acceptedDecision: DecisionCurrent = {
   ...proposedDecision,
   status: "accepted",
+  decisionRevision: 2,
   outcome: "Use the Session boundary.",
   rationale: "It preserves current authority.",
   deciders: [{ kind: "user", id: "usr_decider" }],
@@ -67,7 +69,14 @@ const threadView: CollaborationView<ThreadCurrent> = {
 
 const decisionView: CollaborationView<DecisionCurrent> = {
   current: proposedDecision,
-  capabilities: { accept: true, reject: true, createTicket: false },
+  capabilities: {
+    accept: true,
+    reject: true,
+    createTicket: false,
+    supersede: false,
+    retryDecision: true,
+    retryTicketCreation: false,
+  },
   relations: [{ visibility: "restricted" }],
   timeline: [],
 };
@@ -225,7 +234,14 @@ describe("CollaborationPage", () => {
           .mockResolvedValue({
             ...decisionView,
             current: acceptedDecision,
-            capabilities: { accept: false, reject: false, createTicket: true },
+            capabilities: {
+              accept: false,
+              reject: false,
+              createTicket: true,
+              supersede: false,
+              retryDecision: true,
+              retryTicketCreation: true,
+            },
           }),
         acceptDecision,
         createTicket,
@@ -257,7 +273,7 @@ describe("CollaborationPage", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "接受 Decision" }));
 
-    expect(await screen.findByText("Accepted outcome")).toBeDefined();
+    expect(await screen.findByText("已确认结论")).toBeDefined();
     expect(screen.getByText("Use the Session boundary.")).toBeDefined();
     expect(acceptDecision).toHaveBeenCalledWith(
       "wrk_main",
@@ -287,6 +303,7 @@ describe("CollaborationPage", () => {
     const rejected: DecisionCurrent = {
       ...proposedDecision,
       status: "rejected",
+      decisionRevision: 2,
       rejectionReason: "Reason kept",
       deciders: [{ kind: "user", id: "usr_decider" }],
       decidedAt: now,
@@ -308,6 +325,9 @@ describe("CollaborationPage", () => {
               accept: false,
               reject: false,
               createTicket: false,
+              supersede: false,
+              retryDecision: true,
+              retryTicketCreation: false,
             },
           }
         : decisionView,
@@ -355,7 +375,14 @@ describe("CollaborationPage", () => {
       .mockResolvedValueOnce(decisionView)
       .mockResolvedValue({
         ...decisionView,
-        capabilities: { accept: false, reject: false, createTicket: false },
+        capabilities: {
+          accept: false,
+          reject: false,
+          createTicket: false,
+          supersede: false,
+          retryDecision: false,
+          retryTicketCreation: false,
+        },
       });
     const rejectDecision = vi.fn();
     renderPage(
@@ -461,6 +488,7 @@ function testClient(
     proposeDecision: vi.fn(),
     acceptDecision: vi.fn(),
     rejectDecision: vi.fn(),
+    supersedeDecision: vi.fn(),
     createTicket: vi.fn(),
     ...overrides,
   };

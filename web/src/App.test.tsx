@@ -620,6 +620,7 @@ function testCollaborationClient(
     proposeDecision: vi.fn(),
     acceptDecision: vi.fn(),
     rejectDecision: vi.fn(),
+    supersedeDecision: vi.fn(),
     createTicket: vi.fn(),
     ...overrides,
   };

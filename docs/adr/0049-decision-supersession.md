@@ -1,22 +1,22 @@
 # ADR-0049：Decision 最小替代与历史兼容
 
-状态：提议；D01～D07 待所有者确认，未授权实现或运行新资源。
+状态：已接受；D01～D07 已实施，分层验收与限制见[实施记录](../status/reviews/2026-11-02-decision-supersession.md)。
 
 日期：2026-11-02
 
-核对基线：`6f9e8b6`，schema 023 / Activity 11 / `project-collaboration-v4`。承接 [ADR-0048](0048-decision-lifecycle-and-rejection.md) 的 B 方向；若接受，本 ADR 增量替代其 accepted 终态不变、接受重试只返回 accepted、三状态 DTO 和 v4 不含替代历史的限制，不重写原 ADR 或旧事件。Ticket、Document、成员资格和 evidence 继续使用既有权限。
+核对基线：`6f9e8b6`，schema 023 / Activity 11 / `project-collaboration-v4`。承接 [ADR-0048](0048-decision-lifecycle-and-rejection.md) 的 B 方向；本 ADR 增量替代其 accepted 终态不变、接受重试只返回 accepted、三状态 DTO 和 v4 不含替代历史的限制，不重写原 ADR 或旧事件。Ticket、Document、成员资格和 evidence 继续使用既有权限。
 
-拟增量 Supersedes：ADR-0048 上述生命周期 / 重试 / 读取与上下文限制；确认后生效，其余拒绝合同继续有效。
+增量 Supersedes：ADR-0048 上述生命周期 / 重试 / 读取与上下文限制；本次确认已生效，其余拒绝合同继续有效。
 
 ## 背景与首片选择
 
 最小拒绝已实现，但已采纳结论发生变化时，还不能从正式入口说明“哪条新结论替代了哪条旧结论”。推荐先完成替代：它直接延续讨论—决策—执行的来源链；复核另需独立评估记录、到期语义和后续动作，不与替代同时实现。
 
-源码中的 superseded 状态和 supersedes 类型只是预留。migration 001 只要求 superseded 有 active 入向替代关系，没有同 Project、唯一前后继、防环及完整事件约束；正式读取和 v4 仍拒绝该状态。接受精确重试要求当前 accepted，Ticket 创建在 receipt 前检查 accepted，包校验同样要求来源当前 accepted，不能只增加按钮和状态枚举。
+设计基线源码中的 superseded 状态和 supersedes 类型只是预留。migration 001 只要求 superseded 有 active 入向替代关系，没有同 Project、唯一前后继、防环及完整事件约束；正式读取和 v4 仍拒绝该状态。接受精确重试要求当前 accepted，Ticket 创建在 receipt 前检查 accepted，包校验同样要求来源当前 accepted，不能只增加按钮和状态枚举。
 
 本片采用已明确接受的新 Decision 替代已接受的旧 Decision。它不代替新提案的接受确认，不把一条 proposed 自动接受，不编辑或取消原结论，不自动转移工单。
 
-## 待确认决定
+## 已确认决定
 
 | 编号 | 推荐合同 | 影响 |
 | --- | --- | --- |
@@ -26,7 +26,7 @@
 | D04 历史与精确重试 | 旧接受精确重试核对原接受事实后返回真实当前 accepted / superseded；已建 Ticket 的原请求在当前贡献权限下仍可重试，新 operation 不能从 superseded 创建 Ticket | 旧确认不是重新接受，已有 Ticket / Document 不改状态、不换来源；导出校验创建时有效的接受事实 |
 | D05 正式入口 | 完整 DTO 增版本与第四状态；详情从新 accepted 发起，复用 Project 列表选择旧结论，双方详情对照后确认；双向替代关系展示理由、操作者和时间 | 增 supersede / retry_decision / retry_ticket_creation 能力，区分当前授权与首次业务资格；列表仅扩展状态，不新增筛选、候选 API 或通用关系编辑器 |
 | D06 事件与可移植历史 | 一条 decision.superseded 事件以旧 Decision 为 primary，显式投影到双方；Activity 12，默认 v5，严格兼容 v1～v4 | 新 profile 保留理由、双方版本、链与原接受 / 执行历史；不降级丢弃替代链，不向所有相邻对象传播 Activity |
-| D07 迁移与完成线 | 计划 migration 024，无新依赖；旧合法数据只回填版本，不改事实时间、事件或 receipt；完成 R01～R10 后才交付 | Go / Web / CLI / schema 配套停写升级；真实实例、提交 / push、发布及运行资源分别按授权处理 |
+| D07 迁移与完成线 | migration 024，无新依赖；旧合法数据只回填版本，不改事实时间、事件或 receipt；完成 R01～R10 后才交付 | Go / Web / CLI / schema 配套停写升级；真实实例、提交 / push、发布及运行资源分别按授权处理 |
 
 ## 状态、关系和理由
 
@@ -48,12 +48,12 @@
 
 decision_revision 为正整数，上限 2147483647。它表达已确认状态及替代关系的变化：
 
-- proposed 创建为 1；proposed → accepted / rejected 为 2，旧 schema 1 事件分别隐含 1→2，无需补字段或重写事件；
+- proposed 创建为 1；旧合法 proposed 的 updated_at 可晚于 created_at，迁移和 v5 兼容保留原时间；proposed → accepted / rejected 为 2，旧 schema 1 事件分别隐含 1→2，无需补字段或重写事件；
 - 一次替代使双方各 +1。新结论虽仍 accepted，outgoing 事实和 updated_at 已改变，旧确认必须过期；
 - rejected 恒为 2；没有替代的 accepted 为 2，作为替代起点后为 3；superseded 根据是否原有前驱为 3 或 4，必须与完整历史重放一致；
 - 不开放提案编辑、evidence 编辑、accepted 内容编辑或状态回转；未来这些能力仍须独立设计版本合同。
 
-唯一新增写入为 `POST /api/v1/workspaces/{workspace_id}/decisions/{old_decision_id}/supersession`。以下仅是待确认协议示例：
+唯一新增写入为 `POST /api/v1/workspaces/{workspace_id}/decisions/{old_decision_id}/supersession`。请求示例：
 
 ```json
 {
@@ -113,9 +113,9 @@ Decision relation 增 outgoing / incoming supersedes。可读该边的双方后�
 
 新 schema 1 decision.superseded 以旧 Decision 为 primary、当前用户为 actor、web 为 source；payload 精确包含 status=superseded、replacement Decision ref、relation EntityLink ref、from_revision / to_revision，以及 replacement_from_revision / replacement_to_revision。不复制理由或结论正文。
 
-这是一项明确的双对象命令：同一个事件显式投影到旧 / 新两个 Decision Timeline，各自标明“被替代 / 替代了旧结论”、该对象前后版本，并将另一端点作为按当前权限投影的 subject。原事件只存一次，双方不补造重复领域事实。正常写入、重建与导入使用同一分支，Activity 计划升至 12；不传播到 Thread、Ticket、Document、通知或全部图邻居。
+这是一项明确的双对象命令：同一个事件显式投影到旧 / 新两个 Decision Timeline，各自标明“被替代 / 替代了旧结论”、该对象前后版本，并将另一端点作为按当前权限投影的 subject。原事件只存一次，双方不补造重复领域事实。正常写入、重建与导入使用同一分支，Activity 升至 12；不传播到 Thread、Ticket、Document、通知或全部图邻居。
 
-migration 024 计划：
+migration 024：
 
 1. 预检原支持的三状态字段组合、没有任何预留 superseded / supersedes 历史；不支持的旧人工写入整体拒绝，不自动修复或删除。
 2. 新增 decision_revision，旧 proposed 回填 1，accepted / rejected 回填 2；不改旧时间、事件或 receipt。收紧生命周期、metadata、相邻版本、同 Project 和来源事实约束。
@@ -126,7 +126,7 @@ migration 024 计划：
 
 ## v5 上下文兼容
 
-默认导出拟为 project-collaboration-v5，format_version 保持 1。Decision 增 decision_revision；Link 增必填 nullable supersession_reason，只有 supersedes 为非空，其 actor / time / endpoints / event / lineage 复用既有字段，不再复制第二套关系。History 增 decision.superseded 与严格双对象版本 facts。
+默认导出为 project-collaboration-v5，format_version 保持 1。Decision 增 decision_revision；Link 增必填 nullable supersession_reason，只有 supersedes 为非空，其 actor / time / endpoints / event / lineage 复用既有字段，不再复制第二套关系。History 增 decision.superseded 与严格双对象版本 facts。
 
 - 严格读取 v1～v4 原字段 / 事件白名单，再内部补版本（proposed 1、旧终态 2）和 link 的 null 理由；不改原 manifest digest、补造事件或向旧 profile 塞新字段。仅 v5 可包含 superseded / supersedes / 新事件，不降级丢弃历史。
 - 重放原 proposed → accepted / rejected，再按时间验证替代事件同时推进两端；新旧结论在当时均 accepted、版本相邻、边和 metadata 理由合法、原始 actor / time / source 一致。所有结论、边、事件必须闭合，拒绝分叉、双后继、环、缺端点 / 缺事实和最终状态 / updated_at 不符。
@@ -136,7 +136,7 @@ migration 024 计划：
 
 ## 验收矩阵与实施顺序
 
-本表是待实施要求，不是运行证据；本轮仅完成源码设计。
+本表为已确认的验收要求；实际分层结果、运行范围和未覆盖项集中见[实施记录](../status/reviews/2026-11-02-decision-supersession.md)，不能只凭本表推断已执行。
 
 | 编号 | 必须覆盖的结果 |
 | --- | --- |
@@ -168,8 +168,8 @@ migration 024 计划：
 
 ## 确认与运行授权
 
-当前只授权提交既有工作区并继续下一步设计。本 ADR、导航与源码核对记录可以审阅和本地提交；D01～D07 未确认前，不修改业务数据模型、权限实现、公共协议、migration 或依赖，不将提议写成已接受。
+2026-11-02 所有者明确回复“确认，继续推进和实现”，确认 D01～D07 及下述隔离验收范围；据此实施本片。提交、推送与真实实例操作继续按独立授权处理。
 
-若所有者确认实施，隔离验收可同时明确授权：复用已安装工具 / 缓存和已有固定镜像，新建本任务专属临时 PostgreSQL / 空测试数据库、loopback Go / HTTPS fixture 与独立 Chrome profile，仅使用合成数据，故障 / 备份恢复只作用于这些资源。运行会临时占用端口、CPU、内存和磁盘；缺少工具 / 镜像则报告，不安装或拉取，不改系统信任或个人浏览器 profile。结束后按任务资源 ID 停止并精确清理容器、卷、fixture、临时包 / profile，保留必要脱敏证据。
+本次已确认的隔离验收范围：复用已安装工具 / 缓存和已有固定镜像，新建本任务专属临时 PostgreSQL / 空测试数据库、loopback Go / HTTPS fixture 与独立 Chrome profile，仅使用合成数据，故障 / 备份恢复只作用于这些资源。运行会临时占用端口、CPU、内存和磁盘；缺少工具 / 镜像则报告，不安装或拉取，不改系统信任或个人浏览器 profile。结束后按任务资源 ID 停止并精确清理容器、卷、fixture、临时包 / profile，保留必要脱敏证据。
 
 上述确认不授权 push、PR、tag / Release、发布、部署、真实实例升级、外部消息、系统配置或依赖变更；不能沿用拒绝切片已结束的资源授权。

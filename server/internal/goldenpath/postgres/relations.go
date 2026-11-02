@@ -70,7 +70,7 @@ func listRelationProjections(
 			FROM radishnexus.entity_links
 			WHERE workspace_id = $1 AND to_type = $2 AND to_id = $3 AND state = 'active'
 				AND (($2 = 'thread' AND from_type = 'decision' AND relation_type = 'derived-from')
-					OR ($2 = 'decision' AND from_type = 'ticket' AND relation_type = 'implements')
+					OR ($2 = 'decision' AND ((from_type = 'ticket' AND relation_type = 'implements') OR (from_type='decision' AND relation_type='supersedes')))
  OR ($2 = 'document' AND from_type = 'ticket' AND relation_type = 'relates-to')
  OR ($2 = 'repository' AND from_type = 'component' AND relation_type = 'source-repository')
  OR ($2 = 'component' AND from_type = 'ticket' AND relation_type = 'affects'))
@@ -120,7 +120,28 @@ func listRelationProjections(
 		if err != nil {
 			return nil, err
 		}
+		var supersession *goldenpath.SupersessionProjection
+		if fact.relationType == "supersedes" {
+			var p goldenpath.SupersessionProjection
+			err = tx.QueryRow(ctx, `SELECT l.metadata->>'supersession_reason',COALESCE(m.source_actor_id,l.created_by_id),l.created_at FROM radishnexus.entity_links l LEFT JOIN radishnexus.context_import_mappings m ON m.workspace_id=l.workspace_id AND m.kind='entity-link' AND m.target_id=l.id WHERE l.workspace_id=$1 AND l.relation_type='supersedes' AND l.from_id=$2 AND l.to_id=$3`, principal.WorkspaceID, func() string {
+				if fact.direction == "outgoing" {
+					return source.ID
+				}
+				return fact.target.ID
+			}(), func() string {
+				if fact.direction == "outgoing" {
+					return fact.target.ID
+				}
+				return source.ID
+			}()).Scan(&p.Reason, &p.Actor.ID, &p.OccurredAt)
+			if err != nil {
+				return nil, fmt.Errorf("read supersession relation facts: %w", err)
+			}
+			p.Actor.Kind = "user"
+			supersession = &p
+		}
 		projections = append(projections, goldenpath.RelationProjection{
+			Supersession: supersession,
 			State:        goldenpath.ProjectionVisible,
 			Direction:    fact.direction,
 			RelationType: fact.relationType,

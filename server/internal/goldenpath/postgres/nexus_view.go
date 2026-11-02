@@ -66,13 +66,22 @@ func (store *Store) GetNexusView(
 		if !readable {
 			return view, authz.ErrNotFound
 		}
-		caps := &goldenpath.DecisionCapabilities{CreateTicket: view.Current.Status == "accepted" && access.active && access.role.CanContribute()}
-		if view.Current.Status == "proposed" && access.active && access.role.CanAcceptDecision() {
+		contributes := access.active && access.role.CanContribute()
+		caps := &goldenpath.DecisionCapabilities{CreateTicket: view.Current.Status == "accepted" && contributes, RetryTicketCreation: (view.Current.Status == "accepted" || view.Current.Status == "superseded") && contributes}
+		if access.active && access.role.CanAcceptDecision() {
 			e = requireReadableDecisionEvidence(ctx, tx, principal, target.ID)
 			if e != nil && !errors.Is(e, authz.ErrForbidden) {
 				return view, e
 			}
-			caps.Accept, caps.Reject = e == nil, e == nil
+			caps.RetryDecision = e == nil
+			caps.Accept, caps.Reject = e == nil && view.Current.Status == "proposed", e == nil && view.Current.Status == "proposed"
+			if e == nil && view.Current.Status == "accepted" && view.Current.DecisionRevision < goldenpath.MaxDecisionRevision {
+				var outgoing bool
+				if e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM radishnexus.entity_links WHERE workspace_id=$1 AND from_type='decision' AND from_id=$2 AND relation_type='supersedes')`, principal.WorkspaceID, target.ID).Scan(&outgoing); e != nil {
+					return view, fmt.Errorf("read supersession capability: %w", e)
+				}
+				caps.Supersede = !outgoing
+			}
 		}
 		view.DecisionCapabilities = caps
 	}
@@ -136,7 +145,7 @@ func loadCurrentProjection(
 		err = tx.QueryRow(ctx, `
 			SELECT governing_project_id, question, status,
 				COALESCE(outcome, ''), COALESCE(rationale, ''), proposer_id,
-				decider_ids, decided_at, created_at, updated_at, COALESCE(rejection_reason, '')
+				decider_ids, decided_at, created_at, updated_at, COALESCE(rejection_reason, ''),decision_revision
 			FROM radishnexus.decisions
 			WHERE workspace_id = $1 AND id = $2
 		`, principal.WorkspaceID, target.ID).Scan(
@@ -151,6 +160,7 @@ func loadCurrentProjection(
 			&current.CreatedAt,
 			&current.UpdatedAt,
 			&current.RejectionReason,
+			&current.DecisionRevision,
 		)
 	case "ticket":
 		err = tx.QueryRow(ctx, `

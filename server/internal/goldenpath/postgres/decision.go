@@ -104,7 +104,7 @@ func (s *Store) decide(ctx context.Context, c decisionCommand) (d goldenpath.Dec
 		if err != nil {
 			return d, false, fmt.Errorf("verify Decision outcome receipt: %w", err)
 		}
-		if !exact || receipt.resultID != c.id || receipt.resultRevision != nil || d.Status != c.status || d.Outcome != c.outcome || d.Rationale != c.rationale || d.RejectionReason != c.reason || len(d.DeciderIDs) != 1 || d.DeciderIDs[0] != c.Principal.ID {
+		if !exact || receipt.resultID != c.id || receipt.resultRevision != nil || (d.Status != c.status && !(c.status == "accepted" && d.Status == "superseded")) || d.Outcome != c.outcome || d.Rationale != c.rationale || d.RejectionReason != c.reason || len(d.DeciderIDs) != 1 || d.DeciderIDs[0] != c.Principal.ID {
 			return d, false, errors.New("invalid Decision outcome receipt provenance")
 		}
 		if err = tx.Commit(ctx); err != nil {
@@ -116,7 +116,7 @@ func (s *Store) decide(ctx context.Context, c decisionCommand) (d goldenpath.Dec
 		return d, false, authz.ErrConflict
 	}
 	_, err = tx.Exec(ctx, `UPDATE radishnexus.decisions SET status=$3, outcome=NULLIF($4,''), rationale=NULLIF($5,''),
- rejection_reason=NULLIF($6,''), decider_ids=ARRAY[$7]::text[], decided_at=$8, updated_at=$8
+ rejection_reason=NULLIF($6,''), decider_ids=ARRAY[$7]::text[], decided_at=$8, updated_at=$8, decision_revision=decision_revision+1
  WHERE workspace_id=$1 AND id=$2`, c.Principal.WorkspaceID, c.id, c.status, c.outcome, c.rationale, c.reason, c.Principal.ID, now)
 	if err != nil {
 		return d, false, fmt.Errorf("update Decision outcome: %w", err)

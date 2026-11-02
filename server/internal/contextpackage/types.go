@@ -15,8 +15,9 @@ const (
 	Format           = "radishnexus.context"
 	ProfileV1        = "project-collaboration-v1"
 	ProfileV2        = "project-collaboration-v2"
+	ProfileV4        = "project-collaboration-v4"
 	ProfileV3        = "project-collaboration-v3"
-	Profile          = "project-collaboration-v4"
+	Profile          = "project-collaboration-v5"
 	Version          = 1
 	MaxBytes         = 64 << 20
 	MaxObjects       = 10000
@@ -81,17 +82,18 @@ type Thread struct {
 	ChannelID  *string `json:"channel_id"`
 }
 type Decision struct {
-	RejectionReason *string         `json:"rejection_reason"`
-	Question        string          `json:"question"`
-	Outcome         *string         `json:"outcome"`
-	Rationale       *string         `json:"rationale"`
-	Status          string          `json:"status"`
-	Proposer        string          `json:"proposer"`
-	Deciders        []string        `json:"deciders"`
-	DecidedAt       *time.Time      `json:"decided_at"`
-	Alternatives    json.RawMessage `json:"alternatives"`
-	Consequences    *string         `json:"consequences"`
-	ReviewAt        *time.Time      `json:"review_at"`
+	DecisionRevision int             `json:"decision_revision"`
+	RejectionReason  *string         `json:"rejection_reason"`
+	Question         string          `json:"question"`
+	Outcome          *string         `json:"outcome"`
+	Rationale        *string         `json:"rationale"`
+	Status           string          `json:"status"`
+	Proposer         string          `json:"proposer"`
+	Deciders         []string        `json:"deciders"`
+	DecidedAt        *time.Time      `json:"decided_at"`
+	Alternatives     json.RawMessage `json:"alternatives"`
+	Consequences     *string         `json:"consequences"`
+	ReviewAt         *time.Time      `json:"review_at"`
 }
 type Assignment struct {
 	FromUserID   *string `json:"from_user_id"`
@@ -137,21 +139,22 @@ type Revision struct {
 	BodyFile     string    `json:"body_file"`
 }
 type Link struct {
-	ID            string     `json:"id"`
-	From          Ref        `json:"from"`
-	To            Ref        `json:"to"`
-	Relation      string     `json:"relation"`
-	Assertion     string     `json:"assertion"`
-	Origin        string     `json:"origin"`
-	Actor         string     `json:"actor"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	EventID       string     `json:"event_id"`
-	State         string     `json:"state"`
-	RemovedActor  *string    `json:"removed_actor"`
-	RemovedAt     *time.Time `json:"removed_at"`
-	RemovalReason *string    `json:"removal_reason"`
-	Lineage       []Origin   `json:"lineage"`
+	SupersessionReason *string    `json:"supersession_reason"`
+	ID                 string     `json:"id"`
+	From               Ref        `json:"from"`
+	To                 Ref        `json:"to"`
+	Relation           string     `json:"relation"`
+	Assertion          string     `json:"assertion"`
+	Origin             string     `json:"origin"`
+	Actor              string     `json:"actor"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+	EventID            string     `json:"event_id"`
+	State              string     `json:"state"`
+	RemovedActor       *string    `json:"removed_actor"`
+	RemovedAt          *time.Time `json:"removed_at"`
+	RemovalReason      *string    `json:"removal_reason"`
+	Lineage            []Origin   `json:"lineage"`
 }
 type History struct {
 	ID            string          `json:"id"`
@@ -170,21 +173,27 @@ type History struct {
 // Facts is a whitelist. Validate rejects fields that do not belong to the
 // particular event, even when their values happen to be zero.
 type Facts struct {
-	Priority     *Priority   `json:"priority,omitempty"`
-	Assignment   *Assignment `json:"assignment,omitempty"`
-	Status       string      `json:"status,omitempty"`
-	Evidence     *Ref        `json:"evidence,omitempty"`
-	Decision     *Ref        `json:"decision,omitempty"`
-	Ticket       *Ref        `json:"ticket,omitempty"`
-	Channel      *Ref        `json:"channel,omitempty"`
-	Thread       *Ref        `json:"thread,omitempty"`
-	Message      *Ref        `json:"message,omitempty"`
-	Revision     int         `json:"revision,omitempty"`
-	RestoredFrom *int        `json:"restored_from_revision,omitempty"`
-	FromStatus   string      `json:"from_status,omitempty"`
-	ToStatus     string      `json:"to_status,omitempty"`
-	FromRevision int         `json:"from_status_revision,omitempty"`
-	ToRevision   int         `json:"to_status_revision,omitempty"`
+	Replacement             *Ref        `json:"replacement,omitempty"`
+	Relation                *Ref        `json:"relation,omitempty"`
+	DecisionFromRevision    int         `json:"from_revision,omitempty"`
+	DecisionToRevision      int         `json:"to_revision,omitempty"`
+	ReplacementFromRevision int         `json:"replacement_from_revision,omitempty"`
+	ReplacementToRevision   int         `json:"replacement_to_revision,omitempty"`
+	Priority                *Priority   `json:"priority,omitempty"`
+	Assignment              *Assignment `json:"assignment,omitempty"`
+	Status                  string      `json:"status,omitempty"`
+	Evidence                *Ref        `json:"evidence,omitempty"`
+	Decision                *Ref        `json:"decision,omitempty"`
+	Ticket                  *Ref        `json:"ticket,omitempty"`
+	Channel                 *Ref        `json:"channel,omitempty"`
+	Thread                  *Ref        `json:"thread,omitempty"`
+	Message                 *Ref        `json:"message,omitempty"`
+	Revision                int         `json:"revision,omitempty"`
+	RestoredFrom            *int        `json:"restored_from_revision,omitempty"`
+	FromStatus              string      `json:"from_status,omitempty"`
+	ToStatus                string      `json:"to_status,omitempty"`
+	FromRevision            int         `json:"from_status_revision,omitempty"`
+	ToRevision              int         `json:"to_status_revision,omitempty"`
 }
 type Descriptor struct {
 	Path   string `json:"path"`

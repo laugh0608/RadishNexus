@@ -165,6 +165,16 @@ func TestContextCLIHTTPSAndBrowser(t *testing.T) {
 	if _, e = source.core.RejectDecision(source.ctx, contextInvocation(source.principal), goldenpath.RejectDecisionInput{DecisionID: rejected.Decision.ID, ClientOperationID: "cli-rejection", RejectionReason: "Portable CLI rejection reason"}); e != nil {
 		t.Fatal(e)
 	}
+	replacement, e := source.core.CreateDecisionFromThread(source.ctx, contextInvocation(source.principal), goldenpath.CreateDecisionInput{ThreadID: source.thread, ClientOperationID: "cli-supersession-proposal", Question: "CLI replacement conclusion"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = source.core.AcceptDecision(source.ctx, contextInvocation(source.principal), goldenpath.AcceptDecisionInput{DecisionID: replacement.Decision.ID, ClientOperationID: "cli-supersession-accept", Outcome: "New CLI conclusion", Rationale: "Portable evidence"}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = source.core.SupersedeDecision(source.ctx, contextInvocation(source.principal), goldenpath.SupersedeDecisionInput{DecisionID: source.decision, ReplacementID: replacement.Decision.ID, ClientOperationID: "cli-supersession", BaseDecisionRevision: 2, BaseReplacementRevision: 2, SupersessionReason: "Portable CLI supersession reason"}); e != nil {
+		t.Fatal(e)
+	}
 	target := contextDatabase(t)
 	outsiderSession, outsider := target.invite(t, "context.outsider@example.test")
 	webRoot := os.Getenv("RADISHNEXUS_WEB_ROOT")
@@ -221,6 +231,23 @@ func TestContextCLIHTTPSAndBrowser(t *testing.T) {
 		}
 		contextHTTPRead(t, targetHTTP, outsiderSession, base+"/context-source/"+kind+"/"+ids[kind], 404)
 	}
+	oldView := contextHTTPRead(t, targetHTTP, target.owner, base+"/decisions/"+ids["decision"]+"/nexus-view", 200)
+	if !strings.Contains(string(oldView), `"status":"superseded"`) || !strings.Contains(string(oldView), "Portable CLI supersession reason") {
+		t.Fatal("CLI lost supersession state or reason")
+	}
+	native, e := target.core.CreateDecisionFromThread(target.ctx, contextInvocation(target.principal), goldenpath.CreateDecisionInput{ThreadID: ids["thread"], ClientOperationID: "cli-target-new-proposal", Question: "Native continuation after CLI transfer"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = target.core.AcceptDecision(target.ctx, contextInvocation(target.principal), goldenpath.AcceptDecisionInput{DecisionID: native.Decision.ID, ClientOperationID: "cli-target-new-accept", Outcome: "Native continuation", Rationale: "Explicit current member"}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = target.core.SupersedeDecision(target.ctx, contextInvocation(target.principal), goldenpath.SupersedeDecisionInput{DecisionID: contextMapping(t, plan, "decision", replacement.Decision.ID), ReplacementID: native.Decision.ID, ClientOperationID: "cli-target-supersession", BaseDecisionRevision: 3, BaseReplacementRevision: 2, SupersessionReason: "Keep both imported and native source facts"}); e != nil {
+		t.Fatal(e)
+	}
+	continuedPath := filepath.Join(output, "continued.nexus")
+	contextCLI(t, "export", "--origin", targetHTTP.URL, "--ca", targetCA, "--credentials-file", targetLogin, "--workspace", target.workspace, "--project", result.ProjectID, "--output", continuedPath)
+	contextCLI(t, "inspect", "--input", continuedPath)
 	var activeSessions int
 	if e = target.pool.QueryRow(target.ctx, `SELECT count(*) FROM radishnexus.user_sessions WHERE user_id=$1 AND revoked_at IS NULL`, target.principal.ID).Scan(&activeSessions); e != nil || activeSessions != 1 {
 		t.Fatal("CLI left active sessions", e)

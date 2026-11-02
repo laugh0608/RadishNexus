@@ -107,6 +107,16 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if _, e = core.RejectDecision(ctx, invocation, goldenpath.RejectDecisionInput{DecisionID: rejected.Decision.ID, ClientOperationID: "rejection-backup-original", RejectionReason: "Retain rejected history in backup"}); e != nil {
 		t.Fatal(e)
 	}
+	replacement, e := core.CreateDecisionFromThread(ctx, invocation, goldenpath.CreateDecisionInput{ThreadID: thread.ID, ClientOperationID: "backup-replacement-proposal", Question: "Replacement keeps original execution"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = core.AcceptDecision(ctx, invocation, goldenpath.AcceptDecisionInput{DecisionID: replacement.Decision.ID, ClientOperationID: "backup-replacement-accept", Outcome: "Replacement", Rationale: "Preserve context"}); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = core.SupersedeDecision(ctx, invocation, goldenpath.SupersedeDecisionInput{DecisionID: decision.Decision.ID, ReplacementID: replacement.Decision.ID, ClientOperationID: "backup-original-supersession", BaseDecisionRevision: 2, BaseReplacementRevision: 2, SupersessionReason: "Original historical supersession"}); e != nil {
+		t.Fatal(e)
+	}
 	bundle, e := exporter.Export(ctx, principal, session.Token, project.Object.ID)
 	if e != nil {
 		t.Fatal(e)
@@ -123,8 +133,11 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if _, e = importer.Export(ctx, actor, owner.Token, result.ProjectID); e != nil {
 		t.Fatal(e)
 	}
-	var importedThread string
+	var importedThread, importedReplacement string
 	for _, m := range plan.Mappings {
+		if m.Kind == "decision" && m.SourceID == replacement.Decision.ID {
+			importedReplacement = m.TargetID
+		}
 		if m.Kind == "thread" && m.SourceID == thread.ID {
 			importedThread = m.TargetID
 		}
@@ -137,6 +150,18 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	}
 	rejectInput := goldenpath.RejectDecisionInput{DecisionID: native.Decision.ID, ClientOperationID: "native-backup-reject", RejectionReason: "Original native rejection"}
 	if _, e = importedCore.RejectDecision(ctx, currentInvocation, rejectInput); e != nil {
+		t.Fatal(e)
+	}
+	nativeReplacement, e := importedCore.CreateDecisionFromThread(ctx, currentInvocation, goldenpath.CreateDecisionInput{ThreadID: importedThread, ClientOperationID: "native-replacement-proposal", Question: "Continue imported replacement chain"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = importedCore.AcceptDecision(ctx, currentInvocation, goldenpath.AcceptDecisionInput{DecisionID: nativeReplacement.Decision.ID, ClientOperationID: "native-replacement-accept", Outcome: "Continue here", Rationale: "Current owner explicitly accepted"}); e != nil {
+		t.Fatal(e)
+	}
+	supersedeInput := goldenpath.SupersedeDecisionInput{DecisionID: importedReplacement, ReplacementID: nativeReplacement.Decision.ID, ClientOperationID: "native-replacement-command", BaseDecisionRevision: 3, BaseReplacementRevision: 2, SupersessionReason: "Native continuation after imported supersession"}
+	superseded, e := importedCore.SupersedeDecision(ctx, currentInvocation, supersedeInput)
+	if e != nil {
 		t.Fatal(e)
 	}
 	baseline := snapshotIncludedTables(t, ctx, imported)
@@ -175,6 +200,10 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	retried, e := restoredCore.RejectDecision(ctx, currentInvocation, rejectInput)
 	if e != nil || retried.Rejected || retried.Decision.RejectionReason != rejectInput.RejectionReason {
 		t.Fatal("restored rejection receipt", e)
+	}
+	replayed, e := restoredCore.SupersedeDecision(ctx, currentInvocation, supersedeInput)
+	if e != nil || !reflect.DeepEqual(replayed, superseded) {
+		t.Fatal("restored native supersession receipt", e)
 	}
 	restoredContext := goldenpath.NewContextService(goldenpostgres.NewContextStore(restored, schema))
 	status, e := restoredContext.Result(ctx, actor, fresh.Token, plan.OperationID)
