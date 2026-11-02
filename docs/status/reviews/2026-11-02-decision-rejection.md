@@ -1,5 +1,7 @@
 # Decision 最小拒绝实施记录
 
+提交归档说明：本批已在本地 `dev` 提交为 `6f9e8b6`。下文“未提交 / 工作区”保留原验收时点，不代表当前 Git 状态；后续替代提案与源码判断见[设计记录](2026-11-02-decision-supersession-design.md)。
+
 日期：2026-11-02
 
 依据：[ADR-0048](../../adr/0048-decision-lifecycle-and-rejection.md)。所有者确认 D01～D07 与隔离验收范围后实施 A；设计当时的源码判断保留在[设计记录](2026-11-02-decision-lifecycle-design.md)。基线 `08b3359`，在 `dev` 工作区实施，尚未暂存、提交或推送；没有修改真实实例、安装依赖或改变 lockfile。

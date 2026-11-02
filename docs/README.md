@@ -49,6 +49,7 @@
 ## 状态与验证入口
 
 - [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
+- [2026-11-02 Decision 最小替代设计](status/reviews/2026-11-02-decision-supersession-design.md)：拒绝切片提交映射、替代 ADR 提案、旧重试 / 执行来源兼容与待确认范围。
 - [2026-11-02 Decision 最小拒绝](status/reviews/2026-11-02-decision-rejection.md)：三状态读写、并发 / 重试、v4 历史与隔离浏览器验收。
 - [2026-11-02 Decision 生命周期设计](status/reviews/2026-11-02-decision-lifecycle-design.md)：最小拒绝 ADR 的原设计、源码核对与确认边界；后续实施见上条记录。
 - [2026-10-28 提交回顾与文档收尾](status/reviews/2026-10-28-daily-closeout.md)：四笔实现 / 修复的代码文档核对、验证边界与接续范围。
