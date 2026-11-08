@@ -3,15 +3,20 @@ import {
   type TicketPriority,
 } from "../collaboration/ticket-priority";
 import { assigneeLabel } from "../collaboration/ticket-assignee-api";
-import { ticketStatusLabels } from "../collaboration/ticket-status";
+import {
+  ticketStatusLabels,
+  type TicketStatus,
+} from "../collaboration/ticket-status";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthRequestError } from "../auth/api";
 import { collaborationPagePath } from "../collaboration/api";
 import {
   projectTicketsClient,
+  type ProjectTicket,
   type ProjectTicketsClient,
   type TicketFilters,
 } from "./project-tickets-api";
+import { usePage } from "./configuration-hooks";
 
 interface Props {
   workspaceID: string;
@@ -26,7 +31,7 @@ type PageState =
   | {
       status: "ready";
       project: Awaited<ReturnType<ProjectTicketsClient["project"]>>;
-      page: Awaited<ReturnType<ProjectTicketsClient["tickets"]>>;
+      page: Awaited<ReturnType<ProjectTicketsClient["tickets"]>> | null;
     };
 
 export function ProjectTicketsPage(props: Props) {
@@ -47,6 +52,7 @@ function ProjectTickets({
   const [state, setState] = useState<PageState>({ status: "loading" });
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [filters, setFilters] = useState<TicketFilters>({});
+  const [view, setView] = useState<"list" | "board">("list");
   const [revision, setRevision] = useState(0);
   const activeRequest = useRef<AbortController | null>(null);
   const cursor = cursors[cursors.length - 1];
@@ -61,6 +67,18 @@ function ProjectTickets({
     changePage([undefined]);
   };
   const refresh = useCallback(() => changePage([undefined]), [changePage]);
+  const changeView = (next: typeof view) => {
+    if (next === view) return;
+    setView(next);
+    refresh();
+  };
+  const unavailable = useCallback(() => {
+    setState({ status: "error", message: "该项目已不可访问，请返回工作台。" });
+  }, []);
+  const sessionExpired = useCallback(() => {
+    setState({ status: "loading" });
+    onSessionExpired();
+  }, [onSessionExpired]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -69,13 +87,15 @@ function ProjectTickets({
     // denied/failed read of the other, nor a late response after navigation.
     void Promise.all([
       client.project(workspaceID, projectID, controller.signal),
-      client.tickets(
-        workspaceID,
-        projectID,
-        cursor,
-        controller.signal,
-        filters,
-      ),
+      view === "list"
+        ? client.tickets(
+            workspaceID,
+            projectID,
+            cursor,
+            controller.signal,
+            filters,
+          )
+        : null,
     ]).then(
       ([project, page]) => {
         if (!controller.signal.aborted)
@@ -103,6 +123,7 @@ function ProjectTickets({
     onSessionExpired,
     projectID,
     revision,
+    view,
     workspaceID,
   ]);
 
@@ -135,34 +156,52 @@ function ProjectTickets({
     <main className="configuration-panel project-tickets" aria-label="项目工单">
       <a href="/">返回工作台</a>
       <h1>项目工单</h1>
+      <div className="configuration-actions" role="group" aria-label="工单视图">
+        <button
+          type="button"
+          aria-pressed={view === "list"}
+          onClick={() => changeView("list")}
+        >
+          列表
+        </button>
+        <button
+          type="button"
+          aria-pressed={view === "board"}
+          onClick={() => changeView("board")}
+        >
+          状态看板
+        </button>
+      </div>
       <button type="button" onClick={refresh}>
         刷新当前筛选
       </button>
       <fieldset className="ticket-filters">
         <legend>筛选项目工单</legend>
-        <label>
-          状态
-          <select
-            value={filters.status ?? ""}
-            onChange={(e) =>
-              changeFilters({
-                ...filters,
-                status:
-                  e.target.value === ""
-                    ? undefined
-                    : (e.target.value as TicketFilters["status"]),
-              })
-            }
-          >
-            <option value="">全部状态</option>
-            <option value="active">未结束</option>
-            {Object.entries(ticketStatusLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {view === "list" ? (
+          <label>
+            状态
+            <select
+              value={filters.status ?? ""}
+              onChange={(e) =>
+                changeFilters({
+                  ...filters,
+                  status:
+                    e.target.value === ""
+                      ? undefined
+                      : (e.target.value as TicketFilters["status"]),
+                })
+              }
+            >
+              <option value="">全部状态</option>
+              <option value="active">未结束</option>
+              {Object.entries(ticketStatusLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label>
           负责人
           <select
@@ -208,7 +247,11 @@ function ProjectTickets({
           重置筛选
         </button>
       </fieldset>
-      <p>按稳定标识排序。工单变化后可刷新当前筛选，重新读取首页。</p>
+      <p>
+        {view === "board"
+          ? "各状态独立翻页。打开工单详情可继续处理。"
+          : "按稳定标识排序。工单变化后可刷新当前筛选，重新读取首页。"}
+      </p>
       {state.status === "loading" ? (
         <p role="status">正在读取项目工单…</p>
       ) : state.status === "error" ? (
@@ -224,50 +267,156 @@ function ProjectTickets({
           {state.project.status === "archived" ? (
             <p>项目已归档 · 可浏览历史工单</p>
           ) : null}
-          {state.page.items.length === 0 ? (
-            <p>当前条件下没有可显示的工单。</p>
+          {state.page === null ? (
+            <div className="ticket-board">
+              {(Object.keys(ticketStatusLabels) as TicketStatus[]).map(
+                (status) => (
+                  <TicketBoardColumn
+                    key={status}
+                    status={status}
+                    workspaceID={workspaceID}
+                    projectID={projectID}
+                    assignee={filters.assignee}
+                    priority={filters.priority}
+                    client={client}
+                    onUnavailable={unavailable}
+                    onSessionExpired={sessionExpired}
+                  />
+                ),
+              )}
+            </div>
           ) : (
-            <ul className="configuration-list">
-              {state.page.items.map((ticket) => (
-                <li key={ticket.id}>
-                  <a
-                    href={collaborationPagePath(
-                      workspaceID,
-                      "ticket",
-                      ticket.id,
-                    )!}
-                  >
-                    {ticket.title}
-                  </a>
-                  <p>{ticketStatusLabels[ticket.status]}</p>
-                  <p>优先级：{ticketPriorityLabels[ticket.priority]}</p>
-                  <p>负责人：{assigneeLabel(ticket.assignee)}</p>
-                </li>
-              ))}
-            </ul>
+            <>
+              <TicketRows workspaceID={workspaceID} items={state.page.items} />
+              <nav className="discovery-pagination" aria-label="工单分页">
+                <button
+                  type="button"
+                  disabled={cursors.length === 1}
+                  onClick={() => changePage(cursors.slice(0, -1))}
+                >
+                  上一页
+                </button>
+                <span>第 {cursors.length} 页</span>
+                <button
+                  type="button"
+                  disabled={state.page.nextCursor === null}
+                  onClick={() => {
+                    const next = state.page?.nextCursor;
+                    if (next) changePage([...cursors, next]);
+                  }}
+                >
+                  下一页
+                </button>
+              </nav>
+            </>
           )}
-          <nav className="discovery-pagination" aria-label="工单分页">
+        </>
+      )}
+    </main>
+  );
+}
+
+function TicketRows({
+  workspaceID,
+  items,
+  showStatus = true,
+}: {
+  workspaceID: string;
+  items: readonly ProjectTicket[];
+  showStatus?: boolean;
+}) {
+  if (items.length === 0) return <p>当前条件下没有可显示的工单。</p>;
+  return (
+    <ul className="configuration-list">
+      {items.map((ticket) => (
+        <li key={ticket.id}>
+          <a href={collaborationPagePath(workspaceID, "ticket", ticket.id)!}>
+            {ticket.title}
+          </a>
+          {showStatus ? <p>{ticketStatusLabels[ticket.status]}</p> : null}
+          <p>优先级：{ticketPriorityLabels[ticket.priority]}</p>
+          <p>负责人：{assigneeLabel(ticket.assignee)}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function TicketBoardColumn({
+  status,
+  workspaceID,
+  projectID,
+  assignee,
+  priority,
+  client,
+  onUnavailable,
+  onSessionExpired,
+}: Required<Props> & {
+  status: TicketStatus;
+  assignee: TicketFilters["assignee"];
+  priority: TicketFilters["priority"];
+  onUnavailable: () => void;
+}) {
+  const label = ticketStatusLabels[status];
+  const load = useCallback(
+    async (after: string | undefined, signal: AbortSignal) => {
+      try {
+        return await client.tickets(workspaceID, projectID, after, signal, {
+          status,
+          assignee,
+          priority,
+        });
+      } catch (error) {
+        if (
+          !signal.aborted &&
+          error instanceof AuthRequestError &&
+          (error.status === 403 || error.status === 404)
+        ) {
+          onUnavailable();
+        }
+        throw error;
+      }
+    },
+    [assignee, client, onUnavailable, priority, projectID, status, workspaceID],
+  );
+  const column = usePage(load, onSessionExpired);
+  return (
+    <section className="ticket-board-column" aria-label={label}>
+      <h3>{label}</h3>
+      {column.error !== undefined ? (
+        <>
+          <p role="alert">无法读取{label}工单，请重试。</p>
+          <button type="button" onClick={column.refresh}>
+            重新读取
+          </button>
+        </>
+      ) : column.page ? (
+        <>
+          <TicketRows
+            workspaceID={workspaceID}
+            items={column.page.items}
+            showStatus={false}
+          />
+          <nav className="discovery-pagination" aria-label={`${label}工单分页`}>
             <button
               type="button"
-              disabled={cursors.length === 1}
-              onClick={() => changePage(cursors.slice(0, -1))}
+              disabled={!column.hasPrevious}
+              onClick={column.previous}
             >
               上一页
             </button>
-            <span>第 {cursors.length} 页</span>
             <button
               type="button"
-              disabled={state.page.nextCursor === null}
-              onClick={() => {
-                if (state.page.nextCursor !== null)
-                  changePage([...cursors, state.page.nextCursor]);
-              }}
+              disabled={column.page.nextCursor === null}
+              onClick={column.next}
             >
               下一页
             </button>
           </nav>
         </>
+      ) : (
+        <p role="status">正在读取{label}工单…</p>
       )}
-    </main>
+    </section>
   );
 }

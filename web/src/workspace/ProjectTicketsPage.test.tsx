@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AuthRequestError } from "../auth/api";
@@ -51,6 +52,118 @@ function pending<T>() {
 }
 
 describe("Project Tickets page", () => {
+  it("reads each board column with its own cursor and keeps shared filters when switching views", async () => {
+    const api = client();
+    vi.mocked(api.tickets).mockImplementation(
+      async (_workspace, _project, after, _signal, filters) => {
+        if (filters?.status === "in-progress")
+          return {
+            items: [
+              {
+                ...page.items[0]!,
+                id: "tkt_progress",
+                title: "Work underway",
+                status: "in-progress",
+              },
+            ],
+            nextCursor: null,
+          };
+        if (filters?.status === "open" && after)
+          return {
+            items: [
+              { ...page.items[0]!, id: "tkt_later", title: "Next open ticket" },
+            ],
+            nextCursor: null,
+          };
+        if (filters?.status === "done" || filters?.status === "canceled")
+          return { items: [], nextCursor: null };
+        return page;
+      },
+    );
+    render(<ProjectTicketsPage {...props} client={api} />);
+    await screen.findByText("First work");
+    fireEvent.change(screen.getByRole("combobox", { name: "状态" }), {
+      target: { value: "active" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "负责人" }), {
+      target: { value: "me" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "优先级" }), {
+      target: { value: "high" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "状态看板" }));
+    expect(screen.queryByRole("combobox", { name: "状态" })).toBeNull();
+    const open = within(await screen.findByRole("region", { name: "待开始" }));
+    const progress = within(screen.getByRole("region", { name: "处理中" }));
+    expect(
+      (await open.findByRole("link", { name: "First work" })).getAttribute(
+        "href",
+      ),
+    ).toBe("/workspaces/wrk_main/tickets/tkt_first");
+    await progress.findByText("Work underway");
+    for (const status of ["open", "in-progress", "done", "canceled"]) {
+      expect(api.tickets).toHaveBeenCalledWith(
+        "wrk_main",
+        "prj_main",
+        undefined,
+        expect.any(AbortSignal),
+        { status, assignee: "me", priority: "high" },
+      );
+    }
+    const requests = vi.mocked(api.tickets).mock.calls.length;
+    fireEvent.click(open.getByRole("button", { name: "下一页" }));
+    await open.findByText("Next open ticket");
+    expect(progress.getByText("Work underway")).toBeDefined();
+    expect(api.tickets).toHaveBeenCalledTimes(requests + 1);
+    expect(api.tickets).toHaveBeenLastCalledWith(
+      "wrk_main",
+      "prj_main",
+      "next_page",
+      expect.any(AbortSignal),
+      { status: "open", assignee: "me", priority: "high" },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "列表" }));
+    await screen.findByText("First work");
+    expect(api.tickets).toHaveBeenLastCalledWith(
+      "wrk_main",
+      "prj_main",
+      undefined,
+      expect.any(AbortSignal),
+      { status: "active", assignee: "me", priority: "high" },
+    );
+  });
+
+  it("clears the entire board when one column loses access and discards other pending results", async () => {
+    const api = client();
+    const late = pending<typeof page>();
+    vi.mocked(api.tickets).mockImplementation(
+      async (_workspace, _project, after, _signal, filters) => {
+        if (filters?.status === "done") return late.promise;
+        if (filters?.status === "open" && after)
+          throw new AuthRequestError("revoked", { status: 404 });
+        return filters?.status && filters.status !== "open"
+          ? { items: [], nextCursor: null }
+          : page;
+      },
+    );
+    render(<ProjectTicketsPage {...props} client={api} />);
+    await screen.findByText("First work");
+    fireEvent.click(screen.getByRole("button", { name: "状态看板" }));
+    const open = within(await screen.findByRole("region", { name: "待开始" }));
+    fireEvent.click(await open.findByRole("button", { name: "下一页" }));
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "该项目已不可访问",
+    );
+    expect(screen.queryByText(project.name)).toBeNull();
+    expect(screen.queryByRole("region", { name: "已完成" })).toBeNull();
+    const lateSignal = vi
+      .mocked(api.tickets)
+      .mock.calls.find((call) => call[4]?.status === "done")?.[3];
+    expect(lateSignal?.aborted).toBe(true);
+    await act(async () => late.resolve(page));
+    expect(screen.queryByText("First work")).toBeNull();
+  });
+
   it("opens details, pages and refreshes to the first page with current Project context", async () => {
     const api = client();
     vi.mocked(api.project).mockResolvedValue({

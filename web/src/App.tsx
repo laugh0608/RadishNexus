@@ -613,6 +613,7 @@ function SignedInShell({
         />
       ) : route.kind === "project-tickets" ? (
         <ProjectTicketsPage
+          key={session.user.id}
           workspaceID={route.workspaceID}
           projectID={route.projectID}
           onSessionExpired={onSignedOut}

@@ -69,6 +69,8 @@ npm run dev
 
 项目名称 / 归档状态复用现有 configuration 读取，与只读工单列表按同一请求代次加载；任一失败、撤权或 Session 失效都清空旧标题与条目，取消和迟到响应不能恢复旧内容。分页 cursor 栈仅在页面内存，刷新、焦点 / 可见性恢复和浏览器后退重读首页。按 ADR-0039 严格接受四状态并统一显示中文标签；空态不推断隐藏对象；列表不提供状态修改和可变排序。筛选现由 ADR-0047 扩展为状态 / 负责人 / 优先级三组单选 AND 条件，默认全部，切换条件清空旧页并回首页。同页刷新 / 恢复保留条件，重挂载或整页重载恢复默认。桌面、手机长标题、键盘与撤权恢复证据见[实施记录](../docs/status/reviews/2026-10-13-project-ticket-discovery.md)。
 
+项目工单页也可切换到「状态看板」。四列分别用既有状态筛选读取和分页，共用负责人及优先级条件。点击标题进入现有 Ticket 详情处理。切换视图或刷新会从首页重新读取，归档项目可浏览历史工单。
+
 ## Project 决策只读发现
 
 `workspace/ProjectDecisionsPage.tsx` 与 `project-decisions-api.ts` 实现 [ADR-0040](../docs/adr/0040-project-decision-discovery.md)。首页 Project 的“查看项目决策”进入 `/workspaces/{workspace_id}/projects/{project_id}/decisions`；列表按 ADR-0048 / 0049 显示问题原文及“待确认 / 已确认 / 已拒绝 / 已被替代”，打开既有 canonical Decision 详情，详情按自身 Project 返回列表首页。支持直接地址、刷新和退出后重新登录恢复。
