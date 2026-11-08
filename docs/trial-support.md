@@ -62,7 +62,7 @@
 
 下表是未来试用准入检查，全部待执行或确认，不是本轮已通过验收。检查缺项时不邀请外部主体实际运行；文档设计完成不替代有效授权。
 
-当前候选 `127ba0c` 的工件登记和目标宿主 T03、T06、T07 清单见[新候选验收准备](status/reviews/2026-11-08-m1-candidate-127ba0c.md)。前一候选 `4f2b208` 的逐项证据、缺口和责任分工见[原准入核对](status/reviews/2026-11-08-m1-controlled-trial-readiness.md)。
+当前候选 `127ba0c` 的本机证据、正式缺口和责任分工见[首批试用准入复核](status/reviews/2026-11-08-m1-candidate-127ba0c.md#首批试用准入复核)。现场复验使用[目标宿主 T03、T06、T07 清单](status/reviews/2026-11-08-m1-candidate-127ba0c.md#目标宿主-t03t06t07-清单)。前一候选 `4f2b208` 的结果见[原准入核对](status/reviews/2026-11-08-m1-controlled-trial-readiness.md)。
 
 | 编号 | 准入项 | 必需证据 |
 | --- | --- | --- |
