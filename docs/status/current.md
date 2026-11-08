@@ -1,6 +1,6 @@
 # RadishNexus 当前状态
 
-状态事实日期：2026-11-02；最近功能交付：2026-11-02；规划导航整理：2026-11-01。
+状态事实日期：2026-11-08；最近功能交付：2026-11-02；规划导航整理：2026-11-01。
 
 整体目标与阶段范围见[路线图](../roadmap.md)，能力归属与任务 / 验收来源见[专题地图](../topics.md)。完整历史流水保留于[原状态快照](history/planning-structure-2026-11-01.md)，不恢复旧运行授权。
 
@@ -17,7 +17,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | 能力主线 | 当前基线与未关闭范围 | 正式来源 |
 | --- | --- | --- |
 | 身份与管理 | 本地账户、邀请、初始化、恢复、owner / 成员管理交接已有技术证据；真实 OIDC / Radish 联调与团队持续使用仍未验收 | [身份专题](../topics.md#identity) |
-| 沟通与决策 | 讨论创建 / 确认 Decision、Project 决策发现已交付；最小拒绝、单链替代及四状态读取已交付，复核待独立设计 | [沟通与决策专题](../topics.md#communication-decisions) |
+| 沟通与决策 | 讨论创建 / 确认 Decision、Project 决策发现已交付；最小拒绝、单链替代及四状态读取已交付，最小人工复核合同已确认，实施待验收 | [沟通与决策专题](../topics.md#communication-decisions) |
 | 工单与上下文 | 工单发现、四状态、负责人、优先级 / 筛选、首批关系和 Activity 已有证据；完整执行管理、通用关系分页与持续使用未闭合 | [工单与上下文专题](../topics.md#tickets-context) |
 | 文档协作 | 最小 Markdown 正式保存、冲突、版本 / 恢复及隔离浏览器已有证据；原生中文 IME 暂缓、持续使用未验收 | [文档专题](../topics.md#documents) |
 | 交付集成 | 受认证接入、显式 staging 记录、配置、持久发送及 checkout 接收已有相应证据；ADR-0035 / 0037 B 真实采集与整链暂缓 | [交付专题](../topics.md#delivery-integration) |
@@ -42,10 +42,10 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **下一步：Decision 最小复核合同设计（尚未开始）**：拒绝与单链替代已交付；schema 024 / Activity 12 / v5 的分层证据见[替代实施记录](reviews/2026-11-02-decision-supersession.md)，今天的三笔设计 / 实现提交与文档核对见[收尾记录](reviews/2026-11-02-daily-closeout.md)。接续先围绕“现有结论是否仍适用”比较最小人工复核方案，明确复核对象、触发、证据、结论和后续动作，判断 review_at 是否进入首片。依赖现有 evidence 权限、Decision 版本 / 替代链与历史重试；须说明 Ticket / Document 原来源、Activity、上下文包和恢复兼容影响。下一动作是形成可审阅 ADR 与验收矩阵，涉及模型 / 权限 / 公共协议的范围确认后再实现；不先启动自动调度、提醒或状态回转。
+1. **下一步：实施 Decision 最小人工复核**。D01～D07 已确认，先接通 PostgreSQL 写入与当前权限，再补齐事件与历史兼容、正式 HTTP / Web，按 R01～R08 分层取证。现行交付基线仍为 schema 024 / Activity 12 / v5。 [复核合同](../adr/0050-decision-manual-review.md) · [替代实施记录](reviews/2026-11-02-decision-supersession.md)
 2. **已完成切片转入有界观察**：上下文迁移补验、负责人及其并发 / 同名补验、优先级与项目内筛选均已交付，提交与验证映射见[当日收尾记录](reviews/2026-10-28-daily-closeout.md)。后续遇到实际 BFCache、原生选择控件键盘、团队使用或慢查询问题时定向复验；不重复全量测试冒充持续使用，也不把单 Project 合成查询计划当成生产容量。当前 schema 024 / Activity 12 / v5 包须 Go / Web / CLI 配套升级；真实实例操作仍单独授权。
 3. **试用准备与使用观察分别验收**：确认[支持说明](../trial-support.md)的非生产数据范围、目标环境、联系人与退出安排，以及[授权待决事项](../evaluation-authorization-decisions.md) E01～E12；技术准入和有效授权均满足后才开放外部受控试用。届时观察讨论—决策—工单—文档追溯、维护者干预和成员交接，独立团队持续使用与生产容量不由 Agent 浏览器测试替代。
-4. **保留阶段范围与停止线**：M1 文件、通知、审计运营、Attention Item、数据库最小权限和生产运维仍有未交付范围；本日实现不宣布整个 M1 或完整 Golden Path 退出。完整聊天、CRDT、Flutter 与通用插件平台仍服从原路线图门槛；更广迁移 profile 另行规划。
+4. **保留阶段范围与停止线**：M1 文件、通知、审计运营、Attention Item、数据库最小权限和生产运维仍有未交付范围；M1 和完整 Golden Path 的退出条件见路线图。完整聊天、CRDT、Flutter 与通用插件平台仍服从原路线图门槛；更广迁移 profile 另行规划。
 5. **继续暂缓**：ADR-0043 独立操作者 U27、真实 Jenkins ADR-0035 / ADR-0037 B 与原生中文 IME 人工验收。恢复时另行明确资源和验收范围；真实 Jenkins 恢复后再接续 Ticket 与具体构建的交付来源和结果追溯。
 
 以上为当前接续事项，不创建自动任务或启动新服务。10 月 13 日的原收尾事实见[当日记录](reviews/2026-10-13-daily-closeout.md)，10 月 9 日的提交与原计划见[历史收尾记录](reviews/2026-10-09-daily-closeout.md)，当前顺位以本节五项为准。
