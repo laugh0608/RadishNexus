@@ -144,6 +144,23 @@ python3 scripts/check-upgrade-recovery.py --old-ref 333c4ce --new-ref 171527f \
 
 脚本验证错误目标、损坏/缺失备份、临时容器磁盘满、额外 writer、真实 migrate CLI 锁等待预算、旧 app / 新 schema 错配、缺失 Web build、备份后数据取舍、旧 Session 拒绝、恢复后单独升级及权限/来源读取。`--browser-review` 的四个阶段必须由复验者完成并写明确检查结果；没有该参数时浏览器证据标记未运行。退出仅清理任务资源和专属镜像标签，保留构建缓存与指定脱敏报告；清理失败明确报告，不自动清理真实实例。
 
+### 已登记候选的隔离验收
+
+候选模式使用本地 Git 完整 SHA、已登记的 app 和 operations 镜像 ID，以及候选 Git 快照中 `deploy/compose.yaml` 和 `deploy/Caddyfile` 的 SHA-256。先核对登记值，再从候选配置生成两个专属临时 Compose 项目。报告另记录这两份生效配置的 SHA-256。当前场景覆盖 schema 025 与 Activity 13。它需要本地 Docker Unix socket、预先准备好的固定镜像，以及与自部署检查相同的 Linux 文件 ACL 条件。 [候选登记示例](../docs/status/reviews/2026-11-08-m1-candidate-127ba0c.md)
+
+```bash
+python3 scripts/check-upgrade-recovery.py \
+  --candidate-ref "$candidate_commit" \
+  --app-image "$registered_app_image_id" --operations-image "$registered_operations_image_id" \
+  --compose-sha256 "$registered_compose_sha256" --caddy-sha256 "$registered_caddy_sha256" \
+  --max-downtime-seconds "$approved_downtime_seconds" \
+  --report /tmp/radishnexus-candidate-result.json
+```
+
+如已登记独立 CLI，追加 `--context-cli` 和 `--context-cli-sha256` 可同时复核文件身份。候选模式使用现有镜像，在回环 HTTPS 下生成两个项目、三个合成账号、100 条消息和一条可复核的协作链。T03 检查运维文件可读性、完整 migration history、数据库角色、HTTPS 证书和端口隔离。T06 对照权威表、Activity 和备份点的已确认写入，检查旧 Session、恢复后访问权限及复核 receipt。精确重试对照使用重新登录后的快照。
+
+T07 从摘流计至恢复入口验收，目标空库及角色在计时前准备，恢复计时包含 Activity 重建与 ACL。已确认写入的允许损失为 0 条。超时或核对失败返回非零退出码。脱敏 JSON 分别记录 T03、T06、T07、清理和通过标准，T04、R08、U27 仍须独立验收。运行结束清理此次创建的容器、网络、volume 与合成文件，保留登记工件和报告。正式试用以授权范围、目标宿主及独立操作证据判定。 [试用准入与退出](../docs/trial-support.md#准入与退出判据)
+
 `check-server-postgres.sh` 中的 `TestUpgradeFailure*` 验证真实历史 migration 的原子回滚、合法前缀、续迁、并发、取消、连接终止、COMMIT 确认丢失及 history 漂移；readiness 不覆盖手工 DDL 的限制也显式测试。COMMIT 故障夹具位于 `server/internal/testsupport/pgfault`，仅 integration 构建使用。
 
 `check-server-backup-restore.sh` 还会编译正式 restore CLI，并运行 `TestBackupRestoreUpgradeFailures`。它在真实 pg_restore 的事务阶段注入 SQL 错误/断连，在权威恢复后注入 Activity 重建错误，证明失败不能报告完成、不能覆盖非空目标；重新恢复使用独立空目标。旧版本证据仍需显式指定 `RADISHNEXUS_OWNER_TRANSFER_LEGACY_REF=333c4ce`，不能以当前版本往返代替。

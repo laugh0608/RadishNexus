@@ -169,6 +169,8 @@ curl --fail --silent --show-error --cacert "$upgrade_ca" "$upgrade_origin/health
 
 ## 隔离验收入口
 
+已登记的 schema 025 候选可使用同一脚本的 `--candidate-ref` 模式复验 T03、T06、T07。它从候选快照生成独立实例，核对本地工件和停机上限，并输出脱敏报告。输入、命令和判定边界见[候选验收入口](../scripts/README.md#已登记候选的隔离验收)。
+
 仓库提供独立演练脚本，不接受外部 DSN、已有 project 或用户 volume。它只从本地 Git 提取历史工件，建立随机临时 project、文件 Secret、localhost HTTPS 端口、独立数据卷与恢复副本；通过正式 API 建立合成业务链。
 
 ```bash
