@@ -42,6 +42,7 @@ COPY --from=go-build /out/nexus-identity-migrate /usr/local/bin/nexus-identity-m
 COPY --from=go-build /out/nexus-account-recover /usr/local/bin/nexus-account-recover
 COPY --from=go-build /out/nexus-backup /usr/local/bin/nexus-backup
 COPY --from=go-build /out/nexus-restore /usr/local/bin/nexus-restore
+COPY deploy/database-operation.sh deploy/database-roles.sql deploy/database-access.sql /usr/local/share/radishnexus/
 COPY LICENSE /usr/share/licenses/RadishNexus/LICENSE
 USER postgres
 ENTRYPOINT []

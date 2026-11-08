@@ -117,7 +117,7 @@ npm ci
 ./scripts/check-self-hosted-compose.sh
 ```
 
-该入口不会拉取缺失镜像。它创建任务专属 Compose project、临时数据库 Secret、PostgreSQL volume、Caddy CA 和随机本机 HTTPS 端口，验证 Compose/Caddy 配置、固定 image build、PostgreSQL readiness、显式 migration、唯一一次 bootstrap、HTTPS login / Session / logout、Secure Cookie、Caddy 及时 flush 正式 Message SSE 的 `ready` / `message.created`，以及 Go server / PostgreSQL 无宿主端口。退出时只删除自己的临时 project、volume、network 与临时目录，保留本地构建出的 application / operation image cache。运行边界和人工入口见 [部署说明](../deploy/README.md)、[ADR-0016](../docs/adr/0016-minimal-docker-compose-self-hosting.md)与 [ADR-0020](../docs/adr/0020-session-scoped-single-process-message-realtime.md)。
+该入口不会拉取缺失镜像。它使用专属 Compose project、临时数据库 Secret、volume 和回环 HTTPS，验证角色准备、显式 migration、应用禁止 DDL 和改写审计、备份禁止写入、空库恢复后重新授权，以及初始化、登录、SSE、账号恢复和 owner 交接。Linux 上非 UID `10001` 的运行者需要可用的 `setfacl` 与支持 ACL 的临时目录。退出只清理本轮临时 project、资源、镜像标签和目录，保留构建缓存。运行边界见[部署说明](../deploy/README.md)和[数据库权限手册](../deploy/database-roles.md)。
 
 ## Project 上下文包往返
 

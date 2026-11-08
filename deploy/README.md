@@ -6,6 +6,8 @@
 
 执行单宿主升级与失败恢复时，使用[运维手册](upgrade-recovery.md)及其隔离演练入口；实际证据与未完成项见[2026-10-24 记录](../docs/status/reviews/2026-10-24-upgrade-failure-recovery.md)。
 
+当前 Compose 按 [ADR-0051](../docs/adr/0051-single-host-database-roles.md) 分离应用、schema 所有者、备份和 PostgreSQL 管理员。已有实例先按[数据库权限手册](database-roles.md#旧实例停写切换)停写并核对旧工件和备份。
+
 单 Project 结构化导出与新实例导入使用[上下文迁移手册](context-package.md)的受认证独立 CLI。它不使用数据库凭据，也不替代整库恢复。
 
 ## 边界
@@ -14,7 +16,7 @@
 - Caddy 使用 internal CA 并覆盖传入的转发 Header；Go server 只信任 Caddy 固定地址的 `/32`。
 - PostgreSQL 数据保存在命名 volume；本地备份工件只写入忽略提交的 `deploy/local-data/backups/`。
 - 数据库密码通过 Compose Secret 文件按 service 挂载，不进入 Compose environment、命令参数或镜像层。
-- migration、bootstrap、identity-migrate、account-recover、backup 和 restore 都是显式一次性 operation；`docker compose up` 不会自动执行它们。
+- database-roles、migration、bootstrap、identity-migrate、account-recover、backup 和 restore 都是显式一次性 operation；`docker compose up` 不会自动执行它们。
 
 该入口使用 [Docker Official Images](https://hub.docker.com/search?image_filter=official)：Caddy `2.11.4-alpine`、PostgreSQL `17.10-alpine`、Go builder `1.26.7-alpine3.23`、Node builder `24.16.0-alpine3.23` 和 Alpine runtime `3.23.5`。实际配置同时固定完整 digest；升级时必须重新核验版本、许可证、漏洞和 multi-platform manifest。
 
@@ -28,14 +30,20 @@
 cp deploy/.env.example deploy/.env
 ```
 
-创建只属于本实例的数据库密码文件；不要复用账号密码或把结果打印到终端：
+全新实例创建四个独立数据库密码文件；不要复用账号密码或把结果打印到终端：
 
 ```text
 mkdir -p deploy/secrets deploy/local-data/backups
-umask 077
-openssl rand -base64 32 > deploy/secrets/postgres_password
-chmod 0600 deploy/secrets/postgres_password
+(
+  umask 077
+  set -eC
+  for secret in postgres_password app_database_password owner_database_password backup_database_password; do
+    openssl rand -base64 32 > "deploy/secrets/$secret"
+  done
+)
 ```
+
+Linux 等保留 bind-backed 文件权限的宿主须让 app 的 UID `10001` 读取 `app_database_password`，让配置的 operation UID / GID 读取各操作所挂载的文件。使用宿主文件所有权或 ACL 限定访问，避免向其他账号开放。数据库管理员文件和 owner 文件均不挂载到 app。
 
 `RADISHNEXUS_PUBLIC_ORIGIN` 的端口必须与 `RADISHNEXUS_HTTPS_PORT` 相同。若必须调整 proxy 网络，`RADISHNEXUS_PROXY_SUBNET` 必须包含 `RADISHNEXUS_PROXY_IPV4`，且 `RADISHNEXUS_TRUSTED_PROXY_CIDR` 必须是同一个 proxy 地址的 `/32`；不要改成 private range 或 `0.0.0.0/0`。
 
@@ -79,6 +87,7 @@ docker compose -f deploy/compose.yaml -f deploy/compose.setup.yaml up -d --wait 
 
 ```text
 docker compose -f deploy/compose.yaml up -d --wait postgres
+docker compose -f deploy/compose.yaml run --rm -T database-roles
 docker compose -f deploy/compose.yaml run --rm migrate
 ```
 
@@ -138,7 +147,7 @@ docker compose -f deploy/compose.yaml run --rm backup \
   --output /backups/backup-YYYYMMDD-HHMMSS
 ```
 
-restore 只用于全新、尚未 migration 或 bootstrap 的空 PostgreSQL 目标：
+restore 只用于独立的空 PostgreSQL 目标。先启动该目标的 PostgreSQL 并执行 `database-roles`，再恢复：
 
 ```text
 docker compose -f deploy/compose.yaml run --rm restore \
@@ -161,6 +170,7 @@ docker compose -f deploy/compose.yaml down
 | --- | --- |
 | PostgreSQL 未就绪 | `docker compose ps postgres` 与 `logs postgres`；migration 不应继续 |
 | Secret 缺失、空、多行或 URL 歧义 | application / operation 直接失败并指出配置键，不回显密码 |
+| 数据库角色未配置或 ACL 失败 | 检查 `database-roles`、`migrate` / `restore` 的实际结果及 Secret 文件权限，按[数据库权限手册](database-roles.md)核对重试条件 |
 | migration 尚未完成 | `migrate` operation 未成功；应用不会替它自动修改 schema |
 | 尚未初始化 | 网页读取 `/api/v1/setup`：`required` 可提交初始化码，`unavailable` 需部署者配置码或选择 CLI；`complete` 表示已有账户。CLI 与网页均只允许首次创建成功 |
 | Web build 缺失 | application image build 或 Go server 启动失败，不退回 fixture |
@@ -241,7 +251,7 @@ python3 -c 'import getpass,json; print(json.dumps({"user_id":getpass.getpass("Or
 
 密码、旧 Session 撤销和 operator 审计原子提交；稳定 user、各工作区权限、业务引用、外部绑定和未兑换邀请不变。旧 Session / CSRF 的下一次解析拒绝，SSE 在发送 / heartbeat 复核关闭。此流程不等于外部 IdP 登出、邀请撤销、管理员交接或完整失陷处置。
 
-恢复后的备份保留新密码与审计，Session / 邀请 / OIDC 事务数据不恢复；旧备份可能恢复旧 verifier 和旧审计状态。旧工件只能恢复匹配旧备份到隔离空目标，再显式升级、重新 inspect 和执行新的恢复，登录验证后才能开放。当前 Compose 仍共用数据库凭据，不代表数据库最小权限分工已完成。应用与代理不记录密码 / Cookie / CSRF；自定义数据库 statement / 参数 / Detail 日志和外部运维采集必须单独审查，禁止启用会记录凭据的调试采集。
+恢复后的备份保留新密码与审计，Session / 邀请 / OIDC 事务数据不恢复；旧备份可能恢复旧 verifier 和旧审计状态。旧工件只能恢复匹配旧备份到隔离空目标，再显式升级、重新 inspect 和执行新的恢复，登录验证后才能开放。当前 Compose 的账户恢复命令使用独立应用凭据；数据库身份与 Secret 分工见[数据库权限手册](database-roles.md)。应用与代理不记录密码 / Cookie / CSRF；自定义数据库 statement / 参数 / Detail 日志和外部运维采集必须单独审查，禁止启用会记录凭据的调试采集。
 
 ## 仓库演练
 

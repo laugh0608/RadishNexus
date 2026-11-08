@@ -1,8 +1,12 @@
 name: radishnexus
 
-x-database-environment: &database-environment
-  DATABASE_URL: postgres://radishnexus@postgres:5432/radishnexus?sslmode=disable
-  RADISHNEXUS_DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
+x-app-database: &app-database
+  DATABASE_URL: postgres://radishnexus_app@postgres:5432/radishnexus?sslmode=disable
+  RADISHNEXUS_DATABASE_PASSWORD_FILE: /run/secrets/app_database_password
+
+x-owner-database: &owner-database
+  DATABASE_URL: postgres://radishnexus_owner@postgres:5432/radishnexus?sslmode=disable
+  RADISHNEXUS_DATABASE_PASSWORD_FILE: /run/secrets/owner_database_password
 
 x-operation: &operation
   image: radishnexus/operations:local
@@ -16,9 +20,9 @@ x-operation: &operation
   depends_on:
     postgres:
       condition: service_healthy
-  environment: *database-environment
+  environment: *app-database
   secrets:
-    - postgres_password
+    - app_database_password
   networks:
     - data
   read_only: true
@@ -48,7 +52,8 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - pg_isready --username "$${POSTGRES_USER}" --dbname "$${POSTGRES_DB}"
+        # The image starts a Unix-socket-only server during first initialization.
+        - pg_isready --host 127.0.0.1 --username "$${POSTGRES_USER}" --dbname "$${POSTGRES_DB}"
       interval: 2s
       timeout: 3s
       retries: 30
@@ -67,12 +72,12 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      <<: *database-environment
+      <<: *app-database
       RADISHNEXUS_PUBLIC_ORIGIN: "${RADISHNEXUS_PUBLIC_ORIGIN:?RADISHNEXUS_PUBLIC_ORIGIN is required}"
       RADISHNEXUS_TRUSTED_PROXY_CIDRS: "${RADISHNEXUS_TRUSTED_PROXY_CIDR:-172.30.73.10/32}"
       RADISHNEXUS_HTTP_ADDR: 0.0.0.0:8080
     secrets:
-      - postgres_password
+      - app_database_password
     networks:
       - proxy
       - data
@@ -143,10 +148,30 @@ services:
     restart: unless-stopped
     stop_grace_period: 15s
 
+  database-roles:
+    <<: *operation
+    environment:
+      DATABASE_URL: postgres://radishnexus@postgres:5432/radishnexus?sslmode=disable
+      RADISHNEXUS_DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+      - app_database_password
+      - owner_database_password
+      - backup_database_password
+    entrypoint:
+      - /bin/sh
+      - /usr/local/share/radishnexus/database-operation.sh
+      - provision
+
   migrate:
     <<: *operation
+    environment: *owner-database
+    secrets:
+      - owner_database_password
     entrypoint:
-      - /usr/local/bin/nexus-migrate
+      - /bin/sh
+      - /usr/local/share/radishnexus/database-operation.sh
+      - migrate
 
   bootstrap:
     <<: *operation
@@ -165,6 +190,11 @@ services:
 
   backup:
     <<: *operation
+    environment:
+      DATABASE_URL: postgres://radishnexus_backup@postgres:5432/radishnexus?sslmode=disable
+      RADISHNEXUS_DATABASE_PASSWORD_FILE: /run/secrets/backup_database_password
+    secrets:
+      - backup_database_password
     entrypoint:
       - /usr/local/bin/nexus-backup
     volumes:
@@ -172,14 +202,26 @@ services:
 
   restore:
     <<: *operation
+    environment: *owner-database
+    secrets:
+      - owner_database_password
     entrypoint:
-      - /usr/local/bin/nexus-restore
+      - /bin/sh
+      - /usr/local/share/radishnexus/database-operation.sh
+      - restore
     volumes:
       - ./local-data/backups:/backups:ro
 
 secrets:
   postgres_password:
     file: "${RADISHNEXUS_POSTGRES_PASSWORD_FILE:-./secrets/postgres_password}"
+
+  app_database_password:
+    file: "${RADISHNEXUS_APP_DATABASE_PASSWORD_FILE:-./secrets/app_database_password}"
+  owner_database_password:
+    file: "${RADISHNEXUS_OWNER_DATABASE_PASSWORD_FILE:-./secrets/owner_database_password}"
+  backup_database_password:
+    file: "${RADISHNEXUS_BACKUP_DATABASE_PASSWORD_FILE:-./secrets/backup_database_password}"
 
 networks:
   proxy:

@@ -4,6 +4,8 @@
 
 适用于明确授权的非生产单宿主 Compose、PostgreSQL 17、单 Go app 与同源 HTTPS。迁移仍逐文件向前提交，schema 必须与工件精确匹配；恢复只写独立空目标。跨 major、滚动升级、PITR、自动降级和生产运维另立范围。操作流程依据 [ADR-0043](../docs/adr/0043-single-host-upgrade-failure-recovery.md)，备份格式和命令依据[部署说明](README.md#运维命令)。
 
+从共用数据库凭据升级到 [ADR-0051](../docs/adr/0051-single-host-database-roles.md) 时，停写、旧备份及旧目标恢复之后，先按[数据库权限手册](database-roles.md#旧实例停写切换)准备角色和交接所有权，再进入 S3。使用拆分后的工件恢复时，独立空目标先执行 `database-roles`，恢复成功后核对 Activity 和 ACL。
+
 ## 先准备操作记录
 
 每次维护建立私有记录，填实以下字段；不要直接复用演练中的路径、端口或实例名。

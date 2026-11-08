@@ -45,7 +45,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 1. **推进 M1 受控试用准备**。`4f2b208` 本机隔离 Compose 已验收候选工件、schema 025 全新安装、回环 HTTPS、正式协作链、停写与独立空库恢复。T03、T06、T07 已补齐本机证据，正式试用宿主、参与主体、支持联系人、停机和数据取舍及退出安排仍待确认。评估授权 E01～E12 单独复核。 [候选准入表与预演结果](reviews/2026-11-08-m1-controlled-trial-readiness.md) · [评估授权待决事项](../evaluation-authorization-decisions.md)
 2. **已完成切片转入有界观察**：上下文迁移补验、负责人及其并发 / 同名补验、优先级与项目内筛选均已交付，提交与验证映射见[当日收尾记录](reviews/2026-10-28-daily-closeout.md)。后续遇到实际 BFCache、原生选择控件键盘、团队使用或慢查询问题时定向复验；不重复全量测试冒充持续使用，也不把单 Project 合成查询计划当成生产容量。Go / Web / CLI 使用匹配工件配套升级；真实实例操作仍单独授权。
 3. **独立成员操作与使用观察分开记录**。Decision 人工复核已有正式 HTTPS Chrome 证据。按所有者要求，本轮跳过独立成员真人复验，R08 和相关 T04 证据保留待验证。后续使用观察记录讨论—决策—工单—文档追溯、维护者干预和成员交接。 [复核合同](../adr/0050-decision-manual-review.md) · [实施与验证记录](reviews/2026-11-08-decision-manual-review.md)
-4. **保留阶段范围与停止线**：M1 文件、通知、审计运营、Attention Item、数据库最小权限和生产运维仍有未交付范围；M1 和完整 Golden Path 的退出条件见路线图。完整聊天、CRDT、Flutter 与通用插件平台仍服从原路线图门槛；更广迁移 profile 另行规划。
+4. **单宿主数据库身份拆分已通过隔离验收**。Compose 分离常驻应用、schema 所有者、备份和 PostgreSQL 管理员，已有 024→025 故障续迁、凭据轮换和独立空库恢复证据。M1 文件、通知、审计运营、Attention Item 和更广生产运维仍按路线图验收；完整聊天、CRDT、Flutter、通用插件平台和更广迁移 profile 服从原阶段门槛。 [角色边界](../adr/0051-single-host-database-roles.md) · [部署手册](../../deploy/database-roles.md) · [验收记录](reviews/2026-11-08-single-host-database-roles.md)
 5. **继续暂缓**：ADR-0043 独立操作者 U27、真实 Jenkins ADR-0035 / ADR-0037 B 与原生中文 IME 人工验收。恢复时另行明确资源和验收范围；真实 Jenkins 恢复后再接续 Ticket 与具体构建的交付来源和结果追溯。
 
 以上为当前接续事项，不创建自动任务或启动新服务。10 月 13 日的原收尾事实见[当日记录](reviews/2026-10-13-daily-closeout.md)，10 月 9 日的提交与原计划见[历史收尾记录](reviews/2026-10-09-daily-closeout.md)，当前顺位以本节五项为准。
@@ -84,7 +84,7 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - 其他协作对象发现与超出 ADR-0041 / 0042 / 0045 的应急入口；Project admin / 私密对象管理交接及成员生命周期已由 ADR-0045 冻结；基础配置和首访 owner 初始化已由 ADR-0026 / ADR-0027 冻结；
 - Document 正式页面原生中文 IME 与持续使用证据；正式富文本与 CRDT、受控脱敏和可移植导出仍未完成；
 - Jenkins 持续终态采集与业务实例配置、持久来源管理 / 安全审计、真实 checkout 采集与其余具体交付关系；
-- PostgreSQL 支持矩阵、schema 兼容窗口、forward repair、数据库权限拆分和容量基线；
+- PostgreSQL 支持矩阵、schema 兼容窗口、forward repair、其他部署拓扑的数据库权限和容量基线；
 - 人工复核的独立使用证据，以及后续 `review_at` 与触发模型；
 - 安全 Audit、消息 / 事件 / receipt 的保留和受控脱敏边界；
 - `.nexus` 版本化格式、脱敏与导入映射；免费评估路径及授权签发 / 撤销规则；

@@ -25,13 +25,36 @@ proxy_octet="$((https_port % 200 + 20))"
 export RADISHNEXUS_PUBLIC_ORIGIN="https://localhost:${https_port}"
 export RADISHNEXUS_HTTPS_PORT="${https_port}"
 export RADISHNEXUS_POSTGRES_PASSWORD_FILE="${secret_path}"
+export RADISHNEXUS_APP_DATABASE_PASSWORD_FILE="${run_dir}/app_database_password"
+export RADISHNEXUS_OWNER_DATABASE_PASSWORD_FILE="${run_dir}/owner_database_password"
+export RADISHNEXUS_BACKUP_DATABASE_PASSWORD_FILE="${run_dir}/backup_database_password"
 export RADISHNEXUS_PROXY_SUBNET="172.28.${proxy_octet}.0/24"
 export RADISHNEXUS_PROXY_IPV4="172.28.${proxy_octet}.10"
 export RADISHNEXUS_TRUSTED_PROXY_CIDR="172.28.${proxy_octet}.10/32"
 export RADISHNEXUS_OPERATION_UID="$(id -u)"
 export RADISHNEXUS_OPERATION_GID="$(id -g)"
 
-compose=(docker compose --project-name "${project_name}" --file "${compose_file}")
+app_image="radishnexus/server:${project_name}"
+ops_image="radishnexus/operations:${project_name}"
+override_file="${run_dir}/compose.yaml"
+cat > "${override_file}" <<YAML
+services:
+  app:
+    image: ${app_image}
+  caddy:
+    ports: !override
+      - "127.0.0.1:${https_port}:${https_port}/tcp"
+YAML
+for service in database-roles migrate bootstrap identity-migrate account-recover backup restore; do
+  printf '  %s:\n    image: %s\n' "${service}" "${ops_image}" >> "${override_file}"
+  if [[ "${service}" == backup || "${service}" == restore ]]; then
+    mount="${run_dir}/backups:/backups"
+    if [[ "${service}" == restore ]]; then mount+=":ro"; fi
+    printf '    volumes:\n      - "%s"\n' "${mount}" >> "${override_file}"
+  fi
+done
+compose=(docker compose --project-name "${project_name}" --file "${compose_file}" --file "${override_file}")
+restore_compose=(docker compose --project-name "${project_name}-restore" --file "${compose_file}" --file "${override_file}")
 finished=false
 
 cleanup() {
@@ -45,6 +68,8 @@ cleanup() {
     "${compose[@]}" logs --no-color postgres app caddy >&2 || true
   fi
   "${compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+  "${restore_compose[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
+  docker image rm "${app_image}" "${ops_image}" >/dev/null 2>&1 || true
   rm -rf -- "${run_dir}"
   if [[ "${finished}" == true ]]; then
     echo "Self-hosted Compose check passed."
@@ -68,8 +93,15 @@ for image in "${required_images[@]}"; do
   fi
 done
 
-openssl rand -base64 -out "${secret_path}" 32
-chmod 0600 "${secret_path}"
+for secret in "${secret_path}" "${RADISHNEXUS_APP_DATABASE_PASSWORD_FILE}" \
+  "${RADISHNEXUS_OWNER_DATABASE_PASSWORD_FILE}" "${RADISHNEXUS_BACKUP_DATABASE_PASSWORD_FILE}"; do
+  (umask 077; openssl rand -base64 -out "${secret}" 32)
+done
+mkdir "${run_dir}/backups"
+# File-backed Secrets keep host mode on Linux. The app runs as UID 10001.
+if [[ "$(uname -s)" == Linux && "$(id -u)" != 10001 ]]; then
+  setfacl -m u:10001:r "${RADISHNEXUS_APP_DATABASE_PASSWORD_FILE}"
+fi
 
 "${compose[@]}" config --quiet
 docker run --rm \
@@ -80,7 +112,68 @@ docker run --rm \
 
 "${compose[@]}" build --pull=false app migrate
 "${compose[@]}" up -d --wait postgres
+"${compose[@]}" run --rm -T database-roles
 "${compose[@]}" run --rm migrate
+
+role_query() {
+  local service="$1"
+  shift
+  "$@" run --rm --no-deps -T --entrypoint /bin/sh "${service}" -ec '
+    export PGPASSWORD="$(cat "$RADISHNEXUS_DATABASE_PASSWORD_FILE")"
+    exec psql -XwAtq -v ON_ERROR_STOP=1 "$DATABASE_URL"
+  '
+}
+
+role_query bootstrap "${compose[@]}" <<'SQL'
+DO $$
+BEGIN
+    IF current_user <> 'radishnexus_app'
+       OR has_database_privilege(current_user, current_database(), 'CREATE,TEMP')
+       OR has_schema_privilege(current_user, 'public', 'CREATE')
+       OR has_schema_privilege(current_user, 'radishnexus', 'CREATE')
+       OR has_table_privilege(current_user, 'public.radishnexus_schema_migrations', 'INSERT,UPDATE,DELETE,TRUNCATE')
+       OR EXISTS (
+           SELECT FROM unnest(ARRAY['identity_audit', 'workspace_configuration_audit', 'context_export_audit']) AS t(name)
+           WHERE has_table_privilege(current_user, 'radishnexus.' || t.name, 'UPDATE,DELETE,TRUNCATE')
+       )
+       OR pg_has_role(current_user, 'radishnexus_owner', 'MEMBER')
+       OR has_function_privilege(current_user, 'pg_catalog.lo_create(oid)', 'EXECUTE') THEN
+        RAISE EXCEPTION 'unexpected application database privileges';
+    END IF;
+    PERFORM count(*) FROM public.radishnexus_schema_migrations;
+    PERFORM * FROM pg_catalog.pg_control_system();
+    LOCK TABLE radishnexus.context_export_audit IN SHARE ROW EXCLUSIVE MODE;
+    BEGIN
+        CREATE TABLE radishnexus.privilege_probe (id integer);
+        RAISE EXCEPTION 'application unexpectedly performed DDL';
+    EXCEPTION WHEN insufficient_privilege THEN
+        NULL;
+    END;
+END
+$$;
+SQL
+role_query backup "${compose[@]}" <<'SQL'
+DO $$
+BEGIN
+    IF current_user <> 'radishnexus_backup'
+       OR has_database_privilege(current_user, current_database(), 'CREATE,TEMP')
+       OR has_schema_privilege(current_user, 'radishnexus', 'CREATE')
+       OR EXISTS (
+           SELECT FROM pg_tables WHERE schemaname = 'radishnexus'
+           AND has_table_privilege(current_user, format('%I.%I', schemaname, tablename),
+               'INSERT,UPDATE,DELETE,TRUNCATE,TRIGGER,MAINTAIN')
+       ) THEN
+        RAISE EXCEPTION 'unexpected backup database privileges';
+    END IF;
+    BEGIN
+        DELETE FROM radishnexus.identity_audit WHERE false;
+        RAISE EXCEPTION 'backup unexpectedly performed DML';
+    EXCEPTION WHEN insufficient_privilege THEN
+        NULL;
+    END;
+END
+$$;
+SQL
 
 bootstrap_password="compose-browser-fixture-password-2026"
 printf '{"email":"admin@example.test","password":"%s"}' "${bootstrap_password}" | "${compose[@]}" run --rm -T bootstrap \
@@ -286,6 +379,23 @@ app_ports="$(docker port "${app_container}")"
 postgres_ports="$(docker port "${postgres_container}")"
 if [[ -n "${app_ports}" || -n "${postgres_ports}" ]]; then
   echo "Go server or PostgreSQL unexpectedly published a host port." >&2
+  exit 1
+fi
+
+"${compose[@]}" stop caddy app
+"${compose[@]}" run --rm -T backup --output /backups/role-test
+"${restore_compose[@]}" up -d --wait postgres
+"${restore_compose[@]}" run --rm -T database-roles
+"${restore_compose[@]}" run --rm -T restore --input /backups/role-test
+proof="$(role_query bootstrap "${restore_compose[@]}" <<'SQL'
+SELECT EXISTS (SELECT FROM radishnexus.messages WHERE body = 'Compose realtime proof.')
+    AND EXISTS (SELECT FROM radishnexus.identity_audit)
+    AND EXISTS (SELECT FROM radishnexus.workspace_configuration_audit)
+    AND NOT EXISTS (SELECT FROM radishnexus.user_sessions);
+SQL
+)"
+if [[ "${proof}" != t ]]; then
+  echo 'Restored authority, audit or Session exclusion did not match the source.' >&2
   exit 1
 fi
 

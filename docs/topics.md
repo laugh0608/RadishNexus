@@ -90,6 +90,7 @@
 | 子专题与原合同 | 阶段 / 切片与验收来源 | 协同 |
 | --- | --- | --- |
 | [schema readiness：ADR-0024](adr/0024-read-only-schema-readiness.md)、[升级失败恢复：ADR-0043](adr/0043-single-host-upgrade-failure-recovery.md) | M1；U01–U28 沿合同，结果见[隔离演练](status/reviews/2026-10-24-upgrade-failure-recovery.md)，独立操作者 U27 单列 | 身份、数据库与工件 |
+| [数据库身份拆分：ADR-0051](adr/0051-single-host-database-roles.md) | M1；专用 PostgreSQL 17 Compose 的角色准备、旧实例切换与独立恢复目标见[运维手册](../deploy/database-roles.md) | readiness、备份、审计与权限 |
 | [Project 上下文包：ADR-0044](adr/0044-portable-project-context-package.md) | M1 数据迁移首片；[实际结果](status/reviews/2026-10-24-portable-context-package.md)与[有界补验](status/reviews/2026-10-28-context-package-supplement.md) | 全部对象、当前权限与历史身份 |
 | [支持准备](trial-support.md)、[评估授权待决事项](evaluation-authorization-decisions.md) | 原 8 项准入及 E01–E12；技术、有效授权、持续使用分别判断 | Golden Path、运维 |
 | [工作台与 Document 代表页](design/workbench-v1.md)、[客户端连接方向](architecture/client-server-connection-plan.md) | Web 既有交付与 M7 后续客户端分开；[视觉证据](status/reviews/2026-09-26-workbench-ui.md) | 所有产品页面 |
