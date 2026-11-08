@@ -44,7 +44,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 1. **推进 M1 受控试用准备**。候选 `127ba0c` 已通过本机 OrbStack 隔离 T03、T06、T07，仓库验收脚本复跑从摘流至恢复入口验收为 28.867 秒，已确认写入丢失 0 条。首批试用交接单已完成合成案例走查。正式宿主和责任人待定，待确认后填写参与主体、访问范围、维护窗口、停机与数据损失上限、支持和退出安排，再复验正式宿主。评估授权 E01～E12 单独复核。 [首批试用交接单](../trial-support.md#首批试用交接单) · [本机验收与目标宿主清单](reviews/2026-11-08-m1-candidate-127ba0c.md) · [评估授权待决事项](../evaluation-authorization-decisions.md)
 2. **已完成切片转入有界观察**：上下文迁移补验、负责人及其并发 / 同名补验、优先级与项目内筛选均已交付，提交与验证映射见[当日收尾记录](reviews/2026-10-28-daily-closeout.md)。后续遇到实际 BFCache、原生选择控件键盘、团队使用或慢查询问题时定向复验；不重复全量测试冒充持续使用，也不把单 Project 合成查询计划当成生产容量。Go / Web / CLI 使用匹配工件配套升级；真实实例操作仍单独授权。
-3. **独立成员操作与使用观察分开记录**。Decision 人工复核已有正式 HTTPS Chrome 证据。候选 `127ba0c` 已补做三账号 Chrome 复验，覆盖登录、权限分流、跨会话协作与来源追溯。R08 和 T04 的独立成员真人观察继续待验证，后续观察成员完成任务和需要维护者协助的步骤。 [复核合同](../adr/0050-decision-manual-review.md) · [候选多账号复验](reviews/2026-11-08-m1-candidate-127ba0c.md#本机多账号浏览器复验)
+3. **独立成员操作与使用观察分开记录**。候选 `127ba0c` 已在本机以多账号 Chrome 验证登录、权限分流、协作、来源追溯，并补验账号恢复、Workspace owner 主动交接和成员暂停与恢复。R08 和 T04 的独立成员真人观察继续待验证，后续观察成员完成任务和需要维护者协助的步骤。 [复核合同](../adr/0050-decision-manual-review.md) · [多账号协作复验](reviews/2026-11-08-m1-candidate-127ba0c.md#本机多账号浏览器复验) · [账号与管理权复验](reviews/2026-11-08-m1-candidate-127ba0c.md#本机-t04-账号恢复owner-交接与成员暂停恢复)
 4. **单宿主数据库身份拆分已通过隔离验收**。Compose 分离常驻应用、schema 所有者、备份和 PostgreSQL 管理员，已有 024→025 故障续迁、凭据轮换和独立空库恢复证据。M1 文件、通知、审计运营、Attention Item 和更广生产运维仍按路线图验收；完整聊天、CRDT、Flutter、通用插件平台和更广迁移 profile 服从原阶段门槛。 [角色边界](../adr/0051-single-host-database-roles.md) · [部署手册](../../deploy/database-roles.md) · [验收记录](reviews/2026-11-08-single-host-database-roles.md)
 5. **继续暂缓**：ADR-0043 独立操作者 U27、真实 Jenkins ADR-0035 / ADR-0037 B 与原生中文 IME 人工验收。恢复时另行明确资源和验收范围；真实 Jenkins 恢复后再接续 Ticket 与具体构建的交付来源和结果追溯。
 
