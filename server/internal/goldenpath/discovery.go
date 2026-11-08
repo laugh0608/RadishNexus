@@ -32,6 +32,12 @@ type DiscoveryItem struct {
 	Ref      entityref.Ref
 	Title    string
 	Status   string
+	Project  *DiscoveryProject
+}
+
+type DiscoveryProject struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type DiscoveryPage struct {
@@ -43,6 +49,7 @@ type DiscoveryStore interface {
 	ListProjects(context.Context, authz.Principal, DiscoveryPageInput) (DiscoveryPage, error)
 	ListProjectChannels(context.Context, authz.Principal, string, DiscoveryPageInput) (DiscoveryPage, error)
 	ListProjectTickets(context.Context, authz.Principal, string, DiscoveryPageInput) (DiscoveryPage, error)
+	ListMyTickets(context.Context, authz.Principal, DiscoveryPageInput) (DiscoveryPage, error)
 	ListProjectDecisions(context.Context, authz.Principal, string, DiscoveryPageInput) (DiscoveryPage, error)
 }
 
@@ -87,6 +94,16 @@ func (service *DiscoveryService) ListProjectDecisions(ctx context.Context, princ
 		return DiscoveryPage{}, fmt.Errorf("%w: invalid Project reference", authz.ErrInvalid)
 	}
 	return service.store.ListProjectDecisions(ctx, principal, projectID, input)
+}
+
+func (service *DiscoveryService) ListMyTickets(ctx context.Context, principal authz.Principal, input DiscoveryPageInput) (DiscoveryPage, error) {
+	if err := validateDiscoveryInput(principal, "ticket", input); err != nil {
+		return DiscoveryPage{}, err
+	}
+	if input.TicketFilters != (TicketFilters{}) {
+		return DiscoveryPage{}, fmt.Errorf("%w: My Tickets has a fixed scope", authz.ErrInvalid)
+	}
+	return service.store.ListMyTickets(ctx, principal, input)
 }
 
 func validateDiscoveryInput(principal authz.Principal, kind string, input DiscoveryPageInput) error {

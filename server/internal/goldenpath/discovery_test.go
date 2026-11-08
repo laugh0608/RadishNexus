@@ -24,6 +24,11 @@ func (store *discoveryStoreStub) ListProjectTickets(context.Context, authz.Princ
 	return DiscoveryPage{}, nil
 }
 
+func (store *discoveryStoreStub) ListMyTickets(context.Context, authz.Principal, DiscoveryPageInput) (DiscoveryPage, error) {
+	store.calls++
+	return DiscoveryPage{}, nil
+}
+
 func TestDiscoveryValidatesBeforeReading(t *testing.T) {
 	principal := authz.Principal{Kind: authz.PrincipalUser, ID: "usr_reader", WorkspaceID: "wrk_main"}
 	store := &discoveryStoreStub{}

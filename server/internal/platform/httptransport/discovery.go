@@ -23,12 +23,14 @@ const (
 	projectChannelListPattern  = projectListPattern + "/{project_id}/channels"
 	projectTicketListPattern   = projectListPattern + "/{project_id}/tickets"
 	projectDecisionListPattern = projectListPattern + "/{project_id}/decisions"
+	myTicketsListPattern       = "/api/v1/workspaces/{workspace_id}/my-tickets"
 )
 
 type DiscoveryReader interface {
 	ListProjects(context.Context, authz.Principal, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
 	ListProjectChannels(context.Context, authz.Principal, string, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
 	ListProjectTickets(context.Context, authz.Principal, string, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
+	ListMyTickets(context.Context, authz.Principal, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
 	ListProjectDecisions(context.Context, authz.Principal, string, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
 }
 
@@ -73,11 +75,12 @@ func (c discoveryCursor) MarshalJSON() ([]byte, error) {
 }
 
 type discoveryItemDTO struct {
-	Priority string                      `json:"priority,omitempty"`
-	Assignee **goldenpath.TicketAssignee `json:"assignee,omitempty"`
-	Ref      entityRefDTO                `json:"ref"`
-	Title    string                      `json:"title"`
-	Status   string                      `json:"status"`
+	Project  *goldenpath.DiscoveryProject `json:"project,omitempty"`
+	Priority string                       `json:"priority,omitempty"`
+	Assignee **goldenpath.TicketAssignee  `json:"assignee,omitempty"`
+	Ref      entityRefDTO                 `json:"ref"`
+	Title    string                       `json:"title"`
+	Status   string                       `json:"status"`
 }
 
 type discoveryPageDTO struct {
@@ -92,6 +95,7 @@ func NewDiscoveryHandler(sessions WorkspaceSessionResolver, reader DiscoveryRead
 	mux.HandleFunc("GET "+projectChannelListPattern, handler.list)
 	mux.HandleFunc("GET "+projectTicketListPattern, handler.list)
 	mux.HandleFunc("GET "+projectDecisionListPattern, handler.list)
+	mux.HandleFunc("GET "+myTicketsListPattern, handler.list)
 	wrongMethod := func(response http.ResponseWriter, request *http.Request) {
 		response.Header().Set("Allow", http.MethodGet)
 		handler.writeError(response, request, ErrMethodNotAllowed)
@@ -100,6 +104,7 @@ func NewDiscoveryHandler(sessions WorkspaceSessionResolver, reader DiscoveryRead
 	mux.HandleFunc(projectChannelListPattern, wrongMethod)
 	mux.HandleFunc(projectTicketListPattern, wrongMethod)
 	mux.HandleFunc(projectDecisionListPattern, wrongMethod)
+	mux.HandleFunc(myTicketsListPattern, wrongMethod)
 	mux.HandleFunc("/", func(response http.ResponseWriter, request *http.Request) {
 		handler.writeError(response, request, authz.ErrNotFound)
 	})
@@ -144,17 +149,21 @@ func (handler *DiscoveryHandler) list(response http.ResponseWriter, request *htt
 		return
 	}
 	kind := "project"
-	if projectID != "" {
+	switch request.Pattern {
+	case "GET " + projectChannelListPattern:
 		kind = "channel"
-		if request.Pattern == "GET "+projectTicketListPattern {
-			kind = "ticket"
-		} else if request.Pattern == "GET "+projectDecisionListPattern {
-			kind = "decision"
-		}
+	case "GET " + projectTicketListPattern:
+		kind = "ticket"
+	case "GET " + projectDecisionListPattern:
+		kind = "decision"
+	case "GET " + myTicketsListPattern:
+		kind = "my-tickets"
 	}
 	scope := discoveryCursor{Version: 1, WorkspaceID: workspaceID, Kind: kind, ProjectID: projectID}
 	if kind == "ticket" {
 		scope.Version = 2
+	}
+	if kind == "ticket" || kind == "my-tickets" {
 		scope.ActorID = principal.ID
 	}
 	input, err := parseDiscoveryQuery(request.URL.RawQuery, scope)
@@ -164,13 +173,16 @@ func (handler *DiscoveryHandler) list(response http.ResponseWriter, request *htt
 	}
 	scope.Status, scope.Assignee, scope.Priority = input.TicketFilters.Status, input.TicketFilters.Assignee, input.TicketFilters.Priority
 	var page goldenpath.DiscoveryPage
-	if kind == "project" {
+	switch kind {
+	case "project":
 		page, err = handler.reader.ListProjects(request.Context(), principal, input)
-	} else if kind == "ticket" {
+	case "ticket":
 		page, err = handler.reader.ListProjectTickets(request.Context(), principal, projectID, input)
-	} else if kind == "decision" {
+	case "my-tickets":
+		page, err = handler.reader.ListMyTickets(request.Context(), principal, input)
+	case "decision":
 		page, err = handler.reader.ListProjectDecisions(request.Context(), principal, projectID, input)
-	} else {
+	default:
 		page, err = handler.reader.ListProjectChannels(request.Context(), principal, projectID, input)
 	}
 	if err != nil {
@@ -261,14 +273,20 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 	}
 	seen := make(map[string]bool, len(page.Items))
 	previousID := input.AfterID
+	refKind := scope.Kind
+	if scope.Kind == "my-tickets" {
+		refKind = "ticket"
+	}
 	for _, item := range page.Items {
 		validStatus := item.Status == "active" || item.Status == "archived"
 		if scope.Kind == "ticket" {
 			validStatus = goldenpath.ValidTicketStatus(item.Status)
+		} else if scope.Kind == "my-tickets" {
+			validStatus = item.Status == "open" || item.Status == "in-progress"
 		} else if scope.Kind == "decision" {
 			validStatus = item.Status == "proposed" || item.Status == "accepted" || item.Status == "rejected" || item.Status == "superseded"
 		}
-		if item.Ref.Type != scope.Kind || !validScopedID(item.Ref.ID, discoveryPrefix(scope.Kind)) || seen[item.Ref.ID] || !utf8.ValidString(item.Title) || strings.TrimSpace(item.Title) == "" || strings.ContainsRune(item.Title, '\x00') || !validStatus || ((scope.Kind == "ticket" || scope.Kind == "decision") && item.Ref.ID <= previousID) {
+		if item.Ref.Type != refKind || !validScopedID(item.Ref.ID, discoveryPrefix(refKind)) || seen[item.Ref.ID] || !validDiscoveryTitle(item.Title) || !validStatus || ((refKind == "ticket" || refKind == "decision") && item.Ref.ID <= previousID) {
 			return dto, invalid
 		}
 		previousID = item.Ref.ID
@@ -277,10 +295,19 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 			if !goldenpath.ValidTicketPriority(item.Priority) || (input.TicketFilters.Priority != "" && item.Priority != input.TicketFilters.Priority) || (input.TicketFilters.Status == "active" && item.Status != "open" && item.Status != "in-progress") || (input.TicketFilters.Status != "" && input.TicketFilters.Status != "active" && item.Status != input.TicketFilters.Status) || (input.TicketFilters.Assignee == "unassigned" && item.Assignee != nil) || (input.TicketFilters.Assignee == "me" && (item.Assignee == nil || item.Assignee.ID != scope.ActorID)) {
 				return dto, invalid
 			}
+		} else if scope.Kind == "my-tickets" {
+			if !goldenpath.ValidTicketPriority(item.Priority) || item.Project == nil || !validScopedID(item.Project.ID, "prj_") || !validDiscoveryTitle(item.Project.Name) {
+				return dto, invalid
+			}
 		} else if item.Priority != "" {
 			return dto, invalid
 		}
 		row := discoveryItemDTO{Priority: item.Priority, Ref: entityRefDTO{Type: item.Ref.Type, ID: item.Ref.ID}, Title: item.Title, Status: item.Status}
+		if scope.Kind == "my-tickets" {
+			row.Project = item.Project
+		} else if item.Project != nil {
+			return dto, invalid
+		}
 		if scope.Kind == "ticket" {
 			if !validAssignee(item.Assignee) {
 				return dto, invalid
@@ -306,6 +333,10 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 	return dto, nil
 }
 
+func validDiscoveryTitle(title string) bool {
+	return utf8.ValidString(title) && strings.TrimSpace(title) != "" && !strings.ContainsRune(title, '\x00')
+}
+
 func discoveryPrefix(kind string) string {
 	if strings.HasPrefix(kind, "management-") {
 		return managementCursorPrefix(kind)
@@ -319,7 +350,7 @@ func discoveryPrefix(kind string) string {
 	if kind == "repository-ci-runs" {
 		return "cir_"
 	}
-	if kind == "component-tickets" || kind == "ticket" {
+	if kind == "component-tickets" || kind == "ticket" || kind == "my-tickets" {
 		return "tkt_"
 	}
 	if kind == "repositories" || kind == "component-repositories" {

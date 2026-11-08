@@ -48,6 +48,7 @@
 | [Activity 与入向关系：ADR-0022](adr/0022-transactional-activity-and-incoming-relations.md) | M0.5 横切；[正常命令与双向发现证据](status/reviews/2026-09-10-activity-relations.md) | 全部对象、身份 |
 | [Repository / Component：ADR-0033](adr/0033-repository-mapping-and-component-relations.md)、[Ticket / Component：ADR-0034](adr/0034-ticket-component-relations.md) | M4；原关系与权限矩阵，协作对象共属不代表已交付 | 交付集成 |
 | [工单发现：ADR-0038](adr/0038-project-ticket-discovery.md)、[状态流转：ADR-0039](adr/0039-ticket-status-transitions.md) | 原只读 / 写入切片；[状态验收](status/reviews/2026-10-13-ticket-status-transitions.md) | Project 导航、Decision |
+| [Workspace 我的工单：ADR-0052](adr/0052-workspace-my-tickets.md) | 当前 Workspace 内按本人责任和当前可读权限分页发现待处理工单 | 工作台、Project 权限 |
 | [负责人：ADR-0046](adr/0046-ticket-assignee.md)、[优先级与筛选：ADR-0047](adr/0047-ticket-priority-and-filtering.md) | 原任务与退出矩阵；[负责人记录](status/reviews/2026-10-28-ticket-assignee.md)、[优先级记录](status/reviews/2026-10-28-ticket-priority.md)及后续有界观察 | 成员生命周期、迁移包版本 |
 
 完成需沿真实授权与版本恢复路径成立；只读发现、最小状态、负责人、优先级是独立交付，不合称完整工单系统、通用 Timeline 分页或生产容量验收。

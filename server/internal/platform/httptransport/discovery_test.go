@@ -42,6 +42,11 @@ func (reader *fakeDiscoveryReader) ListProjectTickets(ctx context.Context, princ
 	return reader.ListProjects(ctx, principal, input)
 }
 
+func (reader *fakeDiscoveryReader) ListMyTickets(ctx context.Context, principal authz.Principal, input goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error) {
+	reader.kind = "my-tickets"
+	return reader.ListProjects(ctx, principal, input)
+}
+
 func (reader *fakeDiscoveryReader) ListProjectDecisions(ctx context.Context, principal authz.Principal, project string, input goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error) {
 	reader.kind = "decision"
 	reader.project = project

@@ -15,6 +15,7 @@ import (
 var (
 	projectDecisionsWebPathPattern = regexp.MustCompile(`^/workspaces/[^/]+/projects/[^/]+/decisions/?$`)
 	projectTicketsWebPathPattern   = regexp.MustCompile(`^/workspaces/[^/]+/projects/[^/]+/tickets/?$`)
+	myTicketsWebPathPattern        = regexp.MustCompile(`^/workspaces/[^/]+/my-tickets/?$`)
 	repositoryWebPathPattern       = regexp.MustCompile(`^/workspaces/[^/]+/repositories/[^/]+/?$`)
 	componentWebPathPattern        = regexp.MustCompile(`^/workspaces/[^/]+/components/[^/]+/?$`)
 	documentWebPathPattern         = regexp.MustCompile(`^/workspaces/[^/]+/(documents/[^/]+|projects/[^/]+/documents)/?$`)
@@ -71,7 +72,7 @@ func (handler *WebAppHandler) ServeHTTP(response http.ResponseWriter, request *h
 	}
 	if request.URL.Path == "/" || request.URL.Path == "/account" || request.URL.Path == "/prototype/nexus-view" ||
 		deploymentWebPathPattern.MatchString(request.URL.Path) || ciRunWebPathPattern.MatchString(request.URL.Path) ||
-		channelWebPathPattern.MatchString(request.URL.Path) ||
+		channelWebPathPattern.MatchString(request.URL.Path) || myTicketsWebPathPattern.MatchString(request.URL.Path) ||
 		collaborationWebPathPattern.MatchString(request.URL.Path) || documentWebPathPattern.MatchString(request.URL.Path) || componentWebPathPattern.MatchString(request.URL.Path) || repositoryWebPathPattern.MatchString(request.URL.Path) || projectTicketsWebPathPattern.MatchString(request.URL.Path) || projectDecisionsWebPathPattern.MatchString(request.URL.Path) {
 		response.Header().Set("Content-Type", "text/html; charset=utf-8")
 		response.Header().Set("Cache-Control", "no-cache")

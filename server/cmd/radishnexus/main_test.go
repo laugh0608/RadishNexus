@@ -290,7 +290,7 @@ func TestHandlerRoutesStagingBeforeWorkspaceFallback(t *testing.T) {
 	}
 }
 
-func TestHandlerAssemblesProjectDecisionDiscoveryWithConfiguration(t *testing.T) {
+func TestHandlerAssemblesDiscoveryWithConfiguration(t *testing.T) {
 	policy, err := httptransport.NewBrowserSessionPolicy("https://nexus.example.test")
 	if err != nil {
 		t.Fatal(err)
@@ -303,21 +303,29 @@ func TestHandlerAssemblesProjectDecisionDiscoveryWithConfiguration(t *testing.T)
 	// unsupported methods and unknown children must retain its exact errors.
 	discovery := httptransport.NewDiscoveryHandler(nil, nil, policy, proxy)
 	handler := newHandler(fakeReadinessChecker{}, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler(), discovery, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler())
-	for _, tc := range []struct {
-		method, suffix string
-		status         int
-	}{
-		{"GET", "", 401}, {"HEAD", "", 405}, {"POST", "", 405}, {"PUT", "", 405}, {"DELETE", "", 405}, {"OPTIONS", "", 405},
-		{"GET", "/unknown", 404}, {"POST", "/unknown", 404},
-	} {
-		w := httptest.NewRecorder()
-		r := httptest.NewRequest(tc.method, "https://nexus.example.test/api/v1/workspaces/wrk_main/projects/prj_main/decisions"+tc.suffix, nil)
-		handler.ServeHTTP(w, r)
-		if w.Code != tc.status || w.Header().Get("Cache-Control") != "private, no-store" || w.Header().Get("Vary") != "Cookie" || w.Header().Get("X-Request-ID") == "" {
-			t.Fatal(tc, w.Code, w.Header(), w.Body.String())
-		}
-		if tc.status == 405 && w.Header().Get("Allow") != "GET" {
-			t.Fatal(w.Header())
+	for _, path := range []string{"/projects/prj_main/decisions", "/my-tickets"} {
+		for _, tc := range []struct {
+			method, suffix string
+			status         int
+		}{
+			{"GET", "", 401}, {"HEAD", "", 405}, {"POST", "", 405}, {"PUT", "", 405}, {"DELETE", "", 405}, {"OPTIONS", "", 405},
+			{"GET", "/unknown", 404}, {"POST", "/unknown", 404},
+		} {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(tc.method, "https://nexus.example.test/api/v1/workspaces/wrk_main"+path+tc.suffix, nil)
+			handler.ServeHTTP(w, r)
+			if path == "/my-tickets" && tc.suffix != "" {
+				if w.Code != 404 {
+					t.Fatal(path, tc, w.Code)
+				}
+				continue
+			}
+			if w.Code != tc.status || w.Header().Get("Cache-Control") != "private, no-store" || w.Header().Get("Vary") != "Cookie" || w.Header().Get("X-Request-ID") == "" {
+				t.Fatal(tc, w.Code, w.Header(), w.Body.String())
+			}
+			if tc.status == 405 && w.Header().Get("Allow") != "GET" {
+				t.Fatal(w.Header())
+			}
 		}
 	}
 }

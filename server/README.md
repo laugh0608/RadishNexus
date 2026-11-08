@@ -188,6 +188,7 @@ migration 018 与 Go / Web 配套升级，旧 schema readiness 不通过。角�
 - `/workspaces/{workspace_id}/documents/{document_id}`：文档阅读、编辑、预览、保存与历史恢复；
 - `/workspaces/{workspace_id}/projects/{project_id}/documents`：当前 Project 可读文档分页列表；
 - `/workspaces/{workspace_id}/projects/{project_id}/tickets`：当前 Project 可读工单分页列表；
+- `/workspaces/{workspace_id}/my-tickets`：当前 Workspace 分配给自己的待处理工单；
 - `/workspaces/{workspace_id}/projects/{project_id}/decisions`：当前 Project 可读决策分页列表；
 - `/prototype/nexus-view`：与真实入口隔离的静态代表状态检视器。
 
@@ -212,6 +213,10 @@ Deployment Nexus View 只读路由为：
 [ADR-0038](../docs/adr/0038-project-ticket-discovery.md) 增加 `GET /api/v1/workspaces/{workspace_id}/projects/{project_id}/tickets`，复用 `DiscoveryService`、repeatable-read 查询与同源 Session 边界。按 Ticket 的 governing Project 当前权限发现，来源 Thread 权限不决定 Ticket 可读性；restricted Project 不允许 owner 绕过 membership，归档仍可读。
 
 响应为 `data.items[{ref,title,status,assignee,priority}] / next_cursor`，其中负责人摘要按 ADR-0046 返回 null 或最小身份；接受 ADR-0039 的四状态，不展开来源或返回总数。接受 `limit`（默认 25、最大 50）、`after` 及 ADR-0047 的 `status / assignee / priority` 三组单选 AND 条件；Ticket v2 cursor 绑定操作者、作用域与规范筛选，旧 Ticket cursor 明确失效。稳定 Ticket ID 升序、排他边界；不与 Component 反向列表共享 cursor。非法状态或数据拒绝整页，不静默筛除。不可读为 404、失效 Session 为 401，所有响应沿用 `private, no-store` 与 `Vary: Cookie`。原发现切片复用既有索引；负责人摘要由 migration 021 配套补充，原查询与验收证据见[实施记录](../docs/status/reviews/2026-10-13-project-ticket-discovery.md)。
+
+## Workspace 我的工单
+
+`GET /api/v1/workspaces/{workspace_id}/my-tickets` 分页读取当前 Workspace 中分配给登录用户、属于活跃可读 Project 的待处理工单。响应展示工单标题、状态、优先级和所属 Project，接受 `limit / after`。筛选、游标和兼容约定见 [ADR-0052](../docs/adr/0052-workspace-my-tickets.md#http-合同)。
 
 ## Project 决策只读发现
 

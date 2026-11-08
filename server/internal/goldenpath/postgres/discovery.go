@@ -9,6 +9,13 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 )
 
+// Match readProjectAccess after checking active Workspace membership.
+const readableProjectPredicate = `(project.visibility = 'workspace' OR EXISTS (
+	SELECT 1 FROM radishnexus.project_memberships AS membership
+	WHERE membership.workspace_id = project.workspace_id
+	  AND membership.project_id = project.id AND membership.user_id = $2
+))`
+
 func (store *Store) ListProjects(ctx context.Context, principal authz.Principal, input goldenpath.DiscoveryPageInput) (page goldenpath.DiscoveryPage, err error) {
 	if err := principal.ValidateUser(); err != nil {
 		return page, err
@@ -25,17 +32,11 @@ func (store *Store) ListProjects(ctx context.Context, principal authz.Principal,
 	if !active {
 		return page, authz.ErrNotFound
 	}
-	// Match readProjectAccess: Workspace visibility or an explicit Project
-	// membership, always inside the active Workspace membership boundary.
 	rows, err := tx.Query(ctx, `
 		SELECT project.id, project.name, project.status
 		FROM radishnexus.projects AS project
 		WHERE project.workspace_id = $1 AND project.id > $3
-		  AND (project.visibility = 'workspace' OR EXISTS (
-			SELECT 1 FROM radishnexus.project_memberships AS membership
-			WHERE membership.workspace_id = project.workspace_id
-			  AND membership.project_id = project.id AND membership.user_id = $2
-		  ))
+		  AND `+readableProjectPredicate+`
 		ORDER BY project.id LIMIT $4
 	`, principal.WorkspaceID, principal.ID, input.AfterID, input.Limit+1)
 	if err != nil {
@@ -47,6 +48,45 @@ func (store *Store) ListProjects(ctx context.Context, principal authz.Principal,
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return page, fmt.Errorf("commit Project discovery: %w", err)
+	}
+	return page, nil
+}
+
+func (store *Store) ListMyTickets(ctx context.Context, principal authz.Principal, input goldenpath.DiscoveryPageInput) (page goldenpath.DiscoveryPage, err error) {
+	if err := principal.ValidateUser(); err != nil {
+		return page, err
+	}
+	tx, err := store.beginAdmission(ctx, principal, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return page, fmt.Errorf("begin My Tickets discovery: %w", err)
+	}
+	defer rollback(ctx, tx, &err)
+	active, err := activeWorkspaceMember(ctx, tx, principal)
+	if err != nil {
+		return page, err
+	}
+	if !active {
+		return page, authz.ErrNotFound
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT ticket.id, ticket.title, ticket.status, ticket.priority, project.id, project.name
+		FROM radishnexus.tickets AS ticket
+		JOIN radishnexus.projects AS project
+		  ON project.workspace_id = ticket.workspace_id AND project.id = ticket.governing_project_id
+		WHERE ticket.workspace_id = $1 AND ticket.assignee_user_id = $2 AND ticket.id > $3
+		  AND ticket.status IN ('open', 'in-progress') AND project.status = 'active'
+		  AND `+readableProjectPredicate+`
+		ORDER BY ticket.id LIMIT $4
+	`, principal.WorkspaceID, principal.ID, input.AfterID, input.Limit+1)
+	if err != nil {
+		return page, fmt.Errorf("query My Tickets: %w", err)
+	}
+	page, err = scanDiscoveryPage(rows, "my-tickets", input.Limit)
+	if err != nil {
+		return page, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return page, fmt.Errorf("commit My Tickets discovery: %w", err)
 	}
 	return page, nil
 }
@@ -180,8 +220,13 @@ func scanDiscoveryPage(rows pgx.Rows, kind string, limit int) (goldenpath.Discov
 		item := goldenpath.DiscoveryItem{}
 		item.Ref.Type = kind
 		targets := []any{&item.Ref.ID, &item.Title, &item.Status}
-		if kind == "ticket" {
+		switch kind {
+		case "ticket":
 			targets = append(targets, &item.Priority, &item.Assignee)
+		case "my-tickets":
+			item.Ref.Type = "ticket"
+			item.Project = &goldenpath.DiscoveryProject{}
+			targets = append(targets, &item.Priority, &item.Project.ID, &item.Project.Name)
 		}
 		if err := rows.Scan(targets...); err != nil {
 			return goldenpath.DiscoveryPage{}, fmt.Errorf("scan discovery item: %w", err)

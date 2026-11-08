@@ -1,5 +1,7 @@
 # RadishNexus Web
 
+工作台的「我的工单」按当前 Workspace 列出分配给自己的待处理工单，显示项目、状态和优先级，并进入既有 Ticket 详情。分页和当前权限约定见 [ADR-0052](../docs/adr/0052-workspace-my-tickets.md)。
+
 `web/` 是 RadishNexus 第一正式产品形态的 React + TypeScript 入口。当前根路径已经建立最小 authenticated Web Shell，消费正式 login / session / logout transport，允许从当前 Session context 选择 Workspace、分页浏览可读 Project 并打开可读 Channel；Deployment、CI Run、Thread、Decision 与 Ticket 的已知 ID 工具保留在次级入口。Deployment / CI Run 页面安全读取 Nexus View，成功 CI Run 可显式记录外部 staging 部署结果；Ticket 可创建 Markdown Document、人工关联软件组件，并通过稳定组件详情反查可读事项；首页还提供 Repository 映射及组件关联。Project 提供工单、决策与文档列表，Document 页面提供编辑与历史恢复；Channel 页面通过类型化 adapter 分页读取 Message、幂等发送并从 Message 发起 Thread；Thread → Proposed Decision → 人工 Accepted Decision → Ticket 继续使用权限过滤后的 canonical Nexus View 和幂等短请求。原 Decision、CI Run 与 Deployment 代表原型移动到显式 `/prototype/nexus-view`，不参与真实失败 fallback。
 
 ## 本地运行

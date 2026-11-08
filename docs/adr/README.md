@@ -57,6 +57,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0049](0049-decision-supersession.md) | 已接受；已实施 | Decision 最小替代与历史兼容 |
 | [ADR-0050](0050-decision-manual-review.md) | 已接受并实施 | Decision 最小人工复核 |
 | [ADR-0051](0051-single-host-database-roles.md) | 已接受并实施 | 单宿主 PostgreSQL 身份拆分 |
+| [ADR-0052](0052-workspace-my-tickets.md) | 已接受 | Workspace「我的工单」只读发现 |
 
 ## 新建规则
 

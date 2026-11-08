@@ -102,6 +102,9 @@ describe("Workspace discovery", () => {
       target: { value: "wrk_other" },
     });
     expect(
+      screen.getByRole("link", { name: "我的工单" }).getAttribute("href"),
+    ).toBe("/workspaces/wrk_other/my-tickets");
+    expect(
       await screen.findByRole("button", { name: "另一个项目" }),
     ).toBeDefined();
     await act(async () => late.resolve(page([project])));

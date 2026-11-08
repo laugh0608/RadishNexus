@@ -3,6 +3,8 @@ import { projectDecisionsLocation } from "./workspace/project-decisions-api";
 import { RepositoryPage } from "./workspace/RepositoryPage";
 import { ProjectTicketsPage } from "./workspace/ProjectTicketsPage";
 import { projectTicketsLocation } from "./workspace/project-tickets-api";
+import { MyTicketsPage } from "./workspace/MyTicketsPage";
+import { myTicketsLocation } from "./workspace/my-tickets-api";
 import { repositoryLocation } from "./workspace/repository-ci-runs-api";
 import { CIRunPage } from "./nexus-view/CIRunPage";
 import { ciRunLocation, ciRunPagePath } from "./nexus-view/ci-run-api";
@@ -80,6 +82,7 @@ type AppRoute =
   | { kind: "repository"; workspaceID: string; repositoryID: string }
   | { kind: "project-decisions"; workspaceID: string; projectID: string }
   | { kind: "project-tickets"; workspaceID: string; projectID: string }
+  | { kind: "my-tickets"; workspaceID: string }
   | { kind: "component"; workspaceID: string; componentID: string }
   | { kind: "prototype" }
   | { kind: "ci-run"; workspaceID: string; ciRunID: string }
@@ -173,6 +176,8 @@ function appRoute(pathname: string): AppRoute {
   const repository = repositoryLocation(pathname);
   const projectTickets = projectTicketsLocation(pathname);
   const projectDecisions = projectDecisionsLocation(pathname);
+  const myTickets = myTicketsLocation(pathname);
+  if (myTickets) return { kind: "my-tickets", ...myTickets };
   if (projectDecisions)
     return { kind: "project-decisions", ...projectDecisions };
   if (projectTickets) return { kind: "project-tickets", ...projectTickets };
@@ -515,6 +520,7 @@ function SignedInShell({
     route.kind === "component" ||
     route.kind === "repository" ||
     route.kind === "project-tickets" ||
+    route.kind === "my-tickets" ||
     route.kind === "project-decisions" ||
     route.kind === "ci-run" ||
     route.kind === "document" ||
@@ -597,6 +603,12 @@ function SignedInShell({
           key={`${route.workspaceID}/${route.projectID}`}
           workspaceID={route.workspaceID}
           projectID={route.projectID}
+          onSessionExpired={onSignedOut}
+        />
+      ) : route.kind === "my-tickets" ? (
+        <MyTicketsPage
+          key={`${session.user.id}/${route.workspaceID}`}
+          workspaceID={route.workspaceID}
           onSessionExpired={onSignedOut}
         />
       ) : route.kind === "project-tickets" ? (

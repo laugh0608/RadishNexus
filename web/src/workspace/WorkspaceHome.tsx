@@ -12,6 +12,7 @@ import { deploymentNexusViewPagePath } from "../nexus-view/api";
 import type { DiscoveryClient } from "./api";
 import { DeliveryConfigurationPanel } from "./DeliveryConfigurationPanel";
 import { ProjectBrowser } from "./ProjectBrowser";
+import { myTicketsPath } from "./my-tickets-api";
 import { FoundationCreate } from "./ConfigurationPanel";
 import type { ConfigurationObject } from "./configuration-api";
 
@@ -134,6 +135,7 @@ export function WorkspaceHome({
           </div>
         ) : (
           <>
+            <a href={myTicketsPath(workspaceID)}>我的工单</a>
             <ManagementPanel
               key={`membership:${workspaceID}`}
               scope={{

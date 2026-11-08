@@ -42,7 +42,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **下一批优先推进 Workspace「我的工单」**。现有 Project 列表已支持按负责人、状态和优先级筛选。下一批先确认当前 Workspace 的跨 Project 只读发现合同，再接通服务端分页和 Web 入口。默认展示分配给自己、仍可读且所属 Project 未归档的待处理工单，展示项目、状态和优先级，打开既有 Ticket 详情可继续处理和回看来源。服务端按当前权限筛选后分页，定向验收受限项目、撤权、改派和 Workspace 切换。 [工单筛选合同](../adr/0047-ticket-priority-and-filtering.md) · [工单路线图](../roadmap.md#m4工单与上下文关联)
+1. **Workspace「我的工单」已实现并通过定向验收**。工作台可按当前 Workspace 汇总本人负责且仍可读的待处理工单，打开既有详情可继续执行和回看来源。服务端按当前权限筛选后分页。跨项目分页、撤权、改派和 Workspace 切换已有验收证据。 [读取合同](../adr/0052-workspace-my-tickets.md) · [实施验收](reviews/2026-11-08-workspace-my-tickets.md)
 2. **已完成切片转入有界观察**：上下文迁移补验、负责人及其并发 / 同名补验、优先级与项目内筛选均已交付，提交与验证映射见[当日收尾记录](reviews/2026-10-28-daily-closeout.md)。后续遇到实际 BFCache、原生选择控件键盘、团队使用或慢查询问题时定向复验；不重复全量测试冒充持续使用，也不把单 Project 合成查询计划当成生产容量。Go / Web / CLI 使用匹配工件配套升级；真实实例操作仍单独授权。
 3. **保留 M1 受控试用交接**。候选 `127ba0c` 已有本机协作、恢复和当前实例 T08 取回证据。T02 与 T05 已整理拟议范围、支持分流及待填写事项。扩大试用范围前，再确认试用主体、操作范围、支持安排和退出条件，并复核实际授权。 [T02 与 T05 复核说明](reviews/2026-11-08-m1-candidate-127ba0c.md#首批试用-t02-与-t05-复核说明) · [本机试用使用观察](reviews/2026-11-08-m1-candidate-127ba0c.md#本机试用使用观察) · [当前本机实例 T08 演练](../trial-support.md#当前本机实例-t08-退出演练) · [本机临时窗口复验](reviews/2026-11-08-m1-candidate-127ba0c.md#本机临时窗口复验结果)
 4. **单宿主数据库身份拆分已通过隔离验收**。Compose 分离常驻应用、schema 所有者、备份和 PostgreSQL 管理员，已有 024→025 故障续迁、凭据轮换和独立空库恢复证据。M1 文件、通知、审计运营、Attention Item 和更广生产运维仍按路线图验收；完整聊天、CRDT、Flutter、通用插件平台和更广迁移 profile 服从原阶段门槛。 [角色边界](../adr/0051-single-host-database-roles.md) · [部署手册](../../deploy/database-roles.md) · [验收记录](reviews/2026-11-08-single-host-database-roles.md)

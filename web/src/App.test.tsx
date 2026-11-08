@@ -74,6 +74,86 @@ describe("App prototype state controls", () => {
 });
 
 describe("authenticated Web Shell", () => {
+  it("opens My Tickets, reauthorizes on return and discards a late response after switching Workspace", async () => {
+    const response = (title: string) =>
+      new Response(
+        JSON.stringify({
+          data: {
+            items: [
+              {
+                ref: { type: "ticket", id: "tkt_work" },
+                title,
+                status: "in-progress",
+                priority: "high",
+                project: { id: "prj_main", name: "Current project" },
+              },
+            ],
+            next_cursor: null,
+          },
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      );
+    let resolveOld!: (value: Response) => void;
+    const delayed = new Promise<Response>((resolve) => {
+      resolveOld = resolve;
+    });
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(response("Main ticket"))
+      .mockResolvedValueOnce(new Response("{}", { status: 404 }))
+      .mockReturnValueOnce(delayed)
+      .mockResolvedValueOnce(response("Docs ticket"));
+    vi.stubGlobal("fetch", fetch);
+    const view = (workspace: string) => (
+      <App
+        pathname={`/workspaces/${workspace}/my-tickets`}
+        setupClient={establishedSetupClient}
+        authClient={authClient}
+      />
+    );
+    const authClient = testAuthClient();
+    try {
+      const { rerender } = render(view("wrk_main"));
+      const ticket = await screen.findByRole("link", { name: "Main ticket" });
+      expect(ticket.getAttribute("href")).toBe(
+        "/workspaces/wrk_main/tickets/tkt_work",
+      );
+      expect(screen.getByText(/Current project.*处理中.*高/u)).toBeDefined();
+
+      fireEvent(
+        window,
+        new PageTransitionEvent("pagehide", { persisted: true }),
+      );
+      expect(screen.queryByRole("link", { name: "Main ticket" })).toBeNull();
+      fireEvent(
+        window,
+        new PageTransitionEvent("pageshow", { persisted: true }),
+      );
+      expect((await screen.findByRole("alert")).textContent).toContain(
+        "当前无法访问",
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "刷新工单列表" }));
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+      const previousSignal = fetch.mock.calls[2]?.[1]?.signal as AbortSignal;
+      rerender(view("wrk_docs"));
+      const docs = await screen.findByRole("link", { name: "Docs ticket" });
+      expect(docs.getAttribute("href")).toBe(
+        "/workspaces/wrk_docs/tickets/tkt_work",
+      );
+      expect(fetch.mock.calls[3]?.[0]).toBe(
+        "/api/v1/workspaces/wrk_docs/my-tickets?limit=25",
+      );
+      await act(async () => resolveOld(response("Late Main ticket")));
+      expect(previousSignal.aborted).toBe(true);
+      expect(
+        screen.queryByRole("link", { name: "Late Main ticket" }),
+      ).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it.each([
     "/workspaces/wrk_main/projects/prj_main/decisions/new",
     "/workspaces/wrk_main/projects/prj_main/decisions/dec_choice",
