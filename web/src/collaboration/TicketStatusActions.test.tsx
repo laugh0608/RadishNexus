@@ -39,6 +39,10 @@ function view(
 }
 function setup(change = vi.fn(), load = vi.fn().mockResolvedValue(view())) {
   const client: CollaborationClient = {
+    reviewDecision: vi.fn(),
+    loadDecisionReviews: vi
+      .fn()
+      .mockResolvedValue({ items: [], nextAfter: null }),
     loadView: load,
     changeTicketStatus: change,
     proposeDecision: vi.fn(),

@@ -98,6 +98,19 @@ func (ids contextIDs) facts(f cp.Facts) cp.Facts {
 	}
 	return f
 }
+func (ids contextIDs) historyFacts(f cp.Facts) []byte {
+	if f.Review == nil {
+		return cp.Encode(ids.facts(f))
+	}
+	review := *f.Review
+	if review.AdditionalEvidence != nil {
+		ref := *review.AdditionalEvidence
+		ref.ID = ids.get(ref.Type, ref.ID)
+		review.AdditionalEvidence = &ref
+	}
+	return cp.Encode(review)
+}
+
 func writeContext(ctx context.Context, tx pgx.Tx, a goldenpath.OwnerAccess, p cp.Plan, m cp.Manifest, d cp.Data, index *cp.Index, now time.Time) error {
 	ids := contextIDs{}
 	for _, v := range p.Mappings {
@@ -224,8 +237,8 @@ func writeContext(ctx context.Context, tx pgx.Tx, a goldenpath.OwnerAccess, p cp
 	}
 	for _, h := range d.History {
 		event := ids.get("event", h.ID)
-		f := ids.facts(index.Facts[h.ID])
-		if e := exec(`INSERT INTO radishnexus.context_import_history(workspace_id,operation_id,event_id,original_type,original_actor,original_time,original_facts) VALUES($1,$2,$3,$4,$5,$6,$7)`, w, op, event, h.Type, ids.get("actor", h.Actor), h.OccurredAt, cp.Encode(f)); e != nil {
+		facts := ids.historyFacts(index.Facts[h.ID])
+		if e := exec(`INSERT INTO radishnexus.context_import_history(workspace_id,operation_id,event_id,original_type,original_actor,original_time,original_facts) VALUES($1,$2,$3,$4,$5,$6,$7)`, w, op, event, h.Type, ids.get("actor", h.Actor), h.OccurredAt, facts); e != nil {
 			return e
 		}
 		if e := exec(`INSERT INTO radishnexus.domain_events(event_id,event_type,schema_version,workspace_id,actor_kind,actor_id,source_kind,source_id,primary_entity_type,primary_entity_id,project_id,correlation_id,causation_id,occurred_at,payload) VALUES($1,'context.history-recorded',1,$2,'user',$3,'import',$4,$5,$6,$7,$8,$9,$10,'{}')`, event, w, a.Principal.ID, op, h.Entity.Type, ids.get(h.Entity.Type, h.Entity.ID), project, "cor_"+cp.Hash([]byte(op + "/" + h.CorrelationID))[:32], ids.optional("event", h.CausationID), now); e != nil {
@@ -256,7 +269,7 @@ func writeContext(ctx context.Context, tx pgx.Tx, a goldenpath.OwnerAccess, p cp
 			continue
 		}
 		actor := ids.get("actor", h.Actor)
-		record, e := projectActivityEvent(activityEvent{eventID: ids.get("event", h.ID), eventType: h.Type, schemaVersion: 1, workspaceID: w, actorKind: "user", actorID: &actor, target: entityref.Ref{Type: h.Entity.Type, ID: ids.get(h.Entity.Type, h.Entity.ID)}, occurredAt: h.OccurredAt, payload: cp.Encode(ids.facts(index.Facts[h.ID]))})
+		record, e := projectActivityEvent(activityEvent{eventID: ids.get("event", h.ID), eventType: h.Type, schemaVersion: 1, workspaceID: w, actorKind: "user", actorID: &actor, target: entityref.Ref{Type: h.Entity.Type, ID: ids.get(h.Entity.Type, h.Entity.ID)}, occurredAt: h.OccurredAt, payload: ids.historyFacts(index.Facts[h.ID])})
 		if e != nil {
 			return e
 		}

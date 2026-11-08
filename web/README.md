@@ -87,6 +87,10 @@ Project 名称 / 归档状态与列表共用请求代次；任一失败清空二
 
 Go / Web / CLI / schema 024 / Activity 12 / v5 包配套升级；桌面、390px、键盘、真实 409、已提交后丢响应的三类重试、撤权与执行继续的分层证据及焦点 / BFCache 限制见[实施记录](../docs/status/reviews/2026-11-02-decision-supersession.md)。
 
+## Decision 最小人工复核
+
+在 accepted Decision 详情选择复核结论、填写说明并确认所见版本，可用同一 Project 的 Thread 链接补充证据。复核历史在 Activity 旁单独分页；刷新后按当前权限重读。结果未知时可以重试原请求。已被替代的 Decision 仍可追溯当前可读的旧复核。 [ADR-0050](../docs/adr/0050-decision-manual-review.md)
+
 ## Ticket 状态操作
 
 `collaboration/TicketStatusActions.tsx` 在现有详情展示状态、版本和当前允许动作。完成、取消、重新打开二次确认，开始处理与返回待开始使用明确按钮；没有乐观修改。成功后读取完整 Nexus View，409 清理旧确认并重读；网络未知保留原 payload / operation ID，由用户精确重试，不能从当前状态相同推断操作成功。

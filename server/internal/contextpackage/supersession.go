@@ -60,9 +60,14 @@ func validateSupersessionHistory(d Data, x *Index) error {
 		return a.OccurredAt.Before(b.OccurredAt)
 	})
 	links := map[string]Link{}
+	evidence := map[Ref][]Ref{}
+	lastReview := map[Ref]time.Time{}
 	for _, l := range d.Links {
 		if l.Relation == "supersedes" {
 			links[l.ID] = l
+		}
+		if l.Relation == "derived-from" && l.From.Type == "decision" && l.State == "active" {
+			evidence[l.From] = append(evidence[l.From], l.To)
 		}
 	}
 	outgoing, incoming := map[Ref]bool{}, map[Ref]bool{}
@@ -83,6 +88,25 @@ func validateSupersessionHistory(d Data, x *Index) error {
 				return invalid("Decision terminal history")
 			}
 			states[h.Entity] = state{strings.TrimPrefix(h.Type, "decision."), 2, h.OccurredAt}
+		case "decision.reviewed":
+			review := x.Facts[h.ID].Review
+			sources := evidence[h.Entity]
+			if review == nil || current.status != "accepted" || current.revision != review.DecisionRevision ||
+				!h.OccurredAt.After(current.at) || !h.OccurredAt.After(lastReview[h.Entity]) || len(sources) == 0 {
+				return invalid("Decision review history")
+			}
+			for _, source := range sources {
+				if !h.OccurredAt.After(x.Objects[source].CreatedAt) || (review.AdditionalEvidence != nil && source == *review.AdditionalEvidence) {
+					return invalid("Decision review source")
+				}
+			}
+			if review.AdditionalEvidence != nil {
+				thread, found := x.Objects[*review.AdditionalEvidence]
+				if !found || !h.OccurredAt.After(thread.CreatedAt) {
+					return invalid("Decision review additional evidence")
+				}
+			}
+			lastReview[h.Entity] = h.OccurredAt
 		case "decision.superseded":
 			f, err := DecodeSupersession(h.Facts)
 			if err != nil {
@@ -90,7 +114,7 @@ func validateSupersessionHistory(d Data, x *Index) error {
 			}
 			replacement, present := states[f.Replacement]
 			l, found := links[f.Relation.ID]
-			if !exists || !present || current.status != "accepted" || replacement.status != "accepted" || h.Entity == f.Replacement || outgoing[f.Replacement] || incoming[h.Entity] || current.revision != f.FromRevision || replacement.revision != f.ReplacementFromRevision || !h.OccurredAt.After(current.at) || !h.OccurredAt.After(replacement.at) || !found || l.From != f.Replacement || l.To != h.Entity || l.EventID != h.ID || l.Actor != h.Actor || (l.Origin == "user" && h.Source != "web") || !l.CreatedAt.Equal(h.OccurredAt) || !l.UpdatedAt.Equal(h.OccurredAt) {
+			if !exists || !present || current.status != "accepted" || replacement.status != "accepted" || h.Entity == f.Replacement || outgoing[f.Replacement] || incoming[h.Entity] || current.revision != f.FromRevision || replacement.revision != f.ReplacementFromRevision || !h.OccurredAt.After(current.at) || !h.OccurredAt.After(replacement.at) || !h.OccurredAt.After(lastReview[h.Entity]) || !h.OccurredAt.After(lastReview[f.Replacement]) || !found || l.From != f.Replacement || l.To != h.Entity || l.EventID != h.ID || l.Actor != h.Actor || (l.Origin == "user" && h.Source != "web") || !l.CreatedAt.Equal(h.OccurredAt) || !l.UpdatedAt.Equal(h.OccurredAt) {
 				return invalid("supersession history")
 			}
 			delete(links, f.Relation.ID)

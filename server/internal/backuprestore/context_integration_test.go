@@ -114,6 +114,12 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if _, e = core.AcceptDecision(ctx, invocation, goldenpath.AcceptDecisionInput{DecisionID: replacement.Decision.ID, ClientOperationID: "backup-replacement-accept", Outcome: "Replacement", Rationale: "Preserve context"}); e != nil {
 		t.Fatal(e)
 	}
+	if _, applied, err := core.ReviewDecision(ctx, invocation, goldenpath.ReviewDecisionInput{
+		DecisionID: decision.Decision.ID, ClientOperationID: "source-review-backup", BaseDecisionRevision: 2,
+		Conclusion: "reconsider", Reason: "Review retained before replacement.",
+	}); err != nil || !applied {
+		t.Fatal("source review", err)
+	}
 	if _, e = core.SupersedeDecision(ctx, invocation, goldenpath.SupersedeDecisionInput{DecisionID: decision.Decision.ID, ReplacementID: replacement.Decision.ID, ClientOperationID: "backup-original-supersession", BaseDecisionRevision: 2, BaseReplacementRevision: 2, SupersessionReason: "Original historical supersession"}); e != nil {
 		t.Fatal(e)
 	}
@@ -158,6 +164,14 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	}
 	if _, e = importedCore.AcceptDecision(ctx, currentInvocation, goldenpath.AcceptDecisionInput{DecisionID: nativeReplacement.Decision.ID, ClientOperationID: "native-replacement-accept", Outcome: "Continue here", Rationale: "Current owner explicitly accepted"}); e != nil {
 		t.Fatal(e)
+	}
+	reviewInput := goldenpath.ReviewDecisionInput{
+		DecisionID: importedReplacement, ClientOperationID: "native-review-backup", BaseDecisionRevision: 3,
+		Conclusion: "reconsider", Reason: "Native review retained before next replacement.",
+	}
+	review, applied, err := importedCore.ReviewDecision(ctx, currentInvocation, reviewInput)
+	if err != nil || !applied {
+		t.Fatal("native review", err)
 	}
 	supersedeInput := goldenpath.SupersedeDecisionInput{DecisionID: importedReplacement, ReplacementID: nativeReplacement.Decision.ID, ClientOperationID: "native-replacement-command", BaseDecisionRevision: 3, BaseReplacementRevision: 2, SupersessionReason: "Native continuation after imported supersession"}
 	superseded, e := importedCore.SupersedeDecision(ctx, currentInvocation, supersedeInput)
@@ -204,6 +218,10 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	replayed, e := restoredCore.SupersedeDecision(ctx, currentInvocation, supersedeInput)
 	if e != nil || !reflect.DeepEqual(replayed, superseded) {
 		t.Fatal("restored native supersession receipt", e)
+	}
+	restoredReview, applied, err := restoredCore.ReviewDecision(ctx, currentInvocation, reviewInput)
+	if err != nil || applied || !reflect.DeepEqual(restoredReview, review) {
+		t.Fatal("restored native review receipt", err)
 	}
 	restoredContext := goldenpath.NewContextService(goldenpostgres.NewContextStore(restored, schema))
 	status, e := restoredContext.Result(ctx, actor, fresh.Token, plan.OperationID)

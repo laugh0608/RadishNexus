@@ -1,6 +1,6 @@
 # RadishNexus 当前状态
 
-状态事实日期：2026-11-08；最近功能交付：2026-11-02；规划导航整理：2026-11-01。
+状态事实日期：2026-11-08；最近功能交付：2026-11-08；规划导航整理：2026-11-01。
 
 整体目标与阶段范围见[路线图](../roadmap.md)，能力归属与任务 / 验收来源见[专题地图](../topics.md)。完整历史流水保留于[原状态快照](history/planning-structure-2026-11-01.md)，不恢复旧运行授权。
 
@@ -10,14 +10,14 @@
 
 ## 当前阶段
 
-M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 React Web 已建立若干真实业务切片；完整 Golden Path、普通成员独立操作及真实团队持续使用尚未整体验收。Decision 最小拒绝已按 [ADR-0048](../adr/0048-decision-lifecycle-and-rejection.md)实施并通过定向数据库、迁移 / 备份和正式 Web 验收；[ADR-0049 最小替代](../adr/0049-decision-supersession.md)已确认并实施，同 Project 单链、双方版本、原操作重试、双对象 Activity 与 v5 历史已有分层证据；复核继续独立设计。
+M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 React Web 已建立若干真实业务切片；完整 Golden Path、普通成员独立操作及真实团队持续使用尚未整体验收。Decision 最小拒绝已按 [ADR-0048](../adr/0048-decision-lifecycle-and-rejection.md)实施并通过定向数据库、迁移 / 备份和正式 Web 验收；[ADR-0049 最小替代](../adr/0049-decision-supersession.md)已确认并实施，同 Project 单链、双方版本、原操作重试、双对象 Activity 与 v5 历史已有分层证据。人工复核已接通 Go、PostgreSQL 与 Web，并通过正式 HTTPS Chrome 验收。 [ADR-0050](../adr/0050-decision-manual-review.md)
 
 ## 完成线与成熟度
 
 | 能力主线 | 当前基线与未关闭范围 | 正式来源 |
 | --- | --- | --- |
 | 身份与管理 | 本地账户、邀请、初始化、恢复、owner / 成员管理交接已有技术证据；真实 OIDC / Radish 联调与团队持续使用仍未验收 | [身份专题](../topics.md#identity) |
-| 沟通与决策 | 讨论创建 / 确认 Decision、Project 决策发现已交付；最小拒绝、单链替代及四状态读取已交付，最小人工复核合同已确认，实施待验收 | [沟通与决策专题](../topics.md#communication-decisions) |
+| 沟通与决策 | 讨论创建 / 确认 Decision、Project 决策发现已交付；最小拒绝、单链替代及四状态读取已交付，最小人工复核已通过正式浏览器验收，独立成员真人操作待复验 | [沟通与决策专题](../topics.md#communication-decisions) |
 | 工单与上下文 | 工单发现、四状态、负责人、优先级 / 筛选、首批关系和 Activity 已有证据；完整执行管理、通用关系分页与持续使用未闭合 | [工单与上下文专题](../topics.md#tickets-context) |
 | 文档协作 | 最小 Markdown 正式保存、冲突、版本 / 恢复及隔离浏览器已有证据；原生中文 IME 暂缓、持续使用未验收 | [文档专题](../topics.md#documents) |
 | 交付集成 | 受认证接入、显式 staging 记录、配置、持久发送及 checkout 接收已有相应证据；ADR-0035 / 0037 B 真实采集与整链暂缓 | [交付专题](../topics.md#delivery-integration) |
@@ -42,8 +42,8 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **下一步：实施 Decision 最小人工复核**。D01～D07 已确认，先接通 PostgreSQL 写入与当前权限，再补齐事件与历史兼容、正式 HTTP / Web，按 R01～R08 分层取证。现行交付基线仍为 schema 024 / Activity 12 / v5。 [复核合同](../adr/0050-decision-manual-review.md) · [替代实施记录](reviews/2026-11-02-decision-supersession.md)
-2. **已完成切片转入有界观察**：上下文迁移补验、负责人及其并发 / 同名补验、优先级与项目内筛选均已交付，提交与验证映射见[当日收尾记录](reviews/2026-10-28-daily-closeout.md)。后续遇到实际 BFCache、原生选择控件键盘、团队使用或慢查询问题时定向复验；不重复全量测试冒充持续使用，也不把单 Project 合成查询计划当成生产容量。当前 schema 024 / Activity 12 / v5 包须 Go / Web / CLI 配套升级；真实实例操作仍单独授权。
+1. **Decision 最小人工复核进入独立成员复验**。当前源码已接通 D01～D07，配套 schema 025 / Activity 13 / v6。正式 HTTPS Chrome 已验收主链、撤权后 BFCache 恢复、精确重试和分页。下次按明确的隔离资源与成员范围安排真人复验，并与外部试用准入分别记录。 [复核合同](../adr/0050-decision-manual-review.md) · [实施与验证记录](reviews/2026-11-08-decision-manual-review.md)
+2. **已完成切片转入有界观察**：上下文迁移补验、负责人及其并发 / 同名补验、优先级与项目内筛选均已交付，提交与验证映射见[当日收尾记录](reviews/2026-10-28-daily-closeout.md)。后续遇到实际 BFCache、原生选择控件键盘、团队使用或慢查询问题时定向复验；不重复全量测试冒充持续使用，也不把单 Project 合成查询计划当成生产容量。Go / Web / CLI 使用匹配工件配套升级；真实实例操作仍单独授权。
 3. **试用准备与使用观察分别验收**：确认[支持说明](../trial-support.md)的非生产数据范围、目标环境、联系人与退出安排，以及[授权待决事项](../evaluation-authorization-decisions.md) E01～E12；技术准入和有效授权均满足后才开放外部受控试用。届时观察讨论—决策—工单—文档追溯、维护者干预和成员交接，独立团队持续使用与生产容量不由 Agent 浏览器测试替代。
 4. **保留阶段范围与停止线**：M1 文件、通知、审计运营、Attention Item、数据库最小权限和生产运维仍有未交付范围；M1 和完整 Golden Path 的退出条件见路线图。完整聊天、CRDT、Flutter 与通用插件平台仍服从原路线图门槛；更广迁移 profile 另行规划。
 5. **继续暂缓**：ADR-0043 独立操作者 U27、真实 Jenkins ADR-0035 / ADR-0037 B 与原生中文 IME 人工验收。恢复时另行明确资源和验收范围；真实 Jenkins 恢复后再接续 Ticket 与具体构建的交付来源和结果追溯。
@@ -85,7 +85,7 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - Document 正式页面原生中文 IME 与持续使用证据；正式富文本与 CRDT、受控脱敏和可移植导出仍未完成；
 - Jenkins 持续终态采集与业务实例配置、持久来源管理 / 安全审计、真实 checkout 采集与其余具体交付关系；
 - PostgreSQL 支持矩阵、schema 兼容窗口、forward repair、数据库权限拆分和容量基线；
-- 复核独立记录、人工结论、review_at 与触发模型；最小拒绝和替代已按 ADR-0048 / 0049 实施，不能将局部验收当成完整决策治理或持续使用；
+- 人工复核的独立使用证据，以及后续 `review_at` 与触发模型；
 - 安全 Audit、消息 / 事件 / receipt 的保留和受控脱敏边界；
 - `.nexus` 版本化格式、脱敏与导入映射；免费评估路径及授权签发 / 撤销规则；
 - 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。

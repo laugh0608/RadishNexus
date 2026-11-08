@@ -75,6 +75,7 @@ const decisionView: CollaborationView<DecisionCurrent> = {
     createTicket: false,
     supersede: false,
     retryDecision: true,
+    review: false,
     retryTicketCreation: false,
   },
   relations: [{ visibility: "restricted" }],
@@ -82,6 +83,114 @@ const decisionView: CollaborationView<DecisionCurrent> = {
 };
 
 describe("CollaborationPage", () => {
+  it("retries an unknown review after its Decision is superseded", async () => {
+    const accepted = {
+      ...decisionView,
+      current: acceptedDecision,
+      capabilities: {
+        accept: false,
+        reject: false,
+        createTicket: false,
+        supersede: false,
+        retryDecision: true,
+        retryTicketCreation: false,
+        review: true,
+      },
+    };
+    const reviewDecision = vi
+      .fn()
+      .mockRejectedValueOnce(new CollaborationRequestError("连接中断"))
+      .mockResolvedValueOnce({});
+    const loadView = vi.fn().mockResolvedValue(accepted);
+    renderPage(
+      "decision",
+      "dec_choice",
+      testClient({ loadView, reviewDecision }),
+      {
+        createOperationID: () => "web:review",
+      },
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "记录人工复核" }),
+    );
+    fireEvent.change(screen.getByLabelText("复核结论"), {
+      target: { value: "reconsider" },
+    });
+    fireEvent.change(screen.getByLabelText("复核说明"), {
+      target: { value: "需要重评新约束。" },
+    });
+    fireEvent.click(screen.getByLabelText("确认按所示版本保存本次人工复核"));
+    fireEvent.click(screen.getByRole("button", { name: "保存复核" }));
+    await screen.findByText("复核结果暂未确认，可以重试原操作。");
+
+    loadView.mockResolvedValue({
+      ...accepted,
+      current: {
+        ...acceptedDecision,
+        status: "superseded",
+        decisionRevision: 3,
+      },
+      capabilities: { ...accepted.capabilities, review: false },
+    });
+    fireEvent.focus(window);
+    fireEvent.click(await screen.findByRole("button", { name: "重试原复核" }));
+    await waitFor(() => expect(reviewDecision).toHaveBeenCalledTimes(2));
+    const [first, retry] = reviewDecision.mock.calls;
+    expect(first?.slice(0, 3)).toEqual(retry?.slice(0, 3));
+    expect(retry?.[2]).toMatchObject({
+      clientOperationID: "web:review",
+      baseDecisionRevision: 2,
+    });
+    await screen.findByText("已确认复核记录。");
+    expect(screen.queryByRole("button", { name: "记录人工复核" })).toBeNull();
+  });
+
+  it("removes private review history when the refreshed read loses evidence access", async () => {
+    const loadDecisionReviews = vi
+      .fn()
+      .mockResolvedValueOnce({
+        nextAfter: null,
+        items: [
+          {
+            eventID: "evt_private",
+            decisionRevision: 2,
+            conclusion: "still_applicable",
+            reason: "私密复核说明",
+            actor: { kind: "user", id: "usr_decider" },
+            occurredAt: now,
+            originalEvidence: [{ type: "thread", id: "thr_source" }],
+            additionalEvidence: { type: "thread", id: "thr_private" },
+            imported: false,
+          },
+        ],
+      })
+      .mockResolvedValue({ items: [], nextAfter: null });
+    const loadView = vi.fn().mockImplementation(async () => ({
+      ...decisionView,
+      current: { ...acceptedDecision },
+      capabilities: {
+        accept: false,
+        reject: false,
+        createTicket: false,
+        supersede: false,
+        retryDecision: false,
+        retryTicketCreation: false,
+        review: false,
+      },
+    }));
+    renderPage(
+      "decision",
+      "dec_choice",
+      testClient({ loadView, loadDecisionReviews }),
+    );
+    await screen.findByText("私密复核说明");
+    expect(screen.getByRole("link", { name: "补充讨论" })).toBeTruthy();
+    fireEvent.focus(window);
+    await screen.findByText("暂无可读复核记录。");
+    expect(screen.queryByText("私密复核说明")).toBeNull();
+    expect(screen.queryByRole("link", { name: "补充讨论" })).toBeNull();
+  });
+
   it("returns to the current Decision's own Project list homepage", async () => {
     renderPage(
       "decision",
@@ -240,6 +349,7 @@ describe("CollaborationPage", () => {
               createTicket: true,
               supersede: false,
               retryDecision: true,
+              review: false,
               retryTicketCreation: true,
             },
           }),
@@ -327,6 +437,7 @@ describe("CollaborationPage", () => {
               createTicket: false,
               supersede: false,
               retryDecision: true,
+              review: false,
               retryTicketCreation: false,
             },
           }
@@ -381,6 +492,7 @@ describe("CollaborationPage", () => {
           createTicket: false,
           supersede: false,
           retryDecision: false,
+          review: false,
           retryTicketCreation: false,
         },
       });
@@ -483,6 +595,10 @@ function testClient(
   overrides: Partial<CollaborationClient> = {},
 ): CollaborationClient {
   return {
+    reviewDecision: vi.fn(),
+    loadDecisionReviews: vi
+      .fn()
+      .mockResolvedValue({ items: [], nextAfter: null }),
     changeTicketStatus: vi.fn(),
     loadView: vi.fn().mockResolvedValue(threadView),
     proposeDecision: vi.fn(),

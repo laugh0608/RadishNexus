@@ -85,6 +85,15 @@ func upgradeHistoryThrough(t *testing.T, conn *pgx.Conn, limit int) string {
 	return result
 }
 
+func latestUpgradeSequence(t *testing.T) int {
+	t.Helper()
+	history, err := CurrentMigrationHistory()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return len(history)
+}
+
 func requireUpgradePrefix(t *testing.T, conn *pgx.Conn, prefix int) {
 	t.Helper()
 	migrations, err := loadMigrations(migrationFiles)
@@ -171,7 +180,7 @@ func TestUpgradeFailureSQLAndCommittedPrefix(t *testing.T) {
 			if err := Migrate(context.Background(), observer); err != nil {
 				t.Fatal(err)
 			}
-			requireUpgradePrefix(t, observer, 24)
+			requireUpgradePrefix(t, observer, latestUpgradeSequence(t))
 			after := upgradeHistory(t, observer)
 			if err := Migrate(context.Background(), observer); err != nil {
 				t.Fatal(err)
@@ -216,7 +225,7 @@ func TestUpgradeFailureCancellationAndTermination(t *testing.T) {
 			if err := Migrate(context.Background(), fresh); err != nil {
 				t.Fatal(err)
 			}
-			requireUpgradePrefix(t, fresh, 24)
+			requireUpgradePrefix(t, fresh, latestUpgradeSequence(t))
 		})
 	}
 }
@@ -267,7 +276,7 @@ func TestUpgradeFailureConcurrentRunnersAndTimeout(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	requireUpgradePrefix(t, observer, 24)
+	requireUpgradePrefix(t, observer, latestUpgradeSequence(t))
 }
 
 func TestUpgradeFailureHistoryDriftAndUntrackedDDL(t *testing.T) {
@@ -288,7 +297,7 @@ func TestUpgradeFailureHistoryDriftAndUntrackedDDL(t *testing.T) {
 		})
 	}
 	t.Run("manual_DDL_is_outside_readiness", func(t *testing.T) {
-		conn, _ := upgradeFailureDatabase(t, 24)
+		conn, _ := upgradeFailureDatabase(t, latestUpgradeSequence(t))
 		upgradeSQL(t, conn, `ALTER TABLE radishnexus.workspaces ADD COLUMN manual_upgrade_test text`)
 		probe, err := NewReadinessChecker(conn)
 		if err != nil {

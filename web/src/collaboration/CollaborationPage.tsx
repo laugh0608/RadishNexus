@@ -1,3 +1,4 @@
+import { useDecisionReviews } from "./DecisionReviews";
 import { useDecisionSupersession } from "./DecisionSupersession";
 import { useDecisionTicketCreation } from "./DecisionTicketCreation";
 import { useDecisionActions } from "./DecisionActions";
@@ -174,6 +175,21 @@ function CollaborationPageContent({
     state.status === "ready" && isDecisionCurrent(state.view.current)
       ? state.view.current
       : undefined;
+  const decisionReviews = useDecisionReviews({
+    workspaceID,
+    current: decisionCurrent,
+    canReview:
+      state.status === "ready" && state.view.capabilities?.review === true,
+    canRetry:
+      state.status === "ready" &&
+      state.view.capabilities?.retryDecision === true,
+    unavailable: entityType === "decision" && state.status === "error",
+    client,
+    createOperationID,
+    onRefresh: relationChanged,
+    onUnavailable: relationUnavailable,
+    onSessionExpired,
+  });
   const decisionTicketCreation = useDecisionTicketCreation({
     workspaceID,
     current: decisionCurrent,
@@ -461,6 +477,7 @@ function CollaborationPageContent({
             </div>
             <TimelineList workspaceID={workspaceID} timeline={timeline} />
           </section>
+          {entityType === "decision" ? decisionReviews.history : null}
         </div>
 
         <aside
@@ -521,6 +538,7 @@ function CollaborationPageContent({
               )}
               {decisionTicketCreation}
               {decisionSupersession}
+              {decisionReviews.action}
             </>
           ) : (
             <div className="collaboration-complete">

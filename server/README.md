@@ -276,11 +276,15 @@ ADR-0048 引入必填 nullable rejection_reason 和三状态；schema 1 decision
 
 migration 024 / Activity 12 / 默认 v5 包须与 Go / Web / CLI 配套停写升级；严格读取 v1～v4，旧版本与 Link 理由在内部转换，不改源 digest。023 备份须以匹配工件恢复全新空目标，再显式迁移。原生 / 导入继续替代、整库恢复与 CLI 验证见[实施记录](../docs/status/reviews/2026-11-02-decision-supersession.md)。
 
+## Decision 最小人工复核
+
+`GET /api/v1/workspaces/{workspace_id}/decisions/{decision_id}/reviews` 返回按当前证据权限过滤的历史和 `next_after`。同一路径的 `POST` 记录人工复核，首次成功返回 201，精确重试返回 200。接受版本、补充 Thread、说明、结论和显式确认按严格合同校验。当前源码的 schema 025 / Activity 13 / v6 须与 Go / Web / CLI 配套停写升级。 [ADR-0050](../docs/adr/0050-decision-manual-review.md)
+
 ## Ticket 最小负责人
 
 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 由 `TicketAssignmentService` 承载 Ticket 作用域的读取、候选分页和显式写入。详情支持设置、改派、清空、由我负责及原操作重试；Project 列表显示相同摘要。仅 open / in-progress 接受新分配，关闭工单保留责任；成员暂停、退出或失权显示不可执行，不自动清空或授予权限。
 
-migration 021 与 Activity v9 配套部署；负责人字段和不可变历史随备份恢复。当前导出默认 `project-collaboration-v5`，仍严格读取 v1～v4；历史身份不绑定登录账户。接口字段、并发代次和精确重试见 ADR，验收范围见[本轮记录](../docs/status/reviews/2026-10-28-ticket-assignee.md)。
+migration 021 与 Activity v9 配套部署；负责人字段和不可变历史随备份恢复。当前源码默认导出 `project-collaboration-v6`，严格读取 v1～v5；历史身份不绑定登录账户。接口字段、并发代次和精确重试见 ADR，验收范围见[本轮记录](../docs/status/reviews/2026-10-28-ticket-assignee.md)。
 
 ## Ticket 最小状态流转
 
@@ -312,7 +316,7 @@ apply 只接受已确认 proposal、UUID operation ID 与计划摘要；等待�
 
 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的 migration 019、`internal/contextpackage`、`goldenpath.ContextService` 与受认证 HTTP 入口提供单 Project 协作导出 / 空业务实例导入。`go build ./cmd/nexus-context` 构建独立 CLI，使用 HTTPS Session 和私有凭据文件，不读取数据库 DSN；操作、协议路由和限制见[迁移手册](../deploy/context-package.md)。该 CLI 当前面向 macOS / Linux，不包含在 Compose operations 工件中。
 
-历史身份不可登录，初始 Project restricted 并仅授予导入负责人；真实导入操作与源事实分开保存。来源 API 先验证当前对象读取权限，Web 仅展示安全导入标识。Activity 12 支持含负责人、优先级、Decision 拒绝与替代的导入历史重建，四张来源 / 审计表纳入整库备份，Session 等既有排除规则不变。首片隔离验收见[原记录](../docs/status/reviews/2026-10-24-portable-context-package.md)，当前 v5 与替代历史的往返、恢复和 CLI 证据见[增量记录](../docs/status/reviews/2026-11-02-decision-supersession.md)。
+历史身份不可登录，初始 Project restricted 并仅授予导入负责人；真实导入操作与源事实分开保存。来源 API 先验证当前对象读取权限，Web 仅展示安全导入标识。Activity 13 支持含负责人、优先级、Decision 拒绝、替代与复核的导入历史重建，四张来源 / 审计表纳入整库备份，Session 等既有排除规则不变。首片隔离验收见[原记录](../docs/status/reviews/2026-10-24-portable-context-package.md)，v5 与替代历史的往返、恢复和 CLI 证据见[增量记录](../docs/status/reviews/2026-11-02-decision-supersession.md)。
 
 ## 最小备份与恢复
 

@@ -182,7 +182,7 @@
 - 浏览器页面、静态资源和 `/api/v1` 共享 ADR-0013 的唯一 HTTPS public origin；TLS reverse proxy 保持唯一公共入口，不开放 credentialed CORS 或第二个静态站点 origin。
 - Go server 只从必需的绝对 `RADISHNEXUS_WEB_ROOT` 交付 production build；HTML 路径显式 allowlist，未知路径不使用任意 SPA fallback。HTML `no-cache`、哈希资源 immutable cache，认证和业务 API 继续 `no-store`。
 - 根路径先检查正式 Session，未登录时读取初始化状态；新实例完成 ADR-0027 首访初始化后，再使用现有 login / logout transport。初始化码、密码和 Session token 不进入浏览器 storage。Workspace 选择不固定到 Session，业务请求仍按路径与 current membership 授权。
-- Project / Channel 按 [ADR-0025](adr/0025-project-and-channel-discovery.md) 通过当前权限过滤的只读列表进入 canonical 页面；[ADR-0038](adr/0038-project-ticket-discovery.md) 与 [ADR-0040](adr/0040-project-decision-discovery.md) 增加 Project 工单与决策发现，来源 Thread / evidence 权限独立，分页与恢复不授予旧权限。Decision 列表现按 [ADR-0048](adr/0048-decision-lifecycle-and-rejection.md)接受 proposed / accepted / rejected；替代与复核仍未开放。尚无独立列表的 Deployment 与 Thread 保留已知稳定 ID 入口。原代表检视器位于显式 `/prototype/nexus-view`，不参与真实失败 fallback。
+- Project / Channel 按 [ADR-0025](adr/0025-project-and-channel-discovery.md) 通过当前权限过滤的只读列表进入 canonical 页面；[ADR-0038](adr/0038-project-ticket-discovery.md) 与 [ADR-0040](adr/0040-project-decision-discovery.md) 增加 Project 工单与决策发现，来源 Thread / evidence 权限独立，分页与恢复不授予旧权限。Decision 列表按 ADR-0048 / 0049 接受 proposed / accepted / rejected / superseded；复核入口在 Decision 详情。尚无独立列表的 Deployment 与 Thread 保留已知稳定 ID 入口。原代表检视器位于显式 `/prototype/nexus-view`，不参与真实失败 fallback。
 - 真实 PostgreSQL、正式 migration / application service、production Web build 和临时 HTTPS browser fixture 共同验证登录到 Deployment 再登出的完整链路。精确装配、页面、安全 Header 与验证边界以 [ADR-0015](adr/0015-same-origin-authenticated-web-shell.md) 为准。
 
 ### D-022 基础配置与最小 Document
@@ -202,7 +202,7 @@
 
 ### D-024 单 Project 可移植协作上下文
 
-依据 [ADR-0044](adr/0044-portable-project-context-package.md) 及 ADR-0046～0049 的增量，当前导出使用 `project-collaboration-v5`，携带负责人、优先级、Decision 拒绝和替代的完整历史。严格读取旧 v1～v4：旧 Decision 版本回填 proposed 1 / 终态 2，旧 Link 理由为 null，早期字段按原合同转换；源 manifest digest 不变。各 profile 迁移当前可读的单 Project 协作闭包，保留结构化关系、来源、历史作者与全部 Document revision；目标为匹配工件的空业务实例。新 ID 映射、不可登录历史身份和导入来源独立记录，不自动认领作者或导入源 ACL。目标初始 restricted，仅导入负责人取得显式访问和管理责任；其余成员通过正式授权加入。导入原子提交并保存精确结果，不产生历史 Outbox；整库备份、通用 Workspace / 研发数据迁移和附件范围保持独立。
+依据 [ADR-0044](adr/0044-portable-project-context-package.md) 及 ADR-0046～0050 的增量，当前源码默认导出 `project-collaboration-v6`，携带负责人、优先级、Decision 拒绝、替代与人工复核的完整历史。严格读取旧 v1～v5：旧 Decision 版本回填 proposed 1 / 终态 2，旧 Link 理由为 null，早期字段按原合同转换；源 manifest digest 不变。各 profile 迁移当前可读的单 Project 协作闭包，保留结构化关系、来源、历史作者与全部 Document revision；目标为匹配工件的空业务实例。新 ID 映射、不可登录历史身份和导入来源独立记录，不自动认领作者或导入源 ACL。目标初始 restricted，仅导入负责人取得显式访问和管理责任；其余成员通过正式授权加入。导入原子提交并保存精确结果，不产生历史 Outbox；整库备份、通用 Workspace / 研发数据迁移和附件范围保持独立。
 
 ### D-025 Decision 最小拒绝
 
@@ -211,6 +211,10 @@
 ### D-026 Decision 最小替代
 
 2026-11-02 接受 [ADR-0049](adr/0049-decision-supersession.md) D01～D07：同 Project 两条已接受结论由当前有决策权、可读双方全部 evidence 的成员明确确认替代，形成不可变单链。双方版本同时增加，原接受内容、责任、时间与执行来源保留；原未知接受 / 已建 Ticket 请求按当前权限核验原事实，新的 Ticket 请求要求来源仍 accepted。单事件显式投影到双方，理由保存在关系 metadata 并按双方读取权限返回。schema 024 / Activity 12 / v5 与 Go / Web / CLI 配套升级；复核、编辑、重开、分叉与跨 Project 替代不在本片。
+
+### D-027 Decision 最小人工复核
+
+2026-11-08 确认 D01～D07。当前有决策权且可读全部证据的成员可对所见 accepted 版本追加不可变复核。保留现有生命周期和执行来源，历史按证据的当前权限过滤。记录使用 `decision.reviewed`、Activity 13 和 v6 兼容；首片触发范围为人工操作。 [ADR-0050](adr/0050-decision-manual-review.md)
 
 ## 尚未冻结
 

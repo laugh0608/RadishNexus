@@ -103,7 +103,7 @@ func (s *ContextStore) ExportContext(ctx context.Context, a goldenpath.OwnerAcce
 				}
 			}
 		}
-		d.History, e = contextJSONRows[cp.History](ctx, tx, `SELECT jsonb_build_object('id',e.event_id,'type',COALESCE(h.original_type,e.event_type),'version',e.schema_version,'entity',jsonb_build_object('type',e.primary_entity_type,'id',e.primary_entity_id),'actor',COALESCE(h.original_actor,e.actor_id),'source',e.source_kind,'occurred_at',COALESCE(h.original_time,e.occurred_at),'correlation_id',e.correlation_id,'causation_id',e.causation_id,'facts',COALESCE(h.original_facts,e.payload),'lineage',COALESCE(m.lineage,'[]')) FROM radishnexus.domain_events e LEFT JOIN radishnexus.context_import_history h ON h.workspace_id=e.workspace_id AND h.event_id=e.event_id LEFT JOIN radishnexus.context_import_mappings m ON m.workspace_id=e.workspace_id AND m.kind='event' AND m.target_id=e.event_id WHERE e.workspace_id=$1 AND e.primary_entity_id=ANY($2::text[]) AND e.event_type IN ('project.created','channel.created','message.created','thread.started','decision.proposed','decision.accepted','decision.rejected','decision.superseded','ticket.created','ticket.status-changed','ticket.assignee-changed','ticket.priority-changed','document.created','document.revised','context.history-recorded') ORDER BY COALESCE(h.original_time,e.occurred_at),e.event_id`, cp.MaxHistory, a.Principal.WorkspaceID, ids)
+		d.History, e = contextJSONRows[cp.History](ctx, tx, `SELECT jsonb_build_object('id',e.event_id,'type',COALESCE(h.original_type,e.event_type),'version',e.schema_version,'entity',jsonb_build_object('type',e.primary_entity_type,'id',e.primary_entity_id),'actor',COALESCE(h.original_actor,e.actor_id),'source',e.source_kind,'occurred_at',COALESCE(h.original_time,e.occurred_at),'correlation_id',e.correlation_id,'causation_id',e.causation_id,'facts',COALESCE(h.original_facts,e.payload),'lineage',COALESCE(m.lineage,'[]')) FROM radishnexus.domain_events e LEFT JOIN radishnexus.context_import_history h ON h.workspace_id=e.workspace_id AND h.event_id=e.event_id LEFT JOIN radishnexus.context_import_mappings m ON m.workspace_id=e.workspace_id AND m.kind='event' AND m.target_id=e.event_id WHERE e.workspace_id=$1 AND e.primary_entity_id=ANY($2::text[]) AND e.event_type IN ('project.created','channel.created','message.created','thread.started','decision.proposed','decision.accepted','decision.rejected','decision.superseded','decision.reviewed','ticket.created','ticket.status-changed','ticket.assignee-changed','ticket.priority-changed','document.created','document.revised','context.history-recorded') ORDER BY COALESCE(h.original_time,e.occurred_at),e.event_id`, cp.MaxHistory, a.Principal.WorkspaceID, ids)
 		if e != nil {
 			return false, e
 		}
@@ -171,7 +171,7 @@ func (s *ContextStore) ExportContext(ctx context.Context, a goldenpath.OwnerAcce
 		if e != nil {
 			return false, e
 		}
-		out, e = cp.Pack(cp.Manifest{PackageID: packageID, CreatedAt: now.UTC(), SourceVersion: "schema-024", WorkspaceID: a.Principal.WorkspaceID, ProjectID: project}, d)
+		out, e = cp.Pack(cp.Manifest{PackageID: packageID, CreatedAt: now.UTC(), SourceVersion: "schema-025", WorkspaceID: a.Principal.WorkspaceID, ProjectID: project}, d)
 		if e != nil {
 			if errors.Is(e, cp.ErrInvalid) {
 				return false, cp.ErrIncomplete

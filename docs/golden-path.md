@@ -67,7 +67,7 @@ Golden Path 用最薄的可运行产品验证 RadishNexus 的核心价值，而�
 
 ### 结论变化保留原决策与执行依据
 
-最小拒绝与同 Project 单链替代分别遵循 [ADR-0048](adr/0048-decision-lifecycle-and-rejection.md) 和 [ADR-0049](adr/0049-decision-supersession.md)。拒绝需要明确理由；替代必须先分别接受新旧结论，再对照来源并明确确认。替代保留旧接受事实、双方版本与不可变关系，不自动转移 Ticket、修改 Document 或确认新的执行结果。验收须区分当前状态和未知原请求的事实核验，并检查当前权限、双向发现、双对象 Activity、备份恢复与迁移后的合法执行历史；复核与到期触发仍待独立设计。
+最小拒绝与同 Project 单链替代分别遵循 [ADR-0048](adr/0048-decision-lifecycle-and-rejection.md) 和 [ADR-0049](adr/0049-decision-supersession.md)。拒绝需要明确理由；替代必须先分别接受新旧结论，再对照来源并明确确认。替代保留旧接受事实、双方版本与不可变关系，不自动转移 Ticket、修改 Document 或确认新的执行结果。验收须区分当前状态和未知原请求的事实核验，并检查当前权限、双向发现、双对象 Activity、备份恢复与迁移后的合法执行历史；人工复核保留结论当时的版本、证据和评估历史。到期触发属于后续切片。 [ADR-0050](adr/0050-decision-manual-review.md)
 
 ### 基础执行不替代交付事实
 

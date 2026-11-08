@@ -72,9 +72,10 @@ func Unpack(b Bundle) (Data, *Index, error) {
 	if len(Encode(m)) > MaxLineBytes {
 		return d, nil, invalid("manifest size")
 	}
-	if m.Format != Format || m.Version != Version || (m.Profile != Profile && m.Profile != ProfileV1 && m.Profile != ProfileV2 && m.Profile != ProfileV3 && m.Profile != ProfileV4) || !ValidID(m.PackageID, "pkg_") || !ValidID(m.WorkspaceID, "wrk_") || !ValidID(m.ProjectID, "prj_") || !validTime(m.CreatedAt) || !label(m.SourceVersion, 100) || len(m.Files) < len(metadataPaths) || len(m.Files) > MaxHistory+len(metadataPaths) || len(b.Files) != len(m.Files) {
+	if m.Format != Format || m.Version != Version || (m.Profile != Profile && m.Profile != ProfileV1 && m.Profile != ProfileV2 && m.Profile != ProfileV3 && m.Profile != ProfileV4 && m.Profile != ProfileV5) || !ValidID(m.PackageID, "pkg_") || !ValidID(m.WorkspaceID, "wrk_") || !ValidID(m.ProjectID, "prj_") || !validTime(m.CreatedAt) || !label(m.SourceVersion, 100) || len(m.Files) < len(metadataPaths) || len(m.Files) > MaxHistory+len(metadataPaths) || len(b.Files) != len(m.Files) {
 		return d, nil, invalid("manifest")
 	}
+	hasSupersession := m.Profile == Profile || m.Profile == ProfileV5
 	files := map[string][]byte{}
 	total := int64(len(Encode(m)))
 	for _, f := range b.Files {
@@ -114,14 +115,14 @@ func Unpack(b Bundle) (Data, *Index, error) {
 			for _, raw := range lines {
 				var fields map[string]json.RawMessage
 				count := 16
-				if m.Profile != Profile {
+				if !hasSupersession {
 					count = 15
 				}
-				if Decode(raw, &fields) != nil || len(fields) != count || (m.Profile == Profile && fields["supersession_reason"] == nil) || (m.Profile != Profile && fields["supersession_reason"] != nil) {
+				if Decode(raw, &fields) != nil || len(fields) != count || (hasSupersession && fields["supersession_reason"] == nil) || (!hasSupersession && fields["supersession_reason"] != nil) {
 					return d, nil, invalid("Link profile fields")
 				}
 				var l Link
-				if Decode(raw, &l) != nil || (m.Profile != Profile && l.Relation == "supersedes") {
+				if Decode(raw, &l) != nil || (!hasSupersession && l.Relation == "supersedes") {
 					return d, nil, invalid("legacy Link")
 				}
 				d.Links = append(d.Links, l)
@@ -150,7 +151,7 @@ func Unpack(b Bundle) (Data, *Index, error) {
 			return d, nil, invalid("missing file")
 		}
 	}
-	if m.Profile != Profile && m.Profile != ProfileV4 {
+	if !hasSupersession && m.Profile != ProfileV4 {
 		for i, o := range d.Objects {
 			if o.Type != "decision" {
 				continue
@@ -172,7 +173,7 @@ func Unpack(b Bundle) (Data, *Index, error) {
 			}
 		}
 	}
-	if m.Profile != Profile {
+	if !hasSupersession {
 		for i, o := range d.Objects {
 			if o.Type != "decision" {
 				continue
@@ -199,6 +200,13 @@ func Unpack(b Bundle) (Data, *Index, error) {
 		}
 	}
 
+	if m.Profile != Profile {
+		for _, h := range d.History {
+			if h.Type == "decision.reviewed" {
+				return d, nil, invalid("legacy review history")
+			}
+		}
+	}
 	if m.Profile == ProfileV1 || m.Profile == ProfileV2 {
 		for i, o := range d.Objects {
 			if o.Type != "ticket" {

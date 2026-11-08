@@ -295,7 +295,9 @@ M0 最小字段：
 
 接受 / 拒绝在同一 Decision 锁下裁决，先复核当前权限再处理原 receipt，旧接受 body / digest 保持不变。[ADR-0049](adr/0049-decision-supersession.md) 增加同 Workspace / Project 的单链替代：双方必须已接受、全部 evidence 当前可读，并由当前 decider / admin 对照后明确确认。新 → 旧建立不可变 active `supersedes`，旧变为 superseded，新仍为 accepted，双方版本各 +1；不分叉、不成环、不撤销或重开。替代理由仅存于该关系的严格 metadata，双方 Decision 均可读才返回；原结论、接受主体、时间和已有执行来源不变。
 
-完整 Decision 读取包含第四状态和版本。原接受精确重试返回真实当前 accepted / superseded；已创建 Ticket 的原操作仍可按当前贡献权核验，新 operation 不能从 superseded 创建 Ticket。已有 Ticket / Document 继续按自身权限维护，不自动迁移到新结论。当前上下文导出使用 v5，以双对象历史重放保留替代链，并按 Ticket 创建当时的 accepted 事实校验来源；严格读取 v1～v4，保留原 manifest digest，不补造事件或源 receipt。复核、到期和内容编辑继续独立设计。
+完整 Decision 读取包含第四状态和版本。原接受精确重试返回真实当前 accepted / superseded；已创建 Ticket 的原操作仍可按当前贡献权核验，新 operation 不能从 superseded 创建 Ticket。已有 Ticket / Document 继续按自身权限维护，不自动迁移到新结论。上下文包以双对象历史重放保留替代链，并按 Ticket 创建当时的 accepted 事实校验来源。旧包保留原 manifest digest 和事件来源。 [上下文迁移手册](../deploy/context-package.md)
+
+人工复核在当前 accepted 结论上追加不可变的评估事实，保存所见版本、说明、结论、主体、时间和证据。仍适用或需重新评估均保留原 Decision 状态、版本、更新时间和执行来源。普通读者须可读该 Decision 和该条复核的全部证据；写入另需当前决策权。到期触发与内容编辑分别设计。 [ADR-0050](adr/0050-decision-manual-review.md)
 
 首期产品动作：
 

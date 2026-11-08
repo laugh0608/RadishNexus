@@ -157,6 +157,7 @@ export interface CollaborationView<
         createTicket?: never;
         supersede?: never;
         retryDecision?: never;
+        review?: never;
         retryTicketCreation?: never;
       }
     | {
@@ -165,6 +166,7 @@ export interface CollaborationView<
         createTicket: boolean;
         supersede: boolean;
         retryDecision: boolean;
+        review: boolean;
         retryTicketCreation: boolean;
         changeStatus?: never;
       };
@@ -237,7 +239,47 @@ export interface TicketStatusOutcome {
   appliedStatus: TicketStatus;
   appliedStatusRevision: number;
 }
+export type ReviewConclusion = "still_applicable" | "reconsider";
+
+export interface ReviewDecisionInput {
+  clientOperationID: string;
+  baseDecisionRevision: number;
+  conclusion: ReviewConclusion;
+  reason: string;
+  additionalEvidence: EntityRef<"thread"> | null;
+  confirmed: true;
+}
+
+export interface DecisionReview {
+  eventID: string;
+  decisionRevision: number;
+  conclusion: ReviewConclusion;
+  reason: string;
+  actor: UserActor;
+  occurredAt: string;
+  originalEvidence: readonly EntityRef<"thread">[];
+  additionalEvidence: EntityRef<"thread"> | null;
+  imported: boolean;
+}
+
+export interface DecisionReviewPage {
+  items: readonly DecisionReview[];
+  nextAfter: string | null;
+}
+
 export interface CollaborationClient {
+  reviewDecision(
+    workspaceID: string,
+    decisionID: string,
+    input: ReviewDecisionInput,
+    signal?: AbortSignal,
+  ): Promise<DecisionReview>;
+  loadDecisionReviews(
+    workspaceID: string,
+    decisionID: string,
+    after: string | null,
+    signal?: AbortSignal,
+  ): Promise<DecisionReviewPage>;
   supersedeDecision(
     workspaceID: string,
     decisionID: string,
@@ -331,6 +373,8 @@ const segmentTypes: Readonly<Record<string, CollaborationEntityType>> = {
 };
 
 export const browserCollaborationClient: CollaborationClient = {
+  reviewDecision,
+  loadDecisionReviews,
   changeTicketStatus,
   loadView,
   proposeDecision,
@@ -470,6 +514,176 @@ async function proposeDecision(
       error,
     );
   }
+}
+
+function decisionReviewsPath(workspaceID: string, decisionID: string): string {
+  requireLocation(workspaceID, "decision", decisionID);
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/decisions/${encodeURIComponent(decisionID)}/reviews`;
+}
+
+export function validReviewReason(value: string): boolean {
+  return (
+    new TextEncoder().encode(value).length <= 4096 &&
+    validRejectionReason(value)
+  );
+}
+
+async function reviewDecision(
+  workspaceID: string,
+  decisionID: string,
+  input: ReviewDecisionInput,
+  signal?: AbortSignal,
+): Promise<DecisionReview> {
+  const path = decisionReviewsPath(workspaceID, decisionID);
+  if (
+    !validOperationID(input.clientOperationID) ||
+    input.confirmed !== true ||
+    !validReviewReason(input.reason) ||
+    (input.baseDecisionRevision !== 2 && input.baseDecisionRevision !== 3)
+  ) {
+    throw new CollaborationRequestError("请核对结论、复核说明与版本后确认。", {
+      code: "invalid",
+      status: 400,
+    });
+  }
+  const response = await collaborationFetch(
+    path,
+    writeRequest(
+      {
+        client_operation_id: input.clientOperationID,
+        base_decision_revision: input.baseDecisionRevision,
+        conclusion: input.conclusion,
+        reason: input.reason,
+        additional_evidence: input.additionalEvidence,
+        confirmed: true,
+      },
+      signal,
+    ),
+  );
+  if (response.status !== 201 && response.status !== 200) {
+    throw contractError("复核服务返回意外状态。", response.status);
+  }
+  const payload = await responseJSON(response, "Decision 复核");
+  try {
+    const { data } = exactRecord(payload, "response", ["data"]);
+    const result = parseDecisionReview(data, decisionID);
+    if (
+      result.imported ||
+      result.decisionRevision !== input.baseDecisionRevision ||
+      result.conclusion !== input.conclusion ||
+      result.reason !== trimRejectionReason(input.reason) ||
+      result.additionalEvidence?.id !== input.additionalEvidence?.id
+    )
+      throw new TypeError("Unexpected review result");
+    return result;
+  } catch (error) {
+    throw contractError(
+      "无法核对复核结果，仍可重试原操作。",
+      response.status,
+      error,
+    );
+  }
+}
+
+async function loadDecisionReviews(
+  workspaceID: string,
+  decisionID: string,
+  after: string | null,
+  signal?: AbortSignal,
+): Promise<DecisionReviewPage> {
+  const query = after === null ? "" : `?after=${encodeURIComponent(after)}`;
+  const response = await collaborationFetch(
+    decisionReviewsPath(workspaceID, decisionID) + query,
+    {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+      cache: "no-store",
+      signal,
+    },
+  );
+  const payload = await responseJSON(response, "Decision 复核历史");
+  try {
+    const envelope = exactRecord(payload, "response", ["data"]);
+    const page = exactRecord(envelope.data, "response.data", [
+      "items",
+      "next_after",
+    ]);
+    if (
+      !Array.isArray(page.items) ||
+      page.items.length > 20 ||
+      (page.next_after !== null &&
+        (typeof page.next_after !== "string" ||
+          !/^[A-Za-z0-9_-]{1,1024}$/u.test(page.next_after) ||
+          page.next_after === after ||
+          page.items.length !== 20))
+    ) {
+      throw new TypeError("Invalid review page");
+    }
+    const items = page.items.map((item: unknown) =>
+      parseDecisionReview(item, decisionID),
+    );
+    if (new Set(items.map((item) => item.eventID)).size !== items.length) {
+      throw new TypeError("Duplicate review event");
+    }
+    return { items, nextAfter: page.next_after };
+  } catch (error) {
+    throw contractError("无法解析复核历史。", response.status, error);
+  }
+}
+
+function parseDecisionReview(
+  value: unknown,
+  decisionID: string,
+): DecisionReview {
+  const review = exactRecord(value, "review", [
+    "event_id",
+    "decision",
+    "decision_revision",
+    "trigger",
+    "conclusion",
+    "reason",
+    "actor",
+    "occurred_at",
+    "original_evidence",
+    "additional_evidence",
+    "imported",
+  ]);
+  const reason = string(review.reason, "reason");
+  if (
+    parseRef(review.decision, "decision", "decision").id !== decisionID ||
+    (review.decision_revision !== 2 && review.decision_revision !== 3) ||
+    review.trigger !== "manual" ||
+    (review.conclusion !== "still_applicable" &&
+      review.conclusion !== "reconsider") ||
+    !validReviewReason(reason) ||
+    reason !== trimRejectionReason(reason) ||
+    !Array.isArray(review.original_evidence) ||
+    review.original_evidence.length === 0 ||
+    typeof review.imported !== "boolean"
+  )
+    throw new TypeError("Invalid review facts");
+  const originalEvidence = review.original_evidence.map((ref: unknown) =>
+    parseRef(ref, "original_evidence", "thread"),
+  );
+  const additionalEvidence =
+    review.additional_evidence === null
+      ? null
+      : parseRef(review.additional_evidence, "additional_evidence", "thread");
+  if (originalEvidence.some((ref) => ref.id === additionalEvidence?.id)) {
+    throw new TypeError("Duplicate review evidence");
+  }
+  return {
+    eventID: scopedID(review.event_id, "event_id", "evt_"),
+    decisionRevision: review.decision_revision,
+    conclusion: review.conclusion,
+    reason,
+    actor: parseActor(review.actor, "actor"),
+    occurredAt: timestamp(review.occurred_at, "occurred_at"),
+    originalEvidence,
+    additionalEvidence,
+    imported: review.imported,
+  };
 }
 
 async function supersedeDecision(
@@ -823,6 +1037,7 @@ export function parseCollaborationView(
       "create_ticket",
       "supersede",
       "retry_decision",
+      "review",
       "retry_ticket_creation",
     ]);
     if (
@@ -831,12 +1046,14 @@ export function parseCollaborationView(
       typeof cap.create_ticket !== "boolean" ||
       typeof cap.supersede !== "boolean" ||
       typeof cap.retry_decision !== "boolean" ||
+      typeof cap.review !== "boolean" ||
       typeof cap.retry_ticket_creation !== "boolean" ||
       cap.accept !== cap.reject ||
       !("status" in current) ||
       ((cap.accept || cap.reject) && current.status !== "proposed") ||
-      (cap.create_ticket && current.status !== "accepted") ||
-      ((cap.accept || cap.reject || cap.supersede) && !cap.retry_decision) ||
+      ((cap.create_ticket || cap.review) && current.status !== "accepted") ||
+      ((cap.accept || cap.reject || cap.supersede || cap.review) &&
+        !cap.retry_decision) ||
       (cap.create_ticket && !cap.retry_ticket_creation) ||
       (cap.supersede &&
         (current.status !== "accepted" ||
@@ -857,6 +1074,7 @@ export function parseCollaborationView(
         createTicket: cap.create_ticket,
         supersede: cap.supersede,
         retryDecision: cap.retry_decision,
+        review: cap.review,
         retryTicketCreation: cap.retry_ticket_creation,
       },
     };

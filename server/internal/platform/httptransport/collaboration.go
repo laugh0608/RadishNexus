@@ -35,6 +35,8 @@ type CollaborationApplication interface {
 	CreateDecisionFromThread(context.Context, goldenpath.Invocation, goldenpath.CreateDecisionInput) (goldenpath.CreateDecisionResult, error)
 	AcceptDecision(context.Context, goldenpath.Invocation, goldenpath.AcceptDecisionInput) (goldenpath.AcceptDecisionResult, error)
 	RejectDecision(context.Context, goldenpath.Invocation, goldenpath.RejectDecisionInput) (goldenpath.RejectDecisionResult, error)
+	ReviewDecision(context.Context, goldenpath.Invocation, goldenpath.ReviewDecisionInput) (goldenpath.DecisionReviewRecord, bool, error)
+	ListDecisionReviews(context.Context, authz.Principal, string, goldenpath.DecisionReviewPageInput) (goldenpath.DecisionReviewPage, error)
 	SupersedeDecision(context.Context, goldenpath.Invocation, goldenpath.SupersedeDecisionInput) (goldenpath.SupersedeDecisionResult, error)
 	CreateTicketFromDecision(context.Context, goldenpath.Invocation, goldenpath.CreateTicketInput) (goldenpath.CreateTicketResult, error)
 }
@@ -188,6 +190,8 @@ func NewCollaborationHandler(
 	mux.HandleFunc("POST "+decisionAcceptancePattern, handler.acceptDecision)
 	mux.HandleFunc("POST "+decisionRejectionPattern, handler.rejectDecision)
 	mux.HandleFunc("POST "+decisionSupersessionPattern, handler.supersedeDecision)
+	mux.HandleFunc("GET "+decisionReviewsPattern, handler.getDecisionReviews)
+	mux.HandleFunc("POST "+decisionReviewsPattern, handler.reviewDecision)
 	mux.HandleFunc("POST "+decisionTicketsPattern, handler.createTicket)
 	mux.HandleFunc("GET "+ticketViewPattern, handler.getTicket)
 	for _, pattern := range []string{
@@ -197,6 +201,7 @@ func NewCollaborationHandler(
 		decisionAcceptancePattern,
 		decisionRejectionPattern,
 		decisionSupersessionPattern,
+		decisionReviewsPattern,
 		decisionTicketsPattern,
 		ticketViewPattern,
 	} {
@@ -469,7 +474,7 @@ func publicCollaborationView(target entityref.Ref, view goldenpath.NexusView) (c
 	}
 	if target.Type == "decision" {
 		c := view.DecisionCapabilities
-		if c == nil || c.Accept != c.Reject || ((c.Accept || c.Reject) && view.Current.Status != "proposed") || (c.CreateTicket && view.Current.Status != "accepted") || ((c.Accept || c.Reject || c.Supersede) && !c.RetryDecision) || (c.Supersede && (view.Current.Status != "accepted" || view.Current.DecisionRevision != 2)) || (c.CreateTicket && !c.RetryTicketCreation) || (c.RetryTicketCreation && view.Current.Status != "accepted" && view.Current.Status != "superseded") {
+		if c == nil || c.Accept != c.Reject || ((c.Accept || c.Reject) && view.Current.Status != "proposed") || ((c.CreateTicket || c.Review) && view.Current.Status != "accepted") || ((c.Accept || c.Reject || c.Supersede || c.Review) && !c.RetryDecision) || (c.Supersede && (view.Current.Status != "accepted" || view.Current.DecisionRevision != 2)) || (c.CreateTicket && !c.RetryTicketCreation) || (c.RetryTicketCreation && view.Current.Status != "accepted" && view.Current.Status != "superseded") {
 			return collaborationViewDTO{}, errors.New("invalid Decision capabilities")
 		}
 		dto.Capabilities = c
@@ -922,7 +927,9 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 }
 
 func (handler *CollaborationHandler) methodNotAllowed(response http.ResponseWriter, request *http.Request) {
-	if strings.HasSuffix(request.URL.Path, "/nexus-view") {
+	if strings.HasSuffix(request.URL.Path, "/reviews") {
+		response.Header().Set("Allow", "GET, POST")
+	} else if strings.HasSuffix(request.URL.Path, "/nexus-view") {
 		response.Header().Set("Allow", http.MethodGet)
 	} else {
 		response.Header().Set("Allow", http.MethodPost)

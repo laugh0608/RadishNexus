@@ -62,7 +62,7 @@ func (s *Store) SupersedeDecision(ctx context.Context, c goldenpath.SupersedeDec
 		return result, err
 	}
 	var now time.Time
-	if err = tx.QueryRow(ctx, `SELECT GREATEST(clock_timestamp(),$3::timestamptz+interval '1 microsecond',$4::timestamptz+interval '1 microsecond',COALESCE(max(t.created_at)+interval '1 microsecond','-infinity'::timestamptz)) FROM radishnexus.tickets t JOIN radishnexus.entity_links l ON l.workspace_id=t.workspace_id AND l.from_type='ticket' AND l.from_id=t.id AND l.relation_type='implements' AND l.to_type='decision' WHERE l.workspace_id=$1 AND l.to_id=$2`, c.Principal.WorkspaceID, c.DecisionID, old.UpdatedAt, newDecision.UpdatedAt).Scan(&now); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT GREATEST(clock_timestamp(),$3::timestamptz+interval '1 microsecond',$4::timestamptz+interval '1 microsecond',COALESCE(max(t.created_at)+interval '1 microsecond','-infinity'::timestamptz),radishnexus.last_decision_review($1,ARRAY[$2,$5]::text[])+interval '1 microsecond') FROM radishnexus.tickets t JOIN radishnexus.entity_links l ON l.workspace_id=t.workspace_id AND l.from_type='ticket' AND l.from_id=t.id AND l.relation_type='implements' AND l.to_type='decision' WHERE l.workspace_id=$1 AND l.to_id=$2`, c.Principal.WorkspaceID, c.DecisionID, old.UpdatedAt, newDecision.UpdatedAt, c.ReplacementID).Scan(&now); err != nil {
 		return result, fmt.Errorf("read supersession time: %w", err)
 	}
 	receipt, duplicate, err := claimCollaborationCommand(ctx, tx, c.Invocation, "decision.supersede", "decision", c.DecisionID, c.ClientOperationID, c.PayloadSHA256, "entity-link", c.LinkID, c.EventID, now)

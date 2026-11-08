@@ -488,3 +488,11 @@ func (s *recordingStore) SupersedeDecision(_ context.Context, c SupersedeDecisio
 	s.supersedeDecisionCommand = c
 	return SupersedeDecisionResult{}, nil
 }
+
+func (s *recordingStore) ReviewDecision(context.Context, ReviewDecisionCommand) (DecisionReviewRecord, bool, error) {
+	panic("unexpected Decision review")
+}
+
+func (s *recordingStore) ListDecisionReviews(context.Context, authz.Principal, string, DecisionReviewPageInput) (DecisionReviewPage, error) {
+	panic("unexpected Decision review listing")
+}

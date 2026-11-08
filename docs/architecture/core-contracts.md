@@ -141,7 +141,12 @@ proposed / accepted / rejected 初始版本分别为 1 / 2 / 2；参与替代后
 
 完整 DTO 增必填 decision_revision 和第四状态；Nexus View 六能力为 accept / reject / create_ticket / supersede / retry_decision / retry_ticket_creation。首次资格与原未知请求重试权限独立；每次写入仍检查当前权限。原接受 body / digest 不变，精确重试可返回当前 superseded；Ticket 创建先核验原 receipt，新 operation 才要求 accepted。已有执行对象不换来源，新创建 / 替代的事实时间在 Decision 锁内确定。
 
-当前默认 v5 包保留版本、关系理由、双对象历史和创建时有效的 Ticket 来源，严格读取旧 v1～v4，原 digest 不变；历史导入不伪造原生 receipt 或 Outbox。Go / Web / CLI / schema 024 / Activity 12 配套停写升级，旧 023 备份只能使用匹配工件恢复空目标后再显式迁移。验证与限制见[实施记录](../status/reviews/2026-11-02-decision-supersession.md)。
+ADR-0049 的 v5 包保留版本、关系理由、双对象历史和创建时有效的 Ticket 来源，严格读取旧 v1～v4，原 digest 不变；历史导入不伪造原生 receipt 或 Outbox。Go / Web / CLI / schema 024 / Activity 12 配套停写升级，旧 023 备份只能使用匹配工件恢复空目标后再显式迁移。验证与限制见[实施记录](../status/reviews/2026-11-02-decision-supersession.md)。
+
+
+## Decision 最小人工复核
+
+`decision.review` 在原 Decision 锁内绑定 accepted 版本和全部当前可读证据，并原子提交 receipt、不可变 `decision.reviewed`、Outbox 与 Activity 13。复核追加历史，原状态、版本与 `updated_at` 维持原值。精确重试以当前权限核验原事件，替代后仍可取回已提交的原事实。复核详情通过独立权限过滤分页读取，普通 Timeline 继续承载原有历史。v6 在事件重放中验证复核时点和证据闭包，导入保留原时间和历史身份。 [ADR-0050](../adr/0050-decision-manual-review.md)
 
 ## 授权解析
 

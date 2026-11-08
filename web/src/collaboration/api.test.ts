@@ -319,6 +319,7 @@ describe("Collaboration API adapter", () => {
       create_ticket: false,
       supersede: false,
       retry_decision: false,
+      review: false,
       retry_ticket_creation: false,
     };
     expect(parse(rejectedDecision, capabilities).current).toMatchObject({
@@ -355,6 +356,7 @@ describe("Collaboration API adapter", () => {
       create_ticket: false,
       supersede: false,
       retry_decision: true,
+      review: false,
       retry_ticket_creation: true,
     };
     const relation = {
@@ -431,6 +433,7 @@ describe("Collaboration API adapter", () => {
               create_ticket: false,
               supersede: false,
               retry_decision: false,
+              review: false,
               retry_ticket_creation: false,
             },
             relations: [{ visibility: "restricted" }],
@@ -527,6 +530,7 @@ describe("Collaboration API adapter", () => {
               create_ticket: false,
               supersede: false,
               retry_decision: true,
+              review: false,
               retry_ticket_creation: false,
             },
             relations,
@@ -569,6 +573,7 @@ describe("Collaboration API adapter", () => {
           create_ticket: false,
           supersede: false,
           retry_decision: true,
+          review: false,
           retry_ticket_creation: false,
         },
         relations: [{ visibility: "restricted" }],

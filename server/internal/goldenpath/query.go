@@ -9,7 +9,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
 
-const ActivityProjectionVersion = 12
+const ActivityProjectionVersion = 13
 
 type CurrentProjection struct {
 	DecisionRevision   int
@@ -66,6 +66,7 @@ type TicketCapabilities struct {
 }
 
 type DecisionCapabilities struct {
+	Review              bool `json:"review"`
 	Supersede           bool `json:"supersede"`
 	RetryDecision       bool `json:"retry_decision"`
 	RetryTicketCreation bool `json:"retry_ticket_creation"`

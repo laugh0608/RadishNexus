@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	"github.com/laugh0608/RadishNexus/server/internal/markdown"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/jsontext"
 )
 
 const documentPrefix = "/api/v1/workspaces/{workspace_id}"
@@ -374,44 +374,9 @@ func (h *DocumentHandler) fail(w http.ResponseWriter, r *http.Request, err error
 	h.transport.writeError(w, r, err)
 }
 
-// encoding/json replaces malformed Unicode with U+FFFD. Authoritative text must
-// reject that lossy conversion, including unpaired JSON surrogate escapes.
 func decodeUTF8String(raw []byte, dest *string) error {
-	if !utf8.Valid(raw) {
+	if err := jsontext.Decode(raw, dest); err != nil {
 		return authz.ErrInvalid
 	}
-	for i := 0; i < len(raw); i++ {
-		if raw[i] != '\\' {
-			continue
-		}
-		i++
-		if i >= len(raw) {
-			return authz.ErrInvalid
-		}
-		if raw[i] != 'u' {
-			continue
-		}
-		if i+4 >= len(raw) {
-			return authz.ErrInvalid
-		}
-		code, err := strconv.ParseUint(string(raw[i+1:i+5]), 16, 16)
-		if err != nil {
-			return authz.ErrInvalid
-		}
-		i += 4
-		if code >= 0xDC00 && code <= 0xDFFF {
-			return authz.ErrInvalid
-		}
-		if code >= 0xD800 && code <= 0xDBFF {
-			if i+6 >= len(raw) || raw[i+1] != '\\' || raw[i+2] != 'u' {
-				return authz.ErrInvalid
-			}
-			low, err := strconv.ParseUint(string(raw[i+3:i+7]), 16, 16)
-			if err != nil || low < 0xDC00 || low > 0xDFFF {
-				return authz.ErrInvalid
-			}
-			i += 6
-		}
-	}
-	return json.Unmarshal(raw, dest)
+	return nil
 }

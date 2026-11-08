@@ -267,12 +267,17 @@ func requireReadableThreadInChannel(
 	return nil
 }
 
-func requireReadableDecisionEvidence(
+func requireReadableDecisionEvidence(ctx context.Context, tx pgx.Tx, principal authz.Principal, decisionID string) error {
+	_, err := readableDecisionEvidence(ctx, tx, principal, decisionID)
+	return err
+}
+
+func readableDecisionEvidence(
 	ctx context.Context,
 	tx pgx.Tx,
 	principal authz.Principal,
 	decisionID string,
-) error {
+) ([]string, error) {
 	rows, err := tx.Query(ctx, `
 		SELECT to_type, to_id
 		FROM radishnexus.entity_links
@@ -284,37 +289,37 @@ func requireReadableDecisionEvidence(
 		ORDER BY id
 	`, principal.WorkspaceID, decisionID)
 	if err != nil {
-		return fmt.Errorf("load Decision evidence access facts: %w", err)
+		return nil, fmt.Errorf("load Decision evidence access facts: %w", err)
 	}
 	var threadIDs []string
 	for rows.Next() {
 		var threadID, evidenceType string
 		if err := rows.Scan(&evidenceType, &threadID); err != nil {
 			rows.Close()
-			return fmt.Errorf("scan Decision evidence access facts: %w", err)
+			return nil, fmt.Errorf("scan Decision evidence access facts: %w", err)
 		}
 		if evidenceType != "thread" {
 			rows.Close()
-			return errors.New("unsupported Decision evidence type")
+			return nil, errors.New("unsupported Decision evidence type")
 		}
 		threadIDs = append(threadIDs, threadID)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
-		return fmt.Errorf("iterate Decision evidence access facts: %w", err)
+		return nil, fmt.Errorf("iterate Decision evidence access facts: %w", err)
 	}
 	rows.Close()
 	if len(threadIDs) == 0 {
-		return fmt.Errorf("%w: Decision has no readable evidence", authz.ErrConflict)
+		return nil, fmt.Errorf("%w: Decision has no readable evidence", authz.ErrConflict)
 	}
 
 	for _, threadID := range threadIDs {
 		if _, _, err := readableThread(ctx, tx, principal, threadID); err != nil {
 			if errors.Is(err, authz.ErrNotFound) {
-				return fmt.Errorf("%w: Decision evidence is not readable", authz.ErrForbidden)
+				return nil, fmt.Errorf("%w: Decision evidence is not readable", authz.ErrForbidden)
 			}
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return threadIDs, nil
 }

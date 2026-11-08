@@ -62,7 +62,8 @@ assignment_artifact_dir=""
 priority_artifact_dir=""
 decision_artifact_dir=""
 supersession_artifact_dir=""
-for legacy_kind in owner_transfer membership assignment priority decision supersession; do
+review_artifact_dir=""
+for legacy_kind in owner_transfer membership assignment priority decision supersession review; do
     if [[ "${legacy_kind}" == owner_transfer ]]; then
         legacy_ref="${RADISHNEXUS_OWNER_TRANSFER_LEGACY_REF:-}"
     elif [[ "${legacy_kind}" == membership ]]; then
@@ -73,8 +74,10 @@ for legacy_kind in owner_transfer membership assignment priority decision supers
         legacy_ref="${RADISHNEXUS_PRIORITY_LEGACY_REF:-}"
     elif [[ "${legacy_kind}" == decision ]]; then
         legacy_ref="${RADISHNEXUS_DECISION_LEGACY_REF:-}"
-    else
+    elif [[ "${legacy_kind}" == supersession ]]; then
         legacy_ref="${RADISHNEXUS_SUPERSESSION_LEGACY_REF:-}"
+    else
+        legacy_ref="${RADISHNEXUS_REVIEW_LEGACY_REF:-}"
     fi
     [[ -n "${legacy_ref}" ]] || continue
     legacy_commit="$(git -C "${repo_root}" rev-parse --verify "${legacy_ref}^{commit}")"
@@ -97,8 +100,10 @@ for legacy_kind in owner_transfer membership assignment priority decision supers
         priority_artifact_dir="/work/${legacy_kind}-bin"
     elif [[ "${legacy_kind}" == decision ]]; then
         decision_artifact_dir="/work/${legacy_kind}-bin"
-    else
+    elif [[ "${legacy_kind}" == supersession ]]; then
         supersession_artifact_dir="/work/${legacy_kind}-bin"
+    else
+        review_artifact_dir="/work/${legacy_kind}-bin"
     fi
 done
 
@@ -172,8 +177,9 @@ docker exec \
     --env "RADISHNEXUS_PRIORITY_LEGACY_BIN=${priority_artifact_dir}" \
     --env "RADISHNEXUS_DECISION_LEGACY_BIN=${decision_artifact_dir}" \
     --env "RADISHNEXUS_SUPERSESSION_LEGACY_BIN=${supersession_artifact_dir}" \
+    --env "RADISHNEXUS_REVIEW_LEGACY_BIN=${review_artifact_dir}" \
     --env "TARGET_DATABASE_URL=${target_database_url}" \
     "${source_container}" \
     /work/backuprestore.test \
     -test.v \
-    -test.run '^TestBackupRestore(GoldenPath|AccountRecovery|OwnerTransfer|OwnerTransferLegacy|UpgradeFailures|ImportedContext|MembershipLifecycle|MembershipLegacy|AssignmentLegacy|PriorityLegacy|DecisionLegacy|SupersessionLegacy)$'
+    -test.run '^TestBackupRestore(GoldenPath|AccountRecovery|OwnerTransfer|OwnerTransferLegacy|UpgradeFailures|ImportedContext|MembershipLifecycle|MembershipLegacy|AssignmentLegacy|PriorityLegacy|DecisionLegacy|SupersessionLegacy|ReviewLegacy)$'

@@ -179,6 +179,8 @@ type Store interface {
 	CreateDecisionFromThread(context.Context, CreateDecisionCommand) (CreateDecisionResult, error)
 	AcceptDecision(context.Context, AcceptDecisionCommand) (AcceptDecisionResult, error)
 	RejectDecision(context.Context, RejectDecisionCommand) (RejectDecisionResult, error)
+	ReviewDecision(context.Context, ReviewDecisionCommand) (DecisionReviewRecord, bool, error)
+	ListDecisionReviews(context.Context, authz.Principal, string, DecisionReviewPageInput) (DecisionReviewPage, error)
 	SupersedeDecision(context.Context, SupersedeDecisionCommand) (SupersedeDecisionResult, error)
 	CreateTicketFromDecision(context.Context, CreateTicketCommand) (CreateTicketResult, error)
 	RecordCompletedCIRun(context.Context, RecordCompletedCIRunCommand) (CIRunReceipt, error)

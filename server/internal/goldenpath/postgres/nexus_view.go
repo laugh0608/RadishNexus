@@ -74,6 +74,7 @@ func (store *Store) GetNexusView(
 				return view, e
 			}
 			caps.RetryDecision = e == nil
+			caps.Review = e == nil && view.Current.Status == "accepted"
 			caps.Accept, caps.Reject = e == nil && view.Current.Status == "proposed", e == nil && view.Current.Status == "proposed"
 			if e == nil && view.Current.Status == "accepted" && view.Current.DecisionRevision < goldenpath.MaxDecisionRevision {
 				var outgoing bool
@@ -297,6 +298,7 @@ func listTimeline(
 		  AND target_type = $2
 		  AND target_id = $3
 		  AND projection_version = $4
+		  AND activity_type <> 'decision.reviewed'
 		ORDER BY occurred_at, event_id
 	`, principal.WorkspaceID, target.Type, target.ID, goldenpath.ActivityProjectionVersion)
 	if err != nil {

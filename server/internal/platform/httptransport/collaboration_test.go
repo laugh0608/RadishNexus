@@ -534,3 +534,11 @@ func (a *fakeCollaborationApplication) SupersedeDecision(_ context.Context, inv 
 	a.supersessionCalls++
 	return a.supersessionResult, a.supersessionErr
 }
+
+func (a *fakeCollaborationApplication) ReviewDecision(context.Context, goldenpath.Invocation, goldenpath.ReviewDecisionInput) (goldenpath.DecisionReviewRecord, bool, error) {
+	panic("unexpected Decision review")
+}
+
+func (a *fakeCollaborationApplication) ListDecisionReviews(context.Context, authz.Principal, string, goldenpath.DecisionReviewPageInput) (goldenpath.DecisionReviewPage, error) {
+	panic("unexpected Decision review listing")
+}

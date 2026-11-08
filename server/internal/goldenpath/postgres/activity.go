@@ -75,7 +75,7 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
  COALESCE(h.original_time,e.occurred_at),COALESCE(h.original_facts,e.payload),h.event_id IS NOT NULL
  FROM radishnexus.domain_events e LEFT JOIN radishnexus.context_import_history h ON h.workspace_id=e.workspace_id AND h.event_id=e.event_id
  WHERE COALESCE(h.original_type,e.event_type) IN (
- 'decision.proposed','decision.accepted','decision.rejected','decision.superseded','ticket.created','ticket.status-changed','ticket.assignee-changed','ticket.priority-changed',
+ 'decision.proposed','decision.accepted','decision.rejected','decision.superseded','decision.reviewed','ticket.created','ticket.status-changed','ticket.assignee-changed','ticket.priority-changed',
  'ci-run.recorded','deployment.recorded','project.created','channel.created','component.created','environment.created','document.created','document.revised',
  'repository.created','component.repository-linked','component.repository-unlinked','ticket.component-linked','ticket.component-unlinked')
  ORDER BY COALESCE(h.original_time,e.occurred_at),e.event_id
@@ -226,7 +226,7 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 	}
 	repositoryEvent := event.eventType == "repository.created" || event.eventType == "component.repository-linked" || event.eventType == "component.repository-unlinked"
 	ticketRelation := event.eventType == "ticket.component-linked" || event.eventType == "ticket.component-unlinked"
-	if payload.Status == "" && event.target.Type != "document" && event.eventType != "component.created" && !repositoryEvent && !ticketRelation && event.eventType != "ticket.status-changed" && event.eventType != "ticket.assignee-changed" && event.eventType != "ticket.priority-changed" {
+	if payload.Status == "" && event.target.Type != "document" && event.eventType != "component.created" && !repositoryEvent && !ticketRelation && event.eventType != "ticket.status-changed" && event.eventType != "ticket.assignee-changed" && event.eventType != "ticket.priority-changed" && event.eventType != "decision.reviewed" {
 		return activityRecord{}, fmt.Errorf("project Activity event %s: status is required", event.eventID)
 	}
 
@@ -322,6 +322,12 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		if event.target.Type != "decision" || payload.Status != "accepted" {
 			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid decision.accepted facts", event.eventID)
 		}
+	case "decision.reviewed":
+		review, err := cp.DecodeDecisionReview(event.payload)
+		if err != nil || event.target.Type != "decision" || event.actorKind != "user" || event.actorID == nil {
+			return activityRecord{}, fmt.Errorf("invalid Decision review Activity event %s", event.eventID)
+		}
+		record.safeFacts = map[string]string{"decision_revision": strconv.Itoa(review.DecisionRevision)}
 	case "decision.superseded":
 		f, err := cp.DecodeSupersession(event.payload)
 		if err != nil || event.target.Type != "decision" || event.target.ID == f.Replacement.ID || event.actorKind != "user" || event.actorID == nil {

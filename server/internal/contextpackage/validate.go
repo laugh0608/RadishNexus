@@ -401,6 +401,16 @@ func decodeObject(o Object) (any, error) {
 }
 
 func ValidateFacts(h History) (Facts, error) {
+	if h.Type == "decision.reviewed" {
+		review, err := DecodeDecisionReview(h.Facts)
+		if err != nil {
+			return Facts{}, err
+		}
+		if h.Entity.Type != "decision" || !oneOf(h.Source, "web", "import") {
+			return Facts{}, invalid("Decision review envelope")
+		}
+		return Facts{Review: &review}, nil
+	}
 	var f Facts
 	if err := Decode(h.Facts, &f); err != nil {
 		return f, err
@@ -543,7 +553,9 @@ func validateObjectHistory(o Object, v any, events []History, x *Index, relation
 			copy := h
 			first = &copy
 		}
-		if h.OccurredAt.Before(o.CreatedAt) || h.OccurredAt.After(o.UpdatedAt) {
+		// Review chronology is verified against the accepted revision during
+		// Decision replay. Recording it does not advance the object's timestamp.
+		if h.OccurredAt.Before(o.CreatedAt) || (h.Type != "decision.reviewed" && h.OccurredAt.After(o.UpdatedAt)) {
 			return invalid("object history time")
 		}
 	}

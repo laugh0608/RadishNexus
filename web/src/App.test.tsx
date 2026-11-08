@@ -615,6 +615,10 @@ function testCollaborationClient(
   overrides: Partial<CollaborationClient> = {},
 ): CollaborationClient {
   return {
+    reviewDecision: vi.fn(),
+    loadDecisionReviews: vi
+      .fn()
+      .mockResolvedValue({ items: [], nextAfter: null }),
     changeTicketStatus: vi.fn(),
     loadView: vi.fn().mockResolvedValue(threadView),
     proposeDecision: vi.fn(),

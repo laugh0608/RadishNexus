@@ -45,6 +45,7 @@ const capabilities = {
   createTicket: true,
   supersede: true,
   retryDecision: true,
+  review: false,
   retryTicketCreation: true,
 };
 const oldView: CollaborationView<DecisionCurrent> = {
@@ -73,6 +74,10 @@ function client(
     rejectDecision: vi.fn(),
     proposeDecision: vi.fn(),
     createTicket: vi.fn(),
+    reviewDecision: vi.fn(),
+    loadDecisionReviews: vi
+      .fn()
+      .mockResolvedValue({ items: [], nextAfter: null }),
     changeTicketStatus: vi.fn(),
     ...overrides,
   };
