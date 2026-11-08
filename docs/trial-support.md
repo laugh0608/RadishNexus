@@ -2,9 +2,9 @@
 
 状态：设计草案，待所有者确认；不是已开放的外部试用或生产支持承诺
 
-日期：2026-10-24
+2026-10-24 建立支持草案，初版核对基线为 `94da10d`。2026-11-08 的本机技术验收采用 `127ba0c`，对应 schema 025、Activity 13 与 v6 上下文包。实际试用的范围与授权待确认。 [本机候选登记与验收](status/reviews/2026-11-08-m1-candidate-127ba0c.md)
 
-核对基线：`94da10d`，schema 020；范围与授权仍待确认。本文定义首批试用拟支持什么、如何求助、何时停止及如何退出；当前执行顺序仍以[当前状态](status/current.md)为准。使用权取决于根 [LICENSE](../LICENSE) 与另行有效的书面授权，本文不授予部署或运行权。授权范围待决事项见[评估授权设计](evaluation-authorization-decisions.md)。
+本文说明首批试用拟支持的范围、求助方式、停止和退出条件。执行顺序以当前状态为准。部署和运行使用权取决于根许可证与另行有效的书面授权。 [当前状态](status/current.md) · [LICENSE](../LICENSE) · [评估授权待决事项](evaluation-authorization-decisions.md)
 
 ## 现有事实与缺口
 
@@ -12,6 +12,7 @@
 | --- | --- | --- |
 | [路线图](roadmap.md#试用与生产边界)要求试用前说明支持范围、授权、备份、恢复和报告方式 | 可以限定非生产场景，不要求先补齐全部 M1 | 本文的范围确认、具体环境与参与安排、准入记录 |
 | [部署说明](../deploy/README.md)与 ADR-0041 / 0042 隔离记录覆盖 Compose HTTPS、身份恢复、交接及备份 | 有可复用技术基础 | 目标试用宿主与浏览器的实际验收；不能从开发机或镜像架构推导任意环境受支持 |
+| [候选本机复验](status/reviews/2026-11-08-m1-candidate-127ba0c.md#本机临时窗口复验结果)覆盖 T03、T06、T07 | 单宿主回环 HTTPS 与合成数据已有运行和空目标恢复证据 | 扩大范围前按交接单复核实际宿主、配置、维护窗口与样本 |
 | [缺陷模板](../.github/ISSUE_TEMPLATE/bug-report.yml)已有环境、复现、边界与脱敏要求；[安全策略](../SECURITY.md)已有私密报告方式与 best-effort 原则 | 复用现有渠道，不建立第二套工单或安全入口 | 普通支持联系人、可联系时段、预期首次回复时间与升级路径，均待明确，不预先承诺 SLA |
 | [账号恢复](adr/0041-controlled-local-account-recovery.md)和 [owner 交接](adr/0042-workspace-owner-handoff.md)已实现 | 部署者恢复身份与用户主动移交管理责任分开 | Project admin / 私密对象交接及成员退出已按 [ADR-0045](adr/0045-membership-lifecycle-and-management-handoff.md) 交付；owner 应急接管、真实团队持续使用和全局失陷处置未交付 |
 | [备份恢复](adr/0010-verified-postgresql-backup-and-restore.md)保存权威数据并重建 Activity | 可在匹配版本的空目标验证往返 | 单 Project 协作上下文包已按 [ADR-0044](adr/0044-portable-project-context-package.md) 实现并隔离往返验证；完整 Workspace / 研发上下文、容量和独立持续使用仍未验收，整库备份不能代替通用导出或生产灾备承诺 |

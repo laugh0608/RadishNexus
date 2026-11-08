@@ -37,7 +37,7 @@ collaboration migration 007 以 `(workspace, actor, command, target, client_oper
 
 协作 Nexus View 的 readable relation 明确 `direction: outgoing | incoming`，支持 Thread 发现后续 Decision、Decision 发现后续 Ticket；不可读反向目标完全隐藏，原 evidence 占位不带方向。完整合同、全量关系读取限制与 Go / Web 同步升级要求见 [ADR-0022](../docs/adr/0022-transactional-activity-and-incoming-relations.md)。
 
-当前 Activity 白名单包含 `project.created`、`channel.created`、`decision.proposed`、`decision.accepted`、`decision.rejected`、`ticket.created`、`ci-run.recorded`、`deployment.recorded`、`document.created`、`document.revised`、`component.created`、`environment.created`、`repository.created`、`component.repository-linked`、`component.repository-unlinked`、`ticket.component-linked` 和 `ticket.component-unlinked`。正常写入在同一事务投影，并将对应 `activity-projector` delivery 标记完成；命令成功返回后的重新读取立即可见，投影错误整单回滚。重建通过 `postgres.Store.RebuildActivityProjection` 显式触发，先锁定投影表再取得源事件快照，不依赖 Outbox 投递状态；当前不需要常驻 projector worker。Activity 只保存引用和状态等最小安全事实；Nexus View 在读取时按当前权限重新解析 subject，不能读取的目标只形成通用 restricted 占位。
+Activity 13 投影包含 Decision 的提案、接受、拒绝、替代及复核，也包含工单状态、负责人及优先级等协作事件。正常写入在同一事务投影，并将对应 `activity-projector` delivery 标记完成。命令成功返回后可重新读取，投影错误会回滚整单。显式重建先锁定投影表，再读取源事件和导入历史快照。Nexus View 按当前权限解析投影目标，复核历史经独立入口按证据权限过滤。 [投影实现](internal/goldenpath/postgres/activity.go) · [复核合同](../docs/adr/0050-decision-manual-review.md)
 
 CI Run 的 M0 用户读取由所属 Component 控制：同一 Workspace 的活跃成员可读，非成员、暂停成员和跨 Workspace 主体得到 not-found；owner Team 和 Jenkins source 都不授予读取权。CI Run Current 返回 status、受控时间、当前 Component 与按当前 Repository 权限过滤的 checkout 摘要，Timeline 隐藏 plugin/source ID，并且不返回 external run key、receipt、digest、Secret、原始 payload 或外部 URL。该 query 已按 ADR-0029 接入 Session 作用域的正式 HTTP DTO 与 Web 页面。
 
@@ -222,7 +222,7 @@ Deployment Nexus View 只读路由为：
 
 [ADR-0040](../docs/adr/0040-project-decision-discovery.md) 增加 `GET /api/v1/workspaces/{workspace_id}/projects/{project_id}/decisions`。复用 `DiscoveryService`、同源 Session 与 repeatable-read 事务；按 governing Project 当前权限读取，与 evidence Thread / origin Channel 的可读性独立。active Workspace 成员可读 workspace 可见项目，restricted Project 必须有当前 membership，owner 不穿透；归档仍可读。
 
-响应仅为 `data.items[{ref,title,status}] / next_cursor`，title 保留 question 原文，状态严格为 `proposed / accepted / rejected`。仅接受 `limit`（默认 25、最大 50）与 `after`；v1 cursor 绑定 Workspace、Project、kind=`decision`，按稳定 ID 升序、排他边界翻页，不与其他列表互用。待返回页含非法状态、ref、问题或顺序时整页失败；不以状态过滤隐藏异常。列表不展开来源、结论、理由、能力或计数，不改变业务事实。401 / 404、错误 envelope、`private, no-store` 与 `Vary: Cookie` 沿用发现合同。
+响应仅为 `data.items[{ref,title,status}] / next_cursor`，title 保留 question 原文，状态严格为 `proposed / accepted / rejected / superseded`。仅接受 `limit`（默认 25、最大 50）与 `after`；v1 cursor 绑定 Workspace、Project、kind=`decision`，按稳定 ID 升序、排他边界翻页，不与其他列表互用。待返回页含非法状态、ref、问题或顺序时整页失败；不以状态过滤隐藏异常。列表不展开来源、结论、理由、能力或计数，不改变业务事实。401 / 404、错误 envelope、`private, no-store` 与 `Vary: Cookie` 沿用发现合同。
 
 独立查询测量支持本片不新增索引或 migration，无依赖和写入协议变化；规模、权限与浏览器证据见[实施记录](../docs/status/reviews/2026-10-18-project-decision-discovery.md)。
 
@@ -321,7 +321,7 @@ apply 只接受已确认 proposal、UUID operation ID 与计划摘要；等待�
 
 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的 migration 019、`internal/contextpackage`、`goldenpath.ContextService` 与受认证 HTTP 入口提供单 Project 协作导出 / 空业务实例导入。`go build ./cmd/nexus-context` 构建独立 CLI，使用 HTTPS Session 和私有凭据文件，不读取数据库 DSN；操作、协议路由和限制见[迁移手册](../deploy/context-package.md)。该 CLI 当前面向 macOS / Linux，不包含在 Compose operations 工件中。
 
-历史身份不可登录，初始 Project restricted 并仅授予导入负责人；真实导入操作与源事实分开保存。来源 API 先验证当前对象读取权限，Web 仅展示安全导入标识。Activity 13 支持含负责人、优先级、Decision 拒绝、替代与复核的导入历史重建，四张来源 / 审计表纳入整库备份，Session 等既有排除规则不变。首片隔离验收见[原记录](../docs/status/reviews/2026-10-24-portable-context-package.md)，v5 与替代历史的往返、恢复和 CLI 证据见[增量记录](../docs/status/reviews/2026-11-02-decision-supersession.md)。
+历史身份不可登录，初始 Project restricted 并仅授予导入负责人；真实导入操作与源事实分开保存。来源 API 先验证当前对象读取权限，Web 仅展示安全导入标识。Activity 13 支持含负责人、优先级、Decision 拒绝、替代与复核的导入历史重建，四张来源 / 审计表纳入整库备份，Session 等既有排除规则不变。 [首片隔离验收](../docs/status/reviews/2026-10-24-portable-context-package.md) · [v5 替代历史证据](../docs/status/reviews/2026-11-02-decision-supersession.md) · [v6 复核往返与恢复证据](../docs/status/reviews/2026-11-08-decision-manual-review.md)
 
 ## 最小备份与恢复
 

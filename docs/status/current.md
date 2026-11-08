@@ -18,7 +18,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | --- | --- | --- |
 | 身份与管理 | 本地账户、邀请、初始化、恢复、owner / 成员管理交接已有技术证据；真实 OIDC / Radish 联调与团队持续使用仍未验收 | [身份专题](../topics.md#identity) |
 | 沟通与决策 | 讨论创建 / 确认 Decision、Project 决策发现已交付；最小拒绝、单链替代及四状态读取已交付，最小人工复核已通过正式浏览器验收 | [沟通与决策专题](../topics.md#communication-decisions) |
-| 工单与上下文 | 工单发现、四状态、负责人、优先级 / 筛选、首批关系和 Activity 已有证据；完整执行管理、通用关系分页与持续使用未闭合 | [工单与上下文专题](../topics.md#tickets-context) |
+| 工单与上下文 | 工单发现、四状态、负责人和优先级筛选已交付。「我的工单」和项目状态看板已通过定向验收。截止日期与通用关系分页待建设 | [工单与上下文专题](../topics.md#tickets-context) · [我的工单验收](reviews/2026-11-08-workspace-my-tickets.md) · [看板验收](reviews/2026-11-08-project-ticket-board.md) |
 | 文档协作 | 最小 Markdown 正式保存、冲突、版本 / 恢复及隔离浏览器已有证据；原生中文 IME 暂缓、持续使用未验收 | [文档专题](../topics.md#documents) |
 | 交付集成 | 受认证接入、显式 staging 记录、配置、持久发送及 checkout 接收已有相应证据；ADR-0035 / 0037 B 真实采集与整链暂缓 | [交付专题](../topics.md#delivery-integration) |
 | 运行与产品交付 | Web、自部署、升级恢复、单 Project 上下文包及补验已有指定环境证据；U27、生产容量、更广迁移、有效试用授权与独立持续使用未闭合 | [运行交付专题](../topics.md#product-delivery) |
@@ -42,7 +42,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **工单的个人入口和项目状态看板已通过定向验收**。工作台的「我的工单」汇总当前 Workspace 内本人负责且仍可读的待处理工单。项目工单页可切换到四列看板，按状态独立分页，共用负责人和优先级筛选。两个入口都通往既有工单详情。 [我的工单验收](reviews/2026-11-08-workspace-my-tickets.md) · [项目状态看板验收](reviews/2026-11-08-project-ticket-board.md)
+1. **下一步建议推进工单截止日期**。让有工单写权限的成员从详情设置、改期或清除截止日期，并让详情、项目列表、状态看板和「我的工单」显示同一字段。先形成可审阅的设计与验收范围，明确日期和时区口径、待处理与终态的显示规则、并发改期和原请求重试、旧工单兼容、Activity 与上下文包及恢复影响。确认数据模型和 API 范围后再实现和验收。 [M4 工单路线图](../roadmap.md#m4工单与上下文关联) · [当前工单领域模型](../domain-model.md#ticket)
 2. **已完成切片转入有界观察**：上下文迁移补验、负责人及其并发 / 同名补验、优先级与项目内筛选均已交付，提交与验证映射见[当日收尾记录](reviews/2026-10-28-daily-closeout.md)。后续遇到实际 BFCache、原生选择控件键盘、团队使用或慢查询问题时定向复验；不重复全量测试冒充持续使用，也不把单 Project 合成查询计划当成生产容量。Go / Web / CLI 使用匹配工件配套升级；真实实例操作仍单独授权。
 3. **保留 M1 受控试用交接**。候选 `127ba0c` 已有本机协作、恢复和当前实例 T08 取回证据。T02 与 T05 已整理拟议范围、支持分流及待填写事项。扩大试用范围前，再确认试用主体、操作范围、支持安排和退出条件，并复核实际授权。 [T02 与 T05 复核说明](reviews/2026-11-08-m1-candidate-127ba0c.md#首批试用-t02-与-t05-复核说明) · [本机试用使用观察](reviews/2026-11-08-m1-candidate-127ba0c.md#本机试用使用观察) · [当前本机实例 T08 演练](../trial-support.md#当前本机实例-t08-退出演练) · [本机临时窗口复验](reviews/2026-11-08-m1-candidate-127ba0c.md#本机临时窗口复验结果)
 4. **单宿主数据库身份拆分已通过隔离验收**。Compose 分离常驻应用、schema 所有者、备份和 PostgreSQL 管理员，已有 024→025 故障续迁、凭据轮换和独立空库恢复证据。M1 文件、通知、审计运营、Attention Item 和更广生产运维仍按路线图验收；完整聊天、CRDT、Flutter、通用插件平台和更广迁移 profile 服从原阶段门槛。 [角色边界](../adr/0051-single-host-database-roles.md) · [部署手册](../../deploy/database-roles.md) · [验收记录](reviews/2026-11-08-single-host-database-roles.md)
@@ -91,6 +91,8 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 - 后续插件运行方式、SDK / 插件许可证及搜索边界；OIDC 关联目标已由 ADR-0023 冻结，真实 provider、协议验签、浏览器与 Radish 联调延至未来独立切片，当前关闭 Radish 登录。
 
 ## 证据与历史
+
+[2026-11-08 收尾记录](reviews/2026-11-08-daily-closeout.md)汇总当日提交、实际验证及本次文档核对。
 
 [2026-11-02 收尾记录](reviews/2026-11-02-daily-closeout.md)保留当日三笔设计 / 实现提交、代码与文档核对及接续边界；[2026-11-02 替代实施记录](reviews/2026-11-02-decision-supersession.md)保留四状态、单链、双对象历史、恢复 / 往返与浏览器验收限制；[2026-11-02 替代设计与提交记录](reviews/2026-11-02-decision-supersession-design.md)保留拒绝提交映射、后续提案与源码判断；[2026-11-02 Decision 拒绝实施记录](reviews/2026-11-02-decision-rejection.md)保留本轮交付与分层验收；[2026-11-02 Decision 设计记录](reviews/2026-11-02-decision-lifecycle-design.md)保留本轮源码核对、首片取舍与确认边界；[2026-10-28 收尾记录](reviews/2026-10-28-daily-closeout.md)保留上一功能批次的提交与验证映射；[规划整理记录](reviews/2026-11-01-planning-alignment.md)记录导航整理及检查。此前详细流水和完整证据目录见[原状态快照](history/planning-structure-2026-11-01.md#证据与历史)；[2026-09-03 快照](history/2026-09-03-status.md)继续保留原历史边界。
 

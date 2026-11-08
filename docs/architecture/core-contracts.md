@@ -119,13 +119,15 @@ entity://decision/dec_01K4EXAMPLE
 
 [ADR-0046](../adr/0046-ticket-assignee.md) 增加 migration 021、独立 `assignment_revision`、`ticket.assignee.set` receipt 和 `ticket.assignee-changed` schema 1。`GET / POST /api/v1/workspaces/{workspace_id}/tickets/{ticket_id}/assignee` 与 `/assignee/candidates` 复用当前 Workspace / Project 准入、严格 JSON、CSRF 和 no-store；候选 cursor 绑定操作者、Workspace 与 Ticket。Project Ticket 发现行增加必填可空 `assignee`，与详情使用相同资格谓词。旧创建与状态响应不承担分配响应职责。
 
-新动作绑定两个 Ticket 版本及目标 lifecycle / Project management 代次；清空明确传 null 与目标代次字符串 `"0"`。精确重试重查操作者当前写权后只返回原事实，后续终态和目标失权不重演旧分配。真实变更与事件、receipt、Outbox、Activity 原子提交（本切片引入 v9，当前随 ADR-0049 升为 v12）；原始事件只保存前后身份与相邻版本，时间线仅位于 Ticket。成员失权保留记录与历史，不授予任何权限。本切片的 Go、Web、schema 与 v2 导入导出须配套停写升级；当前交付版本以 ADR-0049 v5 合同为准，不能混用旧客户端。
+新动作绑定两个 Ticket 版本及目标 lifecycle / Project management 代次；清空明确传 null 与目标代次字符串 `"0"`。精确重试重查操作者当前写权后只返回原事实，后续终态和目标失权不重演旧分配。真实变更与事件、receipt、Outbox、Activity 原子提交。原始事件只保存前后身份与相邻版本，时间线仅位于 Ticket。成员失权保留记录与历史，不授予任何权限。负责人切片首次采用 Activity 9 与 v2 包，当前工件配套使用 schema 025、Activity 13 与 v6 包。 [当前复核合同](../adr/0050-decision-manual-review.md) · [上下文迁移手册](../../deploy/context-package.md)
 
 ## Ticket 优先级与筛选合同
 
 [ADR-0047](../adr/0047-ticket-priority-and-filtering.md) 增加 migration 022、独立 `priority_revision`、`ticket.priority.set` receipt 和 `ticket.priority-changed` schema 1。优先级 GET / POST 复用当前准入、写权、严格 JSON、CSRF 与 no-store；POST 绑定优先级和状态版本，原子写入事件 / receipt / Outbox / Activity 10，精确重试只确认原 applied 事实。事件 `priority` 四字段保存前后枚举与相邻版本；详情、列表和导出均严格校验枚举。
 
 Project 工单列表增加必填 `priority`，支持 `status / assignee / priority` 三组单选 AND 条件，先 SQL 筛选再按 ID 升序分页。Ticket 专用 v2 cursor 绑定 Workspace、Project、操作者及规范筛选；旧 Ticket cursor 失效，其它 discovery cursor 保持原合同。cursor 不能代替当前授权，跨页不是冻结快照。Go / Web / CLI / schema 与 v3 包配套升级，严格读取旧 v1 / v2，不降级丢失历史。
+
+Workspace「我的工单」按当前 Session 的用户和 Project 可读权限筛选活跃项目中的待处理工单，再按稳定 ID 分页。游标绑定 Workspace、操作者和列表类型。项目状态看板按四种状态分别调用 Project 工单列表，沿用各自游标与既有筛选合同。 [我的工单合同](../adr/0052-workspace-my-tickets.md) · [看板实现](../../web/README.md#project-工单浏览)
 
 ## Decision 最小拒绝
 
