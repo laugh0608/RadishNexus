@@ -42,7 +42,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **推进 M1 受控试用准备**。`4f2b208` 本机隔离 Compose 已验收候选工件、schema 025 全新安装、回环 HTTPS、正式协作链、停写与独立空库恢复。T03、T06、T07 已补齐本机证据，正式试用宿主、参与主体、支持联系人、停机和数据取舍及退出安排仍待确认。评估授权 E01～E12 单独复核。 [候选准入表与预演结果](reviews/2026-11-08-m1-controlled-trial-readiness.md) · [评估授权待决事项](../evaluation-authorization-decisions.md)
+1. **推进 M1 受控试用准备**。新候选 `127ba0c` 已登记本机 app、operations、独立 CLI 和生效配置，目标宿主的 T03、T06、T07 清单已准备。正式试用宿主、参与主体、支持联系人、停机和数据取舍及退出安排仍待确认。评估授权 E01～E12 单独复核。 [新候选与目标宿主清单](reviews/2026-11-08-m1-candidate-127ba0c.md) · [前一候选准入表与预演](reviews/2026-11-08-m1-controlled-trial-readiness.md) · [评估授权待决事项](../evaluation-authorization-decisions.md)
 2. **已完成切片转入有界观察**：上下文迁移补验、负责人及其并发 / 同名补验、优先级与项目内筛选均已交付，提交与验证映射见[当日收尾记录](reviews/2026-10-28-daily-closeout.md)。后续遇到实际 BFCache、原生选择控件键盘、团队使用或慢查询问题时定向复验；不重复全量测试冒充持续使用，也不把单 Project 合成查询计划当成生产容量。Go / Web / CLI 使用匹配工件配套升级；真实实例操作仍单独授权。
 3. **独立成员操作与使用观察分开记录**。Decision 人工复核已有正式 HTTPS Chrome 证据。按所有者要求，本轮跳过独立成员真人复验，R08 和相关 T04 证据保留待验证。后续使用观察记录讨论—决策—工单—文档追溯、维护者干预和成员交接。 [复核合同](../adr/0050-decision-manual-review.md) · [实施与验证记录](reviews/2026-11-08-decision-manual-review.md)
 4. **单宿主数据库身份拆分已通过隔离验收**。Compose 分离常驻应用、schema 所有者、备份和 PostgreSQL 管理员，已有 024→025 故障续迁、凭据轮换和独立空库恢复证据。M1 文件、通知、审计运营、Attention Item 和更广生产运维仍按路线图验收；完整聊天、CRDT、Flutter、通用插件平台和更广迁移 profile 服从原阶段门槛。 [角色边界](../adr/0051-single-host-database-roles.md) · [部署手册](../../deploy/database-roles.md) · [验收记录](reviews/2026-11-08-single-host-database-roles.md)
