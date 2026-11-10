@@ -49,6 +49,8 @@
 ## 状态与验证入口
 
 - [当前状态](status/current.md)：能力成熟度、已确认缺口、近期顺序和停止线。
+- [Web 协作闭环有限检查点](golden-path.md#finite-web-closeout)：本批范围、技术出口和独立使用判断，与完整 Golden Path 分开验收。
+- [2026-11-10 规划收口](status/reviews/2026-11-10-planning-closeout.md)：有限批次、截止日期排期调整、暂缓恢复条件与文档验证。
 - [2026-11-08 提交回顾与文档收尾](status/reviews/2026-11-08-daily-closeout.md)汇总 Decision 复核、单宿主运维身份、试用验收和工单入口的提交与证据。
 - [2026-11-02 提交回顾与文档收尾](status/reviews/2026-11-02-daily-closeout.md)：当日拒绝、替代设计 / 实现三笔提交映射，代码与文档核对，以及复核设计接续。
 - [2026-11-02 Decision 最小替代实施](status/reviews/2026-11-02-decision-supersession.md)：单链替代、双对象版本 / Activity、旧操作重试、v5 往返 / 恢复与正式 Web 验收。
