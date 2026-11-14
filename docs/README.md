@@ -17,7 +17,7 @@
 11. [仓库治理](governance/README.md)：说明分支、PR、Ruleset、Agent 和文档协作规则。
 12. [架构决策记录](adr/README.md)：解释长期工程与治理取舍及其后果。
 13. [开发指南](development/README.md)：说明跨语言工程、测试、安全和兼容性标准。
-14. [视觉方向与页面参考](design/visual-direction.md)：Radish 家族视觉来源、AFFiNE / Mattermost / AppFlowy 参考分工及待评审的页面建议。
+14. [视觉方向与页面参考](design/visual-direction.md)：Radish 家族视觉来源、页面参考与[本机 Penpot 评审留档及恢复](design/visual-direction.md#penpot-评审留档与恢复)。
 15. [工作台与 Document 代表页设计](design/workbench-v1.md)：Pen 原生设计源、桌面 / 手机预览、状态映射及静态检查边界。
 
 客户端连接方向见[官方客户端与实例连接规划](architecture/client-server-connection-plan.md)及 [ADR-0036](adr/0036-official-client-instance-connection.md)：同一官方安装包运行时支持官方端点或用户自部署后端，无需重新编译，Web 保持各实例同源交付。
