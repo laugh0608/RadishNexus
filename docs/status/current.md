@@ -4,6 +4,8 @@
 
 整体目标与阶段范围见[路线图](../roadmap.md)，能力归属与任务 / 验收来源见[专题地图](../topics.md)。完整历史流水保留于[原状态快照](history/planning-structure-2026-11-01.md)，不恢复旧运行授权。
 
+2026-11-14 已停用 Pencil。现有工作台稿与 PNG 随评审留档，后续代表设计见[视觉方向](../design/visual-direction.md)。
+
 ## 已确认待实施的客户端方向
 
 2026-10-12 已确认[客户端连接规划](../architecture/client-server-connection-plan.md)与 [ADR-0036](../adr/0036-official-client-instance-connection.md)：同一官方安装包运行时选择官方端点或用户自部署后端，无需重新编译。本轮仅更新文档；官方端点与 Flutter 选择能力尚未交付，当前 Web Golden Path / M1 和已有停止线继续有效。

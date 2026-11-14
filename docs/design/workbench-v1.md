@@ -1,20 +1,20 @@
 # 工作台与 Document 代表页设计 v1.1
 
-日期：2026-09-26。实现参考基线：`1503511`；上一版设计基线：`92f4a7f`。继续维护同一个 `.pen` 文件，文件名中的 `v1` 表示本轮设计系列。
+日期：2026-09-26。实现参考基线：`1503511`；当时的上一版设计基线：`92f4a7f`。
 
 本稿落实已确认的[视觉方向](visual-direction.md)，用于评审共享工作台和最小 Markdown Document 的阅读、编辑及关键失败状态。项目所有者已认可本次 v1.1 并要求提交；本稿是正式页面实施的视觉参考；随后完成的 React 落地与验证单独见[实施记录](../status/reviews/2026-09-26-workbench-ui.md)，静态稿本身不代表功能、完整可访问性或原生 IME 验收通过。
 
 ## 设计源与参考方法
 
-唯一可编辑源为 [radishnexus-workbench-v1.pen](radishnexus-workbench-v1.pen)。使用 Pen 原生 MCP 读取、编辑、截图和导出；不手写或解析 `.pen` 文件。`previews/` 是该源的静态 PNG 导出，按节点 ID 命名；修改画板后重新导出对应预览，避免两套设计漂移。
+[radishnexus-workbench-v1.pen](radishnexus-workbench-v1.pen) 为首轮设计留档。`previews/` 保存按节点 ID 命名的静态 PNG，与原版评审记录一同保留。后续变更按[现行视觉流程](visual-direction.md)处理，原稿回填取消。
 
 按所有者指示，参考了三个兄弟项目的以下材料，只借鉴对 Nexus 有实际价值的工作方法：
 
 | 兄弟项目材料（各仓库相对路径） | 本轮采用的方法 |
 | --- | --- |
 | Radish：`docs/frontend/pencil-representative-page-workflow.md` | 新共享框架先做桌面 / 手机代表页；冲突、恢复和异常用局部状态表达；设计评审与运行态验收分开 |
-| RadishFlow：`docs/architecture/studio-ui-topic-plan.md` 及其设计维护说明 | 维护单一活动设计源，记录源文件、画板和预览映射，使用原生工具操作 |
-| RadishMind：`docs/radishmind-ui-design-spec.md`、`docs/ui-addendum.md`、`docs/designs/radishmind-web-family-ui-v1.pen` | 观察家族工作面落地方式，先整理共享变量与组件，再组合代表页 |
+| RadishFlow：`docs/architecture/studio-ui-topic-plan.md` 及其设计维护说明 | 记录可编辑源、代表设计和预览映射 |
+| RadishMind：`docs/radishmind-ui-design-spec.md`、`docs/ui-addendum.md`、历史 Family UI 代表稿 | 观察家族工作面落地方式，先整理共享变量与组件，再组合代表页 |
 
 兄弟仓库保持只读；Nexus 文件从空白画布创建，未复制兄弟产品页面、运行时代码或参考产品品牌资产。视觉基线来自 RadishX 家族规范，具体来源与版本见视觉方向文档。
 
