@@ -2,7 +2,7 @@
 
 状态：M0.5 纵向原型基线
 
-日期：2026-09-05（原型基线）；最近合同同步：2026-11-02；有限检查点规划：2026-11-10（原合同不变）。
+原型基线日期为 2026-09-05，有限检查点规划日期为 2026-11-10，最近合同同步于 2026-11-15。
 
 规划归属：本页是[能力专题地图](topics.md#golden-path)中的跨能力整合目标，串联各子专题的真实交付。各能力任务与细项标准仍在原合同 / 专题，整体退出只按本页与路线图判断；局部切片交付不代表整体退出，当前进度与接续见[当前状态](status/current.md)。
 
@@ -21,8 +21,8 @@ Golden Path 用最薄的可运行产品验证 RadishNexus 的核心价值，而�
 3. 决策人补充理由后将 Decision 标记为 Accepted；
 4. 从该 Decision 创建一个 Ticket，不复制原始讨论正文；
 5. Ticket 关联 `auth-service` Component 和设计 Document（人工组件关联已按 [ADR-0034](adr/0034-ticket-component-relations.md) 接通，不表示该 Ticket 已进入某次构建或部署）；
-6. Jenkins Webhook 写入一次 CI Run，并在原 Thread 与 Ticket 中显示状态；
-7. 成功构建后，持有目标 Environment 显式授权的成员通过受控操作记录一次到 `staging` 的 Deployment；
+6. Jenkins Webhook 写入一次 CI Run，成员从工单详情选择该构建并确认关联。回到原 Thread，在“执行与交付”展开工单查看构建。 [ADR-0056](adr/0056-ticket-ci-run-traceability.md) 和 [ADR-0057](adr/0057-thread-delivery-trace.md)。
+7. 成功构建后，持有目标 Environment 显式授权的成员记录一次到 `staging` 的 Deployment。Thread 中的构建行可展开已有部署记录，并打开原部署详情。
 8. 打开任意对象的 Nexus View，都能看到当前状态、关系和完整时间线；
 9. 备份并恢复到新实例后，上述关系和来源仍然存在。
 

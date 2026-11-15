@@ -51,6 +51,7 @@ type discoveryCursor struct {
 	Priority     string `json:"priority,omitempty"`
 	ActorID      string `json:"actor_id,omitempty"`
 	CIRunID      string `json:"ci_run_id,omitempty"`
+	TicketID     string `json:"ticket_id,omitempty"`
 	Version      int    `json:"v"`
 	WorkspaceID  string `json:"workspace_id"`
 	Kind         string `json:"kind"`
@@ -375,7 +376,7 @@ func discoveryPrefix(kind string) string {
 		return "lbl_"
 	}
 	switch kind {
-	case "message-execution", "thread-execution":
+	case "message-execution", "thread-execution", goldenpath.ThreadDeliveryTickets:
 		return "tkt_"
 	case "ticket-execution":
 		return "thr_"
@@ -389,10 +390,10 @@ func discoveryPrefix(kind string) string {
 	if kind == "decision" {
 		return "dec_"
 	}
-	if kind == "repository-ci-runs" || kind == goldenpath.TraceComponentRuns || kind == goldenpath.TraceTicketRuns {
+	if kind == "repository-ci-runs" || kind == goldenpath.TraceComponentRuns || kind == goldenpath.TraceTicketRuns || kind == goldenpath.ThreadDeliveryRuns {
 		return "cir_"
 	}
-	if kind == goldenpath.TraceRunDeployments {
+	if kind == goldenpath.TraceRunDeployments || kind == goldenpath.ThreadDeliveryDeployments {
 		return "dpl_"
 	}
 	if kind == goldenpath.TraceRunTickets || kind == "component-tickets" || kind == "ticket" || kind == "my-tickets" {

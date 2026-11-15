@@ -165,6 +165,15 @@ func (s *Store) ListCIRunTrace(ctx context.Context, p authz.Principal, kind, sou
 		return page, err
 	}
 
+	page, err = readCIRunTracePage(ctx, tx, p, kind, source, input, page.CanLink)
+	if err != nil {
+		return page, err
+	}
+	return page, tx.Commit(ctx)
+}
+
+func readCIRunTracePage(ctx context.Context, tx pgx.Tx, p authz.Principal, kind, source string, input goldenpath.CIRunTraceInput, canLink bool) (page goldenpath.CIRunTracePage, err error) {
+	page.CanLink = canLink
 	rows, err := queryCIRunTrace(ctx, tx, p, kind, source, input)
 	if err != nil {
 		return page, fmt.Errorf("query CI Run trace: %w", err)
@@ -190,7 +199,7 @@ func (s *Store) ListCIRunTrace(ctx context.Context, p authz.Principal, kind, sou
 	if err = rows.Err(); err != nil {
 		return page, fmt.Errorf("iterate CI Run trace: %w", err)
 	}
-	return page, tx.Commit(ctx)
+	return page, nil
 }
 
 // Component and Environment reads require active Workspace membership, checked

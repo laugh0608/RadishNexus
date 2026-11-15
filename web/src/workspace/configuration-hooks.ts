@@ -82,6 +82,7 @@ export function usePage<
 >(
   load: (after: string | undefined, signal: AbortSignal) => Promise<Page>,
   onSessionExpired: () => void,
+  refreshOnFocus = true,
 ) {
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [revision, setRevision] = useState(0);
@@ -122,10 +123,11 @@ export function usePage<
     setRevision((v) => v + 1);
   }, []);
   useEffect(() => {
+    if (!refreshOnFocus) return;
     const focus = () => refresh();
     window.addEventListener("focus", focus);
     return () => window.removeEventListener("focus", focus);
-  }, [refresh]);
+  }, [refresh, refreshOnFocus]);
   const current =
     state.loader === load &&
     state.cursor === cursor &&

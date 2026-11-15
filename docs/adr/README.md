@@ -62,6 +62,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0054](0054-message-to-ticket-and-execution-discussion.md) | 已接受 | 消息转工单与执行讨论 |
 | [ADR-0055](0055-ticket-classification-and-project-search.md) | 已接受 | 工单分类与项目内查找 |
 | [ADR-0056](0056-ticket-ci-run-traceability.md) | 已接受 | 工单与构建的可追溯关联 |
+| [ADR-0057](0057-thread-delivery-trace.md) | 已接受 | 从原讨论追踪工单、构建与部署 |
 
 ## 新建规则
 

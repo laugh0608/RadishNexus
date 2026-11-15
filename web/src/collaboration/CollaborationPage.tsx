@@ -1,3 +1,4 @@
+import { ThreadDelivery } from "./ThreadDelivery";
 import { TicketCIRuns } from "./TicketCIRuns";
 import { TicketClassificationPanel } from "./TicketClassificationPanel";
 import { ticketTypeLabels } from "./ticket-classification-api";
@@ -509,6 +510,14 @@ function CollaborationPageContent({
               write={replyWrite}
               messageWrite={messageWrite}
               onChanged={relationChanged}
+            />
+          )}
+          {isThreadCurrent(current) && (
+            <ThreadDelivery
+              workspace={workspaceID}
+              thread={entityID}
+              onSessionExpired={onSessionExpired}
+              onUnavailable={relationUnavailable}
             />
           )}
           {entityType === "ticket" && (

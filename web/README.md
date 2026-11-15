@@ -195,7 +195,10 @@ ADR-0037 A 在正式 CI Run 页面展示未采集、来源不可用、observed �
 
 消息和 Decision 建单可选择类型与项目标签。工单详情提供分类编辑与历史，项目工单列表和看板共用类型、标签、标题和既有筛选。「我的工单」展示当前分类。Project admin 管理标签目录；归档标签继续显示在已有工单上，也可用来筛选。 [ADR-0055](../docs/adr/0055-ticket-classification-and-project-search.md)
 
-
 ### 工单与构建的可追溯关联
 
 工单详情从 Component 选择具体 Jenkins 终态构建，支持明确关联、解除及分页查看历史。CI Run 页可返回当前可读的关联工单，也可打开该运行已有的 staging 部署记录。关联与部署记录沿各自的权限和确认入口。 [ADR-0056](../docs/adr/0056-ticket-ci-run-traceability.md)
+
+### 从原讨论追踪交付
+
+Thread 的“执行与交付”列出当前可读的工单及其来源。展开工单查阅构建，再展开构建查看已有 staging 记录，各层可独立翻页，链接打开原对象。重读从工单首页重新验证，失效路径清除相关子层。 [ADR-0057](../docs/adr/0057-thread-delivery-trace.md)

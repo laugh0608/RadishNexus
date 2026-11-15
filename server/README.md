@@ -455,7 +455,10 @@ migration 014 增加 `ticket --affects--> component`、来源约束、active 唯
 
 [ADR-0055](../docs/adr/0055-ticket-classification-and-project-search.md) 增加工单分类、项目标签目录以及类型、全匹配标签和字面标题筛选。分类写入与建单支持原操作重试。028、Activity 16、Web 和 v9 上下文包配套交付。本地验证 027 匹配工件的备份和恢复后升级可执行 `RADISHNEXUS_CLASSIFICATION_LEGACY_REF=85b0e52 ./scripts/check-server-backup-restore.sh`。
 
-
 ### 工单与构建的可追溯关联
 
 [ADR-0056](../docs/adr/0056-ticket-ci-run-traceability.md) 增加 Ticket 与 Jenkins CI Run 的人工关联、解除与专用历史，CI Run 可分页反查当前可读 Ticket 和已有 staging 记录。029 与 Activity 17 配套。单 Project 取回沿 v9 的协作范围。可用 `RADISHNEXUS_CI_RUN_TRACE_LEGACY_REF=ad50ff1 ./scripts/check-server-backup-restore.sh` 验证本地 028 匹配工件恢复后升级。
+
+### 从原讨论追踪交付
+
+Thread 使用 `GET /api/v1/workspaces/{workspace_id}/threads/{thread_id}/delivery-tickets`，并在该路径下按工单分页读取 `/{ticket_id}/ci-runs`，按构建分页读取 `/{ticket_id}/ci-runs/{ci_run_id}/deployments`。每次读取在同一快照中复核当前 Session、Thread、工单来源和完整父级路径。失效路径返回 404。三页均只接受 `limit`、`after` 并使用 `private, no-store`。沿用 schema 029、Activity 17 和单 Project v9。 [ADR-0057](../docs/adr/0057-thread-delivery-trace.md)

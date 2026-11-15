@@ -57,6 +57,20 @@ function build(row: Record<string, unknown>) {
   };
 }
 
+export function parseBuildCandidate(value: unknown) {
+  return build(object(value, ["ref", "status", "completed_at", "component"]));
+}
+
+export function parseTraceDeployment(value: unknown) {
+  const row = object(value, ["ref", "status", "completed_at", "environment"]);
+  return {
+    id: ref(row.ref, "deployment", "dpl_"),
+    status: terminal(row.status),
+    completedAt: instant(row.completed_at),
+    environment: named(row.environment, "environment", "env_"),
+  };
+}
+
 function ticketPath(ticket: string) {
   return `/tickets/${encodeURIComponent(requireID(ticket, "tkt_"))}`;
 }
@@ -81,9 +95,7 @@ export const ciRunTraceClient = {
         signal,
       ),
       (value) => {
-        const row = build(
-          object(value, ["ref", "status", "completed_at", "component"]),
-        );
+        const row = parseBuildCandidate(value);
         if (row.component.id !== component) throw invalid();
         return row;
       },
@@ -210,20 +222,7 @@ export const ciRunTraceClient = {
         undefined,
         signal,
       ),
-      (value) => {
-        const row = object(value, [
-          "ref",
-          "status",
-          "completed_at",
-          "environment",
-        ]);
-        return {
-          id: ref(row.ref, "deployment", "dpl_"),
-          status: terminal(row.status),
-          completedAt: instant(row.completed_at),
-          environment: named(row.environment, "environment", "env_"),
-        };
-      },
+      parseTraceDeployment,
       after,
     );
   },

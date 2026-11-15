@@ -22,7 +22,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | --- | --- | --- |
 | 身份与管理 | 本地账户、邀请、初始化、恢复、owner / 成员管理交接已有技术证据；真实 OIDC / Radish 联调与团队持续使用仍未验收 | [身份专题](../topics.md#identity) |
 | 沟通与决策 | 讨论创建 / 确认 Decision、Project 决策发现已交付；最小拒绝、单链替代及四状态读取已交付，最小人工复核已通过正式浏览器验收 | [沟通与决策专题](../topics.md#communication-decisions) |
-| 工单与上下文 | 已交付工单状态、负责人、优先级、截止日期、消息建单、执行讨论、分类与 Project 标签。列表和状态看板支持组合查找，「我的工单」展示分类。已接通 Ticket 与 CI Run 的人工关联及相应 staging 追溯，通用关系分页待建设 | [工单与上下文专题](../topics.md#tickets-context) · [我的工单验收](reviews/2026-11-08-workspace-my-tickets.md) · [看板验收](reviews/2026-11-08-project-ticket-board.md) |
+| 工单与上下文 | 已交付工单状态、负责人、优先级、截止日期、消息建单、执行讨论、分类与 Project 标签。列表和状态看板支持组合查找，「我的工单」展示分类。已接通 Ticket 与 CI Run 的人工关联，也可从原 Thread 分层追溯工单、构建和 staging 部署。通用关系分页待建设 | [工单与上下文专题](../topics.md#tickets-context) · [我的工单验收](reviews/2026-11-08-workspace-my-tickets.md) · [看板验收](reviews/2026-11-08-project-ticket-board.md) |
 | 文档协作 | 最小 Markdown 正式保存、冲突、版本 / 恢复及隔离浏览器已有证据；原生中文 IME 暂缓、持续使用未验收 | [文档专题](../topics.md#documents) |
 | 交付集成 | 受认证接入、显式 staging 记录、配置、持久发送及 checkout 接收已有相应证据；ADR-0035 / 0037 B 真实采集与整链暂缓 | [交付专题](../topics.md#delivery-integration) |
 | 运行与产品交付 | Web、自部署、升级恢复、单 Project 上下文包及补验已有指定环境证据；U27、生产容量、更广迁移、有效试用授权与独立持续使用未闭合 | [运行交付专题](../topics.md#product-delivery) |
@@ -37,7 +37,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 1. **升级运维**：只读 schema readiness 已按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 完成；单机停机升级失败恢复已按 [ADR-0043](../adr/0043-single-host-upgrade-failure-recovery.md) 实施手册与隔离演练，故障与浏览器证据见[记录](reviews/2026-10-24-upgrade-failure-recovery.md)；独立操作者复验已按所有者要求暂缓，跨 schema 兼容窗口与生产编排仍待建立。
 2. **使用入口**：首页已可直接浏览可读 Project / Channel；Team / Project / Channel 创建与首批成员配置已接通；部署后首次访问创建管理员已接通；Workspace owner 主动交接已接通，Project admin / 私密对象管理权交接与成员生命周期已接通；其他对象列表仍缺。Document 的原生 IME 复核和真实外部交付链仍独立推进。
-3. **关系与时间线范围**：核心 Nexus 关系仍全量读取，未建立通用分页；Repository / Component 配置、Ticket / Component 和 Ticket / CI Run 已有专用双向分页。Timeline 默认沿事件主要对象投影，替代命令显式投影双方 Decision。Thread 入口当前可查看执行讨论工单，尚缺沿原讨论查看后续工单的构建与 staging 记录。
+3. **关系与时间线范围**：核心 Nexus 关系仍全量读取，未建立通用分页；Repository / Component 配置、Ticket / Component 和 Ticket / CI Run 已有专用双向分页。Timeline 默认沿事件主要对象投影，替代命令显式投影双方 Decision。Thread 的“执行与交付”支持从三类来源找到工单，再逐级读取关联构建与已有 staging 部署。 [ADR-0057 技术验收](reviews/2026-11-15-thread-delivery-trace.md)
 4. **证据边界**：自动化、真实数据库与本轮浏览器验收证明讨论到执行的局部闭环；Document 的剩余人工复核、真实交付链、完整 Golden Path 和真实团队持续使用仍分别验收。
 
 ## 近期执行顺序
@@ -46,7 +46,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **工单与构建的可追溯关联**。Ticket 和 CI Run 双向追溯、关联历史及已有 staging 记录共用当前权限。schema 029、Activity 17 与 Web 配套，单 Project 取回继续使用 v9。 [ADR-0056](../adr/0056-ticket-ci-run-traceability.md) · [技术验收](reviews/2026-11-15-ticket-ci-run-traceability.md)
+1. **设计核心 Nexus View 的关系分页**。先盘点现有全量读取、来源与后续结果的排序、受限关系的展示，以及 Go 和 Web 的兼容方式。确定首批对象与权限规则后再实施。 [现有反向关系合同](../adr/0022-transactional-activity-and-incoming-relations.md)
 2. **随功能完成技术验证**。以 `1036b21` 的候选证据为基线，按切片风险执行自动化、合成数据和隔离环境验证。实际目标就绪后，按其配置及候选差异定向复验适用的 T03、T04、T06、T07。 [合成预演及 T04 复核](reviews/2026-11-10-web-candidate-1036b21.md#2026-11-15-合成账号预演)
 3. **项目开发完成后安排真人观察和实测**。届时由所有者恢复安排，按 T01～T08 核对适用准入并决定是否开放。独立成员观察和 R08 沿已有任务与记录执行，原生中文 IME 和 U27 按各自合同补验。独立成员证据形成前保持“价值未验证”，观察结束后再根据实测决定继续、定向修复后重试、收窄或暂停。 [准备检查与复核条件](reviews/2026-11-15-trial-observation-readiness-1036b21.md#trial-admission-checks)
 
@@ -55,6 +55,8 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 消息转工单与执行讨论已通过隔离 PostgreSQL、合成 Session 回环 HTTPS、v1～v7 兼容和 v8 双轮导入。以本地 `be1670c` 的 schema 026 工件备份并恢复空目标，再显式迁移至 027。新 schema 空目标恢复后重建 Activity 并核验消息建单、关联和解除的原回执。Web 自动化验证确认、原请求重试和精确解除。 [功能验证](../../server/internal/goldenpath/postgres/ticket_execution_integration_test.go) · [备份恢复验证](../../server/internal/backuprestore/context_integration_test.go)
 
 工单分类与项目内查找通过回环 HTTPS、浏览器操作、v1～v8 兼容、v9 双轮导入以及 027→028 和 028 空目标恢复。代表性查询、Activity 重建和原回执核验见[技术验收](reviews/2026-11-15-ticket-classification.md)。
+
+从原讨论追踪交付已接通三种工单来源及 Ticket、CI Run、Deployment 的独立分页。脱敏证据包括回环 HTTPS 权限与游标、Chromium 窄屏键盘操作、v9 双轮取回、整库备份恢复及查询测量。 [ADR-0057](../adr/0057-thread-delivery-trace.md) · [技术验收](reviews/2026-11-15-thread-delivery-trace.md)
 
 已完成的负责人、优先级及上下文迁移补验沿[原记录](reviews/2026-10-28-daily-closeout.md)转入有界观察；遇到实际 BFCache、原生控件、慢查询或新候选差异时定向复验，不把合成查询计划写成生产容量。单宿主身份拆分沿[ADR-0051](../adr/0051-single-host-database-roles.md)及[隔离证据](reviews/2026-11-08-single-host-database-roles.md)复用，M1 文件、通知、审计运营、Attention Item 与更广生产运维仍按路线图独立推进。
 

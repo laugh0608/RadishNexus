@@ -296,6 +296,37 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 		t.Fatal(secondTrace, e)
 	}
 
+	// Restore the entire Thread → Ticket → CI Run → Deployment path into a clean database.
+	deliveryLinkInput := nativeLinkInput
+	deliveryLinkInput.ClientOperationID = "backup-active-delivery-discussion"
+	if _, e = execution.Write(ctx, currentInvocation, goldenpath.TicketDiscussionLink, deliveryLinkInput); e != nil {
+		t.Fatal(e)
+	}
+	deliveryReader := goldenpath.NewThreadDeliveryService(goldenpostgres.New(imported))
+	deliveryInput := goldenpath.DiscoveryPageInput{Limit: 25}
+	deliveryPaths := []goldenpath.ThreadDeliveryScope{
+		{ThreadID: importedThread},
+		{ThreadID: importedThread, TicketID: traceInput.TicketID},
+		{ThreadID: importedThread, TicketID: traceInput.TicketID, RunID: run.CIRun.ID},
+	}
+	deliveryBaseline := make([]goldenpath.ThreadDeliveryPage, len(deliveryPaths))
+	for i, path := range deliveryPaths {
+		deliveryBaseline[i], e = deliveryReader.List(ctx, actor, path, deliveryInput)
+		if e != nil {
+			t.Fatal(e)
+		}
+	}
+	rootFound := false
+	for _, item := range deliveryBaseline[0].Items {
+		if item.Ref.ID == traceInput.TicketID {
+			rootFound = reflect.DeepEqual(item.Origins, []string{goldenpath.DeliveryDiscussion})
+		}
+	}
+	if !rootFound || len(deliveryBaseline[1].Items) != 1 || deliveryBaseline[1].Items[0].Ref.ID != run.CIRun.ID ||
+		len(deliveryBaseline[2].Items) != 1 || deliveryBaseline[2].Items[0].Ref.ID != staged.ID {
+		t.Fatal("source Thread delivery path is incomplete", deliveryBaseline)
+	}
+
 	baseline := snapshotIncludedTables(t, ctx, imported)
 	activity := snapshotTable(t, ctx, imported, "radishnexus.activity_items")
 	restoredURL := recoveryBackupDatabase(t, ctx, targetURL)
@@ -411,6 +442,14 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	deployments, e := trace.List(ctx, actor, goldenpath.TraceRunDeployments, run.CIRun.ID, listInput)
 	if e != nil || len(deployments.Items) != 1 || deployments.Items[0].Ref.ID != staged.ID || deployments.Items[0].Status != "failed" {
 		t.Fatal(deployments, e)
+	}
+
+	deliveryReader = goldenpath.NewThreadDeliveryService(goldenpostgres.New(restored))
+	for i, path := range deliveryPaths {
+		page, err := deliveryReader.List(ctx, actor, path, deliveryInput)
+		if err != nil || !reflect.DeepEqual(page, deliveryBaseline[i]) {
+			t.Fatalf("restored Thread delivery page %d changed: %v (%v)", i, page, err)
+		}
 	}
 
 	restoredContext := goldenpath.NewContextService(goldenpostgres.NewContextStore(restored, schema))
