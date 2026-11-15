@@ -3,6 +3,10 @@ package goldenpath
 import (
 	"context"
 	"fmt"
+	cp "github.com/laugh0608/RadishNexus/server/internal/contextpackage"
+	"slices"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
@@ -11,17 +15,19 @@ import (
 const MaxDiscoveryPageSize = 50
 
 type TicketFilters struct {
-	Status   string
-	Assignee string
-	Priority string
+	Status              string
+	Assignee            string
+	Priority            string
+	Type, Labels, Title string
 }
 
 func (f TicketFilters) Valid() bool {
-	return (f.Status == "" || f.Status == "active" || ValidTicketStatus(f.Status)) && (f.Assignee == "" || f.Assignee == "me" || f.Assignee == "unassigned") && (f.Priority == "" || ValidTicketPriority(f.Priority))
+	return (f.Status == "" || f.Status == "active" || ValidTicketStatus(f.Status)) && (f.Assignee == "" || f.Assignee == "me" || f.Assignee == "unassigned") && (f.Priority == "" || ValidTicketPriority(f.Priority)) && (f.Type == "" || cp.ValidTicketType(f.Type)) && validTicketFilterLabels(f.Labels) && (f.Title == "" || validTicketTitleQuery(f.Title))
 }
 
 type DiscoveryPageInput struct {
-	IncludeDueDate bool
+	IncludeDueDate        bool
+	IncludeClassification bool
 
 	TicketFilters TicketFilters
 	AfterID       string
@@ -29,13 +35,14 @@ type DiscoveryPageInput struct {
 }
 
 type DiscoveryItem struct {
-	DueDate  *string
-	Priority string
-	Assignee *TicketAssignee
-	Ref      entityref.Ref
-	Title    string
-	Status   string
-	Project  *DiscoveryProject
+	Classification *TicketClassificationSummary
+	DueDate        *string
+	Priority       string
+	Assignee       *TicketAssignee
+	Ref            entityref.Ref
+	Title          string
+	Status         string
+	Project        *DiscoveryProject
 }
 
 type DiscoveryProject struct {
@@ -80,6 +87,7 @@ func (service *DiscoveryService) ListProjectChannels(ctx context.Context, princi
 }
 
 func (service *DiscoveryService) ListProjectTickets(ctx context.Context, principal authz.Principal, projectID string, input DiscoveryPageInput) (DiscoveryPage, error) {
+	input.TicketFilters.Normalize()
 	if err := validateDiscoveryInput(principal, "ticket", input); err != nil {
 		return DiscoveryPage{}, err
 	}
@@ -125,4 +133,28 @@ func validateDiscoveryInput(principal authz.Principal, kind string, input Discov
 		}
 	}
 	return nil
+}
+
+func validTicketFilterLabels(value string) bool {
+	if value == "" {
+		return true
+	}
+	return (cp.Classification{Type: "unset", LabelIDs: strings.Split(value, ",")}).Valid()
+}
+
+func validTicketTitleQuery(value string) bool {
+	return utf8.ValidString(value) && utf8.RuneCountInString(value) <= 80 && strings.TrimSpace(value) == value && !strings.ContainsRune(value, 0)
+}
+
+func (f TicketFilters) HasClassificationFilters() bool {
+	return f.Type != "" || f.Labels != "" || f.Title != ""
+}
+
+func (f *TicketFilters) Normalize() {
+	if f.Labels != "" {
+		ids := strings.Split(f.Labels, ",")
+		slices.Sort(ids)
+		f.Labels = strings.Join(ids, ",")
+	}
+	f.Title = strings.TrimSpace(cp.ASCIIKey(f.Title))
 }

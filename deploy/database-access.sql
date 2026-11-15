@@ -14,7 +14,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA radishnexus TO radishnexus_app, radishnexus
 GRANT INSERT, UPDATE ON ALL TABLES IN SCHEMA radishnexus TO radishnexus_app;
 GRANT DELETE ON radishnexus.activity_items, radishnexus.channel_memberships, radishnexus.external_identities,
     radishnexus.identity_invitations, radishnexus.oidc_transactions, radishnexus.project_memberships,
-    radishnexus.thread_memberships TO radishnexus_app;
+    radishnexus.thread_memberships, radishnexus.ticket_label_assignments TO radishnexus_app;
 REVOKE INSERT, UPDATE ON radishnexus.entity_types, radishnexus.relation_types FROM radishnexus_app;
 REVOKE UPDATE ON radishnexus.identity_audit, radishnexus.workspace_configuration_audit,
     radishnexus.context_export_audit FROM radishnexus_app;

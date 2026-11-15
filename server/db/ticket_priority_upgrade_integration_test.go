@@ -44,7 +44,7 @@ func TestTicketPriorityUpgradeFrom021(t *testing.T) {
 	}
 	var priority string
 	var rev, events int
-	if err = conn.QueryRow(ctx, `SELECT (to_jsonb(t)-'priority'-'priority_revision'-'due_date'-'due_date_revision')::text,priority,priority_revision FROM radishnexus.tickets t`).Scan(&after, &priority, &rev); err != nil || after != before || priority != "unset" || rev != 1 {
+	if err = conn.QueryRow(ctx, `SELECT (to_jsonb(t)-'priority'-'priority_revision'-'due_date'-'due_date_revision'-'ticket_type'-'classification_revision')::text,priority,priority_revision FROM radishnexus.tickets t`).Scan(&after, &priority, &rev); err != nil || after != before || priority != "unset" || rev != 1 {
 		t.Fatal("old priority inferred or history changed", after, priority, rev, err)
 	}
 	if err = conn.QueryRow(ctx, `SELECT count(*) FROM radishnexus.domain_events`).Scan(&events); err != nil || events != 0 {

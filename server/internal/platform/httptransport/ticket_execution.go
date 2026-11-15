@@ -123,7 +123,11 @@ func writeExecutionCommand(w http.ResponseWriter, r *http.Request, p authz.Princ
 		kind = goldenpath.TicketDiscussionLink
 		fields = append(fields, "thread_id")
 	}
-	raw, err := decodeStrictObject(w, r, fields, 8*1024)
+	var optional []string
+	if kind == goldenpath.TicketFromMessage {
+		optional = []string{"classification"}
+	}
+	raw, err := decodeStrictObject(w, r, fields, 8*1024, optional...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -131,6 +135,10 @@ func writeExecutionCommand(w http.ResponseWriter, r *http.Request, p authz.Princ
 		if value, exists := raw[name]; exists && (string(value) == "null" || json.Unmarshal(value, target) != nil) {
 			return nil, 0, authz.ErrInvalid
 		}
+	}
+	in.Classification, err = decodeInitialClassification(raw["classification"])
+	if err != nil {
+		return nil, 0, err
 	}
 	result, err := app.Write(r.Context(), webInvocation(p, r), kind, in)
 	if err != nil {

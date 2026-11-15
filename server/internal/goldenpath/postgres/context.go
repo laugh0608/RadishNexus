@@ -92,7 +92,7 @@ func contextIdentity(ctx context.Context, tx pgx.Tx, workspace string) (string, 
 
 // Business tables are locked in a fixed order before the emptiness check. This
 // blocks ordinary writers too; the import lock alone would not do that.
-var contextBusinessTables = []string{"activity_items", "channels", "ci_runs", "ci_source_checkout_bindings", "collaboration_command_receipts", "components", "context_export_audit", "context_import_batches", "context_import_history", "context_import_mappings", "decisions", "deployments", "document_revisions", "documents", "domain_events", "entity_links", "environment_deployment_authorizations", "environments", "inbound_deliveries", "messages", "outbox_deliveries", "projects", "repositories", "teams", "threads", "tickets"}
+var contextBusinessTables = []string{"activity_items", "channels", "ci_runs", "ci_source_checkout_bindings", "collaboration_command_receipts", "components", "context_export_audit", "context_import_batches", "context_import_history", "context_import_mappings", "decisions", "deployments", "document_revisions", "documents", "domain_events", "entity_links", "environment_deployment_authorizations", "environments", "inbound_deliveries", "messages", "outbox_deliveries", "projects", "repositories", "teams", "threads", "tickets", "ticket_label_assignments", "ticket_labels"}
 
 func emptyContextTarget(ctx context.Context, tx pgx.Tx, lock bool) error {
 	if lock {

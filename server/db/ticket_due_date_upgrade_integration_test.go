@@ -20,7 +20,7 @@ func TestTicketDueDateUpgradeFrom025(t *testing.T) {
 		SELECT workspace_id,primary_entity_type,primary_entity_id,event_id,event_type,actor_kind,actor_id,occurred_at,13,payload
 		FROM radishnexus.domain_events WHERE event_id='evt_accepted'`)
 	const snapshot = `SELECT jsonb_build_array(
-		(SELECT to_jsonb(t)-'due_date'-'due_date_revision' FROM radishnexus.tickets t),
+		(SELECT to_jsonb(t)-'due_date'-'due_date_revision'-'ticket_type'-'classification_revision' FROM radishnexus.tickets t),
 		(SELECT jsonb_agg(e ORDER BY e.event_id) FROM radishnexus.domain_events e),
 		(SELECT jsonb_agg(r) FROM radishnexus.collaboration_command_receipts r),
 		(SELECT to_jsonb(a)-'projection_version' FROM radishnexus.activity_items a))::text`
@@ -36,10 +36,10 @@ func TestTicketDueDateUpgradeFrom025(t *testing.T) {
 	}
 	var revision, projection int
 	var date *string
-	if err := conn.QueryRow(ctx, `SELECT t.due_date::text,t.due_date_revision,a.projection_version FROM radishnexus.tickets t CROSS JOIN radishnexus.activity_items a`).Scan(&date, &revision, &projection); err != nil || date != nil || revision != 1 || projection != 15 {
+	if err := conn.QueryRow(ctx, `SELECT t.due_date::text,t.due_date_revision,a.projection_version FROM radishnexus.tickets t CROSS JOIN radishnexus.activity_items a`).Scan(&date, &revision, &projection); err != nil || date != nil || revision != 1 || projection != 16 {
 		t.Fatal(date, revision, projection, err)
 	}
-	requireUpgradePrefix(t, conn, 27)
+	requireUpgradePrefix(t, conn, 28)
 
 	for payload, want := range map[string]bool{
 		`{"due_date":{"from":null,"to":"2032-02-29","from_revision":1,"to_revision":2}}`:   true,

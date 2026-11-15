@@ -1,3 +1,7 @@
+import {
+  parseTicketType,
+  type ClassificationInput,
+} from "./ticket-classification-api";
 import { parseExecutionMessage } from "./execution-api";
 import { parseTicketDueDate } from "./ticket-due-date";
 import { parseTicketPriority, type TicketPriority } from "./ticket-priority";
@@ -104,6 +108,16 @@ export type CollaborationTimelineItem = TimelineBase &
         activityType: "decision.superseded";
         supersession: {
           side: "superseded" | "replacement";
+          fromRevision: number;
+          toRevision: number;
+        };
+      }
+    | {
+        activityType: "ticket.classification-changed";
+        classification: {
+          from: ClassificationInput;
+          to: ClassificationInput;
+          names: ReadonlyMap<string, string>;
           fromRevision: number;
           toRevision: number;
         };
@@ -234,6 +248,7 @@ export interface SupersedeDecisionOutcome {
   occurredAt: string;
 }
 export interface CreateTicketInput {
+  classification?: ClassificationInput;
   clientOperationID: string;
   title: string;
 }
@@ -458,7 +473,7 @@ async function loadView(
 ): Promise<CollaborationView> {
   requireLocation(workspaceID, entityType, entityID);
   const response = await collaborationFetch(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/${pageSegments[entityType]}/${encodeURIComponent(entityID)}/nexus-view${entityType === "ticket" ? "?include=due_date,execution_context" : ""}`,
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/${pageSegments[entityType]}/${encodeURIComponent(entityID)}/nexus-view${entityType === "ticket" ? "?include=due_date,execution_context,classification" : ""}`,
     {
       method: "GET",
       headers: { Accept: "application/json" },
@@ -968,6 +983,7 @@ async function createTicket(
       {
         client_operation_id: input.clientOperationID,
         title: input.title,
+        classification: input.classification,
       },
       signal,
     ),
@@ -1463,6 +1479,73 @@ function parseTimelineItem(
       supersession: { side: sup.side, fromRevision: from, toRevision: to },
     };
   }
+  if (raw.activity_type === "ticket.classification-changed") {
+    const item = exactRecord(value, path, [
+      "id",
+      "activity_type",
+      "actor",
+      "occurred_at",
+      "subjects",
+      "classification",
+    ]);
+    const change = exactRecord(item.classification, path, [
+      "from",
+      "to",
+      "from_revision",
+      "to_revision",
+      "labels",
+    ]);
+    const selection = (value: unknown): ClassificationInput => {
+      const row = exactRecord(value, path, ["ticket_type", "label_ids"]);
+      if (!Array.isArray(row.label_ids))
+        throw new TypeError("Invalid Ticket label IDs");
+      const label_ids = row.label_ids.map((id) => scopedID(id, path, "lbl_"));
+      if (label_ids.some((id, i) => i > 0 && id <= label_ids[i - 1]!))
+        throw new TypeError("Invalid Ticket label order");
+      return { ticket_type: parseTicketType(row.ticket_type), label_ids };
+    };
+    const from = selection(change.from);
+    const to = selection(change.to);
+    const ids = [...new Set([...from.label_ids, ...to.label_ids])].sort();
+    const fromRevision = parseTicketStatusRevision(change.from_revision);
+    const toRevision = parseTicketStatusRevision(change.to_revision);
+    const subjects = array(item.subjects, path);
+    if (
+      expectedType !== "ticket" ||
+      !Array.isArray(change.labels) ||
+      change.labels.length !== ids.length ||
+      subjects.length !== 0 ||
+      toRevision !== fromRevision + 1 ||
+      (from.ticket_type === to.ticket_type &&
+        from.label_ids.join(",") === to.label_ids.join(","))
+    )
+      throw new TypeError("Invalid Ticket classification change");
+    const names = new Map<string, string>();
+    change.labels.forEach((value, i) => {
+      const label = exactRecord(value, path, ["id", "name", "revision"]);
+      const name = label.name;
+      if (
+        label.id !== ids[i] ||
+        typeof name !== "string" ||
+        name.trim() !== name ||
+        !name ||
+        [...name].length > 40 ||
+        /[\p{Cc}\u2028\u2029]/u.test(name)
+      )
+        throw new TypeError("Invalid historical Ticket label");
+      parseTicketStatusRevision(label.revision);
+      names.set(ids[i]!, name);
+    });
+    return {
+      ...provenance,
+      id: scopedID(item.id, path, "evt_"),
+      activityType: "ticket.classification-changed",
+      actor: parseActor(item.actor, path),
+      occurredAt: timestamp(item.occurred_at, path),
+      subjects: [],
+      classification: { from, to, names, fromRevision, toRevision },
+    };
+  }
   if (raw.activity_type === "ticket.due-date-changed") {
     const item = exactRecord(value, path, [
       "id",
@@ -1798,6 +1881,7 @@ function validateViewShape(
         item.activityType !== "ticket.assignee-changed" &&
         item.activityType !== "ticket.priority-changed" &&
         item.activityType !== "ticket.due-date-changed" &&
+        item.activityType !== "ticket.classification-changed" &&
         item.activityType !== "ticket.discussion-linked" &&
         item.activityType !== "ticket.discussion-unlinked",
     )

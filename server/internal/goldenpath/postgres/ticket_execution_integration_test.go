@@ -47,7 +47,7 @@ func TestTicketExecutionHTTPPermissionsAndRoundTrip(t *testing.T) {
 	f := contextDatabase(t)
 	f.seed(t)
 	legacy := f.bundle(t)
-	legacy.Manifest.Profile = cp.ProfileV7
+	legacy = legacyTicketClassificationBundle(t, legacy, cp.ProfileV7)
 	digest := cp.Digest(legacy.Manifest)
 	if _, _, err := cp.Unpack(legacy); err != nil || cp.Digest(legacy.Manifest) != digest {
 		t.Fatal("v7 compatibility", err)
@@ -184,6 +184,22 @@ func TestTicketExecutionHTTPPermissionsAndRoundTrip(t *testing.T) {
 	contextHTTPRead(t, s, f.owner, workspace+"/threads/"+hidden.ID+"/tickets", 404)
 	executionWriteHTTP(t, s, f.owner, "DELETE", ticketEndpoint+"/discussion-links/"+private.LinkID, `{"client_operation_id":"guess-link","confirmed":true}`, 404)
 	bundle := f.bundle(t)
+	legacyExecution := legacyTicketClassificationBundle(t, bundle, cp.ProfileV8)
+	before := cp.Digest(legacyExecution.Manifest)
+	_, legacyIndex, err := cp.Unpack(legacyExecution)
+	if err != nil || cp.Digest(legacyExecution.Manifest) != before {
+		t.Fatal("v8 Message execution history", err)
+	}
+	hasMessageSource := false
+	for _, event := range legacyIndex.History {
+		if event.Entity.ID == id && event.Type == "ticket.created" && event.Version == 2 {
+			hasMessageSource = true
+		}
+	}
+	if !hasMessageSource {
+		t.Fatal("v8 normalization lost Message source")
+	}
+
 	if bundle.Manifest.Profile != cp.Profile {
 		t.Fatal(bundle.Manifest.Profile)
 	}

@@ -8,6 +8,9 @@ import (
 
 func stripTicketFields(t *testing.T, b *Bundle, fields ...string) {
 	t.Helper()
+	if b.Manifest.Profile != Profile {
+		fields = append(fields, "ticket_type", "label_ids", "classification_revision")
+	}
 	rewritePackageFile(t, b, "objects.jsonl", func(raw []byte) []byte {
 		var result []byte
 		for _, o := range mustUnpackObjects(t, raw) {

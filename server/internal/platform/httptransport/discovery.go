@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	cp "github.com/laugh0608/RadishNexus/server/internal/contextpackage"
 	"log"
 	"net/http"
 	"net/url"
@@ -43,16 +44,17 @@ type DiscoveryHandler struct {
 }
 
 type discoveryCursor struct {
-	Status      string `json:"status,omitempty"`
-	Assignee    string `json:"assignee,omitempty"`
-	Priority    string `json:"priority,omitempty"`
-	ActorID     string `json:"actor_id,omitempty"`
-	CIRunID     string `json:"ci_run_id,omitempty"`
-	Version     int    `json:"v"`
-	WorkspaceID string `json:"workspace_id"`
-	Kind        string `json:"kind"`
-	ProjectID   string `json:"project_id"`
-	AfterID     string `json:"after_id"`
+	FilterDigest string `json:"filter_digest,omitempty"`
+	Status       string `json:"status,omitempty"`
+	Assignee     string `json:"assignee,omitempty"`
+	Priority     string `json:"priority,omitempty"`
+	ActorID      string `json:"actor_id,omitempty"`
+	CIRunID      string `json:"ci_run_id,omitempty"`
+	Version      int    `json:"v"`
+	WorkspaceID  string `json:"workspace_id"`
+	Kind         string `json:"kind"`
+	ProjectID    string `json:"project_id"`
+	AfterID      string `json:"after_id"`
 }
 
 // Ticket cursor v2 requires even empty filters; v1 encodings for all other
@@ -76,13 +78,14 @@ func (c discoveryCursor) MarshalJSON() ([]byte, error) {
 }
 
 type discoveryItemDTO struct {
-	DueDate  **string                     `json:"due_date,omitempty"`
-	Project  *goldenpath.DiscoveryProject `json:"project,omitempty"`
-	Priority string                       `json:"priority,omitempty"`
-	Assignee **goldenpath.TicketAssignee  `json:"assignee,omitempty"`
-	Ref      entityRefDTO                 `json:"ref"`
-	Title    string                       `json:"title"`
-	Status   string                       `json:"status"`
+	Classification *goldenpath.TicketClassificationSummary `json:"classification,omitempty"`
+	DueDate        **string                                `json:"due_date,omitempty"`
+	Project        *goldenpath.DiscoveryProject            `json:"project,omitempty"`
+	Priority       string                                  `json:"priority,omitempty"`
+	Assignee       **goldenpath.TicketAssignee             `json:"assignee,omitempty"`
+	Ref            entityRefDTO                            `json:"ref"`
+	Title          string                                  `json:"title"`
+	Status         string                                  `json:"status"`
 }
 
 type discoveryPageDTO struct {
@@ -173,7 +176,7 @@ func (handler *DiscoveryHandler) list(response http.ResponseWriter, request *htt
 		handler.writeError(response, request, err)
 		return
 	}
-	scope.Status, scope.Assignee, scope.Priority = input.TicketFilters.Status, input.TicketFilters.Assignee, input.TicketFilters.Priority
+	scope = ticketDiscoveryScope(scope, input.TicketFilters)
 	var page goldenpath.DiscoveryPage
 	switch kind {
 	case "project":
@@ -222,22 +225,30 @@ func parseDiscoveryQuery(raw string, scope discoveryCursor) (goldenpath.Discover
 	}
 	for name, values := range values {
 		if name == "include" {
-			if (scope.Kind != "ticket" && scope.Kind != "my-tickets") || len(values) != 1 || values[0] != "due_date" {
+			if (scope.Kind != "ticket" && scope.Kind != "my-tickets") || len(values) != 1 || (values[0] != "due_date" && values[0] != "classification" && values[0] != "due_date,classification") {
 				return input, invalid
 			}
-			input.IncludeDueDate = true
+			input.IncludeDueDate = strings.Contains(values[0], "due_date")
+			input.IncludeClassification = strings.Contains(values[0], "classification")
 			continue
 		}
-		if (name != "limit" && name != "after" && !(scope.Version == 2 && scope.Kind == "ticket" && (name == "status" || name == "assignee" || name == "priority"))) || len(values) != 1 || values[0] == "" {
+		if (name != "limit" && name != "after" && !(scope.Version == 2 && scope.Kind == "ticket" && (name == "status" || name == "assignee" || name == "priority" || name == "type" || name == "labels" || name == "q")) && !(scope.Kind == "ticket-label" && name == "status")) || len(values) != 1 || values[0] == "" {
 			return input, invalid
 		}
 	}
 	if scope.Version == 2 && scope.Kind == "ticket" {
-		input.TicketFilters = goldenpath.TicketFilters{Status: values.Get("status"), Assignee: values.Get("assignee"), Priority: values.Get("priority")}
-		if !input.TicketFilters.Valid() {
+		input.TicketFilters = goldenpath.TicketFilters{Status: values.Get("status"), Assignee: values.Get("assignee"), Priority: values.Get("priority"), Type: values.Get("type"), Labels: values.Get("labels"), Title: values.Get("q")}
+		input.TicketFilters.Normalize()
+		if !input.TicketFilters.Valid() || (values.Has("q") && input.TicketFilters.Title == "") {
 			return input, invalid
 		}
-		scope.Status, scope.Assignee, scope.Priority = input.TicketFilters.Status, input.TicketFilters.Assignee, input.TicketFilters.Priority
+		scope = ticketDiscoveryScope(scope, input.TicketFilters)
+	}
+	if scope.Kind == "ticket-label" {
+		scope.Status = labelDirectoryStatus(values)
+		if scope.Status != "active" && scope.Status != "archived" && scope.Status != "all" {
+			return input, invalid
+		}
 	}
 	if value := values.Get("limit"); value != "" {
 		limit, err := strconv.Atoi(value)
@@ -315,6 +326,12 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 			return dto, invalid
 		}
 		row := discoveryItemDTO{Priority: item.Priority, Ref: entityRefDTO{Type: item.Ref.Type, ID: item.Ref.ID}, Title: item.Title, Status: item.Status}
+		if input.IncludeClassification && refKind == "ticket" {
+			if !validClassificationSummary(item.Classification) {
+				return dto, invalid
+			}
+			row.Classification = item.Classification
+		}
 		if input.IncludeDueDate && refKind == "ticket" {
 			row.DueDate = &item.DueDate
 		}
@@ -353,6 +370,9 @@ func validDiscoveryTitle(title string) bool {
 }
 
 func discoveryPrefix(kind string) string {
+	if kind == "ticket-label" {
+		return "lbl_"
+	}
 	switch kind {
 	case "message-execution", "thread-execution":
 		return "tkt_"
@@ -418,4 +438,62 @@ func validDiscoveryAfterID(id, kind string) bool {
 		return validScopedID(id, "prj_") || validScopedID(id, "chn_") || validScopedID(id, "thr_")
 	}
 	return validScopedID(id, discoveryPrefix(kind))
+}
+
+func validClassificationSummary(summary *goldenpath.TicketClassificationSummary) bool {
+	if summary == nil || summary.Labels == nil || !cp.ValidTicketType(summary.Type) {
+		return false
+	}
+	previous := ""
+	for _, label := range summary.Labels {
+		if label.Ref.Type != "ticket-label" || !validScopedID(label.Ref.ID, "lbl_") || label.Ref.ID <= previous ||
+			!cp.ValidTicketLabelName(label.Name) || (label.Status != "active" && label.Status != "archived") {
+			return false
+		}
+		previous = label.Ref.ID
+	}
+	return true
+}
+
+func ticketDiscoveryScope(scope discoveryCursor, f goldenpath.TicketFilters) discoveryCursor {
+	scope.Status, scope.Assignee, scope.Priority = f.Status, f.Assignee, f.Priority
+	if f.HasClassificationFilters() {
+		scope.Version = 3
+		scope.FilterDigest = cp.Hash(cp.Encode(f))
+	}
+	return scope
+}
+
+func labelDirectoryStatus(values url.Values) string {
+	if status := values.Get("status"); status != "" {
+		return status
+	}
+	return "active"
+}
+
+func parseLabelDirectoryQuery(raw string, p authz.Principal, project string) (goldenpath.DiscoveryPageInput, discoveryCursor, string, error) {
+	scope := discoveryCursor{Version: 1, WorkspaceID: p.WorkspaceID, ActorID: p.ID, ProjectID: project, Kind: "ticket-label"}
+	input, err := parseDiscoveryQuery(raw, scope)
+	if err != nil {
+		return input, scope, "", err
+	}
+	values, err := url.ParseQuery(raw)
+	if err != nil {
+		return input, scope, "", err
+	}
+	scope.Status = labelDirectoryStatus(values)
+	return input, scope, scope.Status, nil
+}
+
+func nextLabelDirectoryCursor(scope discoveryCursor, id string) (*string, error) {
+	if id == "" {
+		return nil, nil
+	}
+	scope.AfterID = id
+	body, err := json.Marshal(scope)
+	if err != nil {
+		return nil, err
+	}
+	cursor := base64.RawURLEncoding.EncodeToString(body)
+	return &cursor, nil
 }

@@ -75,7 +75,7 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
  COALESCE(h.original_time,e.occurred_at),COALESCE(h.original_facts,e.payload),h.event_id IS NOT NULL
  FROM radishnexus.domain_events e LEFT JOIN radishnexus.context_import_history h ON h.workspace_id=e.workspace_id AND h.event_id=e.event_id
  WHERE COALESCE(h.original_type,e.event_type) IN (
- 'decision.proposed','decision.accepted','decision.rejected','decision.superseded','decision.reviewed','ticket.created','ticket.status-changed','ticket.assignee-changed','ticket.priority-changed','ticket.due-date-changed',
+ 'decision.proposed','decision.accepted','decision.rejected','decision.superseded','decision.reviewed','ticket.created','ticket.status-changed','ticket.assignee-changed','ticket.priority-changed','ticket.due-date-changed','ticket.classification-changed','ticket-label.created','ticket-label.renamed','ticket-label.archived',
  'ci-run.recorded','deployment.recorded','project.created','channel.created','component.created','environment.created','document.created','document.revised',
  'repository.created','component.repository-linked','component.repository-unlinked','ticket.component-linked','ticket.component-unlinked','ticket.discussion-linked','ticket.discussion-unlinked')
  ORDER BY COALESCE(h.original_time,e.occurred_at),e.event_id
@@ -221,12 +221,15 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 	}
 
 	var payload activityEventPayload
-	if err := json.Unmarshal(event.payload, &payload); err != nil {
-		return activityRecord{}, fmt.Errorf("decode Activity event %s payload: %w", event.eventID, err)
+	if event.eventType != cp.TicketClassificationChanged {
+		if err := json.Unmarshal(event.payload, &payload); err != nil {
+			return activityRecord{}, fmt.Errorf("decode Activity event %s payload: %w", event.eventID, err)
+		}
 	}
 	repositoryEvent := event.eventType == "repository.created" || event.eventType == "component.repository-linked" || event.eventType == "component.repository-unlinked"
 	ticketRelation := event.eventType == "ticket.component-linked" || event.eventType == "ticket.component-unlinked" || event.eventType == goldenpath.DiscussionLinked || event.eventType == goldenpath.DiscussionUnlinked
-	if payload.Status == "" && event.target.Type != "document" && event.eventType != "component.created" && !repositoryEvent && !ticketRelation && event.eventType != "ticket.status-changed" && event.eventType != "ticket.assignee-changed" && event.eventType != "ticket.priority-changed" && event.eventType != goldenpath.TicketDueDateChanged && event.eventType != "decision.reviewed" {
+	labelEvent := event.eventType == "ticket-label.created" || event.eventType == "ticket-label.renamed" || event.eventType == "ticket-label.archived"
+	if !labelEvent && event.eventType != cp.TicketClassificationChanged && payload.Status == "" && event.target.Type != "document" && event.eventType != "component.created" && !repositoryEvent && !ticketRelation && event.eventType != "ticket.status-changed" && event.eventType != "ticket.assignee-changed" && event.eventType != "ticket.priority-changed" && event.eventType != goldenpath.TicketDueDateChanged && event.eventType != "decision.reviewed" {
 		return activityRecord{}, fmt.Errorf("project Activity event %s: status is required", event.eventID)
 	}
 
@@ -236,6 +239,18 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		safeFacts:     map[string]string{"status": payload.Status},
 	}
 	switch event.eventType {
+	case cp.TicketClassificationChanged:
+		change, err := cp.DecodeClassificationChange(event.payload)
+		if err != nil || event.target.Type != "ticket" || event.actorKind != "user" || event.actorID == nil {
+			return activityRecord{}, fmt.Errorf("invalid Ticket classification event %s", event.eventID)
+		}
+		record.safeFacts = map[string]string{"classification": string(cp.Encode(cp.Facts{Classification: &change}))}
+	case "ticket-label.created", "ticket-label.renamed", "ticket-label.archived":
+		change, err := cp.DecodeLabelChange(event.payload, event.eventType)
+		if err != nil || event.target.Type != "ticket-label" || event.actorKind != "user" || event.actorID == nil {
+			return activityRecord{}, fmt.Errorf("invalid Ticket label event %s", event.eventID)
+		}
+		record.safeFacts = map[string]string{"name": change.To.Name, "status": change.To.Status, "revision": strconv.Itoa(change.To.Revision)}
 	case goldenpath.TicketDueDateChanged:
 		change, err := cp.DecodeDueDateChange(event.payload)
 		if err != nil || event.target.Type != "ticket" || event.actorKind != "user" || event.actorID == nil {

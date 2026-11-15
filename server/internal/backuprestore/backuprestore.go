@@ -74,6 +74,8 @@ var (
 		"radishnexus.thread_memberships",
 		"radishnexus.threads",
 		"radishnexus.tickets",
+		"radishnexus.ticket_labels",
+		"radishnexus.ticket_label_assignments",
 		"radishnexus.user_accounts",
 		"radishnexus.users",
 		"radishnexus.workspace_configuration_audit",

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	cp "github.com/laugh0608/RadishNexus/server/internal/contextpackage"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -222,6 +223,9 @@ func (store *Store) CreateTicketFromDecision(
 		if !exact {
 			return result, fmt.Errorf("invalid Ticket creation receipt provenance")
 		}
+		if err := verifyInitialClassification(ctx, tx, command.Invocation, projectID, receipt.resultID, receipt.eventID, command.Classification); err != nil {
+			return result, err
+		}
 		if err := tx.Commit(ctx); err != nil {
 			return result, fmt.Errorf("commit duplicate Ticket creation lookup: %w", err)
 		}
@@ -279,20 +283,18 @@ func (store *Store) CreateTicketFromDecision(
 	if err := insertOutbox(ctx, tx, command.EventID); err != nil {
 		return result, err
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return result, mapDatabaseError("commit Ticket", err)
+	if command.Classification != nil {
+		if err = applyTicketClassification(ctx, tx, command.Invocation, projectID, command.TicketID, command.ClassificationEventID, command.EventID,
+			cp.EmptyClassification(), *command.Classification, 1, command.OccurredAt.Add(time.Microsecond)); err != nil {
+			return result, err
+		}
 	}
-
-	result.Ticket = goldenpath.Ticket{
-		ID:                 command.TicketID,
-		WorkspaceID:        command.Principal.WorkspaceID,
-		GoverningProjectID: projectID,
-		Title:              command.Title,
-		Status:             "open",
-		StatusRevision:     1,
-		CreatedBy:          command.Principal.ID,
-		CreatedAt:          command.OccurredAt,
-		UpdatedAt:          command.OccurredAt,
+	result.Ticket, err = loadTicket(ctx, tx, command.Principal.WorkspaceID, command.TicketID)
+	if err != nil {
+		return result, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return result, mapDatabaseError("commit Ticket", err)
 	}
 	result.Created = true
 	return result, nil

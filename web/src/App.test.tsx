@@ -86,6 +86,7 @@ describe("authenticated Web Shell", () => {
                 status: "in-progress",
                 priority: "high",
                 due_date: "2032-02-29",
+                classification: { ticket_type: "unset", labels: [] },
                 project: { id: "prj_main", name: "Current project" },
               },
             ],
@@ -145,7 +146,7 @@ describe("authenticated Web Shell", () => {
         "/workspaces/wrk_docs/tickets/tkt_work",
       );
       expect(fetch.mock.calls[3]?.[0]).toBe(
-        "/api/v1/workspaces/wrk_docs/my-tickets?limit=25&include=due_date",
+        "/api/v1/workspaces/wrk_docs/my-tickets?limit=25&include=due_date,classification",
       );
       await act(async () => resolveOld(response("Late Main ticket")));
       expect(previousSignal.aborted).toBe(true);
@@ -203,6 +204,7 @@ describe("authenticated Web Shell", () => {
             assignee: null,
             priority: "unset" as const,
             dueDate: null,
+            classification: { ticketType: "unset" as const, labels: [] },
           },
         ],
         nextCursor: null,

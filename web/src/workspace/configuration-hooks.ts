@@ -76,17 +76,17 @@ export function useAction(
   };
   return { busy, message, uncertain, run };
 }
-export function usePage<T>(
-  load: (
-    after: string | undefined,
-    signal: AbortSignal,
-  ) => Promise<ConfigurationPage<T>>,
+export function usePage<
+  T,
+  Page extends ConfigurationPage<T> = ConfigurationPage<T>,
+>(
+  load: (after: string | undefined, signal: AbortSignal) => Promise<Page>,
   onSessionExpired: () => void,
 ) {
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [revision, setRevision] = useState(0);
   const [state, setState] = useState<{
-    page?: ConfigurationPage<T>;
+    page?: Page;
     error?: string;
     loader?: typeof load;
     cursor?: string;

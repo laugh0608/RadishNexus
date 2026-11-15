@@ -289,7 +289,7 @@ migration 024 / Activity 12 / 默认 v5 包须与 Go / Web / CLI 配套停写升
 
 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 由 `TicketAssignmentService` 承载 Ticket 作用域的读取、候选分页和显式写入。详情支持设置、改派、清空、由我负责及原操作重试；Project 列表显示相同摘要。仅 open / in-progress 接受新分配，关闭工单保留责任；成员暂停、退出或失权显示不可执行，不自动清空或授予权限。
 
-migration 021 与 Activity v9 配套部署；负责人字段和不可变历史随备份恢复。当前源码默认导出 `project-collaboration-v8`，严格读取 v1～v7；历史身份不绑定登录账户。接口字段、并发代次和精确重试见 ADR，验收范围见[本轮记录](../docs/status/reviews/2026-10-28-ticket-assignee.md)。
+migration 021 与 Activity v9 配套部署；负责人字段和不可变历史随备份恢复。当前源码默认导出 `project-collaboration-v9`，严格读取 v1～v8；历史身份不绑定登录账户。接口字段、并发代次和精确重试见 ADR，验收范围见[本轮记录](../docs/status/reviews/2026-10-28-ticket-assignee.md)。
 
 ## Ticket 最小状态流转
 
@@ -450,3 +450,7 @@ migration 014 增加 `ticket --affects--> component`、来源约束、active 唯
 ## 消息转工单与执行讨论
 
 消息建单、来源定位、讨论回复与双向分页沿 [ADR-0054](../docs/adr/0054-message-to-ticket-and-execution-discussion.md) 的 Session API。配套 migration 027、Activity 15、上下文包 v8。使用本地 schema 026 工件复验备份后显式升级时，可从仓库根执行 `RADISHNEXUS_EXECUTION_LEGACY_REF=be1670c ./scripts/check-server-backup-restore.sh`。
+
+### 工单分类与项目内查找
+
+[ADR-0055](../docs/adr/0055-ticket-classification-and-project-search.md) 增加工单分类、项目标签目录以及类型、全匹配标签和字面标题筛选。分类写入与建单支持原操作重试。028、Activity 16、Web 和 v9 上下文包配套交付。本地验证 027 匹配工件的备份和恢复后升级可执行 `RADISHNEXUS_CLASSIFICATION_LEGACY_REF=85b0e52 ./scripts/check-server-backup-restore.sh`。

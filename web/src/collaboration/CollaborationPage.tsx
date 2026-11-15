@@ -1,3 +1,5 @@
+import { TicketClassificationPanel } from "./TicketClassificationPanel";
+import { ticketTypeLabels } from "./ticket-classification-api";
 import { useExecutionWrite } from "./execution-write";
 import { ExecutionDiscussions, ExecutionReplies } from "./ExecutionPanels";
 import { executionMessageLink } from "./execution-api";
@@ -614,6 +616,15 @@ function CollaborationPageContent({
               {ticketAssignmentActions}
               {ticketPriorityActions}
               {ticketDueDateActions}
+              <TicketClassificationPanel
+                key={entityID}
+                workspace={workspaceID}
+                project={current.project.id}
+                ticket={entityID}
+                onSessionExpired={onSessionExpired}
+                onUnavailable={relationUnavailable}
+                onChanged={relationChanged}
+              />
               <CreateDocument
                 workspaceID={workspaceID}
                 ticketID={entityID}
@@ -800,13 +811,15 @@ function TimelineList({
                 ? `${ticketStatusLabels[item.fromStatus]} → ${ticketStatusLabels[item.toStatus]}（版本 ${item.fromRevision} → ${item.toRevision}）`
                 : "assignment" in item
                   ? `${item.assignment.fromUserID ?? "未分配"} → ${item.assignment.toUserID ?? "未分配"}（负责人版本 ${item.assignment.fromRevision} → ${item.assignment.toRevision}）`
-                  : "dueDate" in item
-                    ? `截止日期 ${ticketDueDateLabel(item.dueDate.from)} → ${ticketDueDateLabel(item.dueDate.to)}（版本 ${item.dueDate.fromRevision} → ${item.dueDate.toRevision}）`
-                    : "priority" in item
-                      ? `${ticketPriorityLabels[item.priority.from]} → ${ticketPriorityLabels[item.priority.to]}（优先级版本 ${item.priority.fromRevision} → ${item.priority.toRevision}）`
-                      : "supersession" in item
-                        ? `${item.supersession.side === "superseded" ? "已被替代" : "替代了旧结论"}（版本 ${item.supersession.fromRevision} → ${item.supersession.toRevision}）`
-                        : item.status}
+                  : "classification" in item
+                    ? `分类 ${ticketTypeLabels[item.classification.from.ticket_type]}${item.classification.from.label_ids.map((id) => ` · ${item.classification.names.get(id)}`).join("")} → ${ticketTypeLabels[item.classification.to.ticket_type]}${item.classification.to.label_ids.map((id) => ` · ${item.classification.names.get(id)}`).join("")}`
+                    : "dueDate" in item
+                      ? `截止日期 ${ticketDueDateLabel(item.dueDate.from)} → ${ticketDueDateLabel(item.dueDate.to)}（版本 ${item.dueDate.fromRevision} → ${item.dueDate.toRevision}）`
+                      : "priority" in item
+                        ? `${ticketPriorityLabels[item.priority.from]} → ${ticketPriorityLabels[item.priority.to]}（优先级版本 ${item.priority.fromRevision} → ${item.priority.toRevision}）`
+                        : "supersession" in item
+                          ? `${item.supersession.side === "superseded" ? "已被替代" : "替代了旧结论"}（版本 ${item.supersession.fromRevision} → ${item.supersession.toRevision}）`
+                          : item.status}
           </span>
           <SubjectSummary subjects={item.subjects} />
           {item.subjects.map((subject) =>

@@ -23,7 +23,8 @@ const (
 	ProfileV5        = "project-collaboration-v5"
 	ProfileV6        = "project-collaboration-v6"
 	ProfileV7        = "project-collaboration-v7"
-	Profile          = "project-collaboration-v8"
+	ProfileV8        = "project-collaboration-v8"
+	Profile          = "project-collaboration-v9"
 	Version          = 1
 	MaxBytes         = 64 << 20
 	MaxObjects       = 10000
@@ -133,15 +134,17 @@ func (c DueDateChange) Valid() bool {
 }
 
 type Ticket struct {
-	DueDate            *string `json:"due_date"`
-	DueDateRevision    int     `json:"due_date_revision"`
-	Priority           string  `json:"priority"`
-	PriorityRevision   int     `json:"priority_revision"`
-	AssigneeUserID     *string `json:"assignee_user_id"`
-	AssignmentRevision int     `json:"assignment_revision"`
-	Title              string  `json:"title"`
-	Status             string  `json:"status"`
-	StatusRevision     int     `json:"status_revision"`
+	Classification
+	ClassificationRevision int     `json:"classification_revision"`
+	DueDate                *string `json:"due_date"`
+	DueDateRevision        int     `json:"due_date_revision"`
+	Priority               string  `json:"priority"`
+	PriorityRevision       int     `json:"priority_revision"`
+	AssigneeUserID         *string `json:"assignee_user_id"`
+	AssignmentRevision     int     `json:"assignment_revision"`
+	Title                  string  `json:"title"`
+	Status                 string  `json:"status"`
+	StatusRevision         int     `json:"status_revision"`
 }
 type Document struct {
 	Revision   int    `json:"revision"`
@@ -193,29 +196,31 @@ type History struct {
 // Facts is a whitelist. Validate rejects fields that do not belong to the
 // particular event, even when their values happen to be zero.
 type Facts struct {
-	DueDate                 *DueDateChange  `json:"due_date,omitempty"`
-	Review                  *DecisionReview `json:"-"`
-	Replacement             *Ref            `json:"replacement,omitempty"`
-	Relation                *Ref            `json:"relation,omitempty"`
-	DecisionFromRevision    int             `json:"from_revision,omitempty"`
-	DecisionToRevision      int             `json:"to_revision,omitempty"`
-	ReplacementFromRevision int             `json:"replacement_from_revision,omitempty"`
-	ReplacementToRevision   int             `json:"replacement_to_revision,omitempty"`
-	Priority                *Priority       `json:"priority,omitempty"`
-	Assignment              *Assignment     `json:"assignment,omitempty"`
-	Status                  string          `json:"status,omitempty"`
-	Evidence                *Ref            `json:"evidence,omitempty"`
-	Decision                *Ref            `json:"decision,omitempty"`
-	Ticket                  *Ref            `json:"ticket,omitempty"`
-	Channel                 *Ref            `json:"channel,omitempty"`
-	Thread                  *Ref            `json:"thread,omitempty"`
-	Message                 *Ref            `json:"message,omitempty"`
-	Revision                int             `json:"revision,omitempty"`
-	RestoredFrom            *int            `json:"restored_from_revision,omitempty"`
-	FromStatus              string          `json:"from_status,omitempty"`
-	ToStatus                string          `json:"to_status,omitempty"`
-	FromRevision            int             `json:"from_status_revision,omitempty"`
-	ToRevision              int             `json:"to_status_revision,omitempty"`
+	Classification          *ClassificationChange `json:"classification,omitempty"`
+	Label                   *LabelChange          `json:"label,omitempty"`
+	DueDate                 *DueDateChange        `json:"due_date,omitempty"`
+	Review                  *DecisionReview       `json:"-"`
+	Replacement             *Ref                  `json:"replacement,omitempty"`
+	Relation                *Ref                  `json:"relation,omitempty"`
+	DecisionFromRevision    int                   `json:"from_revision,omitempty"`
+	DecisionToRevision      int                   `json:"to_revision,omitempty"`
+	ReplacementFromRevision int                   `json:"replacement_from_revision,omitempty"`
+	ReplacementToRevision   int                   `json:"replacement_to_revision,omitempty"`
+	Priority                *Priority             `json:"priority,omitempty"`
+	Assignment              *Assignment           `json:"assignment,omitempty"`
+	Status                  string                `json:"status,omitempty"`
+	Evidence                *Ref                  `json:"evidence,omitempty"`
+	Decision                *Ref                  `json:"decision,omitempty"`
+	Ticket                  *Ref                  `json:"ticket,omitempty"`
+	Channel                 *Ref                  `json:"channel,omitempty"`
+	Thread                  *Ref                  `json:"thread,omitempty"`
+	Message                 *Ref                  `json:"message,omitempty"`
+	Revision                int                   `json:"revision,omitempty"`
+	RestoredFrom            *int                  `json:"restored_from_revision,omitempty"`
+	FromStatus              string                `json:"from_status,omitempty"`
+	ToStatus                string                `json:"to_status,omitempty"`
+	FromRevision            int                   `json:"from_status_revision,omitempty"`
+	ToRevision              int                   `json:"to_status_revision,omitempty"`
 }
 type Descriptor struct {
 	Path   string `json:"path"`
@@ -299,5 +304,5 @@ func Encode(v any) json.RawMessage {
 }
 func Digest(m Manifest) string { return Hash(Encode(m)) }
 func Prefix(kind string) string {
-	return map[string]string{"team": "tem_", "project": "prj_", "channel": "chn_", "message": "msg_", "thread": "thr_", "decision": "dec_", "ticket": "tkt_", "document": "doc_", "entity-link": "lnk_", "event": "evt_", "actor": "usr_"}[kind]
+	return map[string]string{"team": "tem_", "project": "prj_", "channel": "chn_", "message": "msg_", "thread": "thr_", "decision": "dec_", "ticket": "tkt_", "ticket-label": "lbl_", "document": "doc_", "entity-link": "lnk_", "event": "evt_", "actor": "usr_"}[kind]
 }

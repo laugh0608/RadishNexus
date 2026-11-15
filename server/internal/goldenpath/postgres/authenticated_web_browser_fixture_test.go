@@ -164,6 +164,15 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	discoveryHandler := httptransport.NewDiscoveryHandler(authService, goldenpath.NewDiscoveryService(goldenpostgres.New(pool)), sessionPolicy, proxyPolicy)
 	configurationHandler := httptransport.NewConfigurationHandler(authService, goldenpath.NewConfigurationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy)
 	httptransport.RegisterConfigurationRoutes(mux, discoveryHandler, configurationHandler)
+	contextStore := goldenpostgres.NewContextStore(pool, func(ctx context.Context, tx pgx.Tx) error {
+		checker, err := db.NewReadinessChecker(tx)
+		if err != nil {
+			return err
+		}
+		return checker.CheckReady(ctx)
+	})
+	httptransport.RegisterContextRoutes(mux, httptransport.NewContextHandler(authService, goldenpath.NewContextService(contextStore), sessionPolicy, proxyPolicy))
+
 	httptransport.RegisterOwnerTransferRoutes(mux, httptransport.NewOwnerTransferHandler(authService, goldenpath.NewOwnerTransferService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
 	mux.Handle("/api/v1/workspaces/{workspace_id}/projects/", discoveryHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/my-tickets", discoveryHandler)
@@ -176,6 +185,9 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	mux.Handle("/api/v1/workspaces/{workspace_id}/decisions/", collaborationHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/tickets/", collaborationHandler)
 	httptransport.RegisterTicketExecutionRoutes(mux, httptransport.NewTicketExecutionHandler(authService, goldenpath.NewTicketExecutionService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
+	httptransport.RegisterTicketClassificationRoutes(mux, httptransport.NewTicketClassificationHandler(authService, goldenpath.NewTicketClassificationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
+	httptransport.RegisterTicketAssignmentRoutes(mux, httptransport.NewTicketAssignmentHandler(authService, goldenpath.NewTicketAssignmentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
+	httptransport.RegisterTicketPriorityRoutes(mux, httptransport.NewTicketPriorityHandler(authService, goldenpath.NewTicketPriorityService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
 	httptransport.RegisterTicketDueDateRoutes(mux, httptransport.NewTicketDueDateHandler(authService, goldenpath.NewTicketDueDateService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
 	httptransport.RegisterTicketStatusRoutes(mux, httptransport.NewTicketStatusHandler(authService, goldenpath.NewTicketStatusService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
 	httptransport.RegisterTicketComponentRoutes(mux, httptransport.NewTicketComponentHandler(authService, goldenpath.NewTicketComponentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), sessionPolicy, proxyPolicy))

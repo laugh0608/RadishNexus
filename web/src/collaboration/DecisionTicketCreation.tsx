@@ -1,3 +1,9 @@
+import { TicketClassificationFields } from "./TicketClassificationFields";
+import {
+  emptyClassification,
+  initialClassification,
+  type ClassificationInput,
+} from "./ticket-classification-api";
 import { useEffect, useRef, useState } from "react";
 import {
   CollaborationRequestError,
@@ -31,10 +37,14 @@ export function useDecisionTicketCreation({
   onSessionExpired: () => void;
   onCreated: (result: CreateTicketOutcome) => void;
 }) {
+  const [classification, setClassification] = useState(emptyClassification);
+  type Operation = {
+    id: string;
+    title: string;
+    classification?: ClassificationInput;
+  };
   const [title, setTitle] = useState(""),
-    [pending, setPending] = useState<{ id: string; title: string } | null>(
-      null,
-    ),
+    [pending, setPending] = useState<Operation | null>(null),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState<string | null>(null);
   const active = useRef<AbortController | null>(null);
@@ -49,6 +59,7 @@ export function useDecisionTicketCreation({
     if (unavailable || (current && !canRetry)) {
       setPending(null);
       setTitle("");
+      setClassification(emptyClassification);
       setMessage(null);
     }
   }
@@ -59,16 +70,20 @@ export function useDecisionTicketCreation({
     },
     [current, canRetry, unavailable],
   );
-  const submit = async (retry?: { id: string; title: string }) => {
+  const submit = async (retry?: Operation) => {
     if (
       !current ||
       active.current ||
       (!retry && (!canCreate || pending || !title.trim()))
     )
       return;
-    let operation: { id: string; title: string };
+    let operation: Operation;
     try {
-      operation = retry ?? { id: createOperationID(), title };
+      operation = retry ?? {
+        id: createOperationID(),
+        title,
+        classification: initialClassification(classification),
+      };
     } catch {
       setMessage("无法生成操作标识，请重试。");
       return;
@@ -82,12 +97,19 @@ export function useDecisionTicketCreation({
       const result = await client.createTicket(
         workspaceID,
         current.ref.id,
-        { clientOperationID: operation.id, title: operation.title },
+        {
+          clientOperationID: operation.id,
+          title: operation.title,
+          ...(operation.classification && {
+            classification: operation.classification,
+          }),
+        },
         controller.signal,
       );
       if (controller.signal.aborted) return;
       setPending(null);
       setTitle("");
+      setClassification(emptyClassification);
       setMessage(
         result.created
           ? "Ticket 已创建，并保留创建时的已确认来源。"
@@ -146,6 +168,13 @@ export function useDecisionTicketCreation({
                 placeholder="把已接受结论转成可执行工作"
               />
             </label>
+            <TicketClassificationFields
+              workspace={workspaceID}
+              project={current?.project.id}
+              onSessionExpired={onSessionExpired}
+              value={classification}
+              onChange={setClassification}
+            />
             <button
               className="primary-button"
               disabled={!title.trim()}

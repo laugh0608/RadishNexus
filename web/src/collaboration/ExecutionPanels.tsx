@@ -1,70 +1,16 @@
-import { useCallback, useEffect, useEffectEvent, useState } from "react";
+import { TicketClassificationFields } from "./TicketClassificationFields";
+import {
+  emptyClassification,
+  initialClassification,
+} from "./ticket-classification-api";
+import { useCallback, useState } from "react";
+import { useExecutionRead } from "./useExecutionRead";
 import { browserChannelMessageClient } from "../channel/api";
-import { requestStatus, type ExecutionWrite } from "./execution-write";
+import type { ExecutionWrite } from "./execution-write";
 import { projectTicketsClient } from "../workspace/project-tickets-api";
 import { executionClient, executionMessageLocation } from "./execution-api";
 
-function useExecutionRead<T>(
-  load: (signal: AbortSignal) => Promise<T>,
-  onSessionExpired: () => void,
-  enabled = true,
-  onDenied?: () => void,
-) {
-  const [state, setState] = useState<{
-    load: typeof load;
-    data?: T;
-    error?: string;
-  }>({ load });
-  const handleDenied = useEffectEvent(() => onDenied?.());
-  useEffect(() => {
-    if (!enabled) return;
-    let controller: AbortController | undefined;
-    const forget = () => {
-      controller?.abort();
-      setState({ load });
-    };
-    const read = () => {
-      controller?.abort();
-      const current = new AbortController();
-      controller = current;
-      void load(current.signal).then(
-        (data) => {
-          if (!current.signal.aborted) setState({ load, data });
-        },
-        (error) => {
-          if (current.signal.aborted) return;
-          const status = requestStatus(error);
-          if (status === 401 || status === 403 || status === 404)
-            handleDenied();
-          if (status === 401) onSessionExpired();
-          setState({ load, error: "当前内容无法读取，请刷新后重试。" });
-        },
-      );
-    };
-    const refresh = () => {
-      forget();
-      if (document.visibilityState === "visible") read();
-    };
-    const restore = (event: PageTransitionEvent) => {
-      if (event.persisted) refresh();
-    };
-    read();
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
-    window.addEventListener("pagehide", forget);
-    window.addEventListener("pageshow", restore);
-    return () => {
-      controller?.abort();
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
-      window.removeEventListener("pagehide", forget);
-      window.removeEventListener("pageshow", restore);
-    };
-  }, [enabled, load, onSessionExpired]);
-  return enabled && state.load === load ? state : { load };
-}
-
-function OperationStatus({
+export function OperationStatus({
   write,
   target,
 }: {
@@ -143,6 +89,7 @@ function MessageWork({
   const [after, setAfter] = useState<string>();
   const [reload, setReload] = useState(0);
   const [title, setTitle] = useState("");
+  const [classification, setClassification] = useState(emptyClassification);
   const [review, setReview] = useState(false);
   const [created, setCreated] = useState<string | null>(null);
   const load = useCallback(
@@ -162,6 +109,7 @@ function MessageWork({
     if (write.pending?.target === message) write.clear();
     setCreated(null);
     setTitle("");
+    setClassification(emptyClassification);
     setReview(false);
   });
   return (
@@ -205,6 +153,8 @@ function MessageWork({
                           message,
                           {
                             title,
+                            classification:
+                              initialClassification(classification),
                             client_operation_id: operationID,
                             confirmed: true,
                           },
@@ -214,6 +164,7 @@ function MessageWork({
                         setCreated(ticket);
                         setReview(false);
                         setTitle("");
+                        setClassification(emptyClassification);
                         setAfter(undefined);
                         setReload((value) => value + 1);
                       },
@@ -243,6 +194,13 @@ function MessageWork({
                     onChange={(event) => setTitle(event.target.value)}
                   />
                 </label>
+                <TicketClassificationFields
+                  workspace={workspace}
+                  channel={channel}
+                  onSessionExpired={onSessionExpired}
+                  value={classification}
+                  onChange={setClassification}
+                />
                 <button type="submit">创建工单</button>
               </form>
             ))}

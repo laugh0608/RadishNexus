@@ -7,19 +7,24 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 	"io"
 	"net/http"
+	"slices"
+	"unicode/utf8"
 )
 
 // Decode a bounded object with an exact field set, retaining explicit null and
 // rejecting duplicate keys before command-specific field validation.
-func decodeStrictObject(w http.ResponseWriter, r *http.Request, fields []string, maxBytes int64) (map[string]json.RawMessage, error) {
+func decodeStrictObject(w http.ResponseWriter, r *http.Request, fields []string, maxBytes int64, optional ...string) (map[string]json.RawMessage, error) {
 	var raw json.RawMessage
 	if err := decodeJSON(w, r, &raw, maxBytes); err != nil {
 		return nil, err
 	}
-	return decodeStrictObjectBytes(raw, fields)
+	return decodeStrictObjectBytes(raw, fields, optional...)
 }
 
-func decodeStrictObjectBytes(raw []byte, fields []string) (map[string]json.RawMessage, error) {
+func decodeStrictObjectBytes(raw []byte, fields []string, optional ...string) (map[string]json.RawMessage, error) {
+	if !utf8.Valid(raw) {
+		return nil, authz.ErrInvalid
+	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	token, err := d.Token()
 	if err != nil || token != json.Delim('{') {
@@ -50,8 +55,10 @@ func decodeStrictObjectBytes(raw []byte, fields []string) (map[string]json.RawMe
 	if _, err = d.Token(); !errors.Is(err, io.EOF) {
 		return nil, authz.ErrInvalid
 	}
-	if len(values) != len(fields) {
-		return nil, authz.ErrInvalid
+	for key := range values {
+		if !slices.Contains(fields, key) && !slices.Contains(optional, key) {
+			return nil, authz.ErrInvalid
+		}
 	}
 	for _, field := range fields {
 		if _, exists := values[field]; !exists {

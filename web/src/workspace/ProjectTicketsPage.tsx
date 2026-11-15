@@ -1,3 +1,12 @@
+import {
+  ClassificationText,
+  LabelPicker,
+} from "../collaboration/TicketClassificationFields";
+import {
+  parseTicketType,
+  ticketTypeLabels,
+} from "../collaboration/ticket-classification-api";
+import { TicketLabelDirectory } from "./TicketLabelDirectory";
 import { ticketDueDateLabel } from "../collaboration/ticket-due-date";
 import {
   ticketPriorityLabels,
@@ -52,6 +61,9 @@ function ProjectTickets({
 }: Props) {
   const [state, setState] = useState<PageState>({ status: "loading" });
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
+  const [titleQuery, setTitleQuery] = useState("");
+  const [showLabels, setShowLabels] = useState(false);
+  const [showDirectory, setShowDirectory] = useState(false);
   const [filters, setFilters] = useState<TicketFilters>({});
   const [view, setView] = useState<"list" | "board">("list");
   const [revision, setRevision] = useState(0);
@@ -74,6 +86,9 @@ function ProjectTickets({
     refresh();
   };
   const unavailable = useCallback(() => {
+    activeRequest.current?.abort();
+    setShowLabels(false);
+    setShowDirectory(false);
     setState({ status: "error", message: "该项目已不可访问，请返回工作台。" });
   }, []);
   const sessionExpired = useCallback(() => {
@@ -244,7 +259,77 @@ function ProjectTickets({
             ))}
           </select>
         </label>
-        <button type="button" onClick={() => changeFilters({})}>
+        <label>
+          类型
+          <select
+            value={filters.type ?? ""}
+            onChange={(e) =>
+              changeFilters({
+                ...filters,
+                type: e.target.value
+                  ? parseTicketType(e.target.value)
+                  : undefined,
+              })
+            }
+          >
+            <option value="">全部类型</option>
+            {Object.entries(ticketTypeLabels).map(([type, label]) => (
+              <option key={type} value={type}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <form
+          role="search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if ([...titleQuery.trim()].length <= 80)
+              changeFilters({ ...filters, q: titleQuery.trim() || undefined });
+          }}
+        >
+          <label>
+            工单标题
+            <input
+              type="search"
+              value={titleQuery}
+              onChange={(event) => setTitleQuery(event.target.value)}
+            />
+          </label>
+          <button disabled={[...titleQuery.trim()].length > 80} type="submit">
+            查找工单
+          </button>
+          {[...titleQuery.trim()].length > 80 && (
+            <p role="status">标题查询最多 80 个字符。</p>
+          )}
+        </form>
+        <button
+          type="button"
+          aria-expanded={showLabels}
+          disabled={state.status === "error"}
+          onClick={() => setShowLabels((value) => !value)}
+        >
+          按标签筛选
+        </button>
+        {showLabels && state.status !== "error" && (
+          <LabelPicker
+            workspace={workspaceID}
+            project={projectID}
+            onSessionExpired={onSessionExpired}
+            includeArchived
+            selected={filters.labels?.split(",") ?? []}
+            onChange={(ids) =>
+              changeFilters({ ...filters, labels: ids.join(",") || undefined })
+            }
+          />
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setTitleQuery("");
+            changeFilters({});
+          }}
+        >
           重置筛选
         </button>
       </fieldset>
@@ -265,6 +350,21 @@ function ProjectTickets({
       ) : (
         <>
           <h2>{state.project.name}</h2>
+          <button
+            type="button"
+            aria-expanded={showDirectory}
+            onClick={() => setShowDirectory((value) => !value)}
+          >
+            项目标签目录
+          </button>
+          {showDirectory && (
+            <TicketLabelDirectory
+              workspace={workspaceID}
+              project={projectID}
+              onSessionExpired={onSessionExpired}
+              onUnavailable={unavailable}
+            />
+          )}
           {state.project.status === "archived" ? (
             <p>项目已归档 · 可浏览历史工单</p>
           ) : null}
@@ -277,8 +377,7 @@ function ProjectTickets({
                     status={status}
                     workspaceID={workspaceID}
                     projectID={projectID}
-                    assignee={filters.assignee}
-                    priority={filters.priority}
+                    filters={filters}
                     client={client}
                     onUnavailable={unavailable}
                     onSessionExpired={sessionExpired}
@@ -338,6 +437,9 @@ function TicketRows({
           <p>优先级：{ticketPriorityLabels[ticket.priority]}</p>
           <p>截止日期：{ticketDueDateLabel(ticket.dueDate)}</p>
           <p>负责人：{assigneeLabel(ticket.assignee)}</p>
+          <p>
+            <ClassificationText value={ticket.classification} />
+          </p>
         </li>
       ))}
     </ul>
@@ -348,15 +450,13 @@ function TicketBoardColumn({
   status,
   workspaceID,
   projectID,
-  assignee,
-  priority,
+  filters,
   client,
   onUnavailable,
   onSessionExpired,
 }: Required<Props> & {
   status: TicketStatus;
-  assignee: TicketFilters["assignee"];
-  priority: TicketFilters["priority"];
+  filters: TicketFilters;
   onUnavailable: () => void;
 }) {
   const label = ticketStatusLabels[status];
@@ -364,9 +464,8 @@ function TicketBoardColumn({
     async (after: string | undefined, signal: AbortSignal) => {
       try {
         return await client.tickets(workspaceID, projectID, after, signal, {
+          ...filters,
           status,
-          assignee,
-          priority,
         });
       } catch (error) {
         if (
@@ -379,7 +478,7 @@ function TicketBoardColumn({
         throw error;
       }
     },
-    [assignee, client, onUnavailable, priority, projectID, status, workspaceID],
+    [filters, client, onUnavailable, projectID, status, workspaceID],
   );
   const column = usePage(load, onSessionExpired);
   return (

@@ -26,20 +26,21 @@ type Registry map[string]string
 // M0Registry returns a new registry containing the frozen M0 entity types.
 func M0Registry() Registry {
 	return Registry{
-		"project":     "prj_",
-		"initiative":  "ini_",
-		"component":   "cmp_",
-		"repository":  "rep_",
-		"channel":     "chn_",
-		"decision":    "dec_",
-		"environment": "env_",
-		"entity-link": "lnk_",
-		"message":     "msg_",
-		"thread":      "thr_",
-		"ticket":      "tkt_",
-		"document":    "doc_",
-		"ci-run":      "cir_",
-		"deployment":  "dpl_",
+		"project":      "prj_",
+		"initiative":   "ini_",
+		"component":    "cmp_",
+		"repository":   "rep_",
+		"channel":      "chn_",
+		"decision":     "dec_",
+		"environment":  "env_",
+		"entity-link":  "lnk_",
+		"message":      "msg_",
+		"thread":       "thr_",
+		"ticket":       "tkt_",
+		"ticket-label": "lbl_",
+		"document":     "doc_",
+		"ci-run":       "cir_",
+		"deployment":   "dpl_",
 	}
 }
 

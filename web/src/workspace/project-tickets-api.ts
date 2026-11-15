@@ -1,3 +1,9 @@
+import {
+  parseClassification,
+  parseTicketType,
+  type ClassificationSummary,
+  type TicketType,
+} from "../collaboration/ticket-classification-api";
 import { parseTicketDueDate } from "../collaboration/ticket-due-date";
 import {
   parseTicketPriority,
@@ -25,6 +31,9 @@ export interface TicketFilters {
   status?: "active" | TicketStatus;
   assignee?: "me" | "unassigned";
   priority?: TicketPriority;
+  type?: TicketType;
+  labels?: string;
+  q?: string;
 }
 function filterQuery(filters: TicketFilters) {
   const parts: string[] = [];
@@ -33,7 +42,14 @@ function filterQuery(filters: TicketFilters) {
     if (
       (key === "status" && (value === "active" || parseTicketStatus(value))) ||
       (key === "assignee" && (value === "me" || value === "unassigned")) ||
-      (key === "priority" && parseTicketPriority(value))
+      (key === "priority" && parseTicketPriority(value)) ||
+      (key === "type" && parseTicketType(value)) ||
+      (key === "labels" &&
+        value.split(",").every((id: string) => requireID(id, "lbl_"))) ||
+      (key === "q" &&
+        typeof value === "string" &&
+        value.trim() &&
+        [...value.trim()].length <= 80)
     )
       parts.push(`${key}=${encodeURIComponent(value)}`);
     else throw new AuthRequestError("工单筛选条件无效。");
@@ -41,6 +57,7 @@ function filterQuery(filters: TicketFilters) {
   return parts.length ? `&${parts.join("&")}` : "";
 }
 export interface ProjectTicket {
+  classification: ClassificationSummary;
   priority: TicketPriority;
   dueDate: string | null;
   assignee: TicketAssignee | null;
@@ -84,7 +101,7 @@ export const projectTicketsClient = {
     return parsePage<ProjectTicket>(
       await request(
         workspaceID,
-        `/projects/${encodeURIComponent(projectID)}/tickets${query(after)}&include=due_date${filterQuery(filters)}`,
+        `/projects/${encodeURIComponent(projectID)}/tickets${query(after)}&include=due_date,classification${filterQuery(filters)}`,
         "GET",
         undefined,
         signal,
@@ -97,6 +114,7 @@ export const projectTicketsClient = {
           "assignee",
           "priority",
           "due_date",
+          "classification",
         ]);
         const ref = object(row.ref, ["type", "id"]);
         if (ref.type !== "ticket")
@@ -106,6 +124,7 @@ export const projectTicketsClient = {
           assignee: parseAssignee(row.assignee),
           priority: parseTicketPriority(row.priority),
           dueDate: parseTicketDueDate(row.due_date),
+          classification: parseClassification(row.classification),
           title: text(row.title),
           status: parseTicketStatus(row.status),
         };

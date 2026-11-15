@@ -190,3 +190,7 @@ ADR-0037 A 在正式 CI Run 页面展示未采集、来源不可用、observed �
 ## 消息转工单与执行讨论
 
 从 Project 可见消息的“此消息的工单”入口填写标题并确认。工单详情可以直接打开原消息。Thread 页面提供回复和项目工单选择器，关联后从两边均可打开与解除。私密讨论的关联按两端当前权限展示。 [ADR-0054](../docs/adr/0054-message-to-ticket-and-execution-discussion.md)
+
+### 工单分类与项目内查找
+
+消息和 Decision 建单可选择类型与项目标签。工单详情提供分类编辑与历史，项目工单列表和看板共用类型、标签、标题和既有筛选。「我的工单」展示当前分类。Project admin 管理标签目录；归档标签继续显示在已有工单上，也可用来筛选。 [ADR-0055](../docs/adr/0055-ticket-classification-and-project-search.md)

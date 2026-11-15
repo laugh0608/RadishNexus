@@ -1,6 +1,6 @@
 # Project 上下文包迁移
 
-本手册执行 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的单 Project 首片及 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 的负责人扩展及 [ADR-0047](../docs/adr/0047-ticket-priority-and-filtering.md) 的优先级扩展，以及 [ADR-0048](../docs/adr/0048-decision-lifecycle-and-rejection.md) 的 Decision 拒绝扩展及 [ADR-0049](../docs/adr/0049-decision-supersession.md) 的替代扩展。ADR-0050 增加人工复核，[ADR-0053](../docs/adr/0053-ticket-due-date.md) 增加工单截止日期。[ADR-0054](../docs/adr/0054-message-to-ticket-and-execution-discussion.md) 增加消息转工单和执行讨论。当前源码默认导出 `project-collaboration-v8`，严格读取旧 v1～v7，旧工件拒绝未知 profile，不提供丢弃历史的降级导出。它迁移单 Project 的当前可读协作闭包，目标为同版本、完整匹配当前 migration history（当前为 schema 027）且已正常初始化的空业务实例；不替代 PostgreSQL 整库备份，不合并已有项目。
+本手册执行 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的单 Project 首片及 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 的负责人扩展及 [ADR-0047](../docs/adr/0047-ticket-priority-and-filtering.md) 的优先级扩展，以及 [ADR-0048](../docs/adr/0048-decision-lifecycle-and-rejection.md) 的 Decision 拒绝扩展及 [ADR-0049](../docs/adr/0049-decision-supersession.md) 的替代扩展。ADR-0050 增加人工复核，[ADR-0053](../docs/adr/0053-ticket-due-date.md) 增加工单截止日期。[ADR-0054](../docs/adr/0054-message-to-ticket-and-execution-discussion.md) 增加消息转工单和执行讨论。[ADR-0055](../docs/adr/0055-ticket-classification-and-project-search.md) 增加分类、项目标签和项目内查找。当前源码默认导出 `project-collaboration-v9`，严格读取旧 v1～v8，旧工件拒绝未知 profile，不提供丢弃历史的降级导出。它迁移单 Project 的当前可读协作闭包，目标为同版本、完整匹配当前 migration history（当前为 schema 028）且已正常初始化的空业务实例；不替代 PostgreSQL 整库备份，不合并已有项目。
 
 ## 准备与权限
 
@@ -105,7 +105,7 @@ v2 在 Ticket 中明确携带可空 `assignee_user_id` 与 `assignment_revision`
 
 v3 在 v2 的五个 Ticket 字段上增加必填 `priority / priority_revision`，从 unset / 1 重放连续优先级历史，校验终态禁止修改、全局时间次序、三条历史链的最终值与更新时间。旧 v1 / v2 先按各自精确字段和事件白名单校验，再在内部补 unset / 1；v1 同时补未分配 / 1。源 manifest digest 保持不变，不补造事件或改写旧时间。
 
-022 与 Activity 10、配套 Go / Web / CLI 一起停写升级。旧 021 工件恢复到空目标后才显式 migrate；优先级字段由 v3 引入，当前新导出使用 v8。筛选、cursor 和协作 receipt 不进入上下文包，receipt 仍保留在整库备份中。原生与导入优先级事件均参与二次导入和投影重建，历史身份仍不可登录。
+022 与 Activity 10、配套 Go / Web / CLI 一起停写升级。旧 021 工件恢复到空目标后才显式 migrate；优先级字段由 v3 引入，当前新导出使用 v9。筛选、cursor 和协作 receipt 不进入上下文包，receipt 仍保留在整库备份中。原生与导入优先级事件均参与二次导入和投影重建，历史身份仍不可登录。
 
 ## Decision 拒绝兼容
 
@@ -143,3 +143,9 @@ schema 026、Activity 14、Go / Web / CLI 配套停写升级。025 备份用匹�
 v8 在 `history.jsonl` 保留 Message 来源的 `ticket.created` schema 2，以及讨论关联和解除事件。按创建来源和关系代次校验引用。创建来源必须可读，私密执行讨论按双方权限整体筛选关联和对应历史。v1～v7 按原 profile 读取，保留 manifest digest 和 Decision 来源历史。导入沿空目标、历史身份与映射规则。 [ADR-0054](../docs/adr/0054-message-to-ticket-and-execution-discussion.md)
 
 迁移 027 与 Activity 15、Go、Web、CLI 配套交付。026 整库备份以匹配工件恢复到独立空目标，再显式迁移。新整库备份保留原生创建、关联及解除 receipt。
+
+### 工单分类和标签，v9
+
+v9 取回 Project 标签目录及创建、改名和归档历史，保留 Ticket 分类、标签绑定、版本和操作当时的名称。重放核对历史名称、目录版本和新绑定当时的有效性。旧 v1～v8 保留原 manifest digest，导入后工单从未分类、无标签、分类版本 1 开始。
+
+028 与 Activity 16、Go、Web 和 CLI 配套。027 整库备份先用匹配工件恢复到独立空目标，然后显式迁移；028 整库备份保留原生分类及目录回执和目录审计。恢复后运行 Activity 重建。 [ADR-0055](../docs/adr/0055-ticket-classification-and-project-search.md)

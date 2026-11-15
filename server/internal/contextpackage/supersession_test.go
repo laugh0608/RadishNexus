@@ -133,7 +133,7 @@ func TestSupersessionLegacyV4AndHistoricalClosure(t *testing.T) {
 		},
 		func(v *Data) {
 			later := at.Add(time.Minute)
-			v.Objects = append(v.Objects, Object{Type: "ticket", ID: "tkt_late", Actor: "usr_a", CreatedAt: later, UpdatedAt: later, Data: Encode(Ticket{Title: "After replacement", Status: "open", StatusRevision: 1, AssignmentRevision: 1, Priority: "unset", PriorityRevision: 1, DueDateRevision: 1}), Lineage: []Origin{}})
+			v.Objects = append(v.Objects, Object{Type: "ticket", ID: "tkt_late", Actor: "usr_a", CreatedAt: later, UpdatedAt: later, Data: Encode(Ticket{Classification: EmptyClassification(), ClassificationRevision: 1, Title: "After replacement", Status: "open", StatusRevision: 1, AssignmentRevision: 1, Priority: "unset", PriorityRevision: 1, DueDateRevision: 1}), Lineage: []Origin{}})
 			v.History = append(v.History, History{ID: "evt_late", Type: "ticket.created", Version: 1, Entity: Ref{"ticket", "tkt_late"}, Actor: "usr_a", Source: "web", OccurredAt: later, CorrelationID: "cor_a", Facts: Encode(Facts{Status: "open", Decision: &Ref{"decision", "dec_a"}}), Lineage: []Origin{}})
 			v.Links = append(v.Links, Link{ID: "lnk_late", From: Ref{"ticket", "tkt_late"}, To: Ref{"decision", "dec_a"}, Relation: "implements", Assertion: "asserted", Origin: "user", Actor: "usr_a", CreatedAt: later, UpdatedAt: later, EventID: "evt_late", State: "active", Lineage: []Origin{}})
 		},

@@ -2,6 +2,7 @@ package goldenpath
 
 import (
 	"context"
+	cp "github.com/laugh0608/RadishNexus/server/internal/contextpackage"
 	"strings"
 
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
@@ -23,6 +24,7 @@ type MessageLocation struct {
 }
 
 type TicketExecutionInput struct {
+	Classification                                                             *cp.Classification
 	ChannelID, MessageID, TicketID, ThreadID, LinkID, Title, ClientOperationID string
 	Confirmed                                                                  bool
 }
@@ -30,7 +32,7 @@ type TicketExecutionInput struct {
 type TicketExecutionCommand struct {
 	Invocation
 	TicketExecutionInput
-	Kind, EventID, ResultID, RelationID, Digest string
+	Kind, EventID, ResultID, RelationID, Digest, ClassificationEventID string
 }
 
 type TicketExecutionResult struct {
@@ -88,9 +90,12 @@ func (s *TicketExecutionService) Write(ctx context.Context, inv Invocation, kind
 		}
 		cmd.Title = title
 		resultPrefix = "tkt_"
-		canonical = struct {
-			Title string `json:"title"`
-		}{title}
+		classification, event, err := initialClassification(in.Classification, s.ids)
+		if err != nil {
+			return result, err
+		}
+		cmd.Classification, cmd.ClassificationEventID = classification, event
+		canonical = ticketCreationPayload{title, classification}
 	case TicketDiscussionLink:
 		if entityref.M0Registry().Validate(entityref.Ref{Type: "ticket", ID: in.TicketID}) != nil || entityref.M0Registry().Validate(entityref.Ref{Type: "thread", ID: in.ThreadID}) != nil {
 			return result, authz.ErrInvalid

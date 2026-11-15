@@ -1,3 +1,4 @@
+import { parseClassification } from "../collaboration/ticket-classification-api";
 import { parseTicketDueDate } from "../collaboration/ticket-due-date";
 import { AuthRequestError } from "../auth/api";
 import { parseTicketPriority } from "../collaboration/ticket-priority";
@@ -28,7 +29,7 @@ export async function readMyTickets(
   return parsePage(
     await request(
       workspaceID,
-      `/my-tickets${query(after)}&include=due_date`,
+      `/my-tickets${query(after)}&include=due_date,classification`,
       "GET",
       undefined,
       signal,
@@ -40,6 +41,7 @@ export async function readMyTickets(
         "status",
         "priority",
         "due_date",
+        "classification",
         "project",
       ]);
       const ref = object(row.ref, ["type", "id"]);
@@ -56,6 +58,7 @@ export async function readMyTickets(
         status,
         priority: parseTicketPriority(row.priority),
         dueDate: parseTicketDueDate(row.due_date),
+        classification: parseClassification(row.classification),
         project: {
           id: requireID(project.id, "prj_"),
           name: text(project.name),

@@ -62,11 +62,6 @@ type acceptDecisionRequest struct {
 	Confirmed         bool   `json:"confirmed"`
 }
 
-type createTicketRequest struct {
-	ClientOperationID string `json:"client_operation_id"`
-	Title             string `json:"title"`
-}
-
 type collaborationViewResponse struct {
 	Data collaborationViewDTO `json:"data"`
 }
@@ -130,22 +125,23 @@ type collaborationRelationDTO struct {
 }
 
 type collaborationTimelineDTO struct {
-	DueDate       *cp.DueDateChange                  `json:"due_date,omitempty"`
-	Supersession  *supersessionTimelineDTO           `json:"supersession,omitempty"`
-	Priority      *goldenpath.TicketPriorityChange   `json:"priority,omitempty"`
-	Assignment    *goldenpath.TicketAssignmentChange `json:"assignment,omitempty"`
-	Imported      bool                               `json:"imported,omitempty"`
-	FromStatus    string                             `json:"from_status,omitempty"`
-	ToStatus      string                             `json:"to_status,omitempty"`
-	FromRevision  int                                `json:"from_status_revision,omitempty"`
-	ToRevision    int                                `json:"to_status_revision,omitempty"`
-	ID            string                             `json:"id"`
-	ActivityType  string                             `json:"activity_type"`
-	Actor         deploymentActorDTO                 `json:"actor"`
-	OccurredAt    string                             `json:"occurred_at"`
-	Status        string                             `json:"status,omitempty"`
-	RelationState string                             `json:"relation_state,omitempty"`
-	Subjects      []collaborationSubjectDTO          `json:"subjects"`
+	Classification *cp.ClassificationChange           `json:"classification,omitempty"`
+	DueDate        *cp.DueDateChange                  `json:"due_date,omitempty"`
+	Supersession   *supersessionTimelineDTO           `json:"supersession,omitempty"`
+	Priority       *goldenpath.TicketPriorityChange   `json:"priority,omitempty"`
+	Assignment     *goldenpath.TicketAssignmentChange `json:"assignment,omitempty"`
+	Imported       bool                               `json:"imported,omitempty"`
+	FromStatus     string                             `json:"from_status,omitempty"`
+	ToStatus       string                             `json:"to_status,omitempty"`
+	FromRevision   int                                `json:"from_status_revision,omitempty"`
+	ToRevision     int                                `json:"to_status_revision,omitempty"`
+	ID             string                             `json:"id"`
+	ActivityType   string                             `json:"activity_type"`
+	Actor          deploymentActorDTO                 `json:"actor"`
+	OccurredAt     string                             `json:"occurred_at"`
+	Status         string                             `json:"status,omitempty"`
+	RelationState  string                             `json:"relation_state,omitempty"`
+	Subjects       []collaborationSubjectDTO          `json:"subjects"`
 }
 
 type collaborationSubjectDTO struct {
@@ -245,16 +241,17 @@ func (handler *CollaborationHandler) getView(
 		handler.writeError(response, request, err)
 		return
 	}
-	includeDueDate, includeExecution := false, false
+	includeDueDate, includeExecution, includeClassification := false, false, false
 	if request.URL.RawQuery != "" {
 		query, err := url.ParseQuery(request.URL.RawQuery)
 		include := query["include"]
-		if target.Type != "ticket" || err != nil || len(query) != 1 || len(include) != 1 || (include[0] != "due_date" && include[0] != "execution_context" && include[0] != "due_date,execution_context") {
+		if target.Type != "ticket" || err != nil || len(query) != 1 || len(include) != 1 || !validTicketViewInclude(include[0]) {
 			handler.writeError(response, request, fmt.Errorf("%w: invalid collaboration query", authz.ErrInvalid))
 			return
 		}
-		includeDueDate = include[0] != "execution_context"
-		includeExecution = include[0] != "due_date"
+		includeDueDate = strings.Contains(include[0], "due_date")
+		includeExecution = strings.Contains(include[0], "execution_context")
+		includeClassification = strings.Contains(include[0], "classification")
 	}
 	view, err := handler.collaboration.GetNexusView(request.Context(), principal, target)
 	if err != nil {
@@ -269,6 +266,7 @@ func (handler *CollaborationHandler) getView(
 		timeline := make([]goldenpath.TimelineItem, 0, len(view.Timeline))
 		for _, item := range view.Timeline {
 			if (!includeDueDate && item.ActivityType == goldenpath.TicketDueDateChanged) ||
+				(!includeClassification && item.ActivityType == cp.TicketClassificationChanged) ||
 				(!includeExecution && (item.ActivityType == goldenpath.DiscussionLinked || item.ActivityType == goldenpath.DiscussionUnlinked)) {
 				continue
 			}
@@ -417,8 +415,16 @@ func (handler *CollaborationHandler) createTicket(response http.ResponseWriter, 
 		handler.writeError(response, request, fmt.Errorf("%w: query parameters are not supported", authz.ErrInvalid))
 		return
 	}
-	var body createTicketRequest
-	if err := decodeJSON(response, request, &body, maxCreateTicketBodyBytes); err != nil {
+	raw, err := decodeStrictObject(response, request, []string{"client_operation_id", "title"}, maxCreateTicketBodyBytes, "classification")
+	var title, operation string
+	if err == nil {
+		err = decodeCommandFields(raw, map[string]any{"client_operation_id": &operation, "title": &title})
+	}
+	var classification *cp.Classification
+	if err == nil {
+		classification, err = decodeInitialClassification(raw["classification"])
+	}
+	if err != nil {
 		handler.writeError(response, request, err)
 		return
 	}
@@ -427,8 +433,9 @@ func (handler *CollaborationHandler) createTicket(response http.ResponseWriter, 
 		webInvocation(principal, request),
 		goldenpath.CreateTicketInput{
 			DecisionID:        decisionID,
-			ClientOperationID: body.ClientOperationID,
-			Title:             body.Title,
+			ClientOperationID: operation,
+			Title:             title,
+			Classification:    classification,
 		},
 	)
 	if err != nil {
@@ -441,7 +448,7 @@ func (handler *CollaborationHandler) createTicket(response http.ResponseWriter, 
 		return
 	}
 	if result.Ticket.WorkspaceID != workspaceID ||
-		result.Ticket.Title != strings.TrimSpace(body.Title) || (result.Created && (result.Ticket.Status != "open" || result.Ticket.StatusRevision != 1)) {
+		result.Ticket.Title != strings.TrimSpace(title) || (result.Created && (result.Ticket.Status != "open" || result.Ticket.StatusRevision != 1)) {
 		handler.writeError(response, request, errors.New("invalid created Ticket application result"))
 		return
 	}
@@ -649,7 +656,7 @@ func publicTicketProjection(
 		return ticketCurrentDTO{}, errors.New("invalid Ticket Nexus View")
 	}
 	for _, item := range timeline {
-		if item.ActivityType != "ticket.created" && item.ActivityType != "ticket.component-linked" && item.ActivityType != "ticket.component-unlinked" && item.ActivityType != "ticket.status-changed" && item.ActivityType != "ticket.assignee-changed" && item.ActivityType != "ticket.priority-changed" && item.ActivityType != goldenpath.TicketDueDateChanged && item.ActivityType != goldenpath.DiscussionLinked && item.ActivityType != goldenpath.DiscussionUnlinked {
+		if item.ActivityType != "ticket.created" && item.ActivityType != "ticket.component-linked" && item.ActivityType != "ticket.component-unlinked" && item.ActivityType != "ticket.status-changed" && item.ActivityType != "ticket.assignee-changed" && item.ActivityType != "ticket.priority-changed" && item.ActivityType != goldenpath.TicketDueDateChanged && item.ActivityType != goldenpath.DiscussionLinked && item.ActivityType != goldenpath.DiscussionUnlinked && item.ActivityType != cp.TicketClassificationChanged {
 			return ticketCurrentDTO{}, errors.New("unexpected Ticket Timeline item")
 		}
 	}
@@ -860,6 +867,19 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 			item.ProjectionVersion != goldenpath.ActivityProjectionVersion {
 			return nil, errors.New("invalid collaboration Timeline item")
 		}
+		if item.ActivityType == cp.TicketClassificationChanged {
+			change, err := cp.DecodeClassificationChange([]byte(item.SafeFacts["classification"]))
+			if err != nil || len(item.SafeFacts) != 1+extra || len(item.Subjects) != 0 {
+				return nil, errors.New("invalid Ticket classification Timeline item")
+			}
+			dto = append(dto, collaborationTimelineDTO{
+				Imported: imported, ID: item.EventID, ActivityType: item.ActivityType,
+				Actor:      deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID},
+				OccurredAt: publicTime(item.OccurredAt), Subjects: []collaborationSubjectDTO{},
+				Classification: &change,
+			})
+			continue
+		}
 		if item.ActivityType == goldenpath.TicketDueDateChanged {
 			from, e1 := strconv.Atoi(item.SafeFacts["from_revision"])
 			to, e2 := strconv.Atoi(item.SafeFacts["to_revision"])
@@ -1040,5 +1060,15 @@ func (handler *CollaborationHandler) writeError(response http.ResponseWriter, re
 	}
 	if writeErr := WriteError(response, RequestID(request.Context()), err); writeErr != nil {
 		log.Printf("write public collaboration error: %v", writeErr)
+	}
+}
+
+func validTicketViewInclude(value string) bool {
+	switch value {
+	case "due_date", "execution_context", "classification", "due_date,execution_context",
+		"due_date,classification", "execution_context,classification", "due_date,execution_context,classification":
+		return true
+	default:
+		return false
 	}
 }

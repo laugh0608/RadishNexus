@@ -3,6 +3,7 @@
 package postgres_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -15,7 +16,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	cp "github.com/laugh0608/RadishNexus/server/internal/contextpackage"
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
@@ -209,13 +212,35 @@ func TestProjectTicketDiscoveryPermissionsPaginationAndScale(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	exec(`UPDATE radishnexus.project_memberships SET role='admin' WHERE project_id='prj_auth' AND user_id='usr_decider'`)
+	classified := goldenpath.NewTicketClassificationService(store, goldenpath.CryptoIDGenerator{})
+	var labels []string
+	for _, name := range []string{"Scale A", "Scale B"} {
+		label, err := classified.WriteLabel(ctx, tcInvocation("usr_decider"), goldenpath.LabelInput{ProjectID: "prj_auth", Name: name, Action: "create", ClientOperationID: name[len(name)-1:] + "-scale-label", Confirmed: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		labels = append(labels, label.Ref.ID)
+	}
+	sort.Strings(labels)
 	for i := 27; i < 200; i++ {
-		create(decision, fmt.Sprintf("scale-main-%04d", i))
+		key := fmt.Sprintf("scale-main-%04d", i)
+		id := create(decision, key)
+		if i%2 == 0 {
+			ids := labels
+			if i%4 == 0 {
+				ids = labels[:1]
+			}
+			_, err := classified.Set(ctx, tcInvocation("usr_decider"), goldenpath.ClassificationInput{TicketID: id, ClientOperationID: key, BaseRevision: 1, Confirmed: true, Classification: cp.Classification{Type: "task", LabelIDs: ids}})
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	for i := 1; i < 1000; i++ {
 		create(otherView.Relations[0].Target.ID, fmt.Sprintf("scale-other-%04d", i))
 	}
-	exec(`ANALYZE radishnexus.tickets`)
+	exec(`ANALYZE radishnexus.tickets; ANALYZE radishnexus.ticket_label_assignments`)
 	var plan []byte
 	if e := pool.QueryRow(ctx, `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT id,title,status FROM radishnexus.tickets WHERE workspace_id=$1 AND governing_project_id=$2 AND id>$3 ORDER BY id LIMIT 26`, "wrk_main", "prj_auth", "").Scan(&plan); e != nil {
 		t.Fatal(e)
@@ -225,7 +250,7 @@ func TestProjectTicketDiscoveryPermissionsPaginationAndScale(t *testing.T) {
 		t.Fatal(e)
 	}
 	t.Logf("Ticket query plan (1200 Tickets, 2 Projects): %s", plan)
-	counter := &relationQueryCounter{}
+	counter := &classifiedDiscoveryTrace{}
 	config := pool.Config()
 	config.ConnConfig.Tracer = counter
 	measured, e := pgxpool.NewWithConfig(ctx, config)
@@ -244,4 +269,60 @@ func TestProjectTicketDiscoveryPermissionsPaginationAndScale(t *testing.T) {
 		t.Fatal(page, e, counter.queries.Load())
 	}
 	t.Logf("Ticket discovery scale: 1200 Tickets, 200 in target Project, 25 results, %d SQL calls, %s", counter.queries.Load(), time.Since(start))
+	filters := goldenpath.TicketFilters{Type: "task", Labels: strings.Join(labels, ","), Title: "scale-main"}
+	total, after := 0, ""
+	for {
+		counter.queries.Store(0)
+		page, e := goldenpath.NewDiscoveryService(goldenpostgres.New(measured)).ListProjectTickets(ctx, reader, "prj_auth", goldenpath.DiscoveryPageInput{Limit: 25, AfterID: after, IncludeClassification: true, TicketFilters: filters})
+		if e != nil || len(page.Items) == 0 || counter.queries.Load() > 12 {
+			t.Fatal(page, e, counter.queries.Load())
+		}
+		for _, item := range page.Items {
+			if item.Classification.Type != "task" || len(item.Classification.Labels) != 2 || item.Ref.ID <= after {
+				t.Fatal(item)
+			}
+			after = item.Ref.ID
+		}
+		total += len(page.Items)
+		if len(counter.query.Args) == 0 {
+			t.Fatal("filtered query trace missing")
+		}
+		var filteredPlan []byte
+		if err := pool.QueryRow(ctx, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "+counter.query.SQL, counter.query.Args...).Scan(&filteredPlan); err != nil {
+			t.Fatal(err)
+		}
+		var plan []struct {
+			Plan struct {
+				ActualRows int `json:"Actual Rows"`
+				Buffers    int `json:"Shared Hit Blocks"`
+			} `json:"Plan"`
+			ExecutionMS float64 `json:"Execution Time"`
+		}
+		if err := json.Unmarshal(filteredPlan, &plan); err != nil || len(plan) != 1 || plan[0].Plan.ActualRows < len(page.Items) {
+			t.Fatal("filtered plan", err)
+		}
+		t.Logf("classified title/labels discovery: page=%d, SQL=%d, plan rows=%d, shared blocks hit=%d, execution=%.3fms, scoped index=%t, assignment index=%t",
+			len(page.Items), counter.queries.Load(), plan[0].Plan.ActualRows, plan[0].Plan.Buffers, plan[0].ExecutionMS,
+			strings.Contains(string(filteredPlan), "tickets_by_project") || strings.Contains(string(filteredPlan), "tickets_workspace_id_governing_project_id_id_key"),
+			strings.Contains(string(filteredPlan), "ticket_label_assignments_"))
+		if page.NextID == "" {
+			break
+		}
+	}
+	if total != 43 {
+		t.Fatal("filtered pagination total", total)
+	}
+
+}
+
+type classifiedDiscoveryTrace struct {
+	relationQueryCounter
+	query pgx.TraceQueryStartData
+}
+
+func (tracer *classifiedDiscoveryTrace) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
+	if strings.Contains(data.SQL, "strpos(translate(t.title") {
+		tracer.query = data
+	}
+	return tracer.relationQueryCounter.TraceQueryStart(ctx, conn, data)
 }

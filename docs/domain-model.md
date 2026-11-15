@@ -257,6 +257,8 @@ Project 内状态、负责人（本人 / 未分配）和优先级三组单选条
 
 Ticket 可从已接受的 Decision 或一条 Project 可见消息创建。两类创建分别形成不可变的 `implements` 或 `started-from`。消息来源保留原始 Message ref，同一 Project 内可显式关联现有 Thread 作为执行讨论。讨论关系可解除并保留历史，两端按当前 Ticket、Channel 与 Thread 权限读取。回复仍是原 Thread 的 Message。 [ADR-0054](adr/0054-message-to-ticket-and-execution-discussion.md)
 
+按 [ADR-0055](adr/0055-ticket-classification-and-project-search.md)，Ticket 保存固定类型与独立分类版本，旧工单默认为未分类、版本 1。Project 标签使用稳定的 `ticket-label / lbl_` 引用，目录与绑定同属 governing Project。归档保留原绑定和筛选，分类历史记录操作时的名称与目录版本。活跃 Project 的 contributor、decider、admin 可整理任一状态的工单。Project 列表和看板在稳定 ID 分页前组合状态、负责人、优先级、类型、全匹配标签和字面标题查询。
+
 ### Document
 
 承载设计、说明、Runbook 和复盘等长内容。在线协作、版本和离线同步属于 Document 自身能力；Document 不能代替结构化 Decision、Ticket 或 Deployment。

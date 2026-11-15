@@ -53,6 +53,7 @@
 | [负责人：ADR-0046](adr/0046-ticket-assignee.md)、[优先级与筛选：ADR-0047](adr/0047-ticket-priority-and-filtering.md) | 原任务与退出矩阵；[负责人记录](status/reviews/2026-10-28-ticket-assignee.md)、[优先级记录](status/reviews/2026-10-28-ticket-priority.md)及后续有界观察 | 成员生命周期、迁移包版本 |
 | [工单截止日期：ADR-0053](adr/0053-ticket-due-date.md) | M4 可选日历日期、独立版本与变更历史 | Ticket 详情、工单发现、备份与 v7 迁移包 |
 | [消息转工单与执行讨论：ADR-0054](adr/0054-message-to-ticket-and-execution-discussion.md) | M4 消息来源、执行讨论与 v8 上下文取回 | Channel、Thread、Ticket、上下文取回 |
+| [工单分类与项目内查找：ADR-0055](adr/0055-ticket-classification-and-project-search.md) | M4 类型、项目标签、组合查找与 v9 上下文取回 | Ticket、项目列表、看板、个人工单 |
 
 完成需沿真实授权与版本恢复路径成立；只读发现、最小状态、负责人、优先级及截止日期是独立交付，不合称完整工单系统、通用 Timeline 分页或生产容量验收。
 

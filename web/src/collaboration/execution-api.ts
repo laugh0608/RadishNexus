@@ -1,3 +1,4 @@
+import type { ClassificationInput } from "./ticket-classification-api";
 import { channelPagePath, parseChannelMessageEnvelope } from "../channel/api";
 import { object, requireID } from "../workspace/api";
 import {
@@ -140,7 +141,10 @@ export const executionClient = {
     workspace: string,
     channel: string,
     message: string,
-    input: Confirmation & { title: string },
+    input: Confirmation & {
+      title: string;
+      classification?: ClassificationInput;
+    },
     signal: AbortSignal,
   ) {
     const out = object(

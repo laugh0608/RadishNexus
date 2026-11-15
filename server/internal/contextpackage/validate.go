@@ -41,7 +41,7 @@ func Validate(d Data) (*Index, error) {
 	counts := map[string]int{}
 	for _, o := range d.Objects {
 		ref := Ref{o.Type, o.ID}
-		if !oneOf(o.Type, "team", "project", "channel", "message", "thread", "decision", "ticket", "document") || !ValidID(o.ID, Prefix(o.Type)) || !validTime(o.CreatedAt) || !validTime(o.UpdatedAt) || o.UpdatedAt.Before(o.CreatedAt) || !validateLineage(o.Lineage) {
+		if !oneOf(o.Type, "team", "project", "channel", "message", "thread", "decision", "ticket", "ticket-label", "document") || !ValidID(o.ID, Prefix(o.Type)) || !validTime(o.CreatedAt) || !validTime(o.UpdatedAt) || o.UpdatedAt.Before(o.CreatedAt) || !validateLineage(o.Lineage) {
 			return nil, invalid("object envelope")
 		}
 		if _, exists := x.Objects[ref]; exists {
@@ -140,6 +140,9 @@ func Validate(d Data) (*Index, error) {
 		}
 		x.History[h.ID] = h
 		x.Facts[h.ID] = f
+	}
+	if err := validateLabelCatalog(d, x); err != nil {
+		return nil, err
 	}
 	// An event's causation must resolve without cycles, and may not point forward
 	// in source time. Correlation is checked rather than regenerated as evidence.
@@ -348,6 +351,8 @@ func decodeObject(o Object) (any, error) {
 		target = &Decision{}
 	case "ticket":
 		target = &Ticket{}
+	case "ticket-label":
+		target = &TicketLabelObject{}
 	case "document":
 		target = &Document{}
 	default:
@@ -404,11 +409,16 @@ func decodeObject(o Object) (any, error) {
 		return *p, nil
 	case *Ticket:
 		var fields map[string]json.RawMessage
-		if Decode(o.Data, &fields) != nil || len(fields) != 9 || fields["priority"] == nil || fields["priority_revision"] == nil || !ValidPriority(p.Priority) || p.PriorityRevision < 1 || p.PriorityRevision > MaxHistory || fields["assignee_user_id"] == nil || fields["assignment_revision"] == nil || p.AssignmentRevision < 1 || p.AssignmentRevision > MaxHistory || (p.AssigneeUserID != nil && !ValidID(*p.AssigneeUserID, "usr_")) {
+		if Decode(o.Data, &fields) != nil || len(fields) != 12 || !p.Classification.Valid() || p.ClassificationRevision < 1 || p.ClassificationRevision > MaxHistory || fields["priority"] == nil || fields["priority_revision"] == nil || !ValidPriority(p.Priority) || p.PriorityRevision < 1 || p.PriorityRevision > MaxHistory || fields["assignee_user_id"] == nil || fields["assignment_revision"] == nil || p.AssignmentRevision < 1 || p.AssignmentRevision > MaxHistory || (p.AssigneeUserID != nil && !ValidID(*p.AssigneeUserID, "usr_")) {
 			return nil, invalid("Ticket assignment fields")
 		}
 		if fields["due_date"] == nil || !calendardate.Valid(p.DueDate) || p.DueDateRevision < 1 || p.DueDateRevision > MaxHistory || !label(p.Title, 800) || !oneOf(p.Status, "open", "in-progress", "done", "canceled") || p.StatusRevision < 1 || p.StatusRevision > MaxHistory {
 			return nil, invalid("Ticket fields")
+		}
+		return *p, nil
+	case *TicketLabelObject:
+		if !p.LabelState.valid() || !ValidID(p.UpdatedBy, "usr_") {
+			return nil, invalid("Ticket label fields")
 		}
 		return *p, nil
 	case *Document:
@@ -433,6 +443,26 @@ func ValidateFacts(h History) (Facts, error) {
 			return Facts{}, invalid("Decision review envelope")
 		}
 		return Facts{Review: &review}, nil
+	}
+	if h.Type == TicketClassificationChanged {
+		change, err := DecodeClassificationChange(h.Facts)
+		if err != nil {
+			return Facts{}, err
+		}
+		if h.Entity.Type != "ticket" || !oneOf(h.Source, "web", "import") {
+			return Facts{}, invalid("Ticket classification envelope")
+		}
+		return Facts{Classification: &change}, nil
+	}
+	if oneOf(h.Type, "ticket-label.created", "ticket-label.renamed", "ticket-label.archived") {
+		change, err := DecodeLabelChange(h.Facts, h.Type)
+		if err != nil {
+			return Facts{}, err
+		}
+		if h.Entity.Type != "ticket-label" || !oneOf(h.Source, "web", "import") || h.CausationID != nil {
+			return Facts{}, invalid("Ticket label history envelope")
+		}
+		return Facts{Label: &change}, nil
 	}
 	var f Facts
 	if err := Decode(h.Facts, &f); err != nil {
@@ -639,7 +669,7 @@ func validateObjectHistory(o Object, v any, events []History, x *Index, relation
 		}
 	case Ticket:
 		links := relations[ref]
-		if len(links["implements"])+len(links["started-from"]) != 1 || len(events)-counts["ticket.discussion-linked"]-counts["ticket.discussion-unlinked"] != p.StatusRevision+p.AssignmentRevision+p.PriorityRevision+p.DueDateRevision-3 {
+		if len(links["implements"])+len(links["started-from"]) != 1 || len(events)-counts["ticket.discussion-linked"]-counts["ticket.discussion-unlinked"] != p.StatusRevision+p.AssignmentRevision+p.PriorityRevision+p.DueDateRevision+p.ClassificationRevision-4 {
 			return invalid("Ticket sources or history count")
 		}
 		if first.Version == 2 {
@@ -656,7 +686,7 @@ func validateObjectHistory(o Object, v any, events []History, x *Index, relation
 		}
 		changes := []History{}
 		for _, h := range events {
-			if h.Type == "ticket.status-changed" || h.Type == "ticket.assignee-changed" || h.Type == "ticket.priority-changed" || h.Type == "ticket.due-date-changed" {
+			if h.Type == "ticket.status-changed" || h.Type == "ticket.assignee-changed" || h.Type == "ticket.priority-changed" || h.Type == "ticket.due-date-changed" || h.Type == TicketClassificationChanged {
 				changes = append(changes, h)
 			}
 		}
@@ -671,13 +701,20 @@ func validateObjectHistory(o Object, v any, events []History, x *Index, relation
 		previousMetadata := false
 		var assignee, dueDate *string
 		dueDateRev := 1
+		classification, classRev := EmptyClassification(), 1
 		last := o.CreatedAt
 		for _, h := range changes {
 			f := x.Facts[h.ID]
-			if h.OccurredAt.Before(last) || ((f.Assignment != nil || f.Priority != nil || f.DueDate != nil || previousMetadata) && h.OccurredAt.Equal(last)) {
+			if h.OccurredAt.Before(last) || ((f.Assignment != nil || f.Priority != nil || f.DueDate != nil || f.Classification != nil || previousMetadata) && h.OccurredAt.Equal(last)) {
 				return invalid("Ticket history sequence")
 			}
-			if f.DueDate != nil {
+			if f.Classification != nil {
+				change := f.Classification
+				if !change.From.Equal(classification) || change.FromRevision != classRev {
+					return invalid("Ticket classification sequence")
+				}
+				classification, classRev = change.To, change.ToRevision
+			} else if f.DueDate != nil {
 				change := f.DueDate
 				if !oneOf(status, "open", "in-progress") || change.FromRevision != dueDateRev || !calendardate.Equal(change.From, dueDate) {
 					return invalid("Ticket due date sequence")
@@ -704,13 +741,26 @@ func validateObjectHistory(o Object, v any, events []History, x *Index, relation
 				status = f.ToStatus
 				rev = f.ToRevision
 			}
-			previousMetadata = f.Assignment != nil || f.Priority != nil || f.DueDate != nil
+			previousMetadata = f.Assignment != nil || f.Priority != nil || f.DueDate != nil || f.Classification != nil
 			last = h.OccurredAt
 		}
-		if priority != p.Priority || priorityRev != p.PriorityRevision || dueDateRev != p.DueDateRevision || !calendardate.Equal(dueDate, p.DueDate) || status != p.Status || rev != p.StatusRevision || assignmentRev != p.AssignmentRevision || !sameString(assignee, p.AssigneeUserID) || !last.Equal(o.UpdatedAt) {
+		if !classification.Equal(p.Classification) || classRev != p.ClassificationRevision || priority != p.Priority || priorityRev != p.PriorityRevision || dueDateRev != p.DueDateRevision || !calendardate.Equal(dueDate, p.DueDate) || status != p.Status || rev != p.StatusRevision || assignmentRev != p.AssignmentRevision || !sameString(assignee, p.AssigneeUserID) || !last.Equal(o.UpdatedAt) {
 			return invalid("Ticket current state")
 		}
 
+	case TicketLabelObject:
+		if len(events) != p.Revision {
+			return invalid("Ticket label history count")
+		}
+		var last History
+		for _, h := range events {
+			if last.ID == "" || h.OccurredAt.After(last.OccurredAt) {
+				last = h
+			}
+		}
+		if x.Facts[last.ID].Label.To != p.LabelState || p.UpdatedBy != last.Actor || !last.OccurredAt.Equal(o.UpdatedAt) {
+			return invalid("Ticket label current state")
+		}
 	case Document:
 		sourceLinks := 0
 		for _, link := range relations[*f.Ticket]["relates-to"] {

@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	cp "github.com/laugh0608/RadishNexus/server/internal/contextpackage"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -128,6 +129,7 @@ type AcceptDecisionInput struct {
 }
 
 type CreateTicketInput struct {
+	Classification    *cp.Classification
 	DecisionID        string
 	ClientOperationID string
 	Title             string
@@ -157,6 +159,8 @@ type AcceptDecisionCommand struct {
 }
 
 type CreateTicketCommand struct {
+	Classification        *cp.Classification
+	ClassificationEventID string
 	Invocation
 	TicketID          string
 	LinkID            string
@@ -323,9 +327,11 @@ func (service *Service) CreateTicketFromDecision(
 	if !validClientOperationID(input.ClientOperationID) || !validCollaborationText(input.Title, title) {
 		return CreateTicketResult{}, fmt.Errorf("%w: client operation ID and title are required", authz.ErrInvalid)
 	}
-	payloadSHA256 := collaborationPayloadDigest(struct {
-		Title string `json:"title"`
-	}{Title: title})
+	classification, classificationEvent, err := initialClassification(input.Classification, service.ids)
+	if err != nil {
+		return CreateTicketResult{}, err
+	}
+	payloadSHA256 := collaborationPayloadDigest(ticketCreationPayload{title, classification})
 
 	ticketID, err := service.ids.NewID("tkt_")
 	if err != nil {
@@ -341,15 +347,17 @@ func (service *Service) CreateTicketFromDecision(
 	}
 
 	return service.store.CreateTicketFromDecision(ctx, CreateTicketCommand{
-		Invocation:        invocation,
-		TicketID:          ticketID,
-		LinkID:            linkID,
-		EventID:           eventID,
-		DecisionID:        input.DecisionID,
-		ClientOperationID: input.ClientOperationID,
-		PayloadSHA256:     payloadSHA256,
-		Title:             title,
-		OccurredAt:        service.clock.Now().UTC(),
+		Invocation:            invocation,
+		Classification:        classification,
+		ClassificationEventID: classificationEvent,
+		TicketID:              ticketID,
+		LinkID:                linkID,
+		EventID:               eventID,
+		DecisionID:            input.DecisionID,
+		ClientOperationID:     input.ClientOperationID,
+		PayloadSHA256:         payloadSHA256,
+		Title:                 title,
+		OccurredAt:            service.clock.Now().UTC(),
 	})
 }
 

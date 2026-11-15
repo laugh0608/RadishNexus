@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	cp "github.com/laugh0608/RadishNexus/server/internal/contextpackage"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -80,6 +81,9 @@ func writeTicketFromMessage(ctx context.Context, tx pgx.Tx, c goldenpath.TicketE
 		if err = verifyExecutionReceipt(ctx, tx, c, receipt.eventID, receipt.resultID, c.MessageID, "ticket.created"); err != nil {
 			return out, err
 		}
+		if err = verifyInitialClassification(ctx, tx, c.Invocation, channel.projectID, receipt.resultID, receipt.eventID, c.Classification); err != nil {
+			return out, err
+		}
 		out.Ticket, err = loadTicket(ctx, tx, p.WorkspaceID, receipt.resultID)
 		return out, err
 	}
@@ -95,6 +99,12 @@ func writeTicketFromMessage(ctx context.Context, tx pgx.Tx, c goldenpath.TicketE
 	}
 	if err = insertOutbox(ctx, tx, c.EventID); err != nil {
 		return out, err
+	}
+	if c.Classification != nil {
+		if err = applyTicketClassification(ctx, tx, c.Invocation, channel.projectID, c.ResultID, c.ClassificationEventID, c.EventID,
+			cp.EmptyClassification(), *c.Classification, 1, at.Add(time.Microsecond)); err != nil {
+			return out, err
+		}
 	}
 	out.Ticket, err = loadTicket(ctx, tx, p.WorkspaceID, c.ResultID)
 	out.Created = true

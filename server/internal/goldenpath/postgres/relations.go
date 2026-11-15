@@ -160,6 +160,17 @@ func entityAccess(
 	ref entityref.Ref,
 ) (exists bool, canRead bool, err error) {
 	switch ref.Type {
+	case "ticket-label":
+		var project string
+		err := tx.QueryRow(ctx, `SELECT project_id FROM radishnexus.ticket_labels WHERE workspace_id=$1 AND id=$2`, principal.WorkspaceID, ref.ID).Scan(&project)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, false, nil
+		}
+		if err != nil {
+			return false, false, err
+		}
+		_, readable, err := readProjectAccess(ctx, tx, principal, project)
+		return true, readable, err
 	case "document":
 		project, err := projectEntityScope(ctx, tx, principal, "document", ref.ID)
 		if errors.Is(err, authz.ErrNotFound) {

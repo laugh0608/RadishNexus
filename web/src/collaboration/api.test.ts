@@ -910,7 +910,7 @@ it("requests and strictly reads nullable Ticket due date history", async () => {
       "tkt_work",
     );
     expect(fetch.mock.calls[0]?.[0]).toBe(
-      "/api/v1/workspaces/wrk_main/tickets/tkt_work/nexus-view?include=due_date,execution_context",
+      "/api/v1/workspaces/wrk_main/tickets/tkt_work/nexus-view?include=due_date,execution_context,classification",
     );
     expect(result.timeline[0]).toMatchObject({
       activityType: "ticket.due-date-changed",

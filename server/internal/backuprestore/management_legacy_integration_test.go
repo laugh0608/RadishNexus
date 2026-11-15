@@ -42,6 +42,10 @@ func TestBackupRestoreExecutionLegacy(t *testing.T) {
 	testBackupRestoreLegacy(t, "RADISHNEXUS_EXECUTION_LEGACY_BIN", 26)
 }
 
+func TestBackupRestoreClassificationLegacy(t *testing.T) {
+	testBackupRestoreLegacy(t, "RADISHNEXUS_CLASSIFICATION_LEGACY_BIN", 27)
+}
+
 func testBackupRestoreLegacy(t *testing.T, variable string, schema int) {
 	legacy := os.Getenv(variable)
 	sourceURL, targetURL := os.Getenv("SOURCE_DATABASE_URL"), os.Getenv("TARGET_DATABASE_URL")

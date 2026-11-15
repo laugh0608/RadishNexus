@@ -7,7 +7,9 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -82,7 +84,27 @@ func (ids contextIDs) optional(kind string, id *string) *string {
 	mapped := ids.get(kind, *id)
 	return &mapped
 }
+func (ids contextIDs) labelIDs(source []string) []string {
+	target := make([]string, 0, len(source))
+	for _, id := range source {
+		target = append(target, ids.get("ticket-label", id))
+	}
+	slices.Sort(target)
+	return target
+}
+
 func (ids contextIDs) facts(f cp.Facts) cp.Facts {
+	if f.Classification != nil {
+		change := *f.Classification
+		change.From.LabelIDs = ids.labelIDs(change.From.LabelIDs)
+		change.To.LabelIDs = ids.labelIDs(change.To.LabelIDs)
+		change.Labels = slices.Clone(change.Labels)
+		for i := range change.Labels {
+			change.Labels[i].ID = ids.get("ticket-label", change.Labels[i].ID)
+		}
+		slices.SortFunc(change.Labels, func(a, b cp.LabelVersion) int { return strings.Compare(a.ID, b.ID) })
+		f.Classification = &change
+	}
 	if f.Assignment != nil {
 		a := *f.Assignment
 		a.FromUserID = ids.optional("actor", a.FromUserID)
@@ -184,7 +206,7 @@ func writeContext(ctx context.Context, tx pgx.Tx, a goldenpath.OwnerAccess, p cp
 	}
 	// Stable type order satisfies ordinary foreign keys; deferred invariants still
 	// validate the complete graph at COMMIT, without disabling any trigger.
-	for _, kind := range []string{"team", "project", "channel", "thread", "message", "decision", "ticket", "document"} {
+	for _, kind := range []string{"team", "project", "channel", "thread", "message", "decision", "ticket-label", "ticket", "document"} {
 		for _, o := range d.Objects {
 			if o.Type != kind {
 				continue
@@ -210,8 +232,14 @@ func writeContext(ctx context.Context, tx pgx.Tx, a goldenpath.OwnerAccess, p cp
 					deciders = append(deciders, ids.get("actor", v))
 				}
 				e = exec(`INSERT INTO radishnexus.decisions(id,workspace_id,governing_project_id,question,outcome,status,proposer_id,decider_ids,decided_at,rationale,alternatives,consequences,review_at,rejection_reason,decision_revision,created_by_kind,created_by_id,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$17,$18,'import',$14,$15,$16)`, id, w, project, data.Question, data.Outcome, data.Status, ids.get("actor", data.Proposer), deciders, data.DecidedAt, data.Rationale, data.Alternatives, data.Consequences, data.ReviewAt, op, o.CreatedAt, o.UpdatedAt, data.RejectionReason, data.DecisionRevision)
+			case cp.TicketLabelObject:
+				e = exec(`INSERT INTO radishnexus.ticket_labels(id,workspace_id,project_id,name,status,revision,created_by,updated_by,created_at,updated_at)
+                    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, id, w, project, data.Name, data.Status, data.Revision, actor, ids.get("actor", data.UpdatedBy), o.CreatedAt, o.UpdatedAt)
 			case cp.Ticket:
-				e = exec(`INSERT INTO radishnexus.tickets(id,workspace_id,governing_project_id,title,status,status_revision,created_by,created_at,updated_at,assignee_user_id,assignment_revision,priority,priority_revision,due_date,due_date_revision) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::text::date,$15)`, id, w, project, data.Title, data.Status, data.StatusRevision, actor, o.CreatedAt, o.UpdatedAt, ids.optional("actor", data.AssigneeUserID), data.AssignmentRevision, data.Priority, data.PriorityRevision, data.DueDate, data.DueDateRevision)
+				e = exec(`INSERT INTO radishnexus.tickets(id,workspace_id,governing_project_id,title,status,status_revision,created_by,created_at,updated_at,assignee_user_id,assignment_revision,priority,priority_revision,due_date,due_date_revision,ticket_type,classification_revision) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::text::date,$15,$16,$17)`, id, w, project, data.Title, data.Status, data.StatusRevision, actor, o.CreatedAt, o.UpdatedAt, ids.optional("actor", data.AssigneeUserID), data.AssignmentRevision, data.Priority, data.PriorityRevision, data.DueDate, data.DueDateRevision, data.Type, data.ClassificationRevision)
+				if e == nil && len(data.LabelIDs) > 0 {
+					e = storeTicketLabelAssignments(ctx, tx, w, project, id, ids.labelIDs(data.LabelIDs))
+				}
 			case cp.Document:
 				e = exec(`INSERT INTO radishnexus.documents(id,workspace_id,governing_project_id,visibility,current_revision,created_by,created_at) VALUES($1,$2,$3,'project',$4,$5,$6)`, id, w, project, data.Revision, actor, o.CreatedAt)
 			}

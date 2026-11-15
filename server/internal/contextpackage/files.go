@@ -72,10 +72,10 @@ func Unpack(b Bundle) (Data, *Index, error) {
 	if len(Encode(m)) > MaxLineBytes {
 		return d, nil, invalid("manifest size")
 	}
-	if m.Format != Format || m.Version != Version || (m.Profile != Profile && m.Profile != ProfileV1 && m.Profile != ProfileV2 && m.Profile != ProfileV3 && m.Profile != ProfileV4 && m.Profile != ProfileV5 && m.Profile != ProfileV6 && m.Profile != ProfileV7) || !ValidID(m.PackageID, "pkg_") || !ValidID(m.WorkspaceID, "wrk_") || !ValidID(m.ProjectID, "prj_") || !validTime(m.CreatedAt) || !label(m.SourceVersion, 100) || len(m.Files) < len(metadataPaths) || len(m.Files) > MaxHistory+len(metadataPaths) || len(b.Files) != len(m.Files) {
+	if m.Format != Format || m.Version != Version || (m.Profile != Profile && m.Profile != ProfileV1 && m.Profile != ProfileV2 && m.Profile != ProfileV3 && m.Profile != ProfileV4 && m.Profile != ProfileV5 && m.Profile != ProfileV6 && m.Profile != ProfileV7 && m.Profile != ProfileV8) || !ValidID(m.PackageID, "pkg_") || !ValidID(m.WorkspaceID, "wrk_") || !ValidID(m.ProjectID, "prj_") || !validTime(m.CreatedAt) || !label(m.SourceVersion, 100) || len(m.Files) < len(metadataPaths) || len(m.Files) > MaxHistory+len(metadataPaths) || len(b.Files) != len(m.Files) {
 		return d, nil, invalid("manifest")
 	}
-	hasSupersession := m.Profile == Profile || m.Profile == ProfileV7 || m.Profile == ProfileV6 || m.Profile == ProfileV5
+	hasSupersession := m.Profile == Profile || m.Profile == ProfileV8 || m.Profile == ProfileV7 || m.Profile == ProfileV6 || m.Profile == ProfileV5
 	files := map[string][]byte{}
 	total := int64(len(Encode(m)))
 	for _, f := range b.Files {
@@ -200,7 +200,7 @@ func Unpack(b Bundle) (Data, *Index, error) {
 		}
 	}
 
-	if m.Profile != Profile {
+	if m.Profile != Profile && m.Profile != ProfileV8 {
 		for _, h := range d.History {
 			if h.Version != 1 || oneOf(h.Type, "ticket.discussion-linked", "ticket.discussion-unlinked") {
 				return d, nil, invalid("unsupported legacy execution history")
@@ -213,7 +213,7 @@ func Unpack(b Bundle) (Data, *Index, error) {
 		}
 	}
 
-	if m.Profile != Profile && m.Profile != ProfileV7 {
+	if m.Profile != Profile && m.Profile != ProfileV8 && m.Profile != ProfileV7 {
 		for _, h := range d.History {
 			if h.Type == "ticket.due-date-changed" ||
 				(h.Type == "decision.reviewed" && m.Profile != ProfileV6) ||
@@ -255,6 +255,33 @@ func Unpack(b Bundle) (Data, *Index, error) {
 			}
 			t.DueDateRevision = 1
 			d.Objects[i].Data = Encode(t)
+		}
+	}
+
+	if m.Profile != Profile {
+		for _, h := range d.History {
+			if h.Type == TicketClassificationChanged || h.Entity.Type == "ticket-label" {
+				return d, nil, invalid("unsupported legacy classification history")
+			}
+		}
+		for i, o := range d.Objects {
+			if o.Type == "ticket-label" {
+				return d, nil, invalid("unsupported legacy Ticket label")
+			}
+			if o.Type != "ticket" {
+				continue
+			}
+			var fields map[string]json.RawMessage
+			if Decode(o.Data, &fields) != nil {
+				return d, nil, invalid("legacy classification fields")
+			}
+			if m.Profile == ProfileV7 || m.Profile == ProfileV8 {
+				if len(fields) != 9 || fields["ticket_type"] != nil || fields["label_ids"] != nil || fields["classification_revision"] != nil {
+					return d, nil, invalid("legacy classification fields")
+				}
+			}
+			fields["ticket_type"], fields["label_ids"], fields["classification_revision"] = Encode("unset"), Encode([]string{}), Encode(1)
+			d.Objects[i].Data = Encode(fields)
 		}
 	}
 

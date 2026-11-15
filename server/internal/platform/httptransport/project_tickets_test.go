@@ -18,7 +18,7 @@ import (
 func TestProjectTicketsRejectsInvalidQueriesAndForeignCursors(t *testing.T) {
 	path := "/api/v1/workspaces/wrk_main/projects/prj_main/tickets"
 	scope := discoveryCursor{Version: 2, ActorID: "usr_reader", WorkspaceID: "wrk_main", ProjectID: "prj_main", Kind: "ticket", AfterID: "tkt_previous"}
-	queries := []string{"limit=0", "limit=51", "limit=01", "limit=1&limit=2", "after=", "after=a&after=b", "status=unknown", "status=", "status=open&status=done", "assignee=usr_reader", "assignee=all", "priority=", "priority=highest", "sort=priority", "q=private", "after=bad", "limit=%zz", strings.Repeat("a", 2049)}
+	queries := []string{"limit=0", "limit=51", "limit=01", "limit=1&limit=2", "after=", "after=a&after=b", "status=unknown", "status=", "status=open&status=done", "assignee=usr_reader", "assignee=all", "priority=", "priority=highest", "sort=priority", "q=%20", "type=bug", "labels=lbl_a,lbl_a", "after=bad", "limit=%zz", strings.Repeat("a", 2049)}
 	for _, change := range []func(*discoveryCursor){
 		func(c *discoveryCursor) { c.Version++ },
 		func(c *discoveryCursor) { c.Version = 1 },
@@ -163,5 +163,56 @@ func TestProjectTicketFiltersBindCursorAndPrincipal(t *testing.T) {
 			t.Fatal("filter drift accepted", w.Code)
 		}
 		reader.page.Items[0] = original
+	}
+}
+
+func TestProjectTicketClassificationCursorNormalizesQueryAndBindsScope(t *testing.T) {
+	base := discoveryCursor{Version: 2, WorkspaceID: "wrk_main", ActorID: "usr_reader", ProjectID: "prj_main", Kind: "ticket"}
+	initial := "status=open&type=defect&labels=lbl_b,lbl_a&q=%20ALPHA%25_%20&limit=1"
+	input, err := parseDiscoveryQuery(initial, base)
+	if err != nil || input.TicketFilters.Labels != "lbl_a,lbl_b" || input.TicketFilters.Title != "alpha%_" {
+		t.Fatal(input, err)
+	}
+	scope := ticketDiscoveryScope(base, input.TicketFilters)
+	if scope.Version != 3 || scope.FilterDigest == "" {
+		t.Fatal(scope)
+	}
+	scope.AfterID = "tkt_previous"
+	raw, err := json.Marshal(scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cursor := "&after=" + base64.RawURLEncoding.EncodeToString(raw)
+	equivalent := "type=defect&status=open&labels=lbl_a,lbl_b&q=alpha%25_&include=classification"
+	if input, err = parseDiscoveryQuery(equivalent+cursor, base); err != nil || input.AfterID != scope.AfterID || !input.IncludeClassification {
+		t.Fatal(input, err)
+	}
+	for _, query := range []string{
+		strings.Replace(equivalent, "type=defect", "type=task", 1),
+		strings.Replace(equivalent, "lbl_a,lbl_b", "lbl_b", 1),
+		strings.Replace(equivalent, "status=open", "status=done", 1),
+		strings.Replace(equivalent, "alpha", "beta", 1),
+		"status=open&include=due_date,classification",
+	} {
+		if _, err := parseDiscoveryQuery(query+cursor, base); err == nil {
+			t.Fatalf("cursor accepted altered scope %s", query)
+		}
+	}
+	for _, changed := range []discoveryCursor{
+		{Version: 2, WorkspaceID: "wrk_main", ActorID: "usr_other", ProjectID: "prj_main", Kind: "ticket"},
+		{Version: 2, WorkspaceID: "wrk_main", ActorID: "usr_reader", ProjectID: "prj_other", Kind: "ticket"},
+	} {
+		if _, err := parseDiscoveryQuery(equivalent+cursor, changed); err == nil {
+			t.Fatal("cursor crossed subject scope")
+		}
+	}
+	base.AfterID = scope.AfterID
+	raw, err = json.Marshal(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base.AfterID = ""
+	if input, err := parseDiscoveryQuery("include=due_date,classification&after="+base64.RawURLEncoding.EncodeToString(raw), base); err != nil || input.AfterID != scope.AfterID {
+		t.Fatal("v2 cursor with display option", input, err)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/laugh0608/RadishNexus/server/db"
+	cp "github.com/laugh0608/RadishNexus/server/internal/contextpackage"
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	goldenpostgres "github.com/laugh0608/RadishNexus/server/internal/goldenpath/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
@@ -87,6 +88,14 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	}
 	ticket, e := core.CreateTicketFromDecision(ctx, invocation, goldenpath.CreateTicketInput{DecisionID: decision.Decision.ID, ClientOperationID: "assignment-backup-ticket", Title: "Restore responsibility"})
 	if e != nil {
+		t.Fatal(e)
+	}
+	classification := goldenpath.NewTicketClassificationService(goldenpostgres.New(original), goldenpath.CryptoIDGenerator{})
+	sourceLabel, e := classification.WriteLabel(ctx, invocation, goldenpath.LabelInput{ProjectID: project.Object.ID, Action: "create", Name: "Synthetic source label", ClientOperationID: "source-label", Confirmed: true})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = classification.Set(ctx, invocation, goldenpath.ClassificationInput{TicketID: ticket.Ticket.ID, BaseRevision: 1, ClientOperationID: "source-classification", Confirmed: true, Classification: cp.Classification{Type: "task", LabelIDs: []string{sourceLabel.Ref.ID}}}); e != nil {
 		t.Fatal(e)
 	}
 	assignments := goldenpath.NewTicketAssignmentService(goldenpostgres.New(original), goldenpath.CryptoIDGenerator{})
@@ -228,6 +237,21 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 		t.Fatal(e)
 	}
 
+	classification = goldenpath.NewTicketClassificationService(goldenpostgres.New(imported), goldenpath.CryptoIDGenerator{})
+	labelInput := goldenpath.LabelInput{ProjectID: result.ProjectID, Action: "create", Name: "Native backup", ClientOperationID: "native-label-create", Confirmed: true}
+	nativeLabel, e := classification.WriteLabel(ctx, currentInvocation, labelInput)
+	if e != nil {
+		t.Fatal(e)
+	}
+	classInput := goldenpath.ClassificationInput{TicketID: nativeExecution.Ticket.ID, BaseRevision: 1, ClientOperationID: "native-classification", Confirmed: true, Classification: cp.Classification{Type: "defect", LabelIDs: []string{nativeLabel.Ref.ID}}}
+	if _, e = classification.Set(ctx, currentInvocation, classInput); e != nil {
+		t.Fatal(e)
+	}
+	archiveInput := goldenpath.LabelInput{ProjectID: result.ProjectID, LabelID: nativeLabel.Ref.ID, BaseRevision: 1, Action: "archive", ClientOperationID: "native-label-archive", Confirmed: true}
+	if _, e = classification.WriteLabel(ctx, currentInvocation, archiveInput); e != nil {
+		t.Fatal(e)
+	}
+
 	baseline := snapshotIncludedTables(t, ctx, imported)
 	activity := snapshotTable(t, ctx, imported, "radishnexus.activity_items")
 	restoredURL := recoveryBackupDatabase(t, ctx, targetURL)
@@ -298,6 +322,26 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	removedReceipt, e := execution.Write(ctx, currentInvocation, goldenpath.TicketDiscussionUnlink, nativeUnlinkInput)
 	if e != nil || removedReceipt.LinkID != nativeLink.LinkID {
 		t.Fatal("restored discussion unlink receipt", e)
+	}
+
+	classification = goldenpath.NewTicketClassificationService(goldenpostgres.New(restored), goldenpath.CryptoIDGenerator{})
+	rev, e := classification.Set(ctx, currentInvocation, classInput)
+	if e != nil || rev != 2 {
+		t.Fatal("restored classification receipt", rev, e)
+	}
+	labelReceipt, e := classification.WriteLabel(ctx, currentInvocation, labelInput)
+	if e != nil || labelReceipt != nativeLabel {
+		t.Fatal("restored label creation receipt", labelReceipt, e)
+	}
+	labelReceipt, e = classification.WriteLabel(ctx, currentInvocation, archiveInput)
+	if e != nil || labelReceipt.Status != "archived" || labelReceipt.Ref.ID != nativeLabel.Ref.ID || labelReceipt.Revision != 2 {
+		t.Fatal("restored label archive receipt", labelReceipt, e)
+	}
+	discovery := goldenpath.NewDiscoveryService(goldenpostgres.New(restored))
+	filtered, e := discovery.ListProjectTickets(ctx, actor, result.ProjectID, goldenpath.DiscoveryPageInput{Limit: 25, IncludeClassification: true, TicketFilters: goldenpath.TicketFilters{Type: "defect", Labels: nativeLabel.Ref.ID}})
+	if e != nil || len(filtered.Items) != 1 || filtered.Items[0].Ref.ID != nativeExecution.Ticket.ID ||
+		filtered.Items[0].Classification.Labels[0].Status != "archived" {
+		t.Fatal("restored classified discovery", filtered, e)
 	}
 
 	restoredContext := goldenpath.NewContextService(goldenpostgres.NewContextStore(restored, schema))

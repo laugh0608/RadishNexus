@@ -64,7 +64,8 @@ decision_artifact_dir=""
 supersession_artifact_dir=""
 review_artifact_dir=""
 execution_artifact_dir=""
-for legacy_kind in owner_transfer membership assignment priority decision supersession review execution; do
+classification_artifact_dir=""
+for legacy_kind in owner_transfer membership assignment priority decision supersession review execution classification; do
     if [[ "${legacy_kind}" == owner_transfer ]]; then
         legacy_ref="${RADISHNEXUS_OWNER_TRANSFER_LEGACY_REF:-}"
     elif [[ "${legacy_kind}" == membership ]]; then
@@ -79,8 +80,10 @@ for legacy_kind in owner_transfer membership assignment priority decision supers
         legacy_ref="${RADISHNEXUS_SUPERSESSION_LEGACY_REF:-}"
     elif [[ "${legacy_kind}" == review ]]; then
         legacy_ref="${RADISHNEXUS_REVIEW_LEGACY_REF:-}"
-    else
+    elif [[ "${legacy_kind}" == execution ]]; then
         legacy_ref="${RADISHNEXUS_EXECUTION_LEGACY_REF:-}"
+    else
+        legacy_ref="${RADISHNEXUS_CLASSIFICATION_LEGACY_REF:-}"
     fi
     [[ -n "${legacy_ref}" ]] || continue
     legacy_commit="$(git -C "${repo_root}" rev-parse --verify "${legacy_ref}^{commit}")"
@@ -107,8 +110,10 @@ for legacy_kind in owner_transfer membership assignment priority decision supers
         supersession_artifact_dir="/work/${legacy_kind}-bin"
     elif [[ "${legacy_kind}" == review ]]; then
         review_artifact_dir="/work/${legacy_kind}-bin"
-    else
+    elif [[ "${legacy_kind}" == execution ]]; then
         execution_artifact_dir="/work/${legacy_kind}-bin"
+    else
+        classification_artifact_dir="/work/${legacy_kind}-bin"
     fi
 done
 
@@ -184,8 +189,9 @@ docker exec \
     --env "RADISHNEXUS_SUPERSESSION_LEGACY_BIN=${supersession_artifact_dir}" \
     --env "RADISHNEXUS_REVIEW_LEGACY_BIN=${review_artifact_dir}" \
     --env "RADISHNEXUS_EXECUTION_LEGACY_BIN=${execution_artifact_dir}" \
+    --env "RADISHNEXUS_CLASSIFICATION_LEGACY_BIN=${classification_artifact_dir}" \
     --env "TARGET_DATABASE_URL=${target_database_url}" \
     "${source_container}" \
     /work/backuprestore.test \
     -test.v \
-    -test.run '^TestBackupRestore(GoldenPath|AccountRecovery|OwnerTransfer|OwnerTransferLegacy|UpgradeFailures|ImportedContext|MembershipLifecycle|MembershipLegacy|AssignmentLegacy|PriorityLegacy|DecisionLegacy|SupersessionLegacy|ReviewLegacy|ExecutionLegacy)$'
+    -test.run '^TestBackupRestore(GoldenPath|AccountRecovery|OwnerTransfer|OwnerTransferLegacy|UpgradeFailures|ImportedContext|MembershipLifecycle|MembershipLegacy|AssignmentLegacy|PriorityLegacy|DecisionLegacy|SupersessionLegacy|ReviewLegacy|ExecutionLegacy|ClassificationLegacy)$'

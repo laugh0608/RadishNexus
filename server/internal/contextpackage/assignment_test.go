@@ -51,6 +51,7 @@ func TestAssignmentV1ReadIsStrictAndPreservesManifest(t *testing.T) {
 		}
 		return result
 	})
+	stripTicketFields(t, &b, "ticket_type", "label_ids", "classification_revision")
 	stripDecisionReason(t, &b)
 	before := Digest(b.Manifest)
 	d, x, err := Unpack(b)

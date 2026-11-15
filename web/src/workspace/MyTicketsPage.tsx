@@ -1,3 +1,4 @@
+import { ClassificationText } from "../collaboration/TicketClassificationFields";
 import { ticketDueDateLabel } from "../collaboration/ticket-due-date";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthRequestError } from "../auth/api";
@@ -114,6 +115,8 @@ export function MyTicketsPage({
                     · 优先级 {ticketPriorityLabels[ticket.priority]}
                     {" · 截止日期 "}
                     {ticketDueDateLabel(ticket.dueDate)}
+                    {" · "}
+                    <ClassificationText value={ticket.classification} />
                   </p>
                 </li>
               ))}
