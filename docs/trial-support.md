@@ -4,7 +4,7 @@
 
 2026-10-24 建立支持草案，初版核对基线为 `94da10d`。当前候选 `1036b21` 于 2026-11-15 通过本机有限技术验收，对应 schema 025、Activity 13 与 v6 上下文包。实际试用的范围与授权待确认。 [候选实测](status/reviews/2026-11-10-web-candidate-1036b21.md#2026-11-15-隔离实例实测)
 
-本文说明首批试用拟支持的范围、求助方式、停止和退出条件。执行顺序以当前状态为准。部署和运行使用权取决于根许可证与另行有效的书面授权。 [当前状态](status/current.md) · [LICENSE](../LICENSE) · [评估授权待决事项](evaluation-authorization-decisions.md)
+本文说明首批试用拟支持的范围、求助方式、停止和退出条件。真人独立观察与真人实测按路线图排在项目开发完成后。执行顺序以当前状态为准。部署和运行使用权取决于根许可证与另行有效的书面授权。 [路线图](roadmap.md#推进原则) · [当前状态](status/current.md) · [LICENSE](../LICENSE) · [评估授权待决事项](evaluation-authorization-decisions.md)
 
 ## 现有事实与缺口
 
