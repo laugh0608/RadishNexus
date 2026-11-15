@@ -2,7 +2,7 @@
 
 状态：设计草案，待所有者确认；不是已开放的外部试用或生产支持承诺
 
-2026-10-24 建立支持草案，初版核对基线为 `94da10d`。2026-11-08 的本机技术验收采用 `127ba0c`，对应 schema 025、Activity 13 与 v6 上下文包。实际试用的范围与授权待确认。 [本机候选登记与验收](status/reviews/2026-11-08-m1-candidate-127ba0c.md)
+2026-10-24 建立支持草案，初版核对基线为 `94da10d`。当前候选 `1036b21` 于 2026-11-15 通过本机有限技术验收，对应 schema 025、Activity 13 与 v6 上下文包。实际试用的范围与授权待确认。 [候选实测](status/reviews/2026-11-10-web-candidate-1036b21.md#2026-11-15-隔离实例实测)
 
 本文说明首批试用拟支持的范围、求助方式、停止和退出条件。执行顺序以当前状态为准。部署和运行使用权取决于根许可证与另行有效的书面授权。 [当前状态](status/current.md) · [LICENSE](../LICENSE) · [评估授权待决事项](evaluation-authorization-decisions.md)
 
@@ -61,9 +61,9 @@
 
 ## 准入与退出判据
 
-下表是未来试用准入检查，全部待执行或确认，不是本轮已通过验收。检查缺项时不邀请外部主体实际运行；文档设计完成不替代有效授权。
+下表定义实际试用的准入判据。准入缺项时继续保持关闭，等待适用条件和有效授权落实。
 
-当前候选 `127ba0c` 的本机证据、正式缺口和责任分工见[首批试用准入复核](status/reviews/2026-11-08-m1-candidate-127ba0c.md#首批试用准入复核)。现场复验使用[目标宿主 T03、T06、T07 清单](status/reviews/2026-11-08-m1-candidate-127ba0c.md#目标宿主-t03t06t07-清单)。前一候选 `4f2b208` 的结果见[原准入核对](status/reviews/2026-11-08-m1-controlled-trial-readiness.md)。
+当前候选 `1036b21` 的正式准入缺项、负责角色及观察任务见[试用观察准备检查](status/reviews/2026-11-15-trial-observation-readiness-1036b21.md)。现场复验沿用[目标宿主 T03、T06、T07 清单](status/reviews/2026-11-08-m1-candidate-127ba0c.md#目标宿主-t03t06t07-清单)的步骤并填入当前工件身份。早期候选的状态见[`127ba0c` 准入复核](status/reviews/2026-11-08-m1-candidate-127ba0c.md#首批试用准入复核)及[`4f2b208` 准入核对](status/reviews/2026-11-08-m1-controlled-trial-readiness.md)。
 
 | 编号 | 准入项 | 必需证据 |
 | --- | --- | --- |
