@@ -125,6 +125,14 @@ func (*recordingStore) ListRelations(context.Context, authz.Principal, entityref
 	return nil, nil
 }
 
+func (store *recordingStore) GetNexusSummary(ctx context.Context, p authz.Principal, target entityref.Ref) (NexusView, error) {
+	return store.GetNexusView(ctx, p, target)
+}
+
+func (*recordingStore) ListNexusRelations(context.Context, authz.Principal, entityref.Ref, NexusRelationPageInput) (NexusRelationPage, error) {
+	return NexusRelationPage{}, nil
+}
+
 func (store *recordingStore) GetNexusView(
 	_ context.Context,
 	principal authz.Principal,

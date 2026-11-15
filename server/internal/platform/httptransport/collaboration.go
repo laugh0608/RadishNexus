@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -34,6 +33,8 @@ const (
 
 type CollaborationApplication interface {
 	GetNexusView(context.Context, authz.Principal, entityref.Ref) (goldenpath.NexusView, error)
+	GetNexusSummary(context.Context, authz.Principal, entityref.Ref) (goldenpath.NexusView, error)
+	ListNexusRelations(context.Context, authz.Principal, entityref.Ref, goldenpath.NexusRelationPageInput) (goldenpath.NexusRelationPage, error)
 	CreateDecisionFromThread(context.Context, goldenpath.Invocation, goldenpath.CreateDecisionInput) (goldenpath.CreateDecisionResult, error)
 	AcceptDecision(context.Context, goldenpath.Invocation, goldenpath.AcceptDecisionInput) (goldenpath.AcceptDecisionResult, error)
 	RejectDecision(context.Context, goldenpath.Invocation, goldenpath.RejectDecisionInput) (goldenpath.RejectDecisionResult, error)
@@ -207,6 +208,7 @@ func NewCollaborationHandler(
 	} {
 		mux.HandleFunc(pattern, handler.methodNotAllowed)
 	}
+	handler.registerNexusRelations(mux)
 	mux.HandleFunc("/api/v1/workspaces/", handler.notFound)
 	mux.HandleFunc("/api/v1/workspaces", handler.notFound)
 	return privateNoStore(mux)
@@ -241,33 +243,30 @@ func (handler *CollaborationHandler) getView(
 		handler.writeError(response, request, err)
 		return
 	}
-	includeDueDate, includeExecution, includeClassification := false, false, false
-	if request.URL.RawQuery != "" {
-		query, err := url.ParseQuery(request.URL.RawQuery)
-		include := query["include"]
-		if target.Type != "ticket" || err != nil || len(query) != 1 || len(include) != 1 || !validTicketViewInclude(include[0]) {
-			handler.writeError(response, request, fmt.Errorf("%w: invalid collaboration query", authz.ErrInvalid))
-			return
-		}
-		includeDueDate = strings.Contains(include[0], "due_date")
-		includeExecution = strings.Contains(include[0], "execution_context")
-		includeClassification = strings.Contains(include[0], "classification")
+	options, err := parseCollaborationReadOptions(request.URL.RawQuery, entityType)
+	if err != nil {
+		handler.writeError(response, request, err)
+		return
 	}
-	view, err := handler.collaboration.GetNexusView(request.Context(), principal, target)
+	read := handler.collaboration.GetNexusView
+	if options.summary {
+		read = handler.collaboration.GetNexusSummary
+	}
+	view, err := read(request.Context(), principal, target)
 	if err != nil {
 		handler.writeError(response, request, err)
 		return
 	}
 	if target.Type == "ticket" {
-		if view.TicketMessageSource != nil && !includeExecution {
+		if view.TicketMessageSource != nil && !options.execution {
 			handler.writeJSON(response, request, http.StatusConflict, ErrorResponse{Error: ErrorObject{Code: "conflict", Message: "This Ticket source requires an updated Web client.", RequestID: RequestID(request.Context())}})
 			return
 		}
 		timeline := make([]goldenpath.TimelineItem, 0, len(view.Timeline))
 		for _, item := range view.Timeline {
-			if (!includeDueDate && item.ActivityType == goldenpath.TicketDueDateChanged) ||
-				(!includeClassification && item.ActivityType == cp.TicketClassificationChanged) ||
-				(!includeExecution && (item.ActivityType == goldenpath.DiscussionLinked || item.ActivityType == goldenpath.DiscussionUnlinked)) {
+			if (!options.dueDate && item.ActivityType == goldenpath.TicketDueDateChanged) ||
+				(!options.classification && item.ActivityType == cp.TicketClassificationChanged) ||
+				(!options.execution && (item.ActivityType == goldenpath.DiscussionLinked || item.ActivityType == goldenpath.DiscussionUnlinked)) {
 				continue
 			}
 			timeline = append(timeline, item)
@@ -1024,7 +1023,7 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 func (handler *CollaborationHandler) methodNotAllowed(response http.ResponseWriter, request *http.Request) {
 	if strings.HasSuffix(request.URL.Path, "/reviews") {
 		response.Header().Set("Allow", "GET, POST")
-	} else if strings.HasSuffix(request.URL.Path, "/nexus-view") {
+	} else if strings.HasSuffix(request.URL.Path, "/nexus-view") || strings.HasSuffix(request.URL.Path, "/nexus-view/relations") {
 		response.Header().Set("Allow", http.MethodGet)
 	} else {
 		response.Header().Set("Allow", http.MethodPost)

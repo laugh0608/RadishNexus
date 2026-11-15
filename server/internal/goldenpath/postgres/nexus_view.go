@@ -18,7 +18,15 @@ func (store *Store) GetNexusView(
 	ctx context.Context,
 	principal authz.Principal,
 	target entityref.Ref,
-) (view goldenpath.NexusView, err error) {
+) (goldenpath.NexusView, error) {
+	return store.getNexusView(ctx, principal, target, false)
+}
+
+func (store *Store) GetNexusSummary(ctx context.Context, principal authz.Principal, target entityref.Ref) (goldenpath.NexusView, error) {
+	return store.getNexusView(ctx, principal, target, true)
+}
+
+func (store *Store) getNexusView(ctx context.Context, principal authz.Principal, target entityref.Ref, summary bool) (view goldenpath.NexusView, err error) {
 	if err := principal.ValidateUser(); err != nil {
 		return view, err
 	}
@@ -102,7 +110,7 @@ func (store *Store) GetNexusView(
 		}
 		view.DecisionCapabilities = caps
 	}
-	view.Relations, err = listRelationProjections(ctx, tx, principal, target)
+	view.Relations, err = listRelationProjections(ctx, tx, principal, target, summary)
 	if err != nil {
 		return view, err
 	}

@@ -193,6 +193,8 @@ type Store interface {
 	RecordStagingDeployment(context.Context, RecordStagingDeploymentCommand) (Deployment, error)
 	ListRelations(context.Context, authz.Principal, entityref.Ref) ([]RelationProjection, error)
 	GetNexusView(context.Context, authz.Principal, entityref.Ref) (NexusView, error)
+	GetNexusSummary(context.Context, authz.Principal, entityref.Ref) (NexusView, error)
+	ListNexusRelations(context.Context, authz.Principal, entityref.Ref, NexusRelationPageInput) (NexusRelationPage, error)
 }
 
 type IDGenerator interface {

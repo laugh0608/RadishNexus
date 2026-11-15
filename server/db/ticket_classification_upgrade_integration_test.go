@@ -42,5 +42,5 @@ func TestTicketClassificationUpgradeFrom027(t *testing.T) {
 		kind != "unset" || revision != 1 || projection != 17 || assignments != 0 {
 		t.Fatal(kind, revision, projection, assignments, err)
 	}
-	requireUpgradePrefix(t, conn, 29)
+	requireUpgradePrefix(t, conn, latestUpgradeSequence(t))
 }

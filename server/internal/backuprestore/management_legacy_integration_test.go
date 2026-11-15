@@ -5,14 +5,17 @@ package backuprestore
 import (
 	"context"
 	"fmt"
-	"github.com/laugh0608/RadishNexus/server/db"
-	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
-	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/laugh0608/RadishNexus/server/db"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
+	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 )
 
 func TestBackupRestoreMembershipLegacy(t *testing.T) {
@@ -51,6 +54,12 @@ func TestBackupRestoreCIRunTraceLegacy(t *testing.T) {
 }
 
 func testBackupRestoreLegacy(t *testing.T, variable string, schema int) {
+	testBackupRestoreLegacyWithFixture(t, variable, schema, nil)
+}
+
+type legacyUpgradeFixture func(context.Context, *pgxpool.Pool, authz.Principal) func(*pgxpool.Pool, authz.Principal)
+
+func testBackupRestoreLegacyWithFixture(t *testing.T, variable string, schema int, seed legacyUpgradeFixture) {
 	legacy := os.Getenv(variable)
 	sourceURL, targetURL := os.Getenv("SOURCE_DATABASE_URL"), os.Getenv("TARGET_DATABASE_URL")
 	if legacy == "" || sourceURL == "" || targetURL == "" {
@@ -78,6 +87,12 @@ func testBackupRestoreLegacy(t *testing.T, variable string, schema int) {
 		t.Fatal("require actual matching legacy artifact", count, schema, e)
 	}
 	run(sourceURL, "nexus-bootstrap", `{"email":"legacy-membership@example.test","password":"legacy membership synthetic password"}`, "--display-name", "Legacy membership owner", "--workspace-name", "Legacy workspace", "--credentials-stdin")
+	var verifyFixture func(*pgxpool.Pool, authz.Principal)
+	if seed != nil {
+		pool := connectIntegrationPool(t, ctx, sourceURL)
+		defer pool.Close()
+		verifyFixture = seed(ctx, pool, loginLegacyOwner(t, ctx, pool))
+	}
 	snapshot := filepath.Join(t.TempDir(), fmt.Sprintf("schema%03d", schema))
 	run(sourceURL, "nexus-backup", "", "--output", snapshot)
 	if _, e := NewService().Restore(ctx, target, targetURL, snapshot); e == nil {
@@ -99,6 +114,21 @@ func testBackupRestoreLegacy(t *testing.T, variable string, schema int) {
 	}
 	pool := connectIntegrationPool(t, ctx, targetURL)
 	defer pool.Close()
+	owner := loginLegacyOwner(t, ctx, pool)
+	if verifyFixture != nil {
+		verifyFixture(pool, owner)
+	}
+	var oldSessions, oldInvitations int
+	if e = pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM radishnexus.user_sessions WHERE id<>$1),(SELECT count(*) FROM radishnexus.identity_invitations)`, owner.SessionID).Scan(&oldSessions, &oldInvitations); e != nil || oldSessions != 0 || oldInvitations != 0 {
+		t.Fatal("restore retained authorization material", oldSessions, oldInvitations, e)
+	}
+	if e = source.QueryRow(ctx, `SELECT count(*) FROM public.radishnexus_schema_migrations`).Scan(&count); e != nil || count != schema {
+		t.Fatal("restore changed source", count, e)
+	}
+}
+
+func loginLegacyOwner(t *testing.T, ctx context.Context, pool *pgxpool.Pool) authz.Principal {
+	t.Helper()
 	auth := authn.NewService(authpostgres.New(pool), authn.NewArgon2idHasher(), authn.CryptoSecretGenerator{}, authn.SystemClock{})
 	session, e := auth.Login(ctx, authn.LoginInput{Email: "legacy-membership@example.test", Password: "legacy membership synthetic password"})
 	if e != nil {
@@ -108,11 +138,9 @@ func testBackupRestoreLegacy(t *testing.T, variable string, schema int) {
 	if e != nil || verified.MembershipRevision != 1 || session.Account.Workspaces[0].Role != "owner" {
 		t.Fatal("upgraded restored admission", e)
 	}
-	var oldSessions, oldInvitations int
-	if e = pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM radishnexus.user_sessions WHERE id<>$1),(SELECT count(*) FROM radishnexus.identity_invitations)`, verified.SessionID).Scan(&oldSessions, &oldInvitations); e != nil || oldSessions != 0 || oldInvitations != 0 {
-		t.Fatal("restore retained authorization material", oldSessions, oldInvitations, e)
+	p, e := authn.UserPrincipal(verified)
+	if e != nil {
+		t.Fatal(e)
 	}
-	if e = source.QueryRow(ctx, `SELECT count(*) FROM public.radishnexus_schema_migrations`).Scan(&count); e != nil || count != schema {
-		t.Fatal("restore changed source", count, e)
-	}
+	return p
 }

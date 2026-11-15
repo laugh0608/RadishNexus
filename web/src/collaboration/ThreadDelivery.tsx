@@ -54,7 +54,7 @@ export function ThreadDelivery({
   );
   // The enclosing Thread handles focus, visibility and history and remounts the
   // entire tree on a fresh read.
-  const tickets = usePage(load, onSessionExpired, false);
+  const tickets = usePage(load, onSessionExpired, { refreshOnFocus: false });
   return (
     <section className="collaboration-panel" aria-label="执行与交付">
       <h2>执行与交付</h2>
@@ -133,7 +133,7 @@ function DeliveryRuns({
     },
     [workspace, thread, ticket, onUnavailable],
   );
-  const runs = usePage(load, onSessionExpired, false);
+  const runs = usePage(load, onSessionExpired, { refreshOnFocus: false });
   return (
     <section aria-label={`${title}的构建`}>
       <TraceList
@@ -206,7 +206,9 @@ function DeliveryDeployments({
     },
     [workspace, thread, ticket, run, onUnavailable],
   );
-  const deployments = usePage(load, onSessionExpired, false);
+  const deployments = usePage(load, onSessionExpired, {
+    refreshOnFocus: false,
+  });
   return (
     <section aria-label={`${run} 的部署`}>
       <TraceList

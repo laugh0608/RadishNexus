@@ -118,10 +118,10 @@ func requireUpgradePrefix(t *testing.T, conn *pgx.Conn, prefix int) {
 	upgradeSQL(t, conn, `SELECT pg_advisory_unlock($1)`, migrationLockID)
 }
 
-func installUpgradeFault(t *testing.T, conn *pgx.Conn, statement string) {
+func installUpgradeFault(t *testing.T, conn *pgx.Conn, sequence int, statement string) {
 	t.Helper()
-	// At INSERT history 018, all its DDL has run but COMMIT has not happened.
-	upgradeSQL(t, conn, `CREATE FUNCTION public.upgrade_test_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.sequence=18 THEN `+statement+`; END IF; RETURN NEW; END $$;
+	// At the history insert, the migration DDL has run and is still transactional.
+	upgradeSQL(t, conn, `CREATE FUNCTION public.upgrade_test_fault() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.sequence=`+fmt.Sprint(sequence)+` THEN `+statement+`; END IF; RETURN NEW; END $$;
 CREATE TRIGGER upgrade_test_fault BEFORE INSERT ON public.radishnexus_schema_migrations FOR EACH ROW EXECUTE FUNCTION public.upgrade_test_fault()`)
 }
 
@@ -162,7 +162,7 @@ func TestUpgradeFailureSQLAndCommittedPrefix(t *testing.T) {
 		t.Run(fmt.Sprintf("from_%03d", prefix), func(t *testing.T) {
 			conn, config := upgradeFailureDatabase(t, prefix)
 			before := upgradeHistory(t, conn)
-			installUpgradeFault(t, conn, `RAISE EXCEPTION 'isolated migration fault' USING ERRCODE='P0001'`)
+			installUpgradeFault(t, conn, 18, `RAISE EXCEPTION 'isolated migration fault' USING ERRCODE='P0001'`)
 			err := Migrate(context.Background(), conn)
 			var pgerr *pgconn.PgError
 			if !errors.As(err, &pgerr) || pgerr.Code != "P0001" || !strings.Contains(err.Error(), "record migration 018") {
@@ -200,7 +200,7 @@ func TestUpgradeFailureCancellationAndTermination(t *testing.T) {
 			const barrier = int64(739140967704145)
 			upgradeSQL(t, observer, `SELECT pg_advisory_lock($1)`, barrier)
 			defer upgradeSQL(t, observer, `SELECT pg_advisory_unlock($1)`, barrier)
-			installUpgradeFault(t, observer, fmt.Sprintf("PERFORM pg_advisory_xact_lock(%d)", barrier))
+			installUpgradeFault(t, observer, 18, fmt.Sprintf("PERFORM pg_advisory_xact_lock(%d)", barrier))
 			runner := upgradeConnection(t, config)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -309,4 +309,65 @@ func TestUpgradeFailureHistoryDriftAndUntrackedDDL(t *testing.T) {
 		// Operational preflight must still reject a known unreviewed alteration.
 		// A successful exact-history probe does not certify arbitrary DDL.
 	})
+}
+
+func TestNexusRelationIndexRollbackAndRetry(t *testing.T) {
+	const previous, indexSequence = 29, 30
+	ctx := context.Background()
+	runner, config := upgradeFailureDatabase(t, previous)
+	observer := upgradeConnection(t, config)
+	before := upgradeHistory(t, observer)
+	ready, err := NewReadinessChecker(observer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readIndex := func() (oid uint32, valid bool) {
+		t.Helper()
+		err := observer.QueryRow(ctx, `
+			SELECT COALESCE(i.indexrelid, 0::oid), COALESCE(i.indisvalid AND i.indisready, false)
+			FROM (SELECT to_regclass('radishnexus.entity_links_nexus_incoming_page') AS name) x
+			LEFT JOIN pg_index i ON i.indexrelid=x.name
+		`).Scan(&oid, &valid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return oid, valid
+	}
+	if oid, _ := readIndex(); oid != 0 || ready.CheckReady(ctx) == nil {
+		t.Fatal("expected the unapplied 029 state")
+	}
+	installUpgradeFault(t, observer, indexSequence, `
+		IF to_regclass('radishnexus.entity_links_nexus_incoming_page') IS NULL THEN
+			RAISE EXCEPTION 'index DDL did not run';
+		END IF;
+		RAISE EXCEPTION 'isolated failure after index DDL'`)
+	err = Migrate(ctx, runner)
+	var pgerr *pgconn.PgError
+	if !errors.As(err, &pgerr) || pgerr.Message != "isolated failure after index DDL" ||
+		!strings.Contains(err.Error(), "record migration 030") {
+		t.Fatal("030 precommit fault did not occur", err)
+	}
+	requireUpgradePrefix(t, observer, previous)
+	if oid, _ := readIndex(); oid != 0 || upgradeHistory(t, observer) != before || ready.CheckReady(ctx) == nil {
+		t.Fatal("failed 030 left an index, changed history, or admitted the new build")
+	}
+
+	removeUpgradeFault(t, observer)
+	if err := Migrate(ctx, runner); err != nil {
+		t.Fatal(err)
+	}
+	if err := ready.CheckReady(ctx); err != nil {
+		t.Fatal(err)
+	}
+	indexOID, valid := readIndex()
+	if !valid || indexOID == 0 || upgradeHistoryThrough(t, observer, previous) != before {
+		t.Fatal("030 retry did not preserve previous history or create a usable index")
+	}
+	after := upgradeHistory(t, observer)
+	if err := Migrate(ctx, runner); err != nil {
+		t.Fatal(err)
+	}
+	if oid, valid := readIndex(); !valid || oid != indexOID || upgradeHistory(t, observer) != after {
+		t.Fatal("second migrate rebuilt the index or changed its history")
+	}
 }

@@ -41,7 +41,7 @@ func (store *Store) ListRelations(
 		return nil, authz.ErrNotFound
 	}
 
-	projections, err = listRelationProjections(ctx, tx, principal, source)
+	projections, err = listRelationProjections(ctx, tx, principal, source, false)
 	if err != nil {
 		return nil, err
 	}
@@ -52,31 +52,49 @@ func (store *Store) ListRelations(
 	return projections, nil
 }
 
+const outgoingRelationFacts = `
+	SELECT 'outgoing' AS direction, relation_type, to_type AS target_type,
+	       to_id AS target_id, created_at, id
+	FROM radishnexus.entity_links
+	WHERE workspace_id = $1 AND from_type = $2 AND from_id = $3 AND state = 'active'`
+
+const incomingRelationFacts = `
+	SELECT 'incoming', relation_type, from_type, from_id, created_at, id
+	FROM radishnexus.entity_links
+	WHERE workspace_id = $1 AND to_type = $2 AND to_id = $3 AND state = 'active'`
+
 func listRelationProjections(
 	ctx context.Context,
 	tx pgx.Tx,
 	principal authz.Principal,
 	source entityref.Ref,
+	summary bool,
 ) ([]goldenpath.RelationProjection, error) {
+	factsSQL := outgoingRelationFacts + `
+		AND relation_type <> 'tracks-build'
+		AND NOT (from_type='ticket' AND ((relation_type='started-from' AND to_type='message') OR (relation_type='relates-to' AND to_type='thread')))
+		UNION ALL` + incomingRelationFacts + `
+		AND (($2 = 'thread' AND from_type = 'decision' AND relation_type = 'derived-from')
+		  OR ($2 = 'decision' AND ((from_type = 'ticket' AND relation_type = 'implements') OR (from_type='decision' AND relation_type='supersedes')))
+		  OR ($2 = 'document' AND from_type = 'ticket' AND relation_type = 'relates-to')
+		  OR ($2 = 'repository' AND from_type = 'component' AND relation_type = 'source-repository')
+		  OR ($2 = 'component' AND from_type = 'ticket' AND relation_type = 'affects'))`
+	if summary {
+		switch source.Type {
+		case "thread":
+			factsSQL = outgoingRelationFacts + ` AND relation_type='started-from' AND to_type='message'`
+		case "decision":
+			factsSQL = outgoingRelationFacts + ` AND relation_type IN ('derived-from','supersedes')
+				UNION ALL` + incomingRelationFacts + ` AND from_type='decision' AND relation_type='supersedes'`
+		case "ticket":
+			factsSQL = outgoingRelationFacts + ` AND relation_type='implements' AND to_type='decision'`
+		default:
+			return nil, authz.ErrInvalid
+		}
+	}
 	rows, err := tx.Query(ctx, `
 		SELECT direction, relation_type, target_type, target_id
-		FROM (
-			SELECT 'outgoing' AS direction, relation_type, to_type AS target_type,
-				to_id AS target_id, created_at, id
-			FROM radishnexus.entity_links
-			WHERE workspace_id = $1 AND from_type = $2 AND from_id = $3 AND state = 'active'
-              AND relation_type <> 'tracks-build'
-              AND NOT (from_type='ticket' AND ((relation_type='started-from' AND to_type='message') OR (relation_type='relates-to' AND to_type='thread')))
-			UNION ALL
-			SELECT 'incoming', relation_type, from_type, from_id, created_at, id
-			FROM radishnexus.entity_links
-			WHERE workspace_id = $1 AND to_type = $2 AND to_id = $3 AND state = 'active'
-				AND (($2 = 'thread' AND from_type = 'decision' AND relation_type = 'derived-from')
-					OR ($2 = 'decision' AND ((from_type = 'ticket' AND relation_type = 'implements') OR (from_type='decision' AND relation_type='supersedes')))
- OR ($2 = 'document' AND from_type = 'ticket' AND relation_type = 'relates-to')
- OR ($2 = 'repository' AND from_type = 'component' AND relation_type = 'source-repository')
- OR ($2 = 'component' AND from_type = 'ticket' AND relation_type = 'affects'))
-		) AS relations
+		FROM (`+factsSQL+`) AS relations
 		ORDER BY CASE direction WHEN 'outgoing' THEN 0 ELSE 1 END, created_at, id
 	`, principal.WorkspaceID, source.Type, source.ID)
 	if err != nil {

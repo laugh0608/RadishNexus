@@ -56,6 +56,14 @@ func (application *fakeCollaborationApplication) GetNexusView(
 	return application.view, application.viewErr
 }
 
+func (application *fakeCollaborationApplication) GetNexusSummary(ctx context.Context, p authz.Principal, target entityref.Ref) (goldenpath.NexusView, error) {
+	return application.GetNexusView(ctx, p, target)
+}
+
+func (*fakeCollaborationApplication) ListNexusRelations(context.Context, authz.Principal, entityref.Ref, goldenpath.NexusRelationPageInput) (goldenpath.NexusRelationPage, error) {
+	return goldenpath.NexusRelationPage{Items: []goldenpath.RelationProjection{}}, nil
+}
+
 func (application *fakeCollaborationApplication) CreateDecisionFromThread(
 	_ context.Context,
 	invocation goldenpath.Invocation,

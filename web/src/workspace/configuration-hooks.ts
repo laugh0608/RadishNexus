@@ -82,7 +82,7 @@ export function usePage<
 >(
   load: (after: string | undefined, signal: AbortSignal) => Promise<Page>,
   onSessionExpired: () => void,
-  refreshOnFocus = true,
+  { refreshOnFocus = true, restartOnCursorConflict = false } = {},
 ) {
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [revision, setRevision] = useState(0);
@@ -94,6 +94,11 @@ export function usePage<
     revision?: number;
   }>({});
   const cursor = cursors[cursors.length - 1];
+  const refresh = useCallback(() => {
+    setState({});
+    setCursors([undefined]);
+    setRevision((v) => v + 1);
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     void load(cursor, controller.signal).then(
@@ -107,6 +112,15 @@ export function usePage<
           onSessionExpired();
           return;
         }
+        if (
+          restartOnCursorConflict &&
+          cursor &&
+          error instanceof AuthRequestError &&
+          error.status === 409
+        ) {
+          refresh();
+          return;
+        }
         setState({
           error: error instanceof Error ? error.message : "无法加载配置。",
           loader: load,
@@ -116,12 +130,14 @@ export function usePage<
       },
     );
     return () => controller.abort();
-  }, [load, cursor, revision, onSessionExpired]);
-  const refresh = useCallback(() => {
-    setState({});
-    setCursors([undefined]);
-    setRevision((v) => v + 1);
-  }, []);
+  }, [
+    load,
+    cursor,
+    revision,
+    onSessionExpired,
+    refresh,
+    restartOnCursorConflict,
+  ]);
   useEffect(() => {
     if (!refreshOnFocus) return;
     const focus = () => refresh();

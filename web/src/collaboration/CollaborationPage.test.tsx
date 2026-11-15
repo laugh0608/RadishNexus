@@ -1,6 +1,14 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { CollaborationPage } from "./CollaborationPage";
+import { AuthRequestError } from "../auth/api";
 import {
   CollaborationRequestError,
   type CollaborationClient,
@@ -573,6 +581,124 @@ describe("CollaborationPage", () => {
   });
 });
 
+it("restarts relations at the first page after a stale cursor while keeping the source", async () => {
+  const row = (id: string, title: string) => ({
+    id,
+    relation: {
+      visibility: "readable" as const,
+      direction: "incoming" as const,
+      relationType: "derived-from" as const,
+      target: { ref: { type: "decision" as const, id }, title },
+    },
+  });
+  const loadRelations = vi
+    .fn<CollaborationClient["loadRelations"]>()
+    .mockResolvedValueOnce({
+      items: [row("dec_first", "Old related decision")],
+      nextCursor: "next",
+    })
+    .mockRejectedValueOnce(new AuthRequestError("Changed", { status: 409 }))
+    .mockResolvedValueOnce({
+      items: [row("dec_second", "Current related decision")],
+      nextCursor: null,
+    });
+  const client = testClient({ loadRelations });
+  renderPage("thread", thread.ref.id, client);
+  const found = await screen.findByRole("region", { name: "关联对象" });
+  fireEvent.click(await within(found).findByRole("button", { name: "下一页" }));
+  await within(found).findByText("Current related decision");
+  expect(loadRelations.mock.calls.map((args) => args[3])).toEqual([
+    undefined,
+    "next",
+    undefined,
+  ]);
+  expect(within(found).queryByText("Old related decision")).toBeNull();
+  expect(within(found).queryByRole("button", { name: "上一页" })).toBeNull();
+  expect(screen.getByText("entity://message/msg_source")).toBeTruthy();
+  expect(client.loadView).toHaveBeenCalledTimes(1);
+});
+
+it("keeps the authoritative actions available while a relation request fails", async () => {
+  const loadRelations = vi
+    .fn<CollaborationClient["loadRelations"]>()
+    .mockRejectedValueOnce(new AuthRequestError("Unavailable", { status: 503 }))
+    .mockResolvedValueOnce({ items: [], nextCursor: null });
+  const client = testClient({ loadRelations });
+  renderPage("thread", thread.ref.id, client);
+  const found = await screen.findByRole("region", { name: "关联对象" });
+  const retry = await within(found).findByRole("button", {
+    name: "重新读取关联",
+  });
+  expect(
+    screen.getByRole("button", { name: "创建 Proposed Decision" }),
+  ).toBeTruthy();
+  fireEvent.click(retry);
+  await within(found).findByText("当前对象没有可展示的关联对象。");
+  expect(client.loadView).toHaveBeenCalledTimes(1);
+});
+
+it("aborts a pending relation page on a Workspace and Thread switch", async () => {
+  type Page = Awaited<ReturnType<CollaborationClient["loadRelations"]>>;
+  let resolveOld: (value: Page) => void = () => {};
+  const old = new Promise<Page>((resolve) => {
+    resolveOld = resolve;
+  });
+  const loadRelations = vi
+    .fn<CollaborationClient["loadRelations"]>()
+    .mockReturnValueOnce(old)
+    .mockResolvedValueOnce({ items: [], nextCursor: null });
+  const client = testClient({ loadRelations });
+  const onSessionExpired = vi.fn();
+  const ui = render(
+    <CollaborationPage
+      workspaceID="wrk_main"
+      entityType="thread"
+      entityID={thread.ref.id}
+      client={client}
+      onSessionExpired={onSessionExpired}
+    />,
+  );
+  await waitFor(() => expect(loadRelations).toHaveBeenCalledTimes(1));
+  ui.rerender(
+    <CollaborationPage
+      workspaceID="wrk_second"
+      entityType="thread"
+      entityID="thr_second"
+      client={client}
+      onSessionExpired={onSessionExpired}
+    />,
+  );
+  const region = await screen.findByRole("region", { name: "关联对象" });
+  await within(region).findByText("当前对象没有可展示的关联对象。");
+  expect(loadRelations.mock.calls[0]![4].aborted).toBe(true);
+  expect(loadRelations.mock.calls[1]!.slice(0, 4)).toEqual([
+    "wrk_second",
+    "thread",
+    "thr_second",
+    undefined,
+  ]);
+  await act(async () =>
+    resolveOld({
+      items: [
+        {
+          id: "dec_old",
+          relation: {
+            visibility: "readable",
+            direction: "incoming",
+            relationType: "derived-from",
+            target: {
+              ref: { type: "decision", id: "dec_old" },
+              title: "Stale old Workspace relation",
+            },
+          },
+        },
+      ],
+      nextCursor: null,
+    }),
+  );
+  expect(within(region).queryByText("Stale old Workspace relation")).toBeNull();
+});
+
 function renderPage(
   entityType: "thread" | "decision" | "ticket",
   entityID: string,
@@ -601,6 +727,7 @@ function testClient(
       .mockResolvedValue({ items: [], nextAfter: null }),
     changeTicketStatus: vi.fn(),
     loadView: vi.fn().mockResolvedValue(threadView),
+    loadRelations: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
     proposeDecision: vi.fn(),
     acceptDecision: vi.fn(),
     rejectDecision: vi.fn(),

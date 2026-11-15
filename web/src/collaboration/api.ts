@@ -1,3 +1,4 @@
+import { parsePage, query, request } from "../workspace/configuration-api";
 import {
   parseTicketType,
   type ClassificationInput,
@@ -329,7 +330,18 @@ export interface CollaborationClient {
     entityType: CollaborationEntityType,
     entityID: string,
     signal?: AbortSignal,
+    mode?: "full" | "summary",
   ): Promise<CollaborationView>;
+  loadRelations(
+    workspaceID: string,
+    entityType: CollaborationEntityType,
+    entityID: string,
+    after: string | undefined,
+    signal: AbortSignal,
+  ): Promise<{
+    items: readonly { id: string; relation: CollaborationRelation }[];
+    nextCursor: string | null;
+  }>;
   proposeDecision(
     workspaceID: string,
     threadID: string,
@@ -408,6 +420,7 @@ export const browserCollaborationClient: CollaborationClient = {
   loadDecisionReviews,
   changeTicketStatus,
   loadView,
+  loadRelations,
   proposeDecision,
   acceptDecision,
   rejectDecision,
@@ -470,10 +483,16 @@ async function loadView(
   entityType: CollaborationEntityType,
   entityID: string,
   signal?: AbortSignal,
+  mode: "full" | "summary" = "full",
 ): Promise<CollaborationView> {
   requireLocation(workspaceID, entityType, entityID);
+  const parameters: string[] = [];
+  if (entityType === "ticket")
+    parameters.push("include=due_date,execution_context,classification");
+  if (mode === "summary") parameters.push("relations=summary");
+  const suffix = parameters.length ? `?${parameters.join("&")}` : "";
   const response = await collaborationFetch(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/${pageSegments[entityType]}/${encodeURIComponent(entityID)}/nexus-view${entityType === "ticket" ? "?include=due_date,execution_context,classification" : ""}`,
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/${pageSegments[entityType]}/${encodeURIComponent(entityID)}/nexus-view${suffix}`,
     {
       method: "GET",
       headers: { Accept: "application/json" },
@@ -487,7 +506,7 @@ async function loadView(
   }
   const payload = await responseJSON(response, "协作 Nexus View");
   try {
-    return parseCollaborationView(payload, entityType, entityID);
+    return parseCollaborationView(payload, entityType, entityID, mode);
   } catch (error) {
     throw contractError(
       "服务返回的协作对象不符合当前契约，请稍后重试。",
@@ -495,6 +514,50 @@ async function loadView(
       error,
     );
   }
+}
+
+async function loadRelations(
+  workspace: string,
+  kind: CollaborationEntityType,
+  id: string,
+  after: string | undefined,
+  signal: AbortSignal,
+) {
+  requireLocation(workspace, kind, id);
+  const data = await request(
+    workspace,
+    `/${pageSegments[kind]}/${encodeURIComponent(id)}/nexus-view/relations${query(after)}`,
+    "GET",
+    undefined,
+    signal,
+  );
+  const seen = new Set<string>();
+  return parsePage(
+    data,
+    (value) => {
+      const relation = parseRelation(value, seen.size, kind);
+      if (relation.visibility !== "readable" || !isPagedRelation(relation))
+        throw new TypeError("Unexpected paged Nexus View relation");
+      const key = `${relation.target.ref.type}/${relation.target.ref.id}`;
+      if (seen.has(key))
+        throw new TypeError("Duplicate paged Nexus View relation");
+      seen.add(key);
+      return { id: key, relation };
+    },
+    after,
+    // Ordering uses link timing and ID, which are internal to the server.
+    () => true,
+  );
+}
+
+function isPagedRelation(relation: CollaborationRelation): boolean {
+  return (
+    relation.visibility === "readable" &&
+    ((relation.direction === "incoming" &&
+      relation.relationType !== "supersedes") ||
+      relation.relationType === "relates-to" ||
+      relation.relationType === "affects")
+  );
 }
 
 async function proposeDecision(
@@ -1025,6 +1088,7 @@ export function parseCollaborationView(
   payload: unknown,
   expectedType: CollaborationEntityType,
   expectedID: string,
+  mode: "full" | "summary" = "full",
 ): CollaborationView {
   const envelope = exactRecord(payload, "response", ["data"]);
   const fields = record(envelope.data, "response.data");
@@ -1043,6 +1107,8 @@ export function parseCollaborationView(
   const relations = array(data.relations, "response.data.relations").map(
     (relation, index) => parseRelation(relation, index, expectedType),
   );
+  if (mode === "summary" && relations.some(isPagedRelation))
+    throw new TypeError("Unexpected paged relation in Nexus View summary");
   const timeline = array(data.timeline, "response.data.timeline").map(
     (item, index) => parseTimelineItem(item, index, expectedType),
   );

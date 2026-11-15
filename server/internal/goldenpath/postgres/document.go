@@ -191,7 +191,7 @@ func (s *Store) ReadDocument(ctx context.Context, p authz.Principal, id string, 
 		view.Current.View = &projection
 	}
 	if revision == 0 {
-		view.Relations, err = listRelationProjections(ctx, tx, p, view.Current.Ref)
+		view.Relations, err = listRelationProjections(ctx, tx, p, view.Current.Ref, false)
 		if err != nil {
 			return view, err
 		}

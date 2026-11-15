@@ -202,3 +202,7 @@ ADR-0037 A 在正式 CI Run 页面展示未采集、来源不可用、observed �
 ### 从原讨论追踪交付
 
 Thread 的“执行与交付”列出当前可读的工单及其来源。展开工单查阅构建，再展开构建查看已有 staging 记录，各层可独立翻页，链接打开原对象。重读从工单首页重新验证，失效路径清除相关子层。 [ADR-0057](../docs/adr/0057-thread-delivery-trace.md)
+
+### 协作 Nexus View 关系分页
+
+Thread、Decision 和 Ticket 的“来源与后续结果”保留原始来源及直接替代关系。派生 Decision、实施 Ticket 或工单关联的文档和组件各从当前页读取。切页保留详情和可用操作，游标失效自动从第一页核对。 [ADR-0058](../docs/adr/0058-nexus-view-relation-pagination.md)

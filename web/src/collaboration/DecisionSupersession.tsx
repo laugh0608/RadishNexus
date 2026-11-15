@@ -126,7 +126,7 @@ export function useDecisionSupersession({
     const controller = new AbortController();
     if (!current || !oldID) return () => controller.abort();
     void client
-      .loadView(workspaceID, "decision", oldID, controller.signal)
+      .loadView(workspaceID, "decision", oldID, controller.signal, "summary")
       .then(
         (view) => {
           if (controller.signal.aborted) return;

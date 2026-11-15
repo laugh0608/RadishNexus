@@ -37,7 +37,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 1. **升级运维**：只读 schema readiness 已按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 完成；单机停机升级失败恢复已按 [ADR-0043](../adr/0043-single-host-upgrade-failure-recovery.md) 实施手册与隔离演练，故障与浏览器证据见[记录](reviews/2026-10-24-upgrade-failure-recovery.md)；独立操作者复验已按所有者要求暂缓，跨 schema 兼容窗口与生产编排仍待建立。
 2. **使用入口**：首页已可直接浏览可读 Project / Channel；Team / Project / Channel 创建与首批成员配置已接通；部署后首次访问创建管理员已接通；Workspace owner 主动交接已接通，Project admin / 私密对象管理权交接与成员生命周期已接通；其他对象列表仍缺。Document 的原生 IME 复核和真实外部交付链仍独立推进。
-3. **关系与时间线范围**：核心 Nexus 关系仍全量读取，未建立通用分页；Repository / Component 配置、Ticket / Component 和 Ticket / CI Run 已有专用双向分页。Timeline 默认沿事件主要对象投影，替代命令显式投影双方 Decision。Thread 的“执行与交付”支持从三类来源找到工单，再逐级读取关联构建与已有 staging 部署。 [ADR-0057 技术验收](reviews/2026-11-15-thread-delivery-trace.md)
+3. **关系与时间线范围**：Thread、Decision 和 Ticket 已接入关系分页与 schema 030 入向索引。其他 Nexus View 仍沿各自读取合同。Repository / Component 配置、Ticket / Component 和 Ticket / CI Run 已有专用双向分页。Timeline 默认沿事件主要对象投影，替代命令显式投影双方 Decision。Thread 的“执行与交付”支持从三类来源找到工单，再逐级读取关联构建与已有 staging 部署。 [ADR-0057 技术验收](reviews/2026-11-15-thread-delivery-trace.md)
 4. **证据边界**：自动化、真实数据库与本轮浏览器验收证明讨论到执行的局部闭环；Document 的剩余人工复核、真实交付链、完整 Golden Path 和真实团队持续使用仍分别验收。
 
 ## 近期执行顺序
@@ -46,7 +46,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **设计核心 Nexus View 的关系分页**。先盘点现有全量读取、来源与后续结果的排序、受限关系的展示，以及 Go 和 Web 的兼容方式。确定首批对象与权限规则后再实施。 [现有反向关系合同](../adr/0022-transactional-activity-and-incoming-relations.md)
+1. **设计核心 Nexus View 的 Activity 时间线分页**。先盘点各对象当前事件、排序键、受限 subject 的展示和现有客户端兼容要求，再明确首批分页范围。 [当前 Activity 与关系合同](../adr/0022-transactional-activity-and-incoming-relations.md)
 2. **随功能完成技术验证**。以 `1036b21` 的候选证据为基线，按切片风险执行自动化、合成数据和隔离环境验证。实际目标就绪后，按其配置及候选差异定向复验适用的 T03、T04、T06、T07。 [合成预演及 T04 复核](reviews/2026-11-10-web-candidate-1036b21.md#2026-11-15-合成账号预演)
 3. **项目开发完成后安排真人观察和实测**。届时由所有者恢复安排，按 T01～T08 核对适用准入并决定是否开放。独立成员观察和 R08 沿已有任务与记录执行，原生中文 IME 和 U27 按各自合同补验。独立成员证据形成前保持“价值未验证”，观察结束后再根据实测决定继续、定向修复后重试、收窄或暂停。 [准备检查与复核条件](reviews/2026-11-15-trial-observation-readiness-1036b21.md#trial-admission-checks)
 
@@ -57,6 +57,8 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 工单分类与项目内查找通过回环 HTTPS、浏览器操作、v1～v8 兼容、v9 双轮导入以及 027→028 和 028 空目标恢复。代表性查询、Activity 重建和原回执核验见[技术验收](reviews/2026-11-15-ticket-classification.md)。
 
 从原讨论追踪交付已接通三种工单来源及 Ticket、CI Run、Deployment 的独立分页。脱敏证据包括回环 HTTPS 权限与游标、Chromium 窄屏键盘操作、v9 双轮取回、整库备份恢复及查询测量。 [ADR-0057](../adr/0057-thread-delivery-trace.md) · [技术验收](reviews/2026-11-15-thread-delivery-trace.md)
+
+核心 Nexus View 的三类协作对象关系分页已完成。030 入向索引已通过匹配 029 工件恢复后显式升级、故障回滚与重试、查询计划、同版本恢复及 v9 取回复验。 [ADR-0058 技术验收](reviews/2026-11-15-nexus-view-relation-pagination.md#schema-030-升级与恢复)
 
 已完成的负责人、优先级及上下文迁移补验沿[原记录](reviews/2026-10-28-daily-closeout.md)转入有界观察；遇到实际 BFCache、原生控件、慢查询或新候选差异时定向复验，不把合成查询计划写成生产容量。单宿主身份拆分沿[ADR-0051](../adr/0051-single-host-database-roles.md)及[隔离证据](reviews/2026-11-08-single-host-database-roles.md)复用，M1 文件、通知、审计运营、Attention Item 与更广生产运维仍按路线图独立推进。
 
@@ -106,7 +108,7 @@ M0.5 / M1 采用服务端权威 Markdown、显式保存与 revision 冲突控制
 
 ## 开放问题
 
-- 关系分页、反向索引、查询容量与跨对象 Timeline；事务内 Activity 更新、重建并发及首批 direction 合同已由 ADR-0022 冻结；
+- 其他对象的关系分页、查询容量与跨对象 Timeline。核心协作对象的入向索引见 ADR-0058，事务内 Activity 更新、重建并发及首批 direction 合同见 ADR-0022；
 - 其他协作对象发现与超出 ADR-0041 / 0042 / 0045 的应急入口；Project admin / 私密对象管理交接及成员生命周期已由 ADR-0045 冻结；基础配置和首访 owner 初始化已由 ADR-0026 / ADR-0027 冻结；
 - Document 正式页面原生中文 IME 与持续使用证据；正式富文本与 CRDT、受控脱敏和可移植导出仍未完成；
 - Jenkins 持续终态采集与业务实例配置、持久来源管理 / 安全审计、真实 checkout 采集与其余具体交付关系；

@@ -166,7 +166,7 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if _, e = importer.Export(ctx, actor, owner.Token, result.ProjectID); e != nil {
 		t.Fatal(e)
 	}
-	var importedTeam, importedThread, importedReplacement, importedTicket, importedChannel, importedMessage, importedExecutionTicket string
+	var importedTeam, importedThread, importedDecision, importedReplacement, importedTicket, importedChannel, importedMessage, importedExecutionTicket string
 	for _, m := range plan.Mappings {
 		if m.Kind == "team" && m.SourceID == team.Object.ID {
 			importedTeam = m.TargetID
@@ -179,6 +179,9 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 		}
 		if m.Kind == "ticket" && m.SourceID == sourceTicket.Ticket.ID {
 			importedExecutionTicket = m.TargetID
+		}
+		if m.Kind == "decision" && m.SourceID == decision.Decision.ID {
+			importedDecision = m.TargetID
 		}
 		if m.Kind == "decision" && m.SourceID == replacement.Decision.ID {
 			importedReplacement = m.TargetID
@@ -327,6 +330,56 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 		t.Fatal("source Thread delivery path is incomplete", deliveryBaseline)
 	}
 
+	componentRelations := goldenpath.NewTicketComponentService(goldenpostgres.New(imported), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	if _, e = componentRelations.WriteTicketComponent(ctx, currentInvocation, "ticket.component.link", goldenpath.TicketComponentInput{
+		TicketID: importedTicket, ComponentID: component, ClientOperationID: "backup-nexus-component", Confirmed: true,
+	}); e != nil {
+		t.Fatal(e)
+	}
+	nexusSources := []entityref.Ref{
+		{Type: "thread", ID: importedThread},
+		{Type: "decision", ID: importedDecision},
+		{Type: "ticket", ID: importedTicket},
+	}
+	type nexusSnapshot struct {
+		summary goldenpath.NexusView
+		pages   []goldenpath.NexusRelationPage
+	}
+	readNexusRelations := func(pool *pgxpool.Pool) []nexusSnapshot {
+		t.Helper()
+		reader := goldenpostgres.New(pool)
+		result := make([]nexusSnapshot, len(nexusSources))
+		for i, source := range nexusSources {
+			summary, err := reader.GetNexusSummary(ctx, actor, source)
+			if err != nil {
+				t.Fatal(source.Type, err)
+			}
+			result[i].summary = summary
+			input := goldenpath.NexusRelationPageInput{Limit: 1}
+			for range 12 {
+				page, err := reader.ListNexusRelations(ctx, actor, source, input)
+				if err != nil {
+					t.Fatal(source.Type, err)
+				}
+				result[i].pages = append(result[i].pages, page)
+				if page.Next == nil {
+					break
+				}
+				input.After = page.Next
+			}
+			if result[i].pages[len(result[i].pages)-1].Next != nil {
+				t.Fatal("Nexus View pagination did not terminate", source.Type)
+			}
+		}
+		return result
+	}
+	nexusBefore := readNexusRelations(imported)
+	if len(nexusBefore[0].pages) < 2 || len(nexusBefore[1].pages[0].Items) != 1 ||
+		nexusBefore[1].pages[0].Items[0].Target.ID != importedTicket || len(nexusBefore[2].pages[0].Items) != 1 ||
+		nexusBefore[2].pages[0].Items[0].Target.ID != component {
+		t.Fatal("incomplete relation backup fixture")
+	}
+
 	baseline := snapshotIncludedTables(t, ctx, imported)
 	activity := snapshotTable(t, ctx, imported, "radishnexus.activity_items")
 	restoredURL := recoveryBackupDatabase(t, ctx, targetURL)
@@ -450,6 +503,10 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 		if err != nil || !reflect.DeepEqual(page, deliveryBaseline[i]) {
 			t.Fatalf("restored Thread delivery page %d changed: %v (%v)", i, page, err)
 		}
+	}
+
+	if nexusAfter := readNexusRelations(restored); !reflect.DeepEqual(nexusBefore, nexusAfter) {
+		t.Fatal("Nexus View summaries, relation pages, or ordering changed after restore")
 	}
 
 	restoredContext := goldenpath.NewContextService(goldenpostgres.NewContextStore(restored, schema))

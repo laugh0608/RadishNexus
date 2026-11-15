@@ -461,4 +461,10 @@ migration 014 增加 `ticket --affects--> component`、来源约束、active 唯
 
 ### 从原讨论追踪交付
 
-Thread 使用 `GET /api/v1/workspaces/{workspace_id}/threads/{thread_id}/delivery-tickets`，并在该路径下按工单分页读取 `/{ticket_id}/ci-runs`，按构建分页读取 `/{ticket_id}/ci-runs/{ci_run_id}/deployments`。每次读取在同一快照中复核当前 Session、Thread、工单来源和完整父级路径。失效路径返回 404。三页均只接受 `limit`、`after` 并使用 `private, no-store`。沿用 schema 029、Activity 17 和单 Project v9。 [ADR-0057](../docs/adr/0057-thread-delivery-trace.md)
+Thread 使用 `GET /api/v1/workspaces/{workspace_id}/threads/{thread_id}/delivery-tickets`，并在该路径下按工单分页读取 `/{ticket_id}/ci-runs`，按构建分页读取 `/{ticket_id}/ci-runs/{ci_run_id}/deployments`。每次读取在同一快照中复核当前 Session、Thread、工单来源和完整父级路径。失效路径返回 404。三页均只接受 `limit`、`after` 并使用 `private, no-store`。首次交付采用 schema 029、Activity 17 和单 Project v9。 [ADR-0057](../docs/adr/0057-thread-delivery-trace.md)
+
+### 协作 Nexus View 关系分页
+
+Thread、Decision 和 Ticket 的原 `nexus-view` 继续返回完整关系。新 Web 请求 `relations=summary` 读取创建来源、直接替代关系、Activity 和现有操作能力，再通过同一路径下的 `/relations` 读取关系页。分页使用 `limit` 和 `after`，可见边界失效返回 409。服务端每页重新校验 Session 和对象权限。 [ADR-0058](../docs/adr/0058-nexus-view-relation-pagination.md)
+
+schema 030 安装入向关系部分索引。复验 029 备份由匹配工件恢复到空目标并显式升级，可运行 `RADISHNEXUS_NEXUS_RELATIONS_LEGACY_REF=93c7095 ./scripts/check-server-backup-restore.sh`。 [升降级流程与证据](../docs/status/reviews/2026-11-15-nexus-view-relation-pagination.md#schema-030-升级与恢复)

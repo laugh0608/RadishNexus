@@ -44,6 +44,7 @@ function setup(change = vi.fn(), load = vi.fn().mockResolvedValue(view())) {
       .fn()
       .mockResolvedValue({ items: [], nextAfter: null }),
     loadView: load,
+    loadRelations: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
     changeTicketStatus: change,
     proposeDecision: vi.fn(),
     acceptDecision: vi.fn(),

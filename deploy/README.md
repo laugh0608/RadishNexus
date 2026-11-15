@@ -183,9 +183,11 @@ docker compose -f deploy/compose.yaml down
 
 ## 当前 schema 与演练证据
 
+当前配套工件使用 schema 030、Activity 17 和 v9 上下文包。030 为核心关系分页增加事务内入向索引，建索引期间锁定相关关系表的写入。029→030 沿停写升级顺序执行。使用匹配的 029 工件备份和验证空目标恢复，再以 030 工件显式迁移。迁移成功后验证就绪、正常登录与 Thread／Decision 的关系分页。回退使用升级前备份、匹配的旧工件和独立空目标。 [升级恢复手册](upgrade-recovery.md) · [029→030 隔离验收](../docs/status/reviews/2026-11-15-nexus-view-relation-pagination.md#schema-030-升级与恢复)
+
 ADR-0049 首次交付的工件包含 migration 024 和 Activity 12，配套 Go / Web / CLI 默认导出 `project-collaboration-v5` 并严格读取旧 v1～v4。Decision 拒绝理由、双方版本、不可变替代关系 / 理由及原生命令 receipt 随权威备份保留；恢复后重建双对象 Activity，旧接受 / 已建 Ticket 原请求仍须按当前权限核验。022→023 与 023→024 均须停写并更新整套工件；旧 022 / 023 备份先使用精确匹配的旧工件恢复全新空目标，再显式迁移至当前版本。迁移 024 拒绝预留异常替代历史，不自动清理；不支持丢弃拒绝或替代历史的降级导出。原生 / 导入历史及匹配旧工件恢复的证据分别见[拒绝记录](../docs/status/reviews/2026-11-02-decision-rejection.md)、[替代记录](../docs/status/reviews/2026-11-02-decision-supersession.md)，具体格式见[上下文迁移手册](context-package.md)。
 
-当前源码配套工件为 schema 027、Activity 15 和 v8 上下文包，严格读取旧 v1～v7。026→027 使用停写升级。026 备份使用匹配工件恢复到独立空目标后再迁移。新整库备份保留两种工单来源、讨论关系和原生回执。 [ADR-0054](../docs/adr/0054-message-to-ticket-and-execution-discussion.md) · [上下文迁移手册](context-package.md#消息转工单与执行讨论)
+ADR-0054 首次交付采用 schema 027、Activity 15 和 v8 上下文包，严格读取旧 v1～v7。026→027 使用停写升级。026 备份使用匹配工件恢复到独立空目标后再迁移。新整库备份保留两种工单来源、讨论关系和原生回执。 [ADR-0054](../docs/adr/0054-message-to-ticket-and-execution-discussion.md) · [上下文迁移手册](context-package.md#消息转工单与执行讨论)
 
 截止日期首次交付采用 schema 026、Activity 14 和 v7 上下文包。025→026 须停写升级。025 备份使用匹配工件恢复到独立空目标后再显式迁移。整库备份保留截止日期、版本、事件与原生 receipt，Activity 在恢复后重建。 [ADR-0053](../docs/adr/0053-ticket-due-date.md) · [上下文迁移手册](context-package.md#ticket-截止日期与-v7)
 

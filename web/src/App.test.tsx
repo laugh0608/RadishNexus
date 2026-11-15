@@ -556,6 +556,7 @@ describe("authenticated Web Shell", () => {
       "thread",
       "thr_discussion",
       expect.any(AbortSignal),
+      "summary",
     );
   });
 
@@ -707,6 +708,7 @@ function testCollaborationClient(
       .mockResolvedValue({ items: [], nextAfter: null }),
     changeTicketStatus: vi.fn(),
     loadView: vi.fn().mockResolvedValue(threadView),
+    loadRelations: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
     proposeDecision: vi.fn(),
     acceptDecision: vi.fn(),
     rejectDecision: vi.fn(),

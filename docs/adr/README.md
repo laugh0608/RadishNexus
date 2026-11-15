@@ -63,6 +63,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0055](0055-ticket-classification-and-project-search.md) | 已接受 | 工单分类与项目内查找 |
 | [ADR-0056](0056-ticket-ci-run-traceability.md) | 已接受 | 工单与构建的可追溯关联 |
 | [ADR-0057](0057-thread-delivery-trace.md) | 已接受 | 从原讨论追踪工单、构建与部署 |
+| [ADR-0058](0058-nexus-view-relation-pagination.md) | 已接受 | 核心 Nexus View 关系分页 |
 
 ## 新建规则
 

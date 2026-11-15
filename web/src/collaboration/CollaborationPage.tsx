@@ -1,8 +1,9 @@
+import { usePage } from "../workspace/configuration-hooks";
 import { ThreadDelivery } from "./ThreadDelivery";
 import { TicketCIRuns } from "./TicketCIRuns";
 import { TicketClassificationPanel } from "./TicketClassificationPanel";
 import { ticketTypeLabels } from "./ticket-classification-api";
-import { useExecutionWrite } from "./execution-write";
+import { requestStatus, useExecutionWrite } from "./execution-write";
 import { ExecutionDiscussions, ExecutionReplies } from "./ExecutionPanels";
 import { executionMessageLink } from "./execution-api";
 import { useTicketDueDateActions } from "./TicketDueDateActions";
@@ -109,7 +110,7 @@ function CollaborationPageContent({
     const controller = new AbortController();
     activeRead.current = controller;
     void client
-      .loadView(workspaceID, entityType, entityID, controller.signal)
+      .loadView(workspaceID, entityType, entityID, controller.signal, "summary")
       .then(
         (view) => {
           if (!controller.signal.aborted) {
@@ -548,9 +549,18 @@ function CollaborationPageContent({
                 <p className="section-kicker">Structured context</p>
                 <h2 id="relations-title">来源与后续结果</h2>
               </div>
-              <span className="panel-count">{relations.length}</span>
             </div>
-            <RelationList workspaceID={workspaceID} relations={relations} />
+            {relations.length > 0 && (
+              <RelationList workspaceID={workspaceID} relations={relations} />
+            )}
+            <PagedRelationList
+              client={client}
+              workspaceID={workspaceID}
+              entityType={entityType}
+              entityID={entityID}
+              onSessionExpired={onSessionExpired}
+              onUnavailable={relationUnavailable}
+            />
           </section>
           <section
             className="collaboration-panel"
@@ -697,6 +707,83 @@ function CollaborationPageContent({
         </aside>
       </section>
     </main>
+  );
+}
+
+function PagedRelationList({
+  client,
+  workspaceID,
+  entityType,
+  entityID,
+  onSessionExpired,
+  onUnavailable,
+}: {
+  client: CollaborationClient;
+  workspaceID: string;
+  entityType: CollaborationEntityType;
+  entityID: string;
+  onSessionExpired: () => void;
+  onUnavailable: () => void;
+}) {
+  const load = useCallback(
+    async (after: string | undefined, signal: AbortSignal) => {
+      try {
+        return await client.loadRelations(
+          workspaceID,
+          entityType,
+          entityID,
+          after,
+          signal,
+        );
+      } catch (error) {
+        if (!signal.aborted && requestStatus(error) === 404) onUnavailable();
+        throw error;
+      }
+    },
+    [client, workspaceID, entityType, entityID, onUnavailable],
+  );
+  const { page, error, refresh, next, previous, hasPrevious } = usePage(
+    load,
+    onSessionExpired,
+    {
+      refreshOnFocus: false,
+      restartOnCursorConflict: true,
+    },
+  );
+  return (
+    <section aria-label="关联对象">
+      {error ? (
+        <>
+          <p role="status">关联读取失败，请重新读取。</p>
+          <button type="button" onClick={refresh}>
+            重新读取关联
+          </button>
+        </>
+      ) : page ? (
+        <>
+          <button type="button" onClick={refresh}>
+            重新读取关联
+          </button>
+          {page.items.length > 0 && <p>本页 {page.items.length} 项关联</p>}
+          <RelationList
+            workspaceID={workspaceID}
+            relations={page.items.map(({ relation }) => relation)}
+          />
+          {hasPrevious && (
+            <button type="button" onClick={previous}>
+              上一页
+            </button>
+          )}
+          {page.nextCursor && (
+            <button type="button" onClick={next}>
+              下一页
+            </button>
+          )}
+        </>
+      ) : (
+        <p role="status">正在读取关联…</p>
+      )}
+    </section>
   );
 }
 
