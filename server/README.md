@@ -6,7 +6,7 @@
 - 基于原生 `pgx/v5`、连续编号与 SHA-256 漂移检测的显式 PostgreSQL migration；
 - Channel / Message / messaging-origin Thread 的正式 schema、权限和幂等 application service；
 - 权限过滤、稳定 keyset 分页的 Project / Channel 发现和 canonical Channel Message application query；
-- Thread → Decision → Ticket 的幂等 application service 与 immutable command receipt；
+- Thread → Decision、Decision 或 Message → Ticket 的幂等 application service 与 immutable command receipt；
 - 受控 Jenkins HMAC delivery → 完成态 CI Run 的 HTTP adapter、application service 与有限重试发送命令；
 - 独立 Jenkins 快照持久发送 worker、重启预算、精确恢复与双边确认后的显式 payload 清理；
 - 显式授权用户记录终态 staging Deployment 的 application service、Session 目标查询 / 写入与精确重试 receipt；
@@ -14,7 +14,7 @@
 - 与业务状态同事务写入的不可变领域事件与 Outbox 投递状态；
 - 正式 Component、CI Run 与不可变 inbound delivery receipt schema；
 - 正式 Environment、环境级部署授权与不可变 Deployment schema；
-- 在业务事务内正常更新、并可从领域事件原子重建的 Activity projection version 10；
+- 在业务事务内正常更新、并可从领域事件原子重建的 Activity projection version 17；
 - 为 Thread、Decision、Ticket、Document、CI Run 和 Deployment 返回 Current、Relations 和 Timeline 的权限过滤 Nexus View query；
 - 一次性本地管理员 bootstrap、Argon2id credential、账号锁定、opaque Session、CSRF digest 与当前 Workspace membership resolver；
 - 把已验证 Session 用户转换为 application `Principal` 的认证 adapter；
@@ -35,9 +35,9 @@ Channel / Message migration 006 固化 Channel membership、Message 不可变和
 
 collaboration migration 007 以 `(workspace, actor, command, target, client_operation_id)` 固化 Proposed Decision、Decision acceptance 与 Ticket 创建的幂等范围。首次命令在同一事务写入 immutable receipt、业务状态、关系、事件和 Outbox；相同 canonical payload 返回原结果，变化重放冲突。每次 retry 仍重新授权，receipt 不进入领域事件、Activity、普通 DTO 或客户端可见状态，但属于必须备份恢复的权威事实。
 
-协作 Nexus View 的 readable relation 明确 `direction: outgoing | incoming`，支持 Thread 发现后续 Decision、Decision 发现后续 Ticket；不可读反向目标完全隐藏，原 evidence 占位不带方向。完整合同、全量关系读取限制与 Go / Web 同步升级要求见 [ADR-0022](../docs/adr/0022-transactional-activity-and-incoming-relations.md)。
+协作 Nexus View 的 readable relation 明确 `direction: outgoing | incoming`，支持 Thread 发现后续 Decision、Decision 发现后续 Ticket；不可读反向目标完全隐藏，原 evidence 占位不带方向。旧详情继续提供完整关系，新 Web 通过精简详情和独立关系页读取。 [反向关系](../docs/adr/0022-transactional-activity-and-incoming-relations.md) · [核心关系分页](../docs/adr/0058-nexus-view-relation-pagination.md)
 
-Activity 13 投影包含 Decision 的提案、接受、拒绝、替代及复核，也包含工单状态、负责人及优先级等协作事件。正常写入在同一事务投影，并将对应 `activity-projector` delivery 标记完成。命令成功返回后可重新读取，投影错误会回滚整单。显式重建先锁定投影表，再读取源事件和导入历史快照。Nexus View 按当前权限解析投影目标，复核历史经独立入口按证据权限过滤。 [投影实现](internal/goldenpath/postgres/activity.go) · [复核合同](../docs/adr/0050-decision-manual-review.md)
+Activity 17 投影覆盖 Decision 的提案、接受、拒绝、替代及复核，也覆盖工单状态、负责人、优先级、截止日期、执行讨论、分类及构建关联。正常写入在同一事务投影，并将对应 `activity-projector` delivery 标记完成。命令成功返回后可重新读取，投影错误会回滚整单。显式重建先锁定投影表，再读取源事件和导入历史快照。Nexus View 按当前权限解析投影目标，复核历史和工单构建关联历史经专用入口按当前权限过滤。 [投影实现](internal/goldenpath/postgres/activity.go) · [复核合同](../docs/adr/0050-decision-manual-review.md)
 
 CI Run 的 M0 用户读取由所属 Component 控制：同一 Workspace 的活跃成员可读，非成员、暂停成员和跨 Workspace 主体得到 not-found；owner Team 和 Jenkins source 都不授予读取权。CI Run Current 返回 status、受控时间、当前 Component 与按当前 Repository 权限过滤的 checkout 摘要，Timeline 隐藏 plugin/source ID，并且不返回 external run key、receipt、digest、Secret、原始 payload 或外部 URL。该 query 已按 ADR-0029 接入 Session 作用域的正式 HTTP DTO 与 Web 页面。
 
@@ -283,7 +283,7 @@ migration 024 / Activity 12 / 默认 v5 包须与 Go / Web / CLI 配套停写升
 
 ## Decision 最小人工复核
 
-`GET /api/v1/workspaces/{workspace_id}/decisions/{decision_id}/reviews` 返回按当前证据权限过滤的历史和 `next_after`。同一路径的 `POST` 记录人工复核，首次成功返回 201，精确重试返回 200。接受版本、补充 Thread、说明、结论和显式确认按严格合同校验。当前源码的 schema 025 / Activity 13 / v6 须与 Go / Web / CLI 配套停写升级。 [ADR-0050](../docs/adr/0050-decision-manual-review.md)
+`GET /api/v1/workspaces/{workspace_id}/decisions/{decision_id}/reviews` 返回按当前证据权限过滤的历史和 `next_after`。同一路径的 `POST` 记录人工复核，首次成功返回 201，精确重试返回 200。接受版本、补充 Thread、说明、结论和显式确认按严格合同校验。人工复核首次交付采用 schema 025、Activity 13 和 v6，上线时须配套 Go、Web 与 CLI。 [ADR-0050](../docs/adr/0050-decision-manual-review.md)
 
 ## Ticket 最小负责人
 
@@ -321,7 +321,7 @@ apply 只接受已确认 proposal、UUID operation ID 与计划摘要；等待�
 
 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的 migration 019、`internal/contextpackage`、`goldenpath.ContextService` 与受认证 HTTP 入口提供单 Project 协作导出 / 空业务实例导入。`go build ./cmd/nexus-context` 构建独立 CLI，使用 HTTPS Session 和私有凭据文件，不读取数据库 DSN；操作、协议路由和限制见[迁移手册](../deploy/context-package.md)。该 CLI 当前面向 macOS / Linux，不包含在 Compose operations 工件中。
 
-历史身份不可登录，初始 Project restricted 并仅授予导入负责人；真实导入操作与源事实分开保存。来源 API 先验证当前对象读取权限，Web 仅展示安全导入标识。Activity 13 支持含负责人、优先级、Decision 拒绝、替代与复核的导入历史重建，四张来源 / 审计表纳入整库备份，Session 等既有排除规则不变。 [首片隔离验收](../docs/status/reviews/2026-10-24-portable-context-package.md) · [v5 替代历史证据](../docs/status/reviews/2026-11-02-decision-supersession.md) · [v6 复核往返与恢复证据](../docs/status/reviews/2026-11-08-decision-manual-review.md)
+历史身份不可登录，初始 Project restricted 并仅授予导入负责人；真实导入操作与源事实分开保存。来源 API 先验证当前对象读取权限，Web 仅展示安全导入标识。当前默认导出 v9，严格读取 v1～v8。Activity 17 支持权威协作历史的重建，导入历史、映射和审计随整库备份保存。具体取回范围见迁移手册。 [v9 格式与恢复](../deploy/context-package.md) · [首片隔离验收](../docs/status/reviews/2026-10-24-portable-context-package.md) · [v5 替代历史证据](../docs/status/reviews/2026-11-02-decision-supersession.md) · [v6 复核往返与恢复证据](../docs/status/reviews/2026-11-08-decision-manual-review.md)
 
 ## 最小备份与恢复
 

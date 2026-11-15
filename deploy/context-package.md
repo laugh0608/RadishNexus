@@ -153,6 +153,6 @@ v9 取回 Project 标签目录及创建、改名和归档历史，保留 Ticket 
 
 ### 工单与构建的可追溯关联
 
-schema 029 配套 [ADR-0056](../docs/adr/0056-ticket-ci-run-traceability.md) 和 Activity 17。schema 030 增加核心 Nexus View 入向索引。单 Project 上下文包继续使用 v9 以及原 scope 文件。研发上下文排除范围包括 CI Run、Deployment、工单与构建的关联及对应事件。导入后仍可读取 Ticket 的创建来源、分类、原执行讨论及协作历史。
+schema 029 配套 [ADR-0056](../docs/adr/0056-ticket-ci-run-traceability.md) 和 Activity 17。schema 030 增加核心 Nexus View 入向索引。单 Project 上下文包继续使用 v9 以及原 scope 文件。研发上下文排除范围包括 CI Run、Deployment、工单与构建的关联及对应事件。导入后仍可读取 Ticket 的创建来源、分类、原执行讨论及协作历史。Thread 可从恢复的协作关系重新列出工单，构建和部署追溯使用整库恢复后的研发事实。 [原讨论交付追溯](../docs/adr/0057-thread-delivery-trace.md)
 
-使用 PostgreSQL 整库备份恢复构建、已有 staging 记录、关联各代次、操作回执和 Outbox。先用匹配工件恢复到独立空库；恢复 028 时再用 029 工件显式迁移。恢复后重建 Activity，并在正常登录后核验关联历史、可读部署记录和原回执。
+使用 PostgreSQL 整库备份恢复构建、已有 staging 记录、关联各代次、操作回执和 Outbox。用与备份完全匹配的工件恢复到独立空库，再用目标版本工件显式迁移。恢复后重建 Activity，重新登录核验关联历史、可读部署记录和原回执。 [现行部署说明](README.md#当前-schema-与演练证据) · [029→030 隔离验收](../docs/status/reviews/2026-11-15-nexus-view-relation-pagination.md#schema-030-升级与恢复)

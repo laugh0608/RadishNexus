@@ -46,19 +46,12 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **设计核心 Nexus View 的 Activity 时间线分页**。先盘点各对象当前事件、排序键、受限 subject 的展示和现有客户端兼容要求，再明确首批分页范围。 [当前 Activity 与关系合同](../adr/0022-transactional-activity-and-incoming-relations.md)
+1. **设计核心 Nexus View 的 Activity 时间线分页**。建议从持续累积状态、分类和执行讨论历史的 Ticket 入手，先用一个 ADR 确定首批读取范围。盘点各对象的事件白名单、`(occurred_at, event_id)` 排序、不可读讨论事件的省略规则、受限 subject 的投影，以及 Ticket 现有 `include` 与专用历史入口的兼容要求。 [核心 Activity 契约](../architecture/core-contracts.md#activity-投影) · [当前读取代码](../../server/internal/goldenpath/postgres/nexus_view.go)
+   - ADR 确认后，按一个开发批次完成数据库授权与分页、新旧 HTTP 合同和 Web 历史翻页。用同时间多事件、权限混排、撤权、旧详情兼容和恢复后读回做合成验收。先测量现有时间线索引，再决定是否需要迁移。
 2. **随功能完成技术验证**。以 `1036b21` 的候选证据为基线，按切片风险执行自动化、合成数据和隔离环境验证。实际目标就绪后，按其配置及候选差异定向复验适用的 T03、T04、T06、T07。 [合成预演及 T04 复核](reviews/2026-11-10-web-candidate-1036b21.md#2026-11-15-合成账号预演)
 3. **项目开发完成后安排真人观察和实测**。届时由所有者恢复安排，按 T01～T08 核对适用准入并决定是否开放。独立成员观察和 R08 沿已有任务与记录执行，原生中文 IME 和 U27 按各自合同补验。独立成员证据形成前保持“价值未验证”，观察结束后再根据实测决定继续、定向修复后重试、收窄或暂停。 [准备检查与复核条件](reviews/2026-11-15-trial-observation-readiness-1036b21.md#trial-admission-checks)
 
-截止日期切片已有合成 Session 回环 HTTPS、025→026 迁移、并发与回滚、Activity 重建、v7 双轮导入和独立空目标恢复证据。Web 自动化覆盖设置、清除、原操作重试、列表和看板展示。新候选的正式浏览器复验沿第 2 项执行。 [PostgreSQL 验证](../../server/internal/goldenpath/postgres/ticket_due_date_integration_test.go) · [备份恢复验证](../../server/internal/backuprestore/context_integration_test.go)
-
-消息转工单与执行讨论已通过隔离 PostgreSQL、合成 Session 回环 HTTPS、v1～v7 兼容和 v8 双轮导入。以本地 `be1670c` 的 schema 026 工件备份并恢复空目标，再显式迁移至 027。新 schema 空目标恢复后重建 Activity 并核验消息建单、关联和解除的原回执。Web 自动化验证确认、原请求重试和精确解除。 [功能验证](../../server/internal/goldenpath/postgres/ticket_execution_integration_test.go) · [备份恢复验证](../../server/internal/backuprestore/context_integration_test.go)
-
-工单分类与项目内查找通过回环 HTTPS、浏览器操作、v1～v8 兼容、v9 双轮导入以及 027→028 和 028 空目标恢复。代表性查询、Activity 重建和原回执核验见[技术验收](reviews/2026-11-15-ticket-classification.md)。
-
-从原讨论追踪交付已接通三种工单来源及 Ticket、CI Run、Deployment 的独立分页。脱敏证据包括回环 HTTPS 权限与游标、Chromium 窄屏键盘操作、v9 双轮取回、整库备份恢复及查询测量。 [ADR-0057](../adr/0057-thread-delivery-trace.md) · [技术验收](reviews/2026-11-15-thread-delivery-trace.md)
-
-核心 Nexus View 的三类协作对象关系分页已完成。030 入向索引已通过匹配 029 工件恢复后显式升级、故障回滚与重试、查询计划、同版本恢复及 v9 取回复验。 [ADR-0058 技术验收](reviews/2026-11-15-nexus-view-relation-pagination.md#schema-030-升级与恢复)
+本日交付覆盖工单截止日期、消息建单与执行讨论、分类与查找、构建关联及原讨论追溯，并完成核心协作关系分页和 schema 030 升级恢复验证。各实现及证据沿对应 ADR 查阅。 [2026-11-15 提交回顾](reviews/2026-11-15-daily-closeout.md)
 
 已完成的负责人、优先级及上下文迁移补验沿[原记录](reviews/2026-10-28-daily-closeout.md)转入有界观察；遇到实际 BFCache、原生控件、慢查询或新候选差异时定向复验，不把合成查询计划写成生产容量。单宿主身份拆分沿[ADR-0051](../adr/0051-single-host-database-roles.md)及[隔离证据](reviews/2026-11-08-single-host-database-roles.md)复用，M1 文件、通知、审计运营、Attention Item 与更广生产运维仍按路线图独立推进。
 

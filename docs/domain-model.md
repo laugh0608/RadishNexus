@@ -239,7 +239,7 @@ M0 纵向切片继续冻结 `thread` / `thr_` 与 `ticket` / `tkt_` 的稳定引
 
 ### Ticket
 
-可执行工作的统一对象。需求、任务、缺陷、事故和改进项的长期表达保持同一模型。当前实现包括四状态、单一可选负责人、固定优先级及可选截止日期。项目状态看板使用这四种状态，工单类型和自定义工作流留作后续能力。 [状态流转](adr/0039-ticket-status-transitions.md) · [负责人](adr/0046-ticket-assignee.md) · [优先级](adr/0047-ticket-priority-and-filtering.md)
+可执行工作的统一对象。需求、任务、缺陷、事故和改进项的长期表达保持同一模型。当前实现包括四状态、单一可选负责人、固定优先级、可选截止日期、固定工单类型和 Project 标签。项目状态看板使用这四种状态，自定义工作流属于后续能力。 [状态流转](adr/0039-ticket-status-transitions.md) · [负责人](adr/0046-ticket-assignee.md) · [优先级](adr/0047-ticket-priority-and-filtering.md) · [截止日期](adr/0053-ticket-due-date.md) · [分类与查找](adr/0055-ticket-classification-and-project-search.md)
 
 [ADR-0039](adr/0039-ticket-status-transitions.md) 冻结最小四状态：open 待开始、in-progress 处理中、done 已完成、canceled 已取消。前两者可转向其他状态；两个终态只能显式重新打开为 open，不能直接互转。done 只表示人工完成执行事项，不证明 Decision、CI Run 或 Deployment 结果。
 
@@ -346,6 +346,9 @@ removal_reason
 
 - `derived-from`：Decision 来源于 Thread；
 - `implements`：Ticket 实现某 Decision；
+- `started-from`：Thread 或 Ticket 指向其创建来源 Message；
+- `relates-to`：Ticket 指向关联文档或显式关联的执行讨论 Thread；
+- `tracks-build`：Ticket 关联一条已记录的 CI Run；
 - `documents`：Document 解释某 Component 或 Initiative；
 - `source-repository`：Component 明确关联 Repository（ADR-0033 已实现）；
 - `built-from`：CI Run 来源于 Repository commit；
@@ -380,7 +383,7 @@ removal_reason
 ### 权限规则
 
 - 引用不会授予目标对象权限；
-- 无权访问目标时，只显示不泄漏标题和摘要的受限占位符；
+- 不可读的反向发现目标完全隐藏。已知来源可以依该对象合同显示通用受限占位，占位省略目标类型、ID、标题和时间；
 - 搜索、通知、时间线和 AI 插件使用同一权限判断；
 - 关系两端权限变化后，缓存和派生视图必须及时失效；
 - 删除、撤销访问和导出时必须处理关系残留。
@@ -406,10 +409,10 @@ removal_reason
 
 1. Current：当前状态、负责人、健康度和关键结论；
 2. Relations：相关 Decision、Ticket、Document、Component、CI Run 和 Deployment；
-3. Timeline：经过权限过滤的完整活动时间线；
+3. Timeline：当前对象合同内、经过权限过滤的 Activity；
 4. Actions：用户当前有权执行的下一步。
 
-首期不要求所有对象共享完全相同的 UI，但这四类信息应成为产品设计和 API 的共同约束。
+这四类信息由各对象合同决定。Thread、Decision 和 Ticket 的关系分页保留创建来源及直接替代关系，独立读取可增长的关联。Thread 的执行与交付从工单来源或有效执行讨论关系出发，逐跳读取已关联构建及已有部署。后续对象的事件继续留在其自身的时间线。 [交付追溯](adr/0057-thread-delivery-trace.md) · [核心关系分页](adr/0058-nexus-view-relation-pagination.md)
 
 ## 后续对象
 

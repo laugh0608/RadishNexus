@@ -12,7 +12,7 @@
 
 CI Run 公共 Current 的 `checkout` 是封闭联合：readable 的 not_collected、observed（Repository + revision）、unavailable（Repository + 受控 reason），或只有 visibility 的 restricted。Relations / Timeline 必须与之保持一致。`GET /api/v1/workspaces/{workspace_id}/repositories/{repository_id}/ci-runs` 按同源 Session 和当前对象权限返回稳定 ID 分页，不输出隐藏数量；cursor 绑定 Workspace / Repository。客户端与服务端同步升级。
 
-[ADR-0038](../adr/0038-project-ticket-discovery.md) 增加 Project 下 Ticket 只读分页：按 `governing_project_id` 与当前 Project 权限读取，引用来源不授予或削减 Ticket 权限。公共列表只返回 `ref / title / status`，与正式详情一致接受 ADR-0039 的四状态；异常状态拒绝整页，不通过过滤掩盖漂移。稳定 ID cursor 绑定 Workspace / Project / 列表种类，不是授权或固定结果快照。该读取不改变领域状态、事件、Activity 或 receipt。
+Project 工单列表按 `governing_project_id` 和当前 Project 权限读取。首版返回 `ref / title / status`。当前列表同时展示负责人、优先级和显式请求的截止日期及分类。四状态沿详情校验，异常状态拒绝整页。稳定 ID 游标绑定 Workspace、操作者、Project、列表种类和规范筛选，每页重新检查权限。 [工单发现](../adr/0038-project-ticket-discovery.md) · [负责人](../adr/0046-ticket-assignee.md) · [优先级与筛选](../adr/0047-ticket-priority-and-filtering.md) · [截止日期](../adr/0053-ticket-due-date.md) · [分类与查找](../adr/0055-ticket-classification-and-project-search.md)
 
 [ADR-0039](../adr/0039-ticket-status-transitions.md) 增加唯一 `ticket.status.change` 命令与 migration 016。Ticket 独立 `status_revision` 防止并发覆盖和重新打开后的旧请求；先按当前账户 / Workspace / Project 重新授权，再匹配 receipt，最后检查新转换。receipt 返回原 applied 状态与版本，Nexus View 同事务读取 Current 和 `capabilities.change_status`；客户端成功后重新读取当前事实。状态、receipt、schema 1 `ticket.status-changed`、Outbox 与 Activity 7 原子提交。新事件无 subject，只投影到 Ticket 并记录四个前后状态 / 版本字段；旧创建仍为 open，组件事件仍为 relation_state。创建首次 201 为 open / 1，200 精确重试返回原 Ticket 的真实当前状态 / 版本。Go、schema、Web 必须配套升级；旧非 open 基线拒绝迁移，备份恢复保留状态版本与 receipt 后显式重建投影。
 
@@ -335,9 +335,11 @@ safe_facts
 
 ### 正常更新与协作对象反向发现
 
-[ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md) 将首批五类 Activity 事件接入同一业务事务；投影完成与业务提交一致，失败整单回滚。显式重建先取得投影表写入排他锁，再读取新的源事件快照，保留完整版本并避免覆盖并发提交。后续基础配置与 Document 扩展事件映射；当前投影版本为 5，包含 `document.created` 与 `document.revised`，以及 ADR-0032 的 `component.created` / `environment.created`；恢复历史通过 revised 事件记录来源版本。ADR-0033 增加 `repository.created`、`component.repository-linked` 与 `component.repository-unlinked`；创建投影到 Repository，关系事件的主要对象为 Component，Activity 只投影状态与受控对象引用，精确 link ID 保存在源事件中，不复制外部 URL / 身份。ADR-0034 增加 `ticket.component-linked` 与 `ticket.component-unlinked`，只投影到 Ticket，使用 `relation_state` 和受控 Component subject，不扩散到共享组件时间线。授权管理明细只进入配置 Audit，不进入普通 Activity。旧数据仍由显式重建补齐，不随启动自动执行。
+[ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md) 将首批五类 Activity 事件接入同一业务事务；投影完成与业务提交一致，失败整单回滚。显式重建先取得投影表写入排他锁，再读取新的源事件快照，保留完整版本并避免覆盖并发提交。投影版本 5 时，事件映射已覆盖 `document.created` 与 `document.revised`，以及 ADR-0032 的 `component.created` / `environment.created`；恢复历史通过 revised 事件记录来源版本。ADR-0033 增加 `repository.created`、`component.repository-linked` 与 `component.repository-unlinked`；创建投影到 Repository，关系事件的主要对象为 Component，Activity 只投影状态与受控对象引用，精确 link ID 保存在源事件中，不复制外部 URL / 身份。ADR-0034 增加 `ticket.component-linked` 与 `ticket.component-unlinked`，只投影到 Ticket，使用 `relation_state` 和受控 Component subject，不扩散到共享组件时间线。授权管理明细只进入配置 Audit，不进入普通 Activity。旧数据仍由显式重建补齐，不随启动自动执行。
 
-Thread ← Decision、Decision ← Ticket 从同一权威 EntityLink 反向读取，不复制镜像关系。协作 readable relation 明确 `direction`，不可读反向目标完全隐藏；原 evidence restricted 占位不携带方向或目标信息。结果排序、全量读取成本和 Go / Web 同步升级边界见 ADR-0022。Timeline 默认投影到原事件主要对象；ADR-0049 的替代命令显式投影到双方 Decision，不自动向所有关系端点传播。
+当前投影版本为 17。工单截止日期、执行讨论、分类和构建关联分别保留其权威事件与回执。普通 Timeline 按各对象合同过滤事件和 subject。Decision 复核及工单的构建关联历史分别使用专用入口。投影默认面向事件主要对象，Decision 替代显式投影到双方。 [截止日期](../adr/0053-ticket-due-date.md) · [执行讨论](../adr/0054-message-to-ticket-and-execution-discussion.md) · [分类](../adr/0055-ticket-classification-and-project-search.md) · [构建关联](../adr/0056-ticket-ci-run-traceability.md)
+
+Thread ← Decision、Decision ← Ticket 从同一权威 EntityLink 反向读取。可读关系明确标注 `direction`。不可读反向目标完全隐藏，既有受限 evidence 占位省略方向与目标信息。旧详情返回完整关系。新 Web 使用精简详情保留来源和直接替代关系，再按 `(created_at, link_id)` 读取可增长的关联。入向页使用 schema 030 的部分索引。原讨论的交付查询逐跳检查当前可达性，沿独立入口读取。 [反向关系](../adr/0022-transactional-activity-and-incoming-relations.md) · [核心关系分页](../adr/0058-nexus-view-relation-pagination.md) · [原讨论的交付追溯](../adr/0057-thread-delivery-trace.md)
 
 ## Outbox、Activity 与 Audit 分工
 
@@ -423,7 +425,7 @@ M0 实验与正式纵向切片累计必须证明：
 - 关系类型注册表的完整方向、基数和 metadata schema；
 - Team 角色继承、对象分享、跨 Project 转换和管理员 break-glass 策略；
 - 领域事件保留、压缩和 projection version 迁移策略；
-- Activity 异步消费的实际触发条件与多对象 Timeline；反向关系的分页、上限和索引，当前事务内更新与首批方向 DTO 已由 ADR-0022 冻结；
+- Activity 异步消费的实际触发条件、对象 Timeline 分页和跨对象分发，以及首批协作对象之外的关系分页；
 - 其余公共 HTTP / OpenAPI 契约和并发控制字段；canonical Message 列表 opaque cursor 已由 ADR-0018 冻结，ADR-0020 的进程内实时 cursor 不是公共列表游标，不能互换；
 - 消息、事件、receipt、Audit 与导出分别需要的保留、归档、受控脱敏和删除标记；在独立合同冻结前不修改现有不可变约束或清理权威数据。
 

@@ -23,7 +23,7 @@ Golden Path 用最薄的可运行产品验证 RadishNexus 的核心价值，而�
 5. Ticket 关联 `auth-service` Component 和设计 Document（人工组件关联已按 [ADR-0034](adr/0034-ticket-component-relations.md) 接通，不表示该 Ticket 已进入某次构建或部署）；
 6. Jenkins Webhook 写入一次 CI Run，成员从工单详情选择该构建并确认关联。回到原 Thread，在“执行与交付”展开工单查看构建。 [ADR-0056](adr/0056-ticket-ci-run-traceability.md) 和 [ADR-0057](adr/0057-thread-delivery-trace.md)。
 7. 成功构建后，持有目标 Environment 显式授权的成员记录一次到 `staging` 的 Deployment。Thread 中的构建行可展开已有部署记录，并打开原部署详情。
-8. 打开任意对象的 Nexus View，都能看到当前状态、关系和完整时间线；
+8. 从 Thread、Decision 或 Ticket 的 Nexus View 复核当前事实、来源与可读关联。各对象展示自身合同内的 Activity，Thread 的后续对象通过关系区和“执行与交付”发现。 [核心关系分页](adr/0058-nexus-view-relation-pagination.md)
 9. 备份并恢复到新实例后，上述关系和来源仍然存在。
 
 ## 原型范围
