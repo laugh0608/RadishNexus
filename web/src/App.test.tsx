@@ -85,6 +85,7 @@ describe("authenticated Web Shell", () => {
                 title,
                 status: "in-progress",
                 priority: "high",
+                due_date: "2032-02-29",
                 project: { id: "prj_main", name: "Current project" },
               },
             ],
@@ -118,7 +119,9 @@ describe("authenticated Web Shell", () => {
       expect(ticket.getAttribute("href")).toBe(
         "/workspaces/wrk_main/tickets/tkt_work",
       );
-      expect(screen.getByText(/Current project.*处理中.*高/u)).toBeDefined();
+      expect(
+        screen.getByText(/Current project.*处理中.*高.*2032-02-29/u),
+      ).toBeDefined();
 
       fireEvent(
         window,
@@ -142,7 +145,7 @@ describe("authenticated Web Shell", () => {
         "/workspaces/wrk_docs/tickets/tkt_work",
       );
       expect(fetch.mock.calls[3]?.[0]).toBe(
-        "/api/v1/workspaces/wrk_docs/my-tickets?limit=25",
+        "/api/v1/workspaces/wrk_docs/my-tickets?limit=25&include=due_date",
       );
       await act(async () => resolveOld(response("Late Main ticket")));
       expect(previousSignal.aborted).toBe(true);
@@ -199,6 +202,7 @@ describe("authenticated Web Shell", () => {
             status: "open",
             assignee: null,
             priority: "unset" as const,
+            dueDate: null,
           },
         ],
         nextCursor: null,

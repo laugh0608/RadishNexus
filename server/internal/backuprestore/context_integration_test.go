@@ -100,6 +100,12 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if _, e = priorities.SetTicketPriority(ctx, invocation, goldenpath.TicketPriorityInput{TicketID: ticket.Ticket.ID, ClientOperationID: "priority-backup-set", BasePriorityRevision: 1, BaseStatusRevision: 1, Priority: "high", Confirmed: true}); e != nil {
 		t.Fatal(e)
 	}
+	day := "2032-02-29"
+	dates := goldenpath.NewTicketDueDateService(goldenpostgres.New(original), goldenpath.CryptoIDGenerator{})
+	dateInput := goldenpath.TicketDueDateInput{TicketID: ticket.Ticket.ID, ClientOperationID: "due-backup-set", BaseDueDateRevision: 1, BaseStatusRevision: 1, DueDate: &day, Confirmed: true}
+	if _, e = dates.SetTicketDueDate(ctx, invocation, dateInput); e != nil {
+		t.Fatal(e)
+	}
 	rejected, e := core.CreateDecisionFromThread(ctx, invocation, goldenpath.CreateDecisionInput{ThreadID: thread.ID, ClientOperationID: "rejection-backup-proposal", Question: "Rejected source must survive"})
 	if e != nil {
 		t.Fatal(e)
@@ -139,10 +145,13 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if _, e = importer.Export(ctx, actor, owner.Token, result.ProjectID); e != nil {
 		t.Fatal(e)
 	}
-	var importedThread, importedReplacement string
+	var importedThread, importedReplacement, importedTicket string
 	for _, m := range plan.Mappings {
 		if m.Kind == "decision" && m.SourceID == replacement.Decision.ID {
 			importedReplacement = m.TargetID
+		}
+		if m.Kind == "ticket" && m.SourceID == ticket.Ticket.ID {
+			importedTicket = m.TargetID
 		}
 		if m.Kind == "thread" && m.SourceID == thread.ID {
 			importedThread = m.TargetID
@@ -150,6 +159,12 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	}
 	importedCore := goldenpath.NewService(goldenpostgres.New(imported), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
 	currentInvocation := goldenpath.Invocation{Principal: actor, SourceKind: "web", CorrelationID: "cor_restored_rejection"}
+	dates = goldenpath.NewTicketDueDateService(goldenpostgres.New(imported), goldenpath.CryptoIDGenerator{})
+	nativeDate := goldenpath.TicketDueDateInput{TicketID: importedTicket, ClientOperationID: "due-backup-clear", BaseDueDateRevision: 2, BaseStatusRevision: 1, Confirmed: true}
+	cleared, e := dates.SetTicketDueDate(ctx, currentInvocation, nativeDate)
+	if e != nil || cleared.DueDate != nil || cleared.DueDateRevision != 3 {
+		t.Fatal(cleared, e)
+	}
 	native, e := importedCore.CreateDecisionFromThread(ctx, currentInvocation, goldenpath.CreateDecisionInput{ThreadID: importedThread, ClientOperationID: "native-backup-proposal", Question: "Native rejection receipt must survive"})
 	if e != nil {
 		t.Fatal(e)
@@ -222,6 +237,15 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	restoredReview, applied, err := restoredCore.ReviewDecision(ctx, currentInvocation, reviewInput)
 	if err != nil || applied || !reflect.DeepEqual(restoredReview, review) {
 		t.Fatal("restored native review receipt", err)
+	}
+	restoredDates := goldenpath.NewTicketDueDateService(goldenpostgres.New(restored), goldenpath.CryptoIDGenerator{})
+	currentDay, e := restoredDates.ReadTicketDueDate(ctx, actor, importedTicket)
+	if e != nil || currentDay.DueDateRevision != 3 || currentDay.DueDate != nil {
+		t.Fatal("restored due date", currentDay, e)
+	}
+	dateReceipt, e := restoredDates.SetTicketDueDate(ctx, currentInvocation, nativeDate)
+	if e != nil || !reflect.DeepEqual(dateReceipt, cleared) {
+		t.Fatal("restored due date receipt", dateReceipt, e)
 	}
 	restoredContext := goldenpath.NewContextService(goldenpostgres.NewContextStore(restored, schema))
 	status, e := restoredContext.Result(ctx, actor, fresh.Token, plan.OperationID)

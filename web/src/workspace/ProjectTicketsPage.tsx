@@ -1,3 +1,4 @@
+import { ticketDueDateLabel } from "../collaboration/ticket-due-date";
 import {
   ticketPriorityLabels,
   type TicketPriority,
@@ -335,6 +336,7 @@ function TicketRows({
           </a>
           {showStatus ? <p>{ticketStatusLabels[ticket.status]}</p> : null}
           <p>优先级：{ticketPriorityLabels[ticket.priority]}</p>
+          <p>截止日期：{ticketDueDateLabel(ticket.dueDate)}</p>
           <p>负责人：{assigneeLabel(ticket.assignee)}</p>
         </li>
       ))}

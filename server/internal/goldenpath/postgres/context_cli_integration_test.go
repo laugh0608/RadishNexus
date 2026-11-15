@@ -72,6 +72,7 @@ func contextHTTPS(t *testing.T, f *contextFixture, webRoot string) (*httptest.Se
 	configuration := httptransport.NewConfigurationHandler(f.auth, f.configuration, policy, proxy)
 	httptransport.RegisterConfigurationRoutes(mux, discovery, configuration)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/projects/", discovery)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/my-tickets", discovery)
 	httptransport.RegisterContextRoutes(mux, httptransport.NewContextHandler(f.auth, f.service, policy, proxy))
 	httptransport.RegisterManagementRoutes(mux, httptransport.NewManagementHandler(f.auth, goldenpath.NewManagementService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
 	httptransport.RegisterOwnerTransferRoutes(mux, httptransport.NewOwnerTransferHandler(f.auth, goldenpath.NewOwnerTransferService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
@@ -87,6 +88,7 @@ func contextHTTPS(t *testing.T, f *contextFixture, webRoot string) (*httptest.Se
 	httptransport.RegisterTicketComponentRoutes(mux, httptransport.NewTicketComponentHandler(f.auth, goldenpath.NewTicketComponentService(f.store, goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{}), policy, proxy))
 	httptransport.RegisterTicketAssignmentRoutes(mux, httptransport.NewTicketAssignmentHandler(f.auth, goldenpath.NewTicketAssignmentService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
 	httptransport.RegisterTicketPriorityRoutes(mux, httptransport.NewTicketPriorityHandler(f.auth, goldenpath.NewTicketPriorityService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
+	httptransport.RegisterTicketDueDateRoutes(mux, httptransport.NewTicketDueDateHandler(f.auth, goldenpath.NewTicketDueDateService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
 	httptransport.RegisterTicketStatusRoutes(mux, httptransport.NewTicketStatusHandler(f.auth, goldenpath.NewTicketStatusService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
 	mux.Handle("/api/v1/workspaces", httptransport.NewDeploymentNexusViewHandler(f.auth, core, policy, proxy))
 	if webRoot != "" {

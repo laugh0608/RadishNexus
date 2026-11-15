@@ -11,6 +11,7 @@ const ticket = {
   status: "open",
   assignee: null,
   priority: "unset" as const,
+  due_date: null,
 };
 function response(data: unknown, status = 200) {
   return new Response(JSON.stringify({ data }), {
@@ -42,12 +43,13 @@ describe("Project Ticket API", () => {
           status: "open",
           assignee: null,
           priority: "unset",
+          dueDate: null,
         },
       ],
       nextCursor: null,
     });
     expect(fetch).toHaveBeenCalledWith(
-      "/api/v1/workspaces/wrk_main/projects/prj_main/tickets?limit=25&after=opaque",
+      "/api/v1/workspaces/wrk_main/projects/prj_main/tickets?limit=25&after=opaque&include=due_date",
       expect.objectContaining({
         method: "GET",
         credentials: "same-origin",
@@ -131,7 +133,7 @@ describe("Project Ticket API", () => {
       { status: "active", assignee: "me", priority: "unset" },
     );
     expect(fetch).toHaveBeenCalledWith(
-      "/api/v1/workspaces/wrk_main/projects/prj_main/tickets?limit=25&after=opaque&status=active&assignee=me&priority=unset",
+      "/api/v1/workspaces/wrk_main/projects/prj_main/tickets?limit=25&after=opaque&include=due_date&status=active&assignee=me&priority=unset",
       expect.objectContaining({ method: "GET" }),
     );
   });

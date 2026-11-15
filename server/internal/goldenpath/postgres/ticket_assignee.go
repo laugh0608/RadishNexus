@@ -219,7 +219,7 @@ func (s *Store) SetTicketAssignee(ctx context.Context, c goldenpath.TicketAssign
 	return goldenpath.TicketAssignmentResult{Applied: true, AssignmentRevision: rev + 1, AssigneeUserID: c.AssigneeUserID}, nil
 }
 
-func assignmentFactString(id *string) string {
+func optionalFactString(id *string) string {
 	if id == nil {
 		return ""
 	}

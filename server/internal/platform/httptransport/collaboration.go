@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
+	cp "github.com/laugh0608/RadishNexus/server/internal/contextpackage"
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
@@ -127,6 +129,7 @@ type collaborationRelationDTO struct {
 }
 
 type collaborationTimelineDTO struct {
+	DueDate       *cp.DueDateChange                  `json:"due_date,omitempty"`
 	Supersession  *supersessionTimelineDTO           `json:"supersession,omitempty"`
 	Priority      *goldenpath.TicketPriorityChange   `json:"priority,omitempty"`
 	Assignment    *goldenpath.TicketAssignmentChange `json:"assignment,omitempty"`
@@ -241,14 +244,28 @@ func (handler *CollaborationHandler) getView(
 		handler.writeError(response, request, err)
 		return
 	}
-	if request.URL.RawQuery != "" {
-		handler.writeError(response, request, fmt.Errorf("%w: query parameters are not supported", authz.ErrInvalid))
-		return
+	includeDueDate := request.URL.RawQuery != ""
+	if includeDueDate {
+		query, err := url.ParseQuery(request.URL.RawQuery)
+		include := query["include"]
+		if target.Type != "ticket" || err != nil || len(query) != 1 || len(include) != 1 || include[0] != "due_date" {
+			handler.writeError(response, request, fmt.Errorf("%w: invalid collaboration query", authz.ErrInvalid))
+			return
+		}
 	}
 	view, err := handler.collaboration.GetNexusView(request.Context(), principal, target)
 	if err != nil {
 		handler.writeError(response, request, err)
 		return
+	}
+	if target.Type == "ticket" && !includeDueDate {
+		timeline := make([]goldenpath.TimelineItem, 0, len(view.Timeline))
+		for _, item := range view.Timeline {
+			if item.ActivityType != goldenpath.TicketDueDateChanged {
+				timeline = append(timeline, item)
+			}
+		}
+		view.Timeline = timeline
 	}
 	dto, err := publicCollaborationView(target, view)
 	if err != nil {
@@ -605,7 +622,7 @@ func publicTicketProjection(
 		return ticketCurrentDTO{}, errors.New("invalid Ticket Nexus View")
 	}
 	for _, item := range timeline {
-		if item.ActivityType != "ticket.created" && item.ActivityType != "ticket.component-linked" && item.ActivityType != "ticket.component-unlinked" && item.ActivityType != "ticket.status-changed" && item.ActivityType != "ticket.assignee-changed" && item.ActivityType != "ticket.priority-changed" {
+		if item.ActivityType != "ticket.created" && item.ActivityType != "ticket.component-linked" && item.ActivityType != "ticket.component-unlinked" && item.ActivityType != "ticket.status-changed" && item.ActivityType != "ticket.assignee-changed" && item.ActivityType != "ticket.priority-changed" && item.ActivityType != goldenpath.TicketDueDateChanged {
 			return ticketCurrentDTO{}, errors.New("unexpected Ticket Timeline item")
 		}
 	}
@@ -815,6 +832,27 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 			!validScopedID(item.Actor.ID, "usr_") || item.OccurredAt.IsZero() ||
 			item.ProjectionVersion != goldenpath.ActivityProjectionVersion {
 			return nil, errors.New("invalid collaboration Timeline item")
+		}
+		if item.ActivityType == goldenpath.TicketDueDateChanged {
+			from, e1 := strconv.Atoi(item.SafeFacts["from_revision"])
+			to, e2 := strconv.Atoi(item.SafeFacts["to_revision"])
+			change := cp.DueDateChange{FromRevision: from, ToRevision: to}
+			before, hasBefore := item.SafeFacts["from"]
+			after, hasAfter := item.SafeFacts["to"]
+			if before != "" {
+				change.From = &before
+			}
+			if after != "" {
+				change.To = &after
+			}
+			if e1 != nil || e2 != nil || strconv.Itoa(from) != item.SafeFacts["from_revision"] || strconv.Itoa(to) != item.SafeFacts["to_revision"] ||
+				!hasBefore || !hasAfter || len(item.SafeFacts) != 4+extra || len(item.Subjects) != 0 || !change.Valid() {
+				return nil, errors.New("invalid Ticket due date Timeline facts")
+			}
+			dto = append(dto, collaborationTimelineDTO{Imported: imported, ID: item.EventID,
+				ActivityType: item.ActivityType, Actor: deploymentActorDTO{Kind: item.Actor.Kind, ID: item.Actor.ID},
+				OccurredAt: publicTime(item.OccurredAt), Subjects: []collaborationSubjectDTO{}, DueDate: &change})
+			continue
 		}
 		if item.ActivityType == "ticket.priority-changed" {
 			from, e1 := strconv.Atoi(item.SafeFacts["from_revision"])

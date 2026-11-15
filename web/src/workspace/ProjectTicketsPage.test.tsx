@@ -28,6 +28,7 @@ const page = {
       status: "open" as const,
       assignee: null,
       priority: "unset" as const,
+      dueDate: "2032-02-29",
     },
   ],
   nextCursor: "next_page",
@@ -100,6 +101,7 @@ describe("Project Tickets page", () => {
         "href",
       ),
     ).toBe("/workspaces/wrk_main/tickets/tkt_first");
+    expect(open.getByText("截止日期：2032-02-29")).toBeDefined();
     await progress.findByText("Work underway");
     for (const status of ["open", "in-progress", "done", "canceled"]) {
       expect(api.tickets).toHaveBeenCalledWith(
@@ -180,6 +182,7 @@ describe("Project Tickets page", () => {
             status: "open",
             assignee: null,
             priority: "unset" as const,
+            dueDate: "2032-02-29",
           },
         ],
         nextCursor: null,
@@ -268,6 +271,7 @@ describe("Project Tickets page", () => {
             status: "open",
             assignee: null,
             priority: "unset" as const,
+            dueDate: "2032-02-29",
           },
         ],
         nextCursor: null,

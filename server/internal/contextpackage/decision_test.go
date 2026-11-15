@@ -48,8 +48,9 @@ func TestDecisionLegacyProfilesAndRejectedHistory(t *testing.T) {
 		t.Run(profile, func(t *testing.T) {
 			b := fixture(t)
 			b.Manifest.Profile = profile
+			stripTicketFields(t, &b, "due_date", "due_date_revision")
 			if profile != ProfileV3 {
-				stripPriorityFields(t, &b)
+				stripTicketFields(t, &b, "priority", "priority_revision")
 			}
 			if profile == ProfileV1 {
 				rewritePackageFile(t, &b, "objects.jsonl", func(raw []byte) []byte {
@@ -132,7 +133,10 @@ func TestDecisionLegacyProfilesAndRejectedHistory(t *testing.T) {
 	}
 	for _, profile := range []string{ProfileV1, ProfileV2, ProfileV3} {
 		bad := packed
+		bad.Files = append([]File(nil), packed.Files...)
+		bad.Manifest.Files = append([]Descriptor(nil), packed.Manifest.Files...)
 		bad.Manifest.Profile = profile
+		stripTicketFields(t, &bad, "due_date", "due_date_revision")
 		if _, _, e = Unpack(bad); e == nil {
 			t.Fatal("legacy profile accepted rejection")
 		}

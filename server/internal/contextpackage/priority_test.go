@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func stripPriorityFields(t *testing.T, b *Bundle) {
+func stripTicketFields(t *testing.T, b *Bundle, fields ...string) {
 	t.Helper()
 	rewritePackageFile(t, b, "objects.jsonl", func(raw []byte) []byte {
 		var result []byte
@@ -16,8 +16,9 @@ func stripPriorityFields(t *testing.T, b *Bundle) {
 				if err := json.Unmarshal(o.Data, &v); err != nil {
 					t.Fatal(err)
 				}
-				delete(v, "priority")
-				delete(v, "priority_revision")
+				for _, field := range fields {
+					delete(v, field)
+				}
 				o.Data = Encode(v)
 			}
 			result = append(result, Encode(o)...)
@@ -29,10 +30,11 @@ func stripPriorityFields(t *testing.T, b *Bundle) {
 func TestPriorityV2ReadIsStrictAndPreservesManifest(t *testing.T) {
 	b := fixture(t)
 	b.Manifest.Profile = ProfileV2
+	stripTicketFields(t, &b, "due_date", "due_date_revision")
 	if _, _, err := Unpack(b); err == nil {
 		t.Fatal("v2 accepted v3 fields")
 	}
-	stripPriorityFields(t, &b)
+	stripTicketFields(t, &b, "priority", "priority_revision")
 	stripDecisionReason(t, &b)
 	before := Digest(b.Manifest)
 	d, x, err := Unpack(b)
@@ -87,7 +89,7 @@ func TestPriorityHistorySequenceAndProfileBoundaries(t *testing.T) {
 		legacy.Files = append([]File(nil), b.Files...)
 		legacy.Manifest.Files = append([]Descriptor(nil), b.Manifest.Files...)
 		legacy.Manifest.Profile = profile
-		stripPriorityFields(t, &legacy)
+		stripTicketFields(t, &legacy, "priority", "priority_revision", "due_date", "due_date_revision")
 		if profile == ProfileV1 {
 			rewritePackageFile(t, &legacy, "objects.jsonl", func(raw []byte) []byte {
 				var result []byte

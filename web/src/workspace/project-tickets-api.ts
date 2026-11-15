@@ -1,3 +1,4 @@
+import { parseTicketDueDate } from "../collaboration/ticket-due-date";
 import {
   parseTicketPriority,
   type TicketPriority,
@@ -41,6 +42,7 @@ function filterQuery(filters: TicketFilters) {
 }
 export interface ProjectTicket {
   priority: TicketPriority;
+  dueDate: string | null;
   assignee: TicketAssignee | null;
   id: string;
   title: string;
@@ -82,7 +84,7 @@ export const projectTicketsClient = {
     return parsePage<ProjectTicket>(
       await request(
         workspaceID,
-        `/projects/${encodeURIComponent(projectID)}/tickets${query(after)}${filterQuery(filters)}`,
+        `/projects/${encodeURIComponent(projectID)}/tickets${query(after)}&include=due_date${filterQuery(filters)}`,
         "GET",
         undefined,
         signal,
@@ -94,6 +96,7 @@ export const projectTicketsClient = {
           "status",
           "assignee",
           "priority",
+          "due_date",
         ]);
         const ref = object(row.ref, ["type", "id"]);
         if (ref.type !== "ticket")
@@ -102,6 +105,7 @@ export const projectTicketsClient = {
           id: requireID(ref.id, "tkt_"),
           assignee: parseAssignee(row.assignee),
           priority: parseTicketPriority(row.priority),
+          dueDate: parseTicketDueDate(row.due_date),
           title: text(row.title),
           status: parseTicketStatus(row.status),
         };

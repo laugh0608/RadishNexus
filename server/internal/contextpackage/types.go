@@ -8,7 +8,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"math"
 	"time"
+
+	"github.com/laugh0608/RadishNexus/server/internal/platform/calendardate"
 )
 
 const (
@@ -18,7 +21,8 @@ const (
 	ProfileV4        = "project-collaboration-v4"
 	ProfileV3        = "project-collaboration-v3"
 	ProfileV5        = "project-collaboration-v5"
-	Profile          = "project-collaboration-v6"
+	ProfileV6        = "project-collaboration-v6"
+	Profile          = "project-collaboration-v7"
 	Version          = 1
 	MaxBytes         = 64 << 20
 	MaxObjects       = 10000
@@ -115,7 +119,21 @@ func (p Priority) Valid() bool {
 	return ValidPriority(p.From) && ValidPriority(p.To) && p.From != p.To && p.FromRevision > 0 && p.FromRevision < MaxHistory && p.ToRevision == p.FromRevision+1
 }
 
+type DueDateChange struct {
+	From         *string `json:"from"`
+	To           *string `json:"to"`
+	FromRevision int     `json:"from_revision"`
+	ToRevision   int     `json:"to_revision"`
+}
+
+func (c DueDateChange) Valid() bool {
+	return calendardate.Valid(c.From) && calendardate.Valid(c.To) && !calendardate.Equal(c.From, c.To) &&
+		c.FromRevision > 0 && c.FromRevision < math.MaxInt32 && c.ToRevision == c.FromRevision+1
+}
+
 type Ticket struct {
+	DueDate            *string `json:"due_date"`
+	DueDateRevision    int     `json:"due_date_revision"`
 	Priority           string  `json:"priority"`
 	PriorityRevision   int     `json:"priority_revision"`
 	AssigneeUserID     *string `json:"assignee_user_id"`
@@ -174,6 +192,7 @@ type History struct {
 // Facts is a whitelist. Validate rejects fields that do not belong to the
 // particular event, even when their values happen to be zero.
 type Facts struct {
+	DueDate                 *DueDateChange  `json:"due_date,omitempty"`
 	Review                  *DecisionReview `json:"-"`
 	Replacement             *Ref            `json:"replacement,omitempty"`
 	Relation                *Ref            `json:"relation,omitempty"`

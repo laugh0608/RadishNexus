@@ -16,6 +16,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/calendardate"
 )
 
 const (
@@ -75,6 +76,7 @@ func (c discoveryCursor) MarshalJSON() ([]byte, error) {
 }
 
 type discoveryItemDTO struct {
+	DueDate  **string                     `json:"due_date,omitempty"`
 	Project  *goldenpath.DiscoveryProject `json:"project,omitempty"`
 	Priority string                       `json:"priority,omitempty"`
 	Assignee **goldenpath.TicketAssignee  `json:"assignee,omitempty"`
@@ -219,6 +221,13 @@ func parseDiscoveryQuery(raw string, scope discoveryCursor) (goldenpath.Discover
 		return input, invalid
 	}
 	for name, values := range values {
+		if name == "include" {
+			if (scope.Kind != "ticket" && scope.Kind != "my-tickets") || len(values) != 1 || values[0] != "due_date" {
+				return input, invalid
+			}
+			input.IncludeDueDate = true
+			continue
+		}
 		if (name != "limit" && name != "after" && !(scope.Version == 2 && scope.Kind == "ticket" && (name == "status" || name == "assignee" || name == "priority"))) || len(values) != 1 || values[0] == "" {
 			return input, invalid
 		}
@@ -302,7 +311,13 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 		} else if item.Priority != "" {
 			return dto, invalid
 		}
+		if !calendardate.Valid(item.DueDate) || (refKind != "ticket" && item.DueDate != nil) {
+			return dto, invalid
+		}
 		row := discoveryItemDTO{Priority: item.Priority, Ref: entityRefDTO{Type: item.Ref.Type, ID: item.Ref.ID}, Title: item.Title, Status: item.Status}
+		if input.IncludeDueDate && refKind == "ticket" {
+			row.DueDate = &item.DueDate
+		}
 		if scope.Kind == "my-tickets" {
 			row.Project = item.Project
 		} else if item.Project != nil {

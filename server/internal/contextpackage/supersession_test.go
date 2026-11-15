@@ -45,6 +45,7 @@ func stripSupersessionFields(t *testing.T, b *Bundle) {
 func TestSupersessionLegacyV4AndHistoricalClosure(t *testing.T) {
 	legacy := fixture(t)
 	legacy.Manifest.Profile = ProfileV4
+	stripTicketFields(t, &legacy, "due_date", "due_date_revision")
 	if _, _, e := Unpack(legacy); e == nil {
 		t.Fatal("v4 accepted new fields")
 	}
@@ -132,7 +133,7 @@ func TestSupersessionLegacyV4AndHistoricalClosure(t *testing.T) {
 		},
 		func(v *Data) {
 			later := at.Add(time.Minute)
-			v.Objects = append(v.Objects, Object{Type: "ticket", ID: "tkt_late", Actor: "usr_a", CreatedAt: later, UpdatedAt: later, Data: Encode(Ticket{Title: "After replacement", Status: "open", StatusRevision: 1, AssignmentRevision: 1, Priority: "unset", PriorityRevision: 1}), Lineage: []Origin{}})
+			v.Objects = append(v.Objects, Object{Type: "ticket", ID: "tkt_late", Actor: "usr_a", CreatedAt: later, UpdatedAt: later, Data: Encode(Ticket{Title: "After replacement", Status: "open", StatusRevision: 1, AssignmentRevision: 1, Priority: "unset", PriorityRevision: 1, DueDateRevision: 1}), Lineage: []Origin{}})
 			v.History = append(v.History, History{ID: "evt_late", Type: "ticket.created", Version: 1, Entity: Ref{"ticket", "tkt_late"}, Actor: "usr_a", Source: "web", OccurredAt: later, CorrelationID: "cor_a", Facts: Encode(Facts{Status: "open", Decision: &Ref{"decision", "dec_a"}}), Lineage: []Origin{}})
 			v.Links = append(v.Links, Link{ID: "lnk_late", From: Ref{"ticket", "tkt_late"}, To: Ref{"decision", "dec_a"}, Relation: "implements", Assertion: "asserted", Origin: "user", Actor: "usr_a", CreatedAt: later, UpdatedAt: later, EventID: "evt_late", State: "active", Lineage: []Origin{}})
 		},
@@ -147,6 +148,7 @@ func TestSupersessionLegacyV4AndHistoricalClosure(t *testing.T) {
 		}
 	}
 	packed.Manifest.Profile = ProfileV4
+	stripTicketFields(t, &packed, "due_date", "due_date_revision")
 	stripSupersessionFields(t, &packed)
 	if _, _, e = Unpack(packed); e == nil {
 		t.Fatal("v4 accepted supersession")
@@ -195,6 +197,7 @@ func TestSupersessionPreservesLegacyProposedTimestamp(t *testing.T) {
 		t.Fatal(e)
 	}
 	packed.Manifest.Profile = ProfileV4
+	stripTicketFields(t, &packed, "due_date", "due_date_revision")
 	stripSupersessionFields(t, &packed)
 	digest := Digest(packed.Manifest)
 	converted, x, e := Unpack(packed)

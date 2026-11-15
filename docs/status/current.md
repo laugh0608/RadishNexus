@@ -1,6 +1,6 @@
 # RadishNexus 当前状态
 
-最近功能交付为 2026-11-08，规划收口为 2026-11-10。2026-11-15 完成固定候选的本机有限 Web 协作技术验收及试用观察准备检查。
+2026-11-15 完成工单截止日期开发与隔离技术验证。同日完成固定候选的本机 Web 协作技术验收及试用观察准备检查。规划收口记录日期为 2026-11-10。
 
 整体目标与阶段范围见[路线图](../roadmap.md)，能力归属与任务 / 验收来源见[专题地图](../topics.md)。完整历史流水保留于[原状态快照](history/planning-structure-2026-11-01.md)，不恢复旧运行授权。
 
@@ -22,7 +22,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | --- | --- | --- |
 | 身份与管理 | 本地账户、邀请、初始化、恢复、owner / 成员管理交接已有技术证据；真实 OIDC / Radish 联调与团队持续使用仍未验收 | [身份专题](../topics.md#identity) |
 | 沟通与决策 | 讨论创建 / 确认 Decision、Project 决策发现已交付；最小拒绝、单链替代及四状态读取已交付，最小人工复核已通过正式浏览器验收 | [沟通与决策专题](../topics.md#communication-decisions) |
-| 工单与上下文 | 工单发现、四状态、负责人和优先级筛选已交付。「我的工单」和项目状态看板已通过定向验收。截止日期与通用关系分页待建设 | [工单与上下文专题](../topics.md#tickets-context) · [我的工单验收](reviews/2026-11-08-workspace-my-tickets.md) · [看板验收](reviews/2026-11-08-project-ticket-board.md) |
+| 工单与上下文 | 工单发现、四状态、负责人和优先级筛选已交付。「我的工单」和项目状态看板已通过定向验收。最小截止日期已接入详情、列表、看板和个人工单，通用关系分页待建设 | [工单与上下文专题](../topics.md#tickets-context) · [我的工单验收](reviews/2026-11-08-workspace-my-tickets.md) · [看板验收](reviews/2026-11-08-project-ticket-board.md) |
 | 文档协作 | 最小 Markdown 正式保存、冲突、版本 / 恢复及隔离浏览器已有证据；原生中文 IME 暂缓、持续使用未验收 | [文档专题](../topics.md#documents) |
 | 交付集成 | 受认证接入、显式 staging 记录、配置、持久发送及 checkout 接收已有相应证据；ADR-0035 / 0037 B 真实采集与整链暂缓 | [交付专题](../topics.md#delivery-integration) |
 | 运行与产品交付 | Web、自部署、升级恢复、单 Project 上下文包及补验已有指定环境证据；U27、生产容量、更广迁移、有效试用授权与独立持续使用未闭合 | [运行交付专题](../topics.md#product-delivery) |
@@ -46,9 +46,11 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **继续按 Web 纵向切片开发**。先评估 M4 的最小工单截止日期作为下一功能候选，基于现有详情、列表和看板核对所需入口，以及日期 / 时区、终态显示、并发与原请求重试、旧工单兼容、Activity、上下文包及恢复影响。实现范围由实际任务需要或所有者确认后确定。 [M4](../roadmap.md#m4工单与上下文关联) · [Ticket 领域](../domain-model.md#ticket)
+1. **继续按 Web 纵向切片开发**。M4 最小工单截止日期已按 ADR-0053 接入详情、Project 列表、状态看板和「我的工单」，配套 schema 026、Activity 14 和单 Project v7 包。按路线图继续推进工单与研发上下文关联能力。 [ADR-0053](../adr/0053-ticket-due-date.md) · [M4](../roadmap.md#m4工单与上下文关联)
 2. **随功能完成技术验证**。以 `1036b21` 的候选证据为基线，按切片风险执行自动化、合成数据和隔离环境验证。实际目标就绪后，按其配置及候选差异定向复验适用的 T03、T04、T06、T07。 [合成预演及 T04 复核](reviews/2026-11-10-web-candidate-1036b21.md#2026-11-15-合成账号预演)
 3. **项目开发完成后安排真人观察和实测**。届时由所有者恢复安排，按 T01～T08 核对适用准入并决定是否开放。独立成员观察和 R08 沿已有任务与记录执行，原生中文 IME 和 U27 按各自合同补验。独立成员证据形成前保持“价值未验证”，观察结束后再根据实测决定继续、定向修复后重试、收窄或暂停。 [准备检查与复核条件](reviews/2026-11-15-trial-observation-readiness-1036b21.md#trial-admission-checks)
+
+截止日期切片已有合成 Session 回环 HTTPS、025→026 迁移、并发与回滚、Activity 重建、v7 双轮导入和独立空目标恢复证据。Web 自动化覆盖设置、清除、原操作重试、列表和看板展示。新候选的正式浏览器复验沿第 2 项执行。 [PostgreSQL 验证](../../server/internal/goldenpath/postgres/ticket_due_date_integration_test.go) · [备份恢复验证](../../server/internal/backuprestore/context_integration_test.go)
 
 已完成的负责人、优先级及上下文迁移补验沿[原记录](reviews/2026-10-28-daily-closeout.md)转入有界观察；遇到实际 BFCache、原生控件、慢查询或新候选差异时定向复验，不把合成查询计划写成生产容量。单宿主身份拆分沿[ADR-0051](../adr/0051-single-host-database-roles.md)及[隔离证据](reviews/2026-11-08-single-host-database-roles.md)复用，M1 文件、通知、审计运营、Attention Item 与更广生产运维仍按路线图独立推进。
 

@@ -69,7 +69,7 @@ func (store *Store) ListMyTickets(ctx context.Context, principal authz.Principal
 		return page, authz.ErrNotFound
 	}
 	rows, err := tx.Query(ctx, `
-		SELECT ticket.id, ticket.title, ticket.status, ticket.priority, project.id, project.name
+		SELECT ticket.id, ticket.title, ticket.status, ticket.priority, project.id, project.name, to_char(ticket.due_date::timestamp, 'YYYY-MM-DD')
 		FROM radishnexus.tickets AS ticket
 		JOIN radishnexus.projects AS project
 		  ON project.workspace_id = ticket.workspace_id AND project.id = ticket.governing_project_id
@@ -152,7 +152,7 @@ func (store *Store) ListProjectTickets(ctx context.Context, principal authz.Prin
 		return page, authz.ErrNotFound
 	}
 	rows, err := tx.Query(ctx, `
-		SELECT t.id,t.title,t.status,t.priority, CASE WHEN t.assignee_user_id IS NULL THEN NULL ELSE jsonb_build_object('id',u.id,'display_name',u.display_name,'eligible',COALESCE(`+assigneeEligibility+`,false) AND $5,'imported',EXISTS(SELECT 1 FROM radishnexus.context_import_mappings im WHERE im.kind='actor' AND im.target_id=u.id)) END
+		SELECT t.id,t.title,t.status,t.priority, to_char(t.due_date::timestamp, 'YYYY-MM-DD'), CASE WHEN t.assignee_user_id IS NULL THEN NULL ELSE jsonb_build_object('id',u.id,'display_name',u.display_name,'eligible',COALESCE(`+assigneeEligibility+`,false) AND $5,'imported',EXISTS(SELECT 1 FROM radishnexus.context_import_mappings im WHERE im.kind='actor' AND im.target_id=u.id)) END
         FROM radishnexus.tickets t
         LEFT JOIN radishnexus.users u ON u.id=t.assignee_user_id
         LEFT JOIN radishnexus.workspace_memberships m ON m.workspace_id=t.workspace_id AND m.user_id=u.id
@@ -222,11 +222,11 @@ func scanDiscoveryPage(rows pgx.Rows, kind string, limit int) (goldenpath.Discov
 		targets := []any{&item.Ref.ID, &item.Title, &item.Status}
 		switch kind {
 		case "ticket":
-			targets = append(targets, &item.Priority, &item.Assignee)
+			targets = append(targets, &item.Priority, &item.DueDate, &item.Assignee)
 		case "my-tickets":
 			item.Ref.Type = "ticket"
 			item.Project = &goldenpath.DiscoveryProject{}
-			targets = append(targets, &item.Priority, &item.Project.ID, &item.Project.Name)
+			targets = append(targets, &item.Priority, &item.Project.ID, &item.Project.Name, &item.DueDate)
 		}
 		if err := rows.Scan(targets...); err != nil {
 			return goldenpath.DiscoveryPage{}, fmt.Errorf("scan discovery item: %w", err)

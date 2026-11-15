@@ -239,7 +239,7 @@ M0 纵向切片继续冻结 `thread` / `thr_` 与 `ticket` / `tkt_` 的稳定引
 
 ### Ticket
 
-可执行工作的统一对象。需求、任务、缺陷、事故和改进项的长期表达保持同一模型。当前实现包括四状态、单一可选负责人和固定优先级。项目状态看板使用这四种状态，工单类型和自定义工作流留作后续能力。 [状态流转](adr/0039-ticket-status-transitions.md) · [负责人](adr/0046-ticket-assignee.md) · [优先级](adr/0047-ticket-priority-and-filtering.md)
+可执行工作的统一对象。需求、任务、缺陷、事故和改进项的长期表达保持同一模型。当前实现包括四状态、单一可选负责人、固定优先级及可选截止日期。项目状态看板使用这四种状态，工单类型和自定义工作流留作后续能力。 [状态流转](adr/0039-ticket-status-transitions.md) · [负责人](adr/0046-ticket-assignee.md) · [优先级](adr/0047-ticket-priority-and-filtering.md)
 
 [ADR-0039](adr/0039-ticket-status-transitions.md) 冻结最小四状态：open 待开始、in-progress 处理中、done 已完成、canceled 已取消。前两者可转向其他状态；两个终态只能显式重新打开为 open，不能直接互转。done 只表示人工完成执行事项，不证明 Decision、CI Run 或 Deployment 结果。
 
@@ -247,11 +247,13 @@ Ticket 初始 `status_revision=1`，只随有效状态变化递增；当前 acti
 
 负责人按 [ADR-0046](adr/0046-ticket-assignee.md) 保存可空 `assignee_user_id` 与独立 `assignment_revision`，旧工单和新建工单均初始未分配 / 1。当前有 Project 写权者只能在 open / in-progress 设置、改派或清空；候选须同 Workspace 的 active 账户和成员，当前 Project 为 contributor / decider / admin，排除历史导入身份。分配不授予权限，也不限制其他有权成员改变工单状态。
 
-成员暂停、退出或失去写权后保留责任记录，读取时显示当前不可执行；恢复后的资格按当前权限计算。历史导入负责人保持不可登录，必须显式重新分配目标成员。新分配绑定所见负责人、状态、成员生命周期及项目管理代次；分配历史与状态历史分别递增，共用工单更新时间，原操作重试只返回原 applied 事实。负责人字段与历史随权威备份保存。上下文包自 v2 承载负责人，自 v3 承载优先级，当前默认 v6 继续保留这些 Ticket 字段和历史。 [上下文迁移手册](../deploy/context-package.md)
+成员暂停、退出或失去写权后保留责任记录，读取时显示当前不可执行；恢复后的资格按当前权限计算。历史导入负责人保持不可登录，必须显式重新分配目标成员。新分配绑定所见负责人、状态、成员生命周期及项目管理代次；分配历史与状态历史分别递增，共用工单更新时间，原操作重试只返回原 applied 事实。负责人字段与历史随权威备份保存。上下文包自 v2 承载负责人，自 v3 承载优先级。 [上下文迁移手册](../deploy/context-package.md)
 
 优先级按 [ADR-0047](adr/0047-ticket-priority-and-filtering.md) 使用 `unset / low / normal / high / urgent`，初始 unset / 1，不把未设置当成普通优先级。当前有 Project 写权的成员只在 open / in-progress 显式修改；独立 `priority_revision` 与所见状态版本共同防止旧确认覆盖，负责人变化不制造无关冲突。优先级不代表严重性、SLA、执行顺序或权限，终态保留结项值，须先重开后修改。
 
-Project 内状态、负责人（本人 / 未分配）和优先级三组单选条件按 AND 组合，默认全部，继续稳定 ID 分页。本人筛选表达责任记录，不暗示可执行资格；未分配仅指 SQL NULL，历史身份不算未分配。当前 v6 包校验状态、分配与优先级的连续历史。Workspace「我的工单」仅列本人负责、仍可读且所属 Project 活跃的待处理工单。 [ADR-0052](adr/0052-workspace-my-tickets.md)
+Project 内状态、负责人（本人 / 未分配）和优先级三组单选条件按 AND 组合，默认全部，继续稳定 ID 分页。本人筛选表达责任记录，不暗示可执行资格；未分配仅指 SQL NULL，历史身份不算未分配。Workspace「我的工单」仅列本人负责、仍可读且所属 Project 活跃的待处理工单。 [ADR-0052](adr/0052-workspace-my-tickets.md)
+
+截止日期按 [ADR-0053](adr/0053-ticket-due-date.md) 保存可空 `due_date` 和独立 `due_date_revision`，初始为空 / 1。日期表示公历年月日，各时区显示同一天。当前有 Project 写权的成员只在 open / in-progress 设置、修改或显式清除。动作绑定日期和状态版本，终态保留原日期。Project 列表、状态看板和「我的工单」沿现有顺序展示日期。v7 包校验状态、分配、优先级与截止日期的连续历史。 [上下文迁移手册](../deploy/context-package.md)
 
 ### Document
 

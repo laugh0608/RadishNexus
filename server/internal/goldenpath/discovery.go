@@ -21,12 +21,15 @@ func (f TicketFilters) Valid() bool {
 }
 
 type DiscoveryPageInput struct {
+	IncludeDueDate bool
+
 	TicketFilters TicketFilters
 	AfterID       string
 	Limit         int
 }
 
 type DiscoveryItem struct {
+	DueDate  *string
 	Priority string
 	Assignee *TicketAssignee
 	Ref      entityref.Ref

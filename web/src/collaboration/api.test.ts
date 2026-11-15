@@ -869,3 +869,65 @@ it("strictly parses native and imported priority history", () => {
     ).toThrow();
   }
 });
+
+it("requests and strictly reads nullable Ticket due date history", async () => {
+  const event = {
+    id: "evt_due",
+    activity_type: "ticket.due-date-changed",
+    actor: { kind: "user", id: "usr_member" },
+    occurred_at: now,
+    subjects: [],
+    imported: true,
+    due_date: {
+      from: "2032-02-29",
+      to: null,
+      from_revision: 2,
+      to_revision: 3,
+    },
+  };
+  const data = {
+    current: ticketCurrent,
+    capabilities: { change_status: true },
+    relations: [
+      {
+        visibility: "readable",
+        direction: "outgoing",
+        relation_type: "implements",
+        target: {
+          ref: { type: "decision", id: "dec_source" },
+          title: "Source",
+        },
+      },
+    ],
+    timeline: [event],
+  };
+  const fetch = vi.fn().mockResolvedValue(jsonResponse({ data }, 200));
+  vi.stubGlobal("fetch", fetch);
+  try {
+    const result = await browserCollaborationClient.loadView(
+      "wrk_main",
+      "ticket",
+      "tkt_work",
+    );
+    expect(fetch.mock.calls[0]?.[0]).toBe(
+      "/api/v1/workspaces/wrk_main/tickets/tkt_work/nexus-view?include=due_date",
+    );
+    expect(result.timeline[0]).toMatchObject({
+      activityType: "ticket.due-date-changed",
+      imported: true,
+      dueDate: { from: "2032-02-29", to: null, fromRevision: 2, toRevision: 3 },
+    });
+    for (const from of [undefined, "", "2031-02-29", "2032-02-29T00:00:00Z"]) {
+      const invalid = { ...event, due_date: { ...event.due_date, from } };
+      expect(() =>
+        parseCollaborationView(
+          { data: { ...data, timeline: [invalid] } },
+          "ticket",
+          "tkt_work",
+        ),
+      ).toThrow();
+    }
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

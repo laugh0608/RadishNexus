@@ -1,3 +1,4 @@
+import { parseTicketDueDate } from "./ticket-due-date";
 import { parseTicketPriority, type TicketPriority } from "./ticket-priority";
 import {
   parseTicketStatus,
@@ -102,6 +103,15 @@ export type CollaborationTimelineItem = TimelineBase &
         activityType: "decision.superseded";
         supersession: {
           side: "superseded" | "replacement";
+          fromRevision: number;
+          toRevision: number;
+        };
+      }
+    | {
+        activityType: "ticket.due-date-changed";
+        dueDate: {
+          from: string | null;
+          to: string | null;
           fromRevision: number;
           toRevision: number;
         };
@@ -442,7 +452,7 @@ async function loadView(
 ): Promise<CollaborationView> {
   requireLocation(workspaceID, entityType, entityID);
   const response = await collaborationFetch(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/${pageSegments[entityType]}/${encodeURIComponent(entityID)}/nexus-view`,
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/${pageSegments[entityType]}/${encodeURIComponent(entityID)}/nexus-view${entityType === "ticket" ? "?include=due_date" : ""}`,
     {
       method: "GET",
       headers: { Accept: "application/json" },
@@ -1426,6 +1436,42 @@ function parseTimelineItem(
       supersession: { side: sup.side, fromRevision: from, toRevision: to },
     };
   }
+  if (raw.activity_type === "ticket.due-date-changed") {
+    const item = exactRecord(value, path, [
+      "id",
+      "activity_type",
+      "actor",
+      "occurred_at",
+      "subjects",
+      "due_date",
+    ]);
+    const p = exactRecord(item.due_date, `${path}.due_date`, [
+      "from",
+      "to",
+      "from_revision",
+      "to_revision",
+    ]);
+    const from = parseTicketDueDate(p.from),
+      to = parseTicketDueDate(p.to),
+      fromRevision = parseTicketStatusRevision(p.from_revision),
+      toRevision = parseTicketStatusRevision(p.to_revision);
+    if (
+      expectedType !== "ticket" ||
+      array(item.subjects, `${path}.subjects`).length !== 0 ||
+      from === to ||
+      toRevision !== fromRevision + 1
+    )
+      throw new TypeError("Invalid Ticket due date timeline");
+    return {
+      ...provenance,
+      id: scopedID(item.id, `${path}.id`, "evt_"),
+      activityType: "ticket.due-date-changed",
+      actor: parseActor(item.actor, `${path}.actor`),
+      occurredAt: timestamp(item.occurred_at, `${path}.occurred_at`),
+      subjects: [],
+      dueDate: { from, to, fromRevision, toRevision },
+    };
+  }
   if (raw.activity_type === "ticket.priority-changed") {
     const item = exactRecord(value, path, [
       "id",
@@ -1701,7 +1747,8 @@ function validateViewShape(
         item.activityType !== "ticket.component-unlinked" &&
         item.activityType !== "ticket.status-changed" &&
         item.activityType !== "ticket.assignee-changed" &&
-        item.activityType !== "ticket.priority-changed",
+        item.activityType !== "ticket.priority-changed" &&
+        item.activityType !== "ticket.due-date-changed",
     )
   ) {
     throw new TypeError("Ticket Timeline contains an unexpected item");

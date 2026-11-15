@@ -1,3 +1,4 @@
+import { ticketDueDateLabel } from "../collaboration/ticket-due-date";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthRequestError } from "../auth/api";
 import { collaborationPagePath } from "../collaboration/api";
@@ -111,6 +112,8 @@ export function MyTicketsPage({
                   <p>
                     {ticket.project.name} · {ticketStatusLabels[ticket.status]}{" "}
                     · 优先级 {ticketPriorityLabels[ticket.priority]}
+                    {" · 截止日期 "}
+                    {ticketDueDateLabel(ticket.dueDate)}
                   </p>
                 </li>
               ))}

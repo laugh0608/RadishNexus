@@ -42,6 +42,8 @@ func TestAssignmentV1ReadIsStrictAndPreservesManifest(t *testing.T) {
 				delete(v, "assignment_revision")
 				delete(v, "priority")
 				delete(v, "priority_revision")
+				delete(v, "due_date")
+				delete(v, "due_date_revision")
 				o.Data = Encode(v)
 			}
 			result = append(result, Encode(o)...)

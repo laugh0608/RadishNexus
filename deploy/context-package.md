@@ -1,6 +1,6 @@
 # Project 上下文包迁移
 
-本手册执行 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的单 Project 首片及 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 的负责人扩展及 [ADR-0047](../docs/adr/0047-ticket-priority-and-filtering.md) 的优先级扩展，以及 [ADR-0048](../docs/adr/0048-decision-lifecycle-and-rejection.md) 的 Decision 拒绝扩展及 [ADR-0049](../docs/adr/0049-decision-supersession.md) 的替代扩展。ADR-0050 增加人工复核。当前源码默认导出 `project-collaboration-v6`，严格读取旧 v1～v5，旧服务拒绝 v6，不提供丢弃历史的降级导出。它迁移单 Project 的当前可读协作闭包，目标为同版本、完整匹配当前 migration history（当前为 schema 025）且已正常初始化的空业务实例；不替代 PostgreSQL 整库备份，不合并已有项目。
+本手册执行 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的单 Project 首片及 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 的负责人扩展及 [ADR-0047](../docs/adr/0047-ticket-priority-and-filtering.md) 的优先级扩展，以及 [ADR-0048](../docs/adr/0048-decision-lifecycle-and-rejection.md) 的 Decision 拒绝扩展及 [ADR-0049](../docs/adr/0049-decision-supersession.md) 的替代扩展。ADR-0050 增加人工复核，[ADR-0053](../docs/adr/0053-ticket-due-date.md) 增加工单截止日期。当前源码默认导出 `project-collaboration-v7`，严格读取旧 v1～v6，旧工件拒绝未知 profile，不提供丢弃历史的降级导出。它迁移单 Project 的当前可读协作闭包，目标为同版本、完整匹配当前 migration history（当前为 schema 026）且已正常初始化的空业务实例；不替代 PostgreSQL 整库备份，不合并已有项目。
 
 ## 准备与权限
 
@@ -105,7 +105,7 @@ v2 在 Ticket 中明确携带可空 `assignee_user_id` 与 `assignment_revision`
 
 v3 在 v2 的五个 Ticket 字段上增加必填 `priority / priority_revision`，从 unset / 1 重放连续优先级历史，校验终态禁止修改、全局时间次序、三条历史链的最终值与更新时间。旧 v1 / v2 先按各自精确字段和事件白名单校验，再在内部补 unset / 1；v1 同时补未分配 / 1。源 manifest digest 保持不变，不补造事件或改写旧时间。
 
-022 与 Activity 10、配套 Go / Web / CLI 一起停写升级。旧 021 工件恢复到空目标后才显式 migrate；优先级字段由 v3 引入，当前新导出使用 v6。筛选、cursor 和协作 receipt 不进入上下文包，receipt 仍保留在整库备份中。原生与导入优先级事件均参与二次导入和投影重建，历史身份仍不可登录。
+022 与 Activity 10、配套 Go / Web / CLI 一起停写升级。旧 021 工件恢复到空目标后才显式 migrate；优先级字段由 v3 引入，当前新导出使用 v7。筛选、cursor 和协作 receipt 不进入上下文包，receipt 仍保留在整库备份中。原生与导入优先级事件均参与二次导入和投影重建，历史身份仍不可登录。
 
 ## Decision 拒绝兼容
 
@@ -129,3 +129,10 @@ v5 首次交付使用 schema 024 / Activity 12 与 Go / Web / CLI 配套停写�
 ## Decision 人工复核与 v6
 
 v6 在 `history.jsonl` 保留 `decision.reviewed`。导出须能构成包含原来源及补充 Thread 的完整可读闭包；导入按原时间检查 accepted 版本、证据和主体并重建 Activity。旧 v1～v5 按原 profile 读取。配套 schema 025 / Activity 13 和 Go / Web / CLI 停写升级；024 整库备份须用匹配旧工件恢复至空目标后再显式迁移。当前整库备份保存原复核 receipt 与事件，便携包保留历史而源 receipt 留在原实例。 [ADR-0050](../docs/adr/0050-decision-manual-review.md)
+
+
+## Ticket 截止日期与 v7
+
+v7 在 Ticket 对象中保存必填可空的 `due_date` 和整数 `due_date_revision`，在 `history.jsonl` 中保存 `ticket.due-date-changed` 的日期前后值和相邻版本。读取 v1～v6 时先校验原 profile，随后将旧 Ticket 归一化为空 / 1，保留原 manifest digest。v7 导入按历史工单状态重放变更，保留原日期、时间和身份来源。新授权成员可在目标项目继续写入。原实例 receipt 随整库备份保存。
+
+schema 026、Activity 14、Go / Web / CLI 配套停写升级。025 备份用匹配的 025 工件恢复至独立空目标，再显式迁移。 [ADR-0053](../docs/adr/0053-ticket-due-date.md)

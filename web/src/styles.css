@@ -2503,7 +2503,8 @@ code {
 }
 
 .ticket-assignment-actions,
-.ticket-priority-actions {
+.ticket-priority-actions,
+.ticket-due-date-actions {
   display: grid;
   gap: 12px;
   margin-top: 24px;
@@ -2513,7 +2514,8 @@ code {
 }
 
 .ticket-assignment-actions > div,
-.ticket-priority-actions > div {
+.ticket-priority-actions > div,
+.ticket-due-date-actions > div {
   display: grid;
   gap: 10px;
   min-width: 0;
@@ -2521,6 +2523,7 @@ code {
 
 .ticket-assignment-actions select,
 .ticket-priority-actions select,
+.ticket-due-date-actions input,
 .ticket-filters select {
   width: 100%;
   min-width: 0;

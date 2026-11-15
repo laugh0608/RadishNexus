@@ -9,6 +9,7 @@ import (
 func TestDecisionReviewPackageProfileAndHistoricalVersion(t *testing.T) {
 	bundle := fixture(t)
 	bundle.Manifest.Profile = ProfileV5
+	stripTicketFields(t, &bundle, "due_date", "due_date_revision")
 	digest := Digest(bundle.Manifest)
 	data, _, err := Unpack(bundle)
 	if err != nil || Digest(bundle.Manifest) != digest {
@@ -24,7 +25,12 @@ func TestDecisionReviewPackageProfileAndHistoricalVersion(t *testing.T) {
 	data.History = append(data.History, review)
 	current, err := Pack(bundle.Manifest, data)
 	if err != nil || current.Manifest.Profile != Profile {
-		t.Fatalf("v6 review history: %v", err)
+		t.Fatalf("current review history: %v", err)
+	}
+	current.Manifest.Profile = ProfileV6
+	stripTicketFields(t, &current, "due_date", "due_date_revision")
+	if _, index, err := Unpack(current); err != nil || index.Decoded[Ref{"ticket", "tkt_a"}].(Ticket).DueDateRevision != 1 {
+		t.Fatalf("v6 review history and Ticket defaults: %v", err)
 	}
 	current.Manifest.Profile = ProfileV5
 	if _, _, err := Unpack(current); err == nil {

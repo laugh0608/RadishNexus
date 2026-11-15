@@ -34,7 +34,7 @@ func TestDecisionReviewUpgradeFrom024(t *testing.T) {
 		t.Fatalf("migration changed pre-existing facts: %v", err)
 	}
 	var version int
-	if err := conn.QueryRow(ctx, `SELECT projection_version FROM radishnexus.activity_items`).Scan(&version); err != nil || version != 13 {
+	if err := conn.QueryRow(ctx, `SELECT projection_version FROM radishnexus.activity_items`).Scan(&version); err != nil || version != 14 {
 		t.Fatalf("Activity version = %d: %v", version, err)
 	}
 	requireUpgradePrefix(t, conn, latestUpgradeSequence(t))

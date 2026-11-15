@@ -63,7 +63,7 @@ func run(ctx context.Context, args []string, out io.Writer) (err error) {
 		if e != nil {
 			return e
 		}
-		return json.NewEncoder(out).Encode(map[string]any{"format": cp.Format, "profile": cp.Profile, "package_digest": cp.Digest(b.Manifest), "objects": len(d.Objects), "history": len(d.History), "document_revisions": len(d.Revisions), "historical_actors": len(d.Actors), "permission_policy": cp.PermissionPolicy, "notice": "Historical facts are unverified package claims. Historical authors cannot log in. Only the importer initially receives access. Text links are preserved without remapping."})
+		return json.NewEncoder(out).Encode(map[string]any{"format": cp.Format, "profile": b.Manifest.Profile, "package_digest": cp.Digest(b.Manifest), "objects": len(d.Objects), "history": len(d.History), "document_revisions": len(d.Revisions), "historical_actors": len(d.Actors), "permission_policy": cp.PermissionPolicy, "notice": "Historical facts are unverified package claims. Historical authors cannot log in. Only the importer initially receives access. Text links are preserved without remapping."})
 	}
 	if !cp.ValidID(o.workspace, "wrk_") {
 		return errors.New("valid --workspace is required")
