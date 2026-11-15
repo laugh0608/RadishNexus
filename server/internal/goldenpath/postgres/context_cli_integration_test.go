@@ -90,9 +90,14 @@ func contextHTTPS(t *testing.T, f *contextFixture, webRoot string) (*httptest.Se
 	httptransport.RegisterTicketPriorityRoutes(mux, httptransport.NewTicketPriorityHandler(f.auth, goldenpath.NewTicketPriorityService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
 	httptransport.RegisterTicketExecutionRoutes(mux, httptransport.NewTicketExecutionHandler(f.auth, goldenpath.NewTicketExecutionService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
 	httptransport.RegisterTicketClassificationRoutes(mux, httptransport.NewTicketClassificationHandler(f.auth, goldenpath.NewTicketClassificationService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
+	httptransport.RegisterTicketCIRunRoutes(mux, httptransport.NewTicketCIRunHandler(f.auth, goldenpath.NewTicketCIRunService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
 	httptransport.RegisterTicketDueDateRoutes(mux, httptransport.NewTicketDueDateHandler(f.auth, goldenpath.NewTicketDueDateService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
 	httptransport.RegisterTicketStatusRoutes(mux, httptransport.NewTicketStatusHandler(f.auth, goldenpath.NewTicketStatusService(f.store, goldenpath.CryptoIDGenerator{}), policy, proxy))
-	mux.Handle("/api/v1/workspaces", httptransport.NewDeploymentNexusViewHandler(f.auth, core, policy, proxy))
+	httptransport.RegisterCIRunRoutes(mux, httptransport.NewCIRunNexusViewHandler(f.auth, core, policy, proxy))
+	httptransport.RegisterStagingDeploymentRoutes(mux, httptransport.NewStagingDeploymentHandler(f.auth, core, policy, proxy))
+	deployment := httptransport.NewDeploymentNexusViewHandler(f.auth, core, policy, proxy)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/deployments/{deployment_id}/nexus-view", deployment)
+	mux.Handle("/api/v1/workspaces", deployment)
 	if webRoot != "" {
 		web, e := httptransport.NewWebAppHandler(webRoot)
 		if e != nil {

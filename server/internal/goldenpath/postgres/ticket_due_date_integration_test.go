@@ -118,7 +118,7 @@ func TestTicketDueDateWritesReplayAndDiscovery(t *testing.T) {
 		(SELECT count(*) FROM radishnexus.collaboration_command_receipts WHERE command_kind='ticket.due-date.set'),
 		(SELECT count(*) FROM radishnexus.domain_events WHERE event_type='ticket.due-date-changed'),
 		(SELECT count(*) FROM radishnexus.outbox_deliveries o JOIN radishnexus.domain_events e USING(event_id) WHERE e.event_type='ticket.due-date-changed'),
-		(SELECT count(*) FROM radishnexus.activity_items WHERE activity_type='ticket.due-date-changed' AND projection_version=16)`).Scan(&receipts, &events, &outbox, &activity); err != nil || receipts != 3 || events != 3 || outbox != 3 || activity != 3 {
+		(SELECT count(*) FROM radishnexus.activity_items WHERE activity_type='ticket.due-date-changed' AND projection_version=17)`).Scan(&receipts, &events, &outbox, &activity); err != nil || receipts != 3 || events != 3 || outbox != 3 || activity != 3 {
 		t.Fatal(receipts, events, outbox, activity, err)
 	}
 	if _, err = pool.Exec(ctx, `UPDATE radishnexus.project_memberships SET role='viewer' WHERE user_id='usr_contributor' AND project_id='prj_auth'`); err != nil {

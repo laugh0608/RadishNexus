@@ -1,6 +1,6 @@
 # RadishNexus 当前状态
 
-2026-11-15 完成工单截止日期、消息转工单与执行讨论、工单分类与项目内查找的开发和技术验证。同日完成固定候选的本机 Web 协作技术验收及试用观察准备检查。规划收口记录日期为 2026-11-10。
+2026-11-15 完成工单截止日期、消息转工单与执行讨论、工单分类与项目内查找的开发和技术验证。工单与构建的可追溯关联已按 ADR-0056 接入。同日完成固定候选的本机 Web 协作技术验收及试用观察准备检查。规划收口记录日期为 2026-11-10。
 
 整体目标与阶段范围见[路线图](../roadmap.md)，能力归属与任务 / 验收来源见[专题地图](../topics.md)。完整历史流水保留于[原状态快照](history/planning-structure-2026-11-01.md)，不恢复旧运行授权。
 
@@ -22,7 +22,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | --- | --- | --- |
 | 身份与管理 | 本地账户、邀请、初始化、恢复、owner / 成员管理交接已有技术证据；真实 OIDC / Radish 联调与团队持续使用仍未验收 | [身份专题](../topics.md#identity) |
 | 沟通与决策 | 讨论创建 / 确认 Decision、Project 决策发现已交付；最小拒绝、单链替代及四状态读取已交付，最小人工复核已通过正式浏览器验收 | [沟通与决策专题](../topics.md#communication-decisions) |
-| 工单与上下文 | 已交付工单状态、负责人、优先级、截止日期、消息建单、执行讨论、分类与 Project 标签。列表和状态看板支持组合查找，「我的工单」展示分类。Ticket 与具体 CI Run 的关系待定义，通用关系分页待建设 | [工单与上下文专题](../topics.md#tickets-context) · [我的工单验收](reviews/2026-11-08-workspace-my-tickets.md) · [看板验收](reviews/2026-11-08-project-ticket-board.md) |
+| 工单与上下文 | 已交付工单状态、负责人、优先级、截止日期、消息建单、执行讨论、分类与 Project 标签。列表和状态看板支持组合查找，「我的工单」展示分类。已接通 Ticket 与 CI Run 的人工关联及相应 staging 追溯，通用关系分页待建设 | [工单与上下文专题](../topics.md#tickets-context) · [我的工单验收](reviews/2026-11-08-workspace-my-tickets.md) · [看板验收](reviews/2026-11-08-project-ticket-board.md) |
 | 文档协作 | 最小 Markdown 正式保存、冲突、版本 / 恢复及隔离浏览器已有证据；原生中文 IME 暂缓、持续使用未验收 | [文档专题](../topics.md#documents) |
 | 交付集成 | 受认证接入、显式 staging 记录、配置、持久发送及 checkout 接收已有相应证据；ADR-0035 / 0037 B 真实采集与整链暂缓 | [交付专题](../topics.md#delivery-integration) |
 | 运行与产品交付 | Web、自部署、升级恢复、单 Project 上下文包及补验已有指定环境证据；U27、生产容量、更广迁移、有效试用授权与独立持续使用未闭合 | [运行交付专题](../topics.md#product-delivery) |
@@ -37,7 +37,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 1. **升级运维**：只读 schema readiness 已按 [ADR-0024](../adr/0024-read-only-schema-readiness.md) 完成；单机停机升级失败恢复已按 [ADR-0043](../adr/0043-single-host-upgrade-failure-recovery.md) 实施手册与隔离演练，故障与浏览器证据见[记录](reviews/2026-10-24-upgrade-failure-recovery.md)；独立操作者复验已按所有者要求暂缓，跨 schema 兼容窗口与生产编排仍待建立。
 2. **使用入口**：首页已可直接浏览可读 Project / Channel；Team / Project / Channel 创建与首批成员配置已接通；部署后首次访问创建管理员已接通；Workspace owner 主动交接已接通，Project admin / 私密对象管理权交接与成员生命周期已接通；其他对象列表仍缺。Document 的原生 IME 复核和真实外部交付链仍独立推进。
-3. **关系与时间线范围**：核心 Nexus 关系仍全量读取，未建立通用分页；Repository / Component 配置和 Ticket / Component 关联已有专用双向分页和 active 反向索引。Timeline 默认保留事件主要对象语义，替代命令显式投影双方 Decision；Thread 不展示后续对象 Activity，其余交付反向关系尚未开放。
+3. **关系与时间线范围**：核心 Nexus 关系仍全量读取，未建立通用分页；Repository / Component 配置、Ticket / Component 和 Ticket / CI Run 已有专用双向分页。Timeline 默认沿事件主要对象投影，替代命令显式投影双方 Decision。Thread 入口当前可查看执行讨论工单，尚缺沿原讨论查看后续工单的构建与 staging 记录。
 4. **证据边界**：自动化、真实数据库与本轮浏览器验收证明讨论到执行的局部闭环；Document 的剩余人工复核、真实交付链、完整 Golden Path 和真实团队持续使用仍分别验收。
 
 ## 近期执行顺序
@@ -46,7 +46,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **梳理工单与构建、部署的可追溯关系**。工单分类、Project 标签、组合查找和 v9 取回已通过技术验证。后续沿 M4 明确 Ticket 与具体 CI Run 的关系、谁可以确认、两侧读权限和历史，核对构建、部署与工单交付的证据边界后拟定 ADR。 [ADR-0055](../adr/0055-ticket-classification-and-project-search.md) · [M4](../roadmap.md#m4工单与上下文关联)
+1. **工单与构建的可追溯关联**。Ticket 和 CI Run 双向追溯、关联历史及已有 staging 记录共用当前权限。schema 029、Activity 17 与 Web 配套，单 Project 取回继续使用 v9。 [ADR-0056](../adr/0056-ticket-ci-run-traceability.md) · [技术验收](reviews/2026-11-15-ticket-ci-run-traceability.md)
 2. **随功能完成技术验证**。以 `1036b21` 的候选证据为基线，按切片风险执行自动化、合成数据和隔离环境验证。实际目标就绪后，按其配置及候选差异定向复验适用的 T03、T04、T06、T07。 [合成预演及 T04 复核](reviews/2026-11-10-web-candidate-1036b21.md#2026-11-15-合成账号预演)
 3. **项目开发完成后安排真人观察和实测**。届时由所有者恢复安排，按 T01～T08 核对适用准入并决定是否开放。独立成员观察和 R08 沿已有任务与记录执行，原生中文 IME 和 U27 按各自合同补验。独立成员证据形成前保持“价值未验证”，观察结束后再根据实测决定继续、定向修复后重试、收窄或暂停。 [准备检查与复核条件](reviews/2026-11-15-trial-observation-readiness-1036b21.md#trial-admission-checks)
 
@@ -70,7 +70,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | 书面授权专业复核：挂起 | 所有者确认恢复后落实复核人，并提供实际主体、候选、用途、期限和取回范围 | T02 待确认，书面授权未签发，试用保持关闭。 [评估授权待决矩阵](../evaluation-authorization-decisions.md#待决矩阵) |
 | U27 独立运维走查：开发完成后安排 | 项目开发完成后，由部署负责人落实另一操作者、目标环境、匹配工件、数据取舍及恢复演练范围，再确认执行授权 | 独立运维能力保持未验收。试用准入沿 T06 / T07 与 ADR-0043 判断。 [原矩阵](../adr/0043-single-host-upgrade-failure-recovery.md) |
 | 原生中文 IME：开发完成后安排 | 项目开发完成后，由维护者与所有者落实实际输入法、浏览器、操作者和正式 Document 场景，确认人工复核安排 | 所选场景包含中文输入时，须实际验证组合、候选确认、Enter 与保存读回。中文文档体验保持未验收。 [原缺口](reviews/2026-09-26-markdown-document.md) |
-| ADR-0035 B / 0037 B 与真实交付整链：暂缓 | 部署负责人落实受支持的原生 Linux 持久目录、真实 Jenkins / SCM、凭据受控提供、重启 / 挂载及双边清理范围，所有者确认联调授权 | 不阻塞有限 Web 协作技术批次，继续阻塞完整交付链结论；按下节依赖恢复，具体 Ticket 交付关系另行冻结。没有外部 staging 事实时止于 CI Run |
+| ADR-0035 B / 0037 B 与真实交付整链：暂缓 | 部署负责人落实受支持的原生 Linux 持久目录、真实 Jenkins / SCM、凭据受控提供、重启 / 挂载及双边清理范围，所有者确认联调授权 | 不阻塞有限 Web 协作技术批次，继续阻塞完整交付链结论；按下节依赖恢复。Ticket 与 CI Run 的人工关联已由 ADR-0056 接通，交付验证以实际外部记录为准 |
 
 真实团队持续使用、生产容量、完整聊天、CRDT、Flutter、通用插件平台及更广迁移 profile 保持原阶段门槛。未就绪事项只在本节登记条件，后续复核由实际候选、人员或环境变化触发，不创建自动任务。
 
@@ -80,7 +80,7 @@ Ticket 与 Component 人工关联已按 ADR-0034 实现，浏览器后退、显�
 
 以下为交付链恢复时的依赖与未完成项，不改变本页当前执行顺位：
 
-1. **来源接收与发现**：[ADR-0037](../adr/0037-ci-run-repository-checkout-provenance.md)已于 2026-10-13 确认，A 的 sources / payload v2、不可变 binding、built-from、Activity 6、正式来源展示与双向发现已实施；验收证据见[原实施记录](reviews/2026-10-13-checkout-provenance.md)。真实 checkout 采集 B 继续暂缓，Ticket 具体交付关系再独立冻结；不按 Component 共属推导已交付。
+1. **来源接收与发现**：[ADR-0037](../adr/0037-ci-run-repository-checkout-provenance.md)已于 2026-10-13 确认，A 的 sources / payload v2、不可变 binding、built-from、Activity 6、正式来源展示与双向发现已实施；验收证据见[原实施记录](reviews/2026-10-13-checkout-provenance.md)。Ticket 已能人工关联具体 CI Run，并读取该构建的既有 staging 记录。真实 checkout 采集 B 继续暂缓。 [ADR-0056](../adr/0056-ticket-ci-run-traceability.md)
 2. **ADR-0035 B：真实终态采集验收（暂缓）**：独立 controller 与双边清理已具备离线证据，但本机 Docker bind mount 实测为 FUSE，超出支持范围。所有者已明确暂缓真实联调，原生 Linux 环境下的真实重启 / 挂载验收尚未完成，恢复时另行明确资源与授权，见[采集记录](reviews/2026-10-09-jenkins-collector.md)和[清理记录](reviews/2026-10-09-jenkins-cleanup.md)。ADR-0037 B 是已确认来源方案中的后续切片，不与既有终态采集完成线混为一谈。
 3. **真实整链验收**：正式新配置对象 → 真实 Jenkins → 浏览器记录已完成的外部 staging → 撤权阻止新记录且历史按当前权限可读。没有实际外部 staging 行为时只验收到 CI Run，不伪造 Deployment。
 

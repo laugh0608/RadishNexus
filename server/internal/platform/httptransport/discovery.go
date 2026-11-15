@@ -44,6 +44,7 @@ type DiscoveryHandler struct {
 }
 
 type discoveryCursor struct {
+	SourceID     string `json:"source_id,omitempty"`
 	FilterDigest string `json:"filter_digest,omitempty"`
 	Status       string `json:"status,omitempty"`
 	Assignee     string `json:"assignee,omitempty"`
@@ -388,10 +389,13 @@ func discoveryPrefix(kind string) string {
 	if kind == "decision" {
 		return "dec_"
 	}
-	if kind == "repository-ci-runs" {
+	if kind == "repository-ci-runs" || kind == goldenpath.TraceComponentRuns || kind == goldenpath.TraceTicketRuns {
 		return "cir_"
 	}
-	if kind == "component-tickets" || kind == "ticket" || kind == "my-tickets" {
+	if kind == goldenpath.TraceRunDeployments {
+		return "dpl_"
+	}
+	if kind == goldenpath.TraceRunTickets || kind == "component-tickets" || kind == "ticket" || kind == "my-tickets" {
 		return "tkt_"
 	}
 	if kind == "repositories" || kind == "component-repositories" {
@@ -434,6 +438,10 @@ func (handler *DiscoveryHandler) writeError(response http.ResponseWriter, reques
 }
 
 func validDiscoveryAfterID(id, kind string) bool {
+	if kind == goldenpath.TraceTicketRunHistory {
+		_, _, err := parseCIRunHistoryBoundary(id)
+		return err == nil
+	}
 	if kind == "management-responsibilities-workspace" {
 		return validScopedID(id, "prj_") || validScopedID(id, "chn_") || validScopedID(id, "thr_")
 	}
@@ -485,7 +493,7 @@ func parseLabelDirectoryQuery(raw string, p authz.Principal, project string) (go
 	return input, scope, scope.Status, nil
 }
 
-func nextLabelDirectoryCursor(scope discoveryCursor, id string) (*string, error) {
+func nextDiscoveryCursor(scope discoveryCursor, id string) (*string, error) {
 	if id == "" {
 		return nil, nil
 	}

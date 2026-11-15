@@ -1,3 +1,4 @@
+import { CIRunTracePanels } from "./CIRunTracePanels";
 import { StagingDeploymentForm } from "./StagingDeploymentForm";
 import { useEffect, useState } from "react";
 import { AuthRequestError } from "../auth/api";
@@ -82,6 +83,14 @@ export function CIRunPage({
         state={state}
         onRetry={() => setRequestKey((key) => key + 1)}
       />
+      {state.status === "ready" && (
+        <CIRunTracePanels
+          key={`${workspaceID}/${ciRunID}`}
+          workspace={workspaceID}
+          run={ciRunID}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
     </div>
   );
 }

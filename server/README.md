@@ -454,3 +454,8 @@ migration 014 增加 `ticket --affects--> component`、来源约束、active 唯
 ### 工单分类与项目内查找
 
 [ADR-0055](../docs/adr/0055-ticket-classification-and-project-search.md) 增加工单分类、项目标签目录以及类型、全匹配标签和字面标题筛选。分类写入与建单支持原操作重试。028、Activity 16、Web 和 v9 上下文包配套交付。本地验证 027 匹配工件的备份和恢复后升级可执行 `RADISHNEXUS_CLASSIFICATION_LEGACY_REF=85b0e52 ./scripts/check-server-backup-restore.sh`。
+
+
+### 工单与构建的可追溯关联
+
+[ADR-0056](../docs/adr/0056-ticket-ci-run-traceability.md) 增加 Ticket 与 Jenkins CI Run 的人工关联、解除与专用历史，CI Run 可分页反查当前可读 Ticket 和已有 staging 记录。029 与 Activity 17 配套。单 Project 取回沿 v9 的协作范围。可用 `RADISHNEXUS_CI_RUN_TRACE_LEGACY_REF=ad50ff1 ./scripts/check-server-backup-restore.sh` 验证本地 028 匹配工件恢复后升级。

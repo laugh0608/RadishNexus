@@ -1,3 +1,4 @@
+import { TicketCIRuns } from "./TicketCIRuns";
 import { TicketClassificationPanel } from "./TicketClassificationPanel";
 import { ticketTypeLabels } from "./ticket-classification-api";
 import { useExecutionWrite } from "./execution-write";
@@ -508,6 +509,15 @@ function CollaborationPageContent({
               write={replyWrite}
               messageWrite={messageWrite}
               onChanged={relationChanged}
+            />
+          )}
+          {entityType === "ticket" && (
+            <TicketCIRuns
+              key={`${workspaceID}/${entityID}`}
+              workspace={workspaceID}
+              ticket={entityID}
+              onSessionExpired={onSessionExpired}
+              onUnavailable={relationUnavailable}
             />
           )}
           {entityType === "ticket" ? (

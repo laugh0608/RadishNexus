@@ -39,8 +39,8 @@ func TestTicketClassificationUpgradeFrom027(t *testing.T) {
 	if err := conn.QueryRow(ctx, `SELECT t.ticket_type,t.classification_revision,a.projection_version,
 		(SELECT count(*) FROM radishnexus.ticket_label_assignments)
 		FROM radishnexus.tickets t CROSS JOIN radishnexus.activity_items a`).Scan(&kind, &revision, &projection, &assignments); err != nil ||
-		kind != "unset" || revision != 1 || projection != 16 || assignments != 0 {
+		kind != "unset" || revision != 1 || projection != 17 || assignments != 0 {
 		t.Fatal(kind, revision, projection, assignments, err)
 	}
-	requireUpgradePrefix(t, conn, 28)
+	requireUpgradePrefix(t, conn, 29)
 }

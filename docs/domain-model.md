@@ -172,7 +172,7 @@ active Workspace owner 创建映射并明确确认 Component → Repository 的 
 
 当前 application service 只记录完成终态，不定义 `queued / running` 的乱序更新、回退或重开语义。Jenkins delivery ID 是 receipt 的幂等身份，不是 CI Run ID；完全重复只返回既有 CI Run，相同 delivery 的 payload digest 改变则失败。receipt、CI Run、领域事件和 Outbox 原子提交，Secret 与原始 webhook body 不进入这些记录。精确边界见 [ADR-0006](adr/0006-verified-jenkins-delivery-and-ci-run.md)。
 
-CI Run 成功只表达构建事实，不能自动创建 Deployment。Repository checkout 来源按 ADR-0037 通过不可变 `built-from` EntityLink 表达；Ticket 与具体构建的交付关系仍待独立冻结，不从 Component 共属推断。
+CI Run 成功只表达构建事实，不能自动创建 Deployment。Repository checkout 来源按 ADR-0037 通过不可变 `built-from` EntityLink 表达；[ADR-0056](adr/0056-ticket-ci-run-traceability.md) 以人工确认的 `ticket --tracks-build--> ci-run` 记录某工单参考的具体 Jenkins 终态。关联和解除要求活跃 Project 的贡献角色及两端可读权限。CI Run 反查工单逐项复核 Project 权限，可读的既有 staging 记录沿 CI Run 和 Environment 权限读取。
 
 M0 读取以 Component 为授权边界：同一 Workspace 的活跃成员可以读取 Component 及其 CI Run；非成员、暂停成员和跨 Workspace 主体不可发现。`owner_team_id` 只表示责任，不形成私密访问组；Jenkins source 和 plugin actor 也不授予用户权限。CI Run 的 Nexus View 投影受控状态、时间、当前 Component 与按当前 Repository 权限过滤的 checkout 摘要，不暴露机器来源标识和 receipt。详见 [ADR-0007](adr/0007-component-scoped-ci-run-read.md)。
 

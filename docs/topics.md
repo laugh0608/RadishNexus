@@ -54,6 +54,7 @@
 | [工单截止日期：ADR-0053](adr/0053-ticket-due-date.md) | M4 可选日历日期、独立版本与变更历史 | Ticket 详情、工单发现、备份与 v7 迁移包 |
 | [消息转工单与执行讨论：ADR-0054](adr/0054-message-to-ticket-and-execution-discussion.md) | M4 消息来源、执行讨论与 v8 上下文取回 | Channel、Thread、Ticket、上下文取回 |
 | [工单分类与项目内查找：ADR-0055](adr/0055-ticket-classification-and-project-search.md) | M4 类型、项目标签、组合查找与 v9 上下文取回 | Ticket、项目列表、看板、个人工单 |
+| [工单与构建的可追溯关联：ADR-0056](adr/0056-ticket-ci-run-traceability.md) | M4 人工构建关联、分权追溯和整库恢复 | Ticket、CI Run、Deployment、整库备份 |
 
 完成需沿真实授权与版本恢复路径成立；只读发现、最小状态、负责人、优先级及截止日期是独立交付，不合称完整工单系统、通用 Timeline 分页或生产容量验收。
 

@@ -186,11 +186,15 @@ export function parsePage<T extends { id: string }>(
   value: unknown,
   parse: (value: unknown) => T,
   after?: string,
+  isAfter: (previous: T, current: T) => boolean = (previous, current) =>
+    previous.id < current.id,
 ): ConfigurationPage<T> {
   const data = object(value, ["items", "next_cursor"]);
   if (!Array.isArray(data.items) || data.items.length > 25) throw error();
   const items = data.items.map(parse);
-  if (items.some((item, index) => index > 0 && item.id <= items[index - 1]!.id))
+  if (
+    items.some((item, index) => index > 0 && !isAfter(items[index - 1]!, item))
+  )
     throw error();
   const next = data.next_cursor;
   if (

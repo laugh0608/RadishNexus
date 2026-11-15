@@ -17,7 +17,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestBackupRestoreImportedContext(t *testing.T) {
@@ -164,8 +166,11 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if _, e = importer.Export(ctx, actor, owner.Token, result.ProjectID); e != nil {
 		t.Fatal(e)
 	}
-	var importedThread, importedReplacement, importedTicket, importedChannel, importedMessage, importedExecutionTicket string
+	var importedTeam, importedThread, importedReplacement, importedTicket, importedChannel, importedMessage, importedExecutionTicket string
 	for _, m := range plan.Mappings {
+		if m.Kind == "team" && m.SourceID == team.Object.ID {
+			importedTeam = m.TargetID
+		}
 		if m.Kind == "channel" && m.SourceID == channel.Object.ID {
 			importedChannel = m.TargetID
 		}
@@ -250,6 +255,45 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	archiveInput := goldenpath.LabelInput{ProjectID: result.ProjectID, LabelID: nativeLabel.Ref.ID, BaseRevision: 1, Action: "archive", ClientOperationID: "native-label-archive", Confirmed: true}
 	if _, e = classification.WriteLabel(ctx, currentInvocation, archiveInput); e != nil {
 		t.Fatal(e)
+	}
+
+	configuration = goldenpath.NewConfigurationService(goldenpostgres.New(imported), goldenpath.CryptoIDGenerator{}, goldenpath.SystemClock{})
+	configureTrace := func(input goldenpath.ConfigurationInput) string {
+		t.Helper()
+		result, err := configuration.Configure(ctx, currentInvocation, input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result.Object.ID
+	}
+	component := configureTrace(goldenpath.ConfigurationInput{Kind: "component.create", ScopeID: actor.WorkspaceID, ClientOperationID: "trace-component", Name: "Backup trace service", Key: "backup-trace", OwnerTeamID: importedTeam, Delivery: &goldenpath.DeliveryConfigurationInput{Type: "service"}})
+	stage := configureTrace(goldenpath.ConfigurationInput{Kind: "environment.create", ScopeID: actor.WorkspaceID, ClientOperationID: "trace-stage", Name: "Backup staging", Key: "backup-stage", OwnerTeamID: importedTeam, Delivery: &goldenpath.DeliveryConfigurationInput{Classification: "staging"}})
+	configureTrace(goldenpath.ConfigurationInput{Kind: "environment.authorization.grant", ScopeID: stage, UserID: actor.ID, ClientOperationID: "trace-stage-grant", Delivery: &goldenpath.DeliveryConfigurationInput{Confirmed: true}})
+	now := time.Now().UTC().Truncate(time.Second)
+	run, e := importedCore.RecordCompletedJenkinsRun(ctx, goldenpath.VerifiedJenkinsDelivery{WorkspaceID: actor.WorkspaceID, SourceID: "backup-trace", DeliveryID: "trace-delivery", PayloadSHA256: strings.Repeat("a", 64)},
+		goldenpath.RecordCompletedCIRunInput{ComponentID: component, ExternalRunKey: "backup-trace-run", Status: "succeeded", CompletedAt: now.Add(-time.Minute)})
+	if e != nil {
+		t.Fatal(e)
+	}
+	staged, e := importedCore.RecordStagingDeployment(ctx, currentInvocation, goldenpath.RecordStagingDeploymentInput{EnvironmentID: stage, CIRunID: run.CIRun.ID, Status: "failed", CompletedAt: now, ClientOperationID: "trace-stage-record", Confirmed: true})
+	if e != nil {
+		t.Fatal(e)
+	}
+	trace := goldenpath.NewTicketCIRunService(goldenpostgres.New(imported), goldenpath.CryptoIDGenerator{})
+	traceInput := goldenpath.TicketCIRunInput{TicketID: nativeExecution.Ticket.ID, RunID: run.CIRun.ID, ClientOperationID: "trace-first-association", Confirmed: true}
+	firstTrace, e := trace.Write(ctx, currentInvocation, goldenpath.TicketCIRunLink, traceInput)
+	if e != nil {
+		t.Fatal(e)
+	}
+	removeTrace := goldenpath.TicketCIRunInput{TicketID: traceInput.TicketID, LinkID: firstTrace.LinkID, ClientOperationID: "trace-remove", Confirmed: true}
+	if _, e = trace.Write(ctx, currentInvocation, goldenpath.TicketCIRunUnlink, removeTrace); e != nil {
+		t.Fatal(e)
+	}
+	newTrace := traceInput
+	newTrace.ClientOperationID = "trace-second-generation"
+	secondTrace, e := trace.Write(ctx, currentInvocation, goldenpath.TicketCIRunLink, newTrace)
+	if e != nil || secondTrace.LinkID == firstTrace.LinkID {
+		t.Fatal(secondTrace, e)
 	}
 
 	baseline := snapshotIncludedTables(t, ctx, imported)
@@ -342,6 +386,31 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if e != nil || len(filtered.Items) != 1 || filtered.Items[0].Ref.ID != nativeExecution.Ticket.ID ||
 		filtered.Items[0].Classification.Labels[0].Status != "archived" {
 		t.Fatal("restored classified discovery", filtered, e)
+	}
+
+	trace = goldenpath.NewTicketCIRunService(goldenpostgres.New(restored), goldenpath.CryptoIDGenerator{})
+	for _, test := range []struct {
+		kind  string
+		input goldenpath.TicketCIRunInput
+		want  string
+	}{
+		{goldenpath.TicketCIRunLink, traceInput, firstTrace.LinkID},
+		{goldenpath.TicketCIRunUnlink, removeTrace, firstTrace.LinkID},
+		{goldenpath.TicketCIRunLink, newTrace, secondTrace.LinkID},
+	} {
+		retry, err := trace.Write(ctx, currentInvocation, test.kind, test.input)
+		if err != nil || retry.Created || retry.LinkID != test.want {
+			t.Fatal(retry, err)
+		}
+	}
+	listInput := goldenpath.CIRunTraceInput{DiscoveryPageInput: goldenpath.DiscoveryPageInput{Limit: 25}}
+	history, e := trace.List(ctx, actor, goldenpath.TraceTicketRunHistory, traceInput.TicketID, listInput)
+	if e != nil || len(history.Items) != 3 || history.Items[0].Link.ID != secondTrace.LinkID || history.Items[1].RelationState != "removed" {
+		t.Fatal(history, e)
+	}
+	deployments, e := trace.List(ctx, actor, goldenpath.TraceRunDeployments, run.CIRun.ID, listInput)
+	if e != nil || len(deployments.Items) != 1 || deployments.Items[0].Ref.ID != staged.ID || deployments.Items[0].Status != "failed" {
+		t.Fatal(deployments, e)
 	}
 
 	restoredContext := goldenpath.NewContextService(goldenpostgres.NewContextStore(restored, schema))

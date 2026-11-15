@@ -91,7 +91,7 @@ func serveLabels(w http.ResponseWriter, r *http.Request, p authz.Principal, app 
 		if err != nil {
 			return nil, err
 		}
-		next, err := nextLabelDirectoryCursor(scope, page.NextID)
+		next, err := nextDiscoveryCursor(scope, page.NextID)
 		return map[string]any{"items": page.Items, "next_cursor": next, "can_manage": page.CanManage}, err
 	}
 	if r.URL.RawQuery != "" {

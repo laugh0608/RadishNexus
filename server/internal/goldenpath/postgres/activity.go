@@ -77,7 +77,7 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
  WHERE COALESCE(h.original_type,e.event_type) IN (
  'decision.proposed','decision.accepted','decision.rejected','decision.superseded','decision.reviewed','ticket.created','ticket.status-changed','ticket.assignee-changed','ticket.priority-changed','ticket.due-date-changed','ticket.classification-changed','ticket-label.created','ticket-label.renamed','ticket-label.archived',
  'ci-run.recorded','deployment.recorded','project.created','channel.created','component.created','environment.created','document.created','document.revised',
- 'repository.created','component.repository-linked','component.repository-unlinked','ticket.component-linked','ticket.component-unlinked','ticket.discussion-linked','ticket.discussion-unlinked')
+ 'repository.created','component.repository-linked','component.repository-unlinked','ticket.component-linked','ticket.component-unlinked','ticket.discussion-linked','ticket.discussion-unlinked','ticket.ci-run-linked','ticket.ci-run-unlinked')
  ORDER BY COALESCE(h.original_time,e.occurred_at),e.event_id
  `)
 	if err != nil {
@@ -227,7 +227,7 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		}
 	}
 	repositoryEvent := event.eventType == "repository.created" || event.eventType == "component.repository-linked" || event.eventType == "component.repository-unlinked"
-	ticketRelation := event.eventType == "ticket.component-linked" || event.eventType == "ticket.component-unlinked" || event.eventType == goldenpath.DiscussionLinked || event.eventType == goldenpath.DiscussionUnlinked
+	ticketRelation := event.eventType == "ticket.component-linked" || event.eventType == "ticket.component-unlinked" || event.eventType == goldenpath.DiscussionLinked || event.eventType == goldenpath.DiscussionUnlinked || event.eventType == goldenpath.TicketCIRunLinked || event.eventType == goldenpath.TicketCIRunUnlinked
 	labelEvent := event.eventType == "ticket-label.created" || event.eventType == "ticket-label.renamed" || event.eventType == "ticket-label.archived"
 	if !labelEvent && event.eventType != cp.TicketClassificationChanged && payload.Status == "" && event.target.Type != "document" && event.eventType != "component.created" && !repositoryEvent && !ticketRelation && event.eventType != "ticket.status-changed" && event.eventType != "ticket.assignee-changed" && event.eventType != "ticket.priority-changed" && event.eventType != goldenpath.TicketDueDateChanged && event.eventType != "decision.reviewed" {
 		return activityRecord{}, fmt.Errorf("project Activity event %s: status is required", event.eventID)
@@ -239,6 +239,14 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		safeFacts:     map[string]string{"status": payload.Status},
 	}
 	switch event.eventType {
+	case goldenpath.TicketCIRunLinked, goldenpath.TicketCIRunUnlinked:
+		facts, err := goldenpath.DecodeCIRunLinkFacts(event.payload, event.eventType)
+		if err != nil || event.target.Type != "ticket" || event.actorKind != "user" || event.actorID == nil || event.imported {
+			return activityRecord{}, fmt.Errorf("invalid Ticket CI Run event %s", event.eventID)
+		}
+		record.subjects = []entityref.Ref{facts.Run}
+		record.safeFacts = map[string]string{"run_id": facts.Run.ID, "link_id": facts.Link.ID, "state": facts.State}
+
 	case cp.TicketClassificationChanged:
 		change, err := cp.DecodeClassificationChange(event.payload)
 		if err != nil || event.target.Type != "ticket" || event.actorKind != "user" || event.actorID == nil {

@@ -65,6 +65,7 @@ func listRelationProjections(
 				to_id AS target_id, created_at, id
 			FROM radishnexus.entity_links
 			WHERE workspace_id = $1 AND from_type = $2 AND from_id = $3 AND state = 'active'
+              AND relation_type <> 'tracks-build'
               AND NOT (from_type='ticket' AND ((relation_type='started-from' AND to_type='message') OR (relation_type='relates-to' AND to_type='thread')))
 			UNION ALL
 			SELECT 'incoming', relation_type, from_type, from_id, created_at, id

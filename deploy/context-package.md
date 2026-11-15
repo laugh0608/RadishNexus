@@ -1,6 +1,6 @@
 # Project 上下文包迁移
 
-本手册执行 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的单 Project 首片及 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 的负责人扩展及 [ADR-0047](../docs/adr/0047-ticket-priority-and-filtering.md) 的优先级扩展，以及 [ADR-0048](../docs/adr/0048-decision-lifecycle-and-rejection.md) 的 Decision 拒绝扩展及 [ADR-0049](../docs/adr/0049-decision-supersession.md) 的替代扩展。ADR-0050 增加人工复核，[ADR-0053](../docs/adr/0053-ticket-due-date.md) 增加工单截止日期。[ADR-0054](../docs/adr/0054-message-to-ticket-and-execution-discussion.md) 增加消息转工单和执行讨论。[ADR-0055](../docs/adr/0055-ticket-classification-and-project-search.md) 增加分类、项目标签和项目内查找。当前源码默认导出 `project-collaboration-v9`，严格读取旧 v1～v8，旧工件拒绝未知 profile，不提供丢弃历史的降级导出。它迁移单 Project 的当前可读协作闭包，目标为同版本、完整匹配当前 migration history（当前为 schema 028）且已正常初始化的空业务实例；不替代 PostgreSQL 整库备份，不合并已有项目。
+本手册执行 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的单 Project 首片及 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 的负责人扩展及 [ADR-0047](../docs/adr/0047-ticket-priority-and-filtering.md) 的优先级扩展，以及 [ADR-0048](../docs/adr/0048-decision-lifecycle-and-rejection.md) 的 Decision 拒绝扩展及 [ADR-0049](../docs/adr/0049-decision-supersession.md) 的替代扩展。ADR-0050 增加人工复核，[ADR-0053](../docs/adr/0053-ticket-due-date.md) 增加工单截止日期。[ADR-0054](../docs/adr/0054-message-to-ticket-and-execution-discussion.md) 增加消息转工单和执行讨论。[ADR-0055](../docs/adr/0055-ticket-classification-and-project-search.md) 增加分类、项目标签和项目内查找。当前源码默认导出 `project-collaboration-v9`，严格读取旧 v1～v8，旧工件拒绝未知 profile，不提供丢弃历史的降级导出。它迁移单 Project 的当前可读协作闭包，目标为同版本、完整匹配当前 migration history（当前为 schema 029）且已正常初始化的空业务实例；不替代 PostgreSQL 整库备份，不合并已有项目。
 
 ## 准备与权限
 
@@ -149,3 +149,10 @@ v8 在 `history.jsonl` 保留 Message 来源的 `ticket.created` schema 2，以�
 v9 取回 Project 标签目录及创建、改名和归档历史，保留 Ticket 分类、标签绑定、版本和操作当时的名称。重放核对历史名称、目录版本和新绑定当时的有效性。旧 v1～v8 保留原 manifest digest，导入后工单从未分类、无标签、分类版本 1 开始。
 
 028 与 Activity 16、Go、Web 和 CLI 配套。027 整库备份先用匹配工件恢复到独立空目标，然后显式迁移；028 整库备份保留原生分类及目录回执和目录审计。恢复后运行 Activity 重建。 [ADR-0055](../docs/adr/0055-ticket-classification-and-project-search.md)
+
+
+### 工单与构建的可追溯关联
+
+schema 029 配套 [ADR-0056](../docs/adr/0056-ticket-ci-run-traceability.md) 和 Activity 17。单 Project 上下文包继续使用 v9 以及原 scope 文件。研发上下文排除范围包括 CI Run、Deployment、工单与构建的关联及对应事件。导入后仍可读取 Ticket 的创建来源、分类、原执行讨论及协作历史。
+
+使用 PostgreSQL 整库备份恢复构建、已有 staging 记录、关联各代次、操作回执和 Outbox。先用匹配工件恢复到独立空库；恢复 028 时再用 029 工件显式迁移。恢复后重建 Activity，并在正常登录后核验关联历史、可读部署记录和原回执。

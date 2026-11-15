@@ -186,6 +186,7 @@ func TestAuthenticatedWebBrowserFixture(t *testing.T) {
 	mux.Handle("/api/v1/workspaces/{workspace_id}/tickets/", collaborationHandler)
 	httptransport.RegisterTicketExecutionRoutes(mux, httptransport.NewTicketExecutionHandler(authService, goldenpath.NewTicketExecutionService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
 	httptransport.RegisterTicketClassificationRoutes(mux, httptransport.NewTicketClassificationHandler(authService, goldenpath.NewTicketClassificationService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
+	httptransport.RegisterTicketCIRunRoutes(mux, httptransport.NewTicketCIRunHandler(authService, goldenpath.NewTicketCIRunService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
 	httptransport.RegisterTicketAssignmentRoutes(mux, httptransport.NewTicketAssignmentHandler(authService, goldenpath.NewTicketAssignmentService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
 	httptransport.RegisterTicketPriorityRoutes(mux, httptransport.NewTicketPriorityHandler(authService, goldenpath.NewTicketPriorityService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
 	httptransport.RegisterTicketDueDateRoutes(mux, httptransport.NewTicketDueDateHandler(authService, goldenpath.NewTicketDueDateService(goldenpostgres.New(pool), goldenpath.CryptoIDGenerator{}), sessionPolicy, proxyPolicy))
