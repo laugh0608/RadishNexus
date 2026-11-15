@@ -118,7 +118,7 @@ func TestTicketDueDateWritesReplayAndDiscovery(t *testing.T) {
 		(SELECT count(*) FROM radishnexus.collaboration_command_receipts WHERE command_kind='ticket.due-date.set'),
 		(SELECT count(*) FROM radishnexus.domain_events WHERE event_type='ticket.due-date-changed'),
 		(SELECT count(*) FROM radishnexus.outbox_deliveries o JOIN radishnexus.domain_events e USING(event_id) WHERE e.event_type='ticket.due-date-changed'),
-		(SELECT count(*) FROM radishnexus.activity_items WHERE activity_type='ticket.due-date-changed' AND projection_version=14)`).Scan(&receipts, &events, &outbox, &activity); err != nil || receipts != 3 || events != 3 || outbox != 3 || activity != 3 {
+		(SELECT count(*) FROM radishnexus.activity_items WHERE activity_type='ticket.due-date-changed' AND projection_version=15)`).Scan(&receipts, &events, &outbox, &activity); err != nil || receipts != 3 || events != 3 || outbox != 3 || activity != 3 {
 		t.Fatal(receipts, events, outbox, activity, err)
 	}
 	if _, err = pool.Exec(ctx, `UPDATE radishnexus.project_memberships SET role='viewer' WHERE user_id='usr_contributor' AND project_id='prj_auth'`); err != nil {
@@ -142,7 +142,7 @@ func TestTicketDueDateV7RoundTripAndNativeContinuation(t *testing.T) {
 		t.Fatal(err)
 	}
 	bundle := source.bundle(t)
-	if bundle.Manifest.Profile != "project-collaboration-v7" {
+	if bundle.Manifest.Profile != "project-collaboration-v8" {
 		t.Fatal(bundle.Manifest.Profile)
 	}
 	target := contextDatabase(t)

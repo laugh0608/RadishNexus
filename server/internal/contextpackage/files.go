@@ -72,10 +72,10 @@ func Unpack(b Bundle) (Data, *Index, error) {
 	if len(Encode(m)) > MaxLineBytes {
 		return d, nil, invalid("manifest size")
 	}
-	if m.Format != Format || m.Version != Version || (m.Profile != Profile && m.Profile != ProfileV1 && m.Profile != ProfileV2 && m.Profile != ProfileV3 && m.Profile != ProfileV4 && m.Profile != ProfileV5 && m.Profile != ProfileV6) || !ValidID(m.PackageID, "pkg_") || !ValidID(m.WorkspaceID, "wrk_") || !ValidID(m.ProjectID, "prj_") || !validTime(m.CreatedAt) || !label(m.SourceVersion, 100) || len(m.Files) < len(metadataPaths) || len(m.Files) > MaxHistory+len(metadataPaths) || len(b.Files) != len(m.Files) {
+	if m.Format != Format || m.Version != Version || (m.Profile != Profile && m.Profile != ProfileV1 && m.Profile != ProfileV2 && m.Profile != ProfileV3 && m.Profile != ProfileV4 && m.Profile != ProfileV5 && m.Profile != ProfileV6 && m.Profile != ProfileV7) || !ValidID(m.PackageID, "pkg_") || !ValidID(m.WorkspaceID, "wrk_") || !ValidID(m.ProjectID, "prj_") || !validTime(m.CreatedAt) || !label(m.SourceVersion, 100) || len(m.Files) < len(metadataPaths) || len(m.Files) > MaxHistory+len(metadataPaths) || len(b.Files) != len(m.Files) {
 		return d, nil, invalid("manifest")
 	}
-	hasSupersession := m.Profile == Profile || m.Profile == ProfileV6 || m.Profile == ProfileV5
+	hasSupersession := m.Profile == Profile || m.Profile == ProfileV7 || m.Profile == ProfileV6 || m.Profile == ProfileV5
 	files := map[string][]byte{}
 	total := int64(len(Encode(m)))
 	for _, f := range b.Files {
@@ -201,6 +201,19 @@ func Unpack(b Bundle) (Data, *Index, error) {
 	}
 
 	if m.Profile != Profile {
+		for _, h := range d.History {
+			if h.Version != 1 || oneOf(h.Type, "ticket.discussion-linked", "ticket.discussion-unlinked") {
+				return d, nil, invalid("unsupported legacy execution history")
+			}
+		}
+		for _, link := range d.Links {
+			if link.From.Type == "ticket" && ((link.Relation == "started-from" && link.To.Type == "message") || (link.Relation == "relates-to" && link.To.Type == "thread")) {
+				return d, nil, invalid("unsupported legacy execution relation")
+			}
+		}
+	}
+
+	if m.Profile != Profile && m.Profile != ProfileV7 {
 		for _, h := range d.History {
 			if h.Type == "ticket.due-date-changed" ||
 				(h.Type == "decision.reviewed" && m.Profile != ProfileV6) ||

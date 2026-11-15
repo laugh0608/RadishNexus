@@ -49,6 +49,22 @@ func (store *Store) GetNexusView(
 		return view, err
 	}
 	if target.Type == "ticket" {
+		var messageID string
+		e := tx.QueryRow(ctx, `SELECT to_id FROM radishnexus.entity_links WHERE workspace_id=$1 AND from_type='ticket' AND from_id=$2 AND relation_type='started-from' AND to_type='message' AND state='active'`, principal.WorkspaceID, target.ID).Scan(&messageID)
+		if e == nil {
+			facts, readErr := readableMessage(ctx, tx, principal, messageID)
+			switch {
+			case readErr == nil:
+				view.TicketMessageSource = &goldenpath.MessageLocation{MessageID: messageID, ChannelID: facts.channelID, ThreadID: facts.threadID}
+			case errors.Is(readErr, authz.ErrNotFound):
+				view.TicketMessageSource = &goldenpath.MessageLocation{}
+			default:
+				return view, readErr
+			}
+		} else if !errors.Is(e, pgx.ErrNoRows) {
+			return view, e
+		}
+
 		access, readable, e := readProjectAccess(ctx, tx, principal, view.Current.GoverningProjectID)
 		if e != nil {
 			return view, e
@@ -349,6 +365,11 @@ func listTimeline(
 		fact.item.Subjects, err = projectActivitySubjects(ctx, tx, principal, fact.subjects)
 		if err != nil {
 			return nil, fmt.Errorf("project Timeline subjects for event %s: %w", fact.item.EventID, err)
+		}
+		if fact.item.ActivityType == goldenpath.DiscussionLinked || fact.item.ActivityType == goldenpath.DiscussionUnlinked {
+			if len(fact.item.Subjects) != 1 || fact.item.Subjects[0].State != goldenpath.ProjectionVisible {
+				continue
+			}
 		}
 		if fact.item.ActivityType == "ci-run.recorded" && len(fact.subjects) == 2 {
 			// Do not disclose provenance availability when its Repository is

@@ -119,7 +119,7 @@ func TestAssignmentHistoryClosureAndCurrentState(t *testing.T) {
 }
 
 func TestAssignmentHistoryRequiresExplicitNullableFields(t *testing.T) {
-	h := History{Type: "ticket.assignee-changed", Entity: Ref{"ticket", "tkt_a"}, Facts: json.RawMessage(`{"assignment":{"from_user_id":null,"to_user_id":"usr_a","from_revision":1,"to_revision":2}}`)}
+	h := History{Version: 1, Type: "ticket.assignee-changed", Entity: Ref{"ticket", "tkt_a"}, Facts: json.RawMessage(`{"assignment":{"from_user_id":null,"to_user_id":"usr_a","from_revision":1,"to_revision":2}}`)}
 	if _, err := ValidateFacts(h); err != nil {
 		t.Fatal(err)
 	}

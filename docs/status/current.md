@@ -1,6 +1,6 @@
 # RadishNexus 当前状态
 
-2026-11-15 完成工单截止日期开发与隔离技术验证。同日完成固定候选的本机 Web 协作技术验收及试用观察准备检查。规划收口记录日期为 2026-11-10。
+2026-11-15 完成工单截止日期以及消息转工单与执行讨论的开发与隔离技术验证。同日完成固定候选的本机 Web 协作技术验收及试用观察准备检查。规划收口记录日期为 2026-11-10。
 
 整体目标与阶段范围见[路线图](../roadmap.md)，能力归属与任务 / 验收来源见[专题地图](../topics.md)。完整历史流水保留于[原状态快照](history/planning-structure-2026-11-01.md)，不恢复旧运行授权。
 
@@ -46,11 +46,13 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **继续按 Web 纵向切片开发**。M4 最小工单截止日期已按 ADR-0053 接入详情、Project 列表、状态看板和「我的工单」，配套 schema 026、Activity 14 和单 Project v7 包。按路线图继续推进工单与研发上下文关联能力。 [ADR-0053](../adr/0053-ticket-due-date.md) · [M4](../roadmap.md#m4工单与上下文关联)
+1. **消息转工单与执行讨论**。ADR-0054 已获确认。Go 和 Web 已接通消息建单、来源追溯、Thread 双向关联和回复，配套 schema 027、Activity 15 和 v8 上下文包。当前技术证据见下文，新候选复验沿第 2 项执行。 [ADR-0054](../adr/0054-message-to-ticket-and-execution-discussion.md) · [M4](../roadmap.md#m4工单与上下文关联)
 2. **随功能完成技术验证**。以 `1036b21` 的候选证据为基线，按切片风险执行自动化、合成数据和隔离环境验证。实际目标就绪后，按其配置及候选差异定向复验适用的 T03、T04、T06、T07。 [合成预演及 T04 复核](reviews/2026-11-10-web-candidate-1036b21.md#2026-11-15-合成账号预演)
 3. **项目开发完成后安排真人观察和实测**。届时由所有者恢复安排，按 T01～T08 核对适用准入并决定是否开放。独立成员观察和 R08 沿已有任务与记录执行，原生中文 IME 和 U27 按各自合同补验。独立成员证据形成前保持“价值未验证”，观察结束后再根据实测决定继续、定向修复后重试、收窄或暂停。 [准备检查与复核条件](reviews/2026-11-15-trial-observation-readiness-1036b21.md#trial-admission-checks)
 
 截止日期切片已有合成 Session 回环 HTTPS、025→026 迁移、并发与回滚、Activity 重建、v7 双轮导入和独立空目标恢复证据。Web 自动化覆盖设置、清除、原操作重试、列表和看板展示。新候选的正式浏览器复验沿第 2 项执行。 [PostgreSQL 验证](../../server/internal/goldenpath/postgres/ticket_due_date_integration_test.go) · [备份恢复验证](../../server/internal/backuprestore/context_integration_test.go)
+
+消息转工单与执行讨论已通过隔离 PostgreSQL、合成 Session 回环 HTTPS、v1～v7 兼容和 v8 双轮导入。以本地 `be1670c` 的 schema 026 工件备份并恢复空目标，再显式迁移至 027。新 schema 空目标恢复后重建 Activity 并核验消息建单、关联和解除的原回执。Web 自动化验证确认、原请求重试和精确解除。 [功能验证](../../server/internal/goldenpath/postgres/ticket_execution_integration_test.go) · [备份恢复验证](../../server/internal/backuprestore/context_integration_test.go)
 
 已完成的负责人、优先级及上下文迁移补验沿[原记录](reviews/2026-10-28-daily-closeout.md)转入有界观察；遇到实际 BFCache、原生控件、慢查询或新候选差异时定向复验，不把合成查询计划写成生产容量。单宿主身份拆分沿[ADR-0051](../adr/0051-single-host-database-roles.md)及[隔离证据](reviews/2026-11-08-single-host-database-roles.md)复用，M1 文件、通知、审计运营、Attention Item 与更广生产运维仍按路线图独立推进。
 

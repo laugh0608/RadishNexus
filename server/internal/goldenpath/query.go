@@ -9,7 +9,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
 
-const ActivityProjectionVersion = 14
+const ActivityProjectionVersion = 15
 
 type CurrentProjection struct {
 	DecisionRevision   int
@@ -76,6 +76,7 @@ type DecisionCapabilities struct {
 }
 
 type NexusView struct {
+	TicketMessageSource  *MessageLocation
 	DecisionCapabilities *DecisionCapabilities
 	TicketCapabilities   *TicketCapabilities
 	Current              CurrentProjection

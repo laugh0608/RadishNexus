@@ -76,10 +76,11 @@ type ticketCapabilitiesDTO struct {
 }
 
 type collaborationViewDTO struct {
-	Capabilities any                        `json:"capabilities,omitempty"`
-	Current      any                        `json:"current"`
-	Relations    []collaborationRelationDTO `json:"relations"`
-	Timeline     []collaborationTimelineDTO `json:"timeline"`
+	SourceMessage **executionMessageDTO      `json:"source_message,omitempty"`
+	Capabilities  any                        `json:"capabilities,omitempty"`
+	Current       any                        `json:"current"`
+	Relations     []collaborationRelationDTO `json:"relations"`
+	Timeline      []collaborationTimelineDTO `json:"timeline"`
 }
 
 type threadCurrentDTO struct {
@@ -244,29 +245,38 @@ func (handler *CollaborationHandler) getView(
 		handler.writeError(response, request, err)
 		return
 	}
-	includeDueDate := request.URL.RawQuery != ""
-	if includeDueDate {
+	includeDueDate, includeExecution := false, false
+	if request.URL.RawQuery != "" {
 		query, err := url.ParseQuery(request.URL.RawQuery)
 		include := query["include"]
-		if target.Type != "ticket" || err != nil || len(query) != 1 || len(include) != 1 || include[0] != "due_date" {
+		if target.Type != "ticket" || err != nil || len(query) != 1 || len(include) != 1 || (include[0] != "due_date" && include[0] != "execution_context" && include[0] != "due_date,execution_context") {
 			handler.writeError(response, request, fmt.Errorf("%w: invalid collaboration query", authz.ErrInvalid))
 			return
 		}
+		includeDueDate = include[0] != "execution_context"
+		includeExecution = include[0] != "due_date"
 	}
 	view, err := handler.collaboration.GetNexusView(request.Context(), principal, target)
 	if err != nil {
 		handler.writeError(response, request, err)
 		return
 	}
-	if target.Type == "ticket" && !includeDueDate {
+	if target.Type == "ticket" {
+		if view.TicketMessageSource != nil && !includeExecution {
+			handler.writeJSON(response, request, http.StatusConflict, ErrorResponse{Error: ErrorObject{Code: "conflict", Message: "This Ticket source requires an updated Web client.", RequestID: RequestID(request.Context())}})
+			return
+		}
 		timeline := make([]goldenpath.TimelineItem, 0, len(view.Timeline))
 		for _, item := range view.Timeline {
-			if item.ActivityType != goldenpath.TicketDueDateChanged {
-				timeline = append(timeline, item)
+			if (!includeDueDate && item.ActivityType == goldenpath.TicketDueDateChanged) ||
+				(!includeExecution && (item.ActivityType == goldenpath.DiscussionLinked || item.ActivityType == goldenpath.DiscussionUnlinked)) {
+				continue
 			}
+			timeline = append(timeline, item)
 		}
 		view.Timeline = timeline
 	}
+
 	dto, err := publicCollaborationView(target, view)
 	if err != nil {
 		handler.writeError(response, request, err)
@@ -512,10 +522,26 @@ func publicCollaborationView(target entityref.Ref, view goldenpath.NexusView) (c
 		}
 		dto.Current = current
 	case "ticket":
-		current, err := publicTicketProjection(view.Current, sources, view.Timeline)
+		current, err := publicTicketProjection(view.Current, sources, view.Timeline, view.TicketMessageSource != nil)
 		if err != nil {
 			return collaborationViewDTO{}, err
 		}
+		if view.TicketMessageSource != nil {
+			loc := *view.TicketMessageSource
+			var visible *executionMessageDTO
+			dto.SourceMessage = &visible
+			if loc.MessageID == "" {
+				dto.Relations = append(dto.Relations, collaborationRelationDTO{Visibility: "restricted"})
+			} else {
+				source, e := publicExecutionMessage(loc)
+				if e != nil {
+					return collaborationViewDTO{}, e
+				}
+				visible = &source
+				dto.Relations = append(dto.Relations, collaborationRelationDTO{Visibility: "readable", Direction: "outgoing", RelationType: "started-from", Target: &visibleEntityDTO{Ref: source.Ref, Title: "Message"}})
+			}
+		}
+
 		dto.Current = current
 	default:
 		return collaborationViewDTO{}, fmt.Errorf("unsupported collaboration target type %q", target.Type)
@@ -611,18 +637,19 @@ func publicTicketProjection(
 	current goldenpath.CurrentProjection,
 	relations []goldenpath.RelationProjection,
 	timeline []goldenpath.TimelineItem,
+	messageSource bool,
 ) (ticketCurrentDTO, error) {
 	if current.Visibility != "" || current.CreatedBy.Kind != "user" || current.OriginChannel != nil || current.Outcome != "" ||
 		current.Rationale != "" || current.RejectionReason != "" || current.ProposerID != "" || len(current.DeciderIDs) != 0 ||
 		current.DecidedAt != nil || current.Component != nil || current.Environment != nil ||
 		current.CIRun != nil || current.StartedAt != nil || current.CompletedAt != nil ||
-		current.RecordedAt != nil || len(relations) != 1 ||
+		current.RecordedAt != nil || (messageSource && len(relations) != 0) || (!messageSource && (len(relations) != 1 ||
 		relations[0].State != goldenpath.ProjectionVisible || relations[0].RelationType != "implements" ||
-		relations[0].Target.Type != "decision" {
+		relations[0].Target.Type != "decision")) {
 		return ticketCurrentDTO{}, errors.New("invalid Ticket Nexus View")
 	}
 	for _, item := range timeline {
-		if item.ActivityType != "ticket.created" && item.ActivityType != "ticket.component-linked" && item.ActivityType != "ticket.component-unlinked" && item.ActivityType != "ticket.status-changed" && item.ActivityType != "ticket.assignee-changed" && item.ActivityType != "ticket.priority-changed" && item.ActivityType != goldenpath.TicketDueDateChanged {
+		if item.ActivityType != "ticket.created" && item.ActivityType != "ticket.component-linked" && item.ActivityType != "ticket.component-unlinked" && item.ActivityType != "ticket.status-changed" && item.ActivityType != "ticket.assignee-changed" && item.ActivityType != "ticket.priority-changed" && item.ActivityType != goldenpath.TicketDueDateChanged && item.ActivityType != goldenpath.DiscussionLinked && item.ActivityType != goldenpath.DiscussionUnlinked {
 			return ticketCurrentDTO{}, errors.New("unexpected Ticket Timeline item")
 		}
 	}
@@ -908,6 +935,9 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 			}
 			sup = &supersessionTimelineDTO{Side: side, FromRevision: from, ToRevision: to}
 		}
+		if item.ActivityType == "ticket.created" && item.SafeFacts["origin"] == "message" {
+			extra++
+		}
 		if sup == nil && len(item.SafeFacts) != 1+extra {
 			return nil, errors.New("invalid collaboration Timeline facts")
 		}
@@ -923,6 +953,13 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 			subjectType = "decision"
 		case "ticket.created":
 			expectedStatus, subjectType = "open", "decision"
+			if item.SafeFacts["origin"] == "message" {
+				subjectType = "message"
+			}
+		case goldenpath.DiscussionLinked:
+			relationState, subjectType = "active", "thread"
+		case goldenpath.DiscussionUnlinked:
+			relationState, subjectType = "removed", "thread"
 		case "ticket.component-linked":
 			relationState, subjectType = "active", "component"
 		case "ticket.component-unlinked":

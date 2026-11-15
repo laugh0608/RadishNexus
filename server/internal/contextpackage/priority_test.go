@@ -154,7 +154,7 @@ func TestPriorityHistorySequenceAndProfileBoundaries(t *testing.T) {
 	}
 }
 func TestPriorityFactsRequireExactFields(t *testing.T) {
-	h := History{Type: "ticket.priority-changed", Entity: Ref{"ticket", "tkt_a"}, Facts: json.RawMessage(`{"priority":{"from":"unset","to":"high","from_revision":1,"to_revision":2}}`)}
+	h := History{Version: 1, Type: "ticket.priority-changed", Entity: Ref{"ticket", "tkt_a"}, Facts: json.RawMessage(`{"priority":{"from":"unset","to":"high","from_revision":1,"to_revision":2}}`)}
 	if _, err := ValidateFacts(h); err != nil {
 		t.Fatal(err)
 	}

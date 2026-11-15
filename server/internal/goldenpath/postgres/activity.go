@@ -70,14 +70,14 @@ func (store *Store) RebuildActivityProjection(ctx context.Context) (projected in
 	}
 
 	rows, err := tx.Query(ctx, `
- SELECT e.event_id, COALESCE(h.original_type,e.event_type), e.schema_version, e.workspace_id,
+ SELECT e.event_id, COALESCE(h.original_type,e.event_type), COALESCE(h.original_version,e.schema_version), e.workspace_id,
  e.actor_kind, COALESCE(h.original_actor,e.actor_id), e.primary_entity_type,e.primary_entity_id,
  COALESCE(h.original_time,e.occurred_at),COALESCE(h.original_facts,e.payload),h.event_id IS NOT NULL
  FROM radishnexus.domain_events e LEFT JOIN radishnexus.context_import_history h ON h.workspace_id=e.workspace_id AND h.event_id=e.event_id
  WHERE COALESCE(h.original_type,e.event_type) IN (
  'decision.proposed','decision.accepted','decision.rejected','decision.superseded','decision.reviewed','ticket.created','ticket.status-changed','ticket.assignee-changed','ticket.priority-changed','ticket.due-date-changed',
  'ci-run.recorded','deployment.recorded','project.created','channel.created','component.created','environment.created','document.created','document.revised',
- 'repository.created','component.repository-linked','component.repository-unlinked','ticket.component-linked','ticket.component-unlinked')
+ 'repository.created','component.repository-linked','component.repository-unlinked','ticket.component-linked','ticket.component-unlinked','ticket.discussion-linked','ticket.discussion-unlinked')
  ORDER BY COALESCE(h.original_time,e.occurred_at),e.event_id
  `)
 	if err != nil {
@@ -208,7 +208,7 @@ func insertActivityRecord(ctx context.Context, tx pgx.Tx, record activityRecord)
 }
 
 func projectActivityEvent(event activityEvent) (activityRecord, error) {
-	if event.schemaVersion != 1 && !(event.eventType == "ci-run.recorded" && event.schemaVersion == 2) {
+	if event.schemaVersion != 1 && !((event.eventType == "ci-run.recorded" || event.eventType == "ticket.created") && event.schemaVersion == 2) {
 		return activityRecord{}, fmt.Errorf(
 			"project Activity event %s: unsupported %s schema version %d",
 			event.eventID,
@@ -225,7 +225,7 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 		return activityRecord{}, fmt.Errorf("decode Activity event %s payload: %w", event.eventID, err)
 	}
 	repositoryEvent := event.eventType == "repository.created" || event.eventType == "component.repository-linked" || event.eventType == "component.repository-unlinked"
-	ticketRelation := event.eventType == "ticket.component-linked" || event.eventType == "ticket.component-unlinked"
+	ticketRelation := event.eventType == "ticket.component-linked" || event.eventType == "ticket.component-unlinked" || event.eventType == goldenpath.DiscussionLinked || event.eventType == goldenpath.DiscussionUnlinked
 	if payload.Status == "" && event.target.Type != "document" && event.eventType != "component.created" && !repositoryEvent && !ticketRelation && event.eventType != "ticket.status-changed" && event.eventType != "ticket.assignee-changed" && event.eventType != "ticket.priority-changed" && event.eventType != goldenpath.TicketDueDateChanged && event.eventType != "decision.reviewed" {
 		return activityRecord{}, fmt.Errorf("project Activity event %s: status is required", event.eventID)
 	}
@@ -350,10 +350,28 @@ func projectActivityEvent(event activityEvent) (activityRecord, error) {
 			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid decision.rejected facts", event.eventID)
 		}
 	case "ticket.created":
-		if event.target.Type != "ticket" || payload.Status != "open" || payload.Decision == nil {
-			return activityRecord{}, fmt.Errorf("project Activity event %s: invalid ticket.created facts", event.eventID)
+		f, err := cp.ValidateFacts(cp.History{Type: event.eventType, Version: event.schemaVersion, Entity: cp.Ref{Type: event.target.Type, ID: event.target.ID}, Facts: event.payload})
+		if err != nil {
+			return activityRecord{}, err
 		}
-		record.subjects = []entityref.Ref{*payload.Decision}
+		source := f.Decision
+		if event.schemaVersion == 2 {
+			source = f.Message
+			record.safeFacts["origin"] = "message"
+		}
+		record.subjects = []entityref.Ref{{Type: source.Type, ID: source.ID}}
+	case goldenpath.DiscussionLinked, goldenpath.DiscussionUnlinked:
+		f, err := cp.ValidateFacts(cp.History{Type: event.eventType, Version: event.schemaVersion, Entity: cp.Ref{Type: event.target.Type, ID: event.target.ID}, Facts: event.payload})
+		if err != nil || event.actorKind != "user" || event.actorID == nil {
+			return activityRecord{}, fmt.Errorf("invalid Ticket discussion event %s", event.eventID)
+		}
+		state := "active"
+		if event.eventType == goldenpath.DiscussionUnlinked {
+			state = "removed"
+		}
+		record.safeFacts = map[string]string{"relation_state": state}
+		record.subjects = []entityref.Ref{{Type: "thread", ID: f.Thread.ID}}
+
 	case "ci-run.recorded":
 		if event.target.Type != "ci-run" || event.actorKind != "plugin" || event.actorID == nil ||
 			!isTerminalCIRunStatus(payload.Status) || payload.Component == nil {

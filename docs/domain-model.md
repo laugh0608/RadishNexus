@@ -255,6 +255,8 @@ Project 内状态、负责人（本人 / 未分配）和优先级三组单选条
 
 截止日期按 [ADR-0053](adr/0053-ticket-due-date.md) 保存可空 `due_date` 和独立 `due_date_revision`，初始为空 / 1。日期表示公历年月日，各时区显示同一天。当前有 Project 写权的成员只在 open / in-progress 设置、修改或显式清除。动作绑定日期和状态版本，终态保留原日期。Project 列表、状态看板和「我的工单」沿现有顺序展示日期。v7 包校验状态、分配、优先级与截止日期的连续历史。 [上下文迁移手册](../deploy/context-package.md)
 
+Ticket 可从已接受的 Decision 或一条 Project 可见消息创建。两类创建分别形成不可变的 `implements` 或 `started-from`。消息来源保留原始 Message ref，同一 Project 内可显式关联现有 Thread 作为执行讨论。讨论关系可解除并保留历史，两端按当前 Ticket、Channel 与 Thread 权限读取。回复仍是原 Thread 的 Message。 [ADR-0054](adr/0054-message-to-ticket-and-execution-discussion.md)
+
 ### Document
 
 承载设计、说明、Runbook 和复盘等长内容。在线协作、版本和离线同步属于 Document 自身能力；Document 不能代替结构化 Decision、Ticket 或 Deployment。

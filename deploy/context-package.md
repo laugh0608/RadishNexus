@@ -1,6 +1,6 @@
 # Project 上下文包迁移
 
-本手册执行 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的单 Project 首片及 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 的负责人扩展及 [ADR-0047](../docs/adr/0047-ticket-priority-and-filtering.md) 的优先级扩展，以及 [ADR-0048](../docs/adr/0048-decision-lifecycle-and-rejection.md) 的 Decision 拒绝扩展及 [ADR-0049](../docs/adr/0049-decision-supersession.md) 的替代扩展。ADR-0050 增加人工复核，[ADR-0053](../docs/adr/0053-ticket-due-date.md) 增加工单截止日期。当前源码默认导出 `project-collaboration-v7`，严格读取旧 v1～v6，旧工件拒绝未知 profile，不提供丢弃历史的降级导出。它迁移单 Project 的当前可读协作闭包，目标为同版本、完整匹配当前 migration history（当前为 schema 026）且已正常初始化的空业务实例；不替代 PostgreSQL 整库备份，不合并已有项目。
+本手册执行 [ADR-0044](../docs/adr/0044-portable-project-context-package.md) 的单 Project 首片及 [ADR-0046](../docs/adr/0046-ticket-assignee.md) 的负责人扩展及 [ADR-0047](../docs/adr/0047-ticket-priority-and-filtering.md) 的优先级扩展，以及 [ADR-0048](../docs/adr/0048-decision-lifecycle-and-rejection.md) 的 Decision 拒绝扩展及 [ADR-0049](../docs/adr/0049-decision-supersession.md) 的替代扩展。ADR-0050 增加人工复核，[ADR-0053](../docs/adr/0053-ticket-due-date.md) 增加工单截止日期。[ADR-0054](../docs/adr/0054-message-to-ticket-and-execution-discussion.md) 增加消息转工单和执行讨论。当前源码默认导出 `project-collaboration-v8`，严格读取旧 v1～v7，旧工件拒绝未知 profile，不提供丢弃历史的降级导出。它迁移单 Project 的当前可读协作闭包，目标为同版本、完整匹配当前 migration history（当前为 schema 027）且已正常初始化的空业务实例；不替代 PostgreSQL 整库备份，不合并已有项目。
 
 ## 准备与权限
 
@@ -82,7 +82,7 @@ apply 原子写入业务对象、历史身份、映射、历史来源、Activity
 
 输出路径必须不存在，不覆盖原包 / 计划。输出中断会保留不完整工件；manifest 最后写入，不把半包标成成功。清理由操作者针对已确认的专属路径执行，CLI 不自动删除输入、目标数据或失败输出。
 
-交接前在正式 Web 验证：负责人登录并发现项目、Channel / Thread 与来源关系、四状态 Decision 及拒绝理由 / 替代链、双向关系和双方 Activity、Ticket 状态 / 分配 / 优先级历史、文档所有版本及恢复来源。普通成员默认拒绝，经正式邀请 / 授权后，按当前权限继续发消息、决定或明确替代、改工单状态、显式分配负责人 / 修改优先级和保存文档；替代不换已有执行来源，撤权后不保留可操作页面。只有实际完成目标实例的对应验证后再开放使用，合成迁移测试不代替交接验收。
+交接前在正式 Web 验证：负责人登录并发现项目、Channel / Thread 与来源关系、四状态 Decision 及拒绝理由 / 替代链、双向关系和双方 Activity、Ticket 创建来源、讨论关系、状态 / 分配 / 优先级 / 截止日期历史、文档所有版本及恢复来源。普通成员默认拒绝，经正式邀请 / 授权后，按当前权限继续发消息、决定或明确替代、改工单状态、显式分配负责人 / 修改优先级和保存文档；替代不换已有执行来源，撤权后不保留可操作页面。只有实际完成目标实例的对应验证后再开放使用，合成迁移测试不代替交接验收。
 
 ## 自动化入口与限制
 
@@ -92,7 +92,7 @@ apply 原子写入业务对象、历史身份、映射、历史来源、Activity
 
 首片输入上限为 64 MiB、10,000 个对象 / 历史作者、50,000 条历史 / 关系 / 文档版本、1 MiB manifest 和 JSONL 单行、256 KiB 单版 Markdown；来源链最多 8 层，导入新增一层，因果链最多 256 层。各限制同时适用，不构成生产容量承诺。profile 不包含研发实体、附件、完整 Workspace、已有项目合并、作者认领或源 ACL 等价迁移。
 
-当前支持现有正式协作入口产生的 proposed / accepted / rejected / superseded Decision 和五类 asserted 关系；不支持的业务形状整体拒绝，不截断成可导入成功。最多 8 层来源链的包仍可 inspect，但再次导入会新增第 9 层，因此 prepare 拒绝。Decision 必须保留 active evidence，Thread 必须保留 active started-from；合法移除状态不能绕过这些现有不变量。实际往返、恢复及部分覆盖范围见[2026-10-24 实施记录](../docs/status/reviews/2026-10-24-portable-context-package.md)与[2026-10-28 有界补验](../docs/status/reviews/2026-10-28-context-package-supplement.md)。64 MiB 文件解析与 1,000 条消息代表性数据库测量不构成满额数据库 / HTTPS 或生产容量保证。
+当前支持现有正式协作入口产生的 proposed / accepted / rejected / superseded Decision 和 profile 白名单中的 asserted 关系；不支持的业务形状整体拒绝，不截断成可导入成功。最多 8 层来源链的包仍可 inspect，但再次导入会新增第 9 层，因此 prepare 拒绝。Decision 必须保留 active evidence，Thread 必须保留 active started-from；合法移除状态不能绕过这些现有不变量。实际往返、恢复及部分覆盖范围见[2026-10-24 实施记录](../docs/status/reviews/2026-10-24-portable-context-package.md)与[2026-10-28 有界补验](../docs/status/reviews/2026-10-28-context-package-supplement.md)。64 MiB 文件解析与 1,000 条消息代表性数据库测量不构成满额数据库 / HTTPS 或生产容量保证。
 
 ## 负责人兼容
 
@@ -105,7 +105,7 @@ v2 在 Ticket 中明确携带可空 `assignee_user_id` 与 `assignment_revision`
 
 v3 在 v2 的五个 Ticket 字段上增加必填 `priority / priority_revision`，从 unset / 1 重放连续优先级历史，校验终态禁止修改、全局时间次序、三条历史链的最终值与更新时间。旧 v1 / v2 先按各自精确字段和事件白名单校验，再在内部补 unset / 1；v1 同时补未分配 / 1。源 manifest digest 保持不变，不补造事件或改写旧时间。
 
-022 与 Activity 10、配套 Go / Web / CLI 一起停写升级。旧 021 工件恢复到空目标后才显式 migrate；优先级字段由 v3 引入，当前新导出使用 v7。筛选、cursor 和协作 receipt 不进入上下文包，receipt 仍保留在整库备份中。原生与导入优先级事件均参与二次导入和投影重建，历史身份仍不可登录。
+022 与 Activity 10、配套 Go / Web / CLI 一起停写升级。旧 021 工件恢复到空目标后才显式 migrate；优先级字段由 v3 引入，当前新导出使用 v8。筛选、cursor 和协作 receipt 不进入上下文包，receipt 仍保留在整库备份中。原生与导入优先级事件均参与二次导入和投影重建，历史身份仍不可登录。
 
 ## Decision 拒绝兼容
 
@@ -136,3 +136,10 @@ v6 在 `history.jsonl` 保留 `decision.reviewed`。导出须能构成包含原�
 v7 在 Ticket 对象中保存必填可空的 `due_date` 和整数 `due_date_revision`，在 `history.jsonl` 中保存 `ticket.due-date-changed` 的日期前后值和相邻版本。读取 v1～v6 时先校验原 profile，随后将旧 Ticket 归一化为空 / 1，保留原 manifest digest。v7 导入按历史工单状态重放变更，保留原日期、时间和身份来源。新授权成员可在目标项目继续写入。原实例 receipt 随整库备份保存。
 
 schema 026、Activity 14、Go / Web / CLI 配套停写升级。025 备份用匹配的 025 工件恢复至独立空目标，再显式迁移。 [ADR-0053](../docs/adr/0053-ticket-due-date.md)
+
+
+## 消息转工单与执行讨论
+
+v8 在 `history.jsonl` 保留 Message 来源的 `ticket.created` schema 2，以及讨论关联和解除事件。按创建来源和关系代次校验引用。创建来源必须可读，私密执行讨论按双方权限整体筛选关联和对应历史。v1～v7 按原 profile 读取，保留 manifest digest 和 Decision 来源历史。导入沿空目标、历史身份与映射规则。 [ADR-0054](../docs/adr/0054-message-to-ticket-and-execution-discussion.md)
+
+迁移 027 与 Activity 15、Go、Web、CLI 配套交付。026 整库备份以匹配工件恢复到独立空目标，再显式迁移。新整库备份保留原生创建、关联及解除 receipt。

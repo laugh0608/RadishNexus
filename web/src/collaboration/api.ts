@@ -1,3 +1,4 @@
+import { parseExecutionMessage } from "./execution-api";
 import { parseTicketDueDate } from "./ticket-due-date";
 import { parseTicketPriority, type TicketPriority } from "./ticket-priority";
 import {
@@ -150,7 +151,11 @@ export type CollaborationTimelineItem = TimelineBase &
         status: "proposed" | "accepted" | "rejected" | "open";
       }
     | {
-        activityType: "ticket.component-linked" | "ticket.component-unlinked";
+        activityType:
+          | "ticket.component-linked"
+          | "ticket.component-unlinked"
+          | "ticket.discussion-linked"
+          | "ticket.discussion-unlinked";
         relationState: "active" | "removed";
       }
   );
@@ -159,6 +164,7 @@ export interface CollaborationView<
   T extends CollaborationCurrent = CollaborationCurrent,
 > {
   current: T;
+  sourceMessage?: ReturnType<typeof parseExecutionMessage> | null;
   capabilities?:
     | {
         changeStatus: boolean;
@@ -452,7 +458,7 @@ async function loadView(
 ): Promise<CollaborationView> {
   requireLocation(workspaceID, entityType, entityID);
   const response = await collaborationFetch(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/${pageSegments[entityType]}/${encodeURIComponent(entityID)}/nexus-view${entityType === "ticket" ? "?include=due_date" : ""}`,
+    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/${pageSegments[entityType]}/${encodeURIComponent(entityID)}/nexus-view${entityType === "ticket" ? "?include=due_date,execution_context" : ""}`,
     {
       method: "GET",
       headers: { Accept: "application/json" },
@@ -1005,8 +1011,11 @@ export function parseCollaborationView(
   expectedID: string,
 ): CollaborationView {
   const envelope = exactRecord(payload, "response", ["data"]);
-  const data = exactRecord(envelope.data, "response.data", [
+  const fields = record(envelope.data, "response.data");
+  const hasSource = expectedType === "ticket" && "source_message" in fields;
+  const data = exactRecord(fields, "response.data", [
     "current",
+    ...(hasSource ? ["source_message"] : []),
     "relations",
     "timeline",
     ...(expectedType !== "thread" ? ["capabilities"] : []),
@@ -1021,7 +1030,12 @@ export function parseCollaborationView(
   const timeline = array(data.timeline, "response.data.timeline").map(
     (item, index) => parseTimelineItem(item, index, expectedType),
   );
-  validateViewShape(current, relations, timeline);
+  const sourceMessage = hasSource
+    ? data.source_message === null
+      ? null
+      : parseExecutionMessage(data.source_message)
+    : undefined;
+  validateViewShape(current, relations, timeline, sourceMessage);
   if (expectedType === "ticket") {
     const cap = exactRecord(data.capabilities, "response.data.capabilities", [
       "change_status",
@@ -1038,6 +1052,7 @@ export function parseCollaborationView(
       relations,
       timeline,
       capabilities: { changeStatus: cap.change_status },
+      ...(hasSource ? { sourceMessage } : {}),
     };
   }
   if (expectedType === "decision") {
@@ -1343,6 +1358,18 @@ function parseRelation(
         "component",
       ),
     };
+  if (
+    expectedType === "ticket" &&
+    direction === "outgoing" &&
+    relation.relation_type === "started-from"
+  ) {
+    return {
+      visibility: "readable",
+      direction,
+      relationType: "started-from",
+      target: parseVisibleEntity(relation.target, `${path}.target`, "message"),
+    };
+  }
   const expectedRelation =
     direction === "incoming"
       ? expectedType === "thread"
@@ -1588,7 +1615,9 @@ function parseTimelineItem(
   }
   if (
     raw.activity_type === "ticket.component-linked" ||
-    raw.activity_type === "ticket.component-unlinked"
+    raw.activity_type === "ticket.component-unlinked" ||
+    raw.activity_type === "ticket.discussion-linked" ||
+    raw.activity_type === "ticket.discussion-unlinked"
   ) {
     const item = exactRecord(value, path, [
       "id",
@@ -1598,8 +1627,8 @@ function parseTimelineItem(
       "relation_state",
       "subjects",
     ]);
-    const state =
-      raw.activity_type === "ticket.component-linked" ? "active" : "removed";
+    const state = raw.activity_type.endsWith("-linked") ? "active" : "removed";
+    const discussion = raw.activity_type.startsWith("ticket.discussion-");
     if (expectedType !== "ticket" || item.relation_state !== state)
       throw new TypeError(`${path} relation state is invalid`);
     const subjects = array(item.subjects, `${path}.subjects`).map(
@@ -1607,10 +1636,12 @@ function parseTimelineItem(
     );
     if (
       subjects.length !== 1 ||
-      subjects.some(
-        (subject) =>
-          subject.visibility === "readable" &&
-          subject.entity.ref.type !== "component",
+      subjects.some((subject) =>
+        discussion
+          ? subject.visibility !== "readable" ||
+            subject.entity.ref.type !== "thread"
+          : subject.visibility === "readable" &&
+            subject.entity.ref.type !== "component",
       )
     )
       throw new TypeError(`${path} relation subject is invalid`);
@@ -1683,6 +1714,7 @@ function validateViewShape(
   current: CollaborationCurrent,
   relations: readonly CollaborationRelation[],
   timeline: readonly CollaborationTimelineItem[],
+  sourceMessage?: ReturnType<typeof parseExecutionMessage> | null,
 ): void {
   const seenIncoming = new Set<string>();
   for (const relation of relations) {
@@ -1696,6 +1728,9 @@ function validateViewShape(
       seenIncoming.add(key);
     }
   }
+  const hasRestricted = relations.some(
+    (relation) => relation.visibility === "restricted",
+  );
   relations = relations.filter(
     (relation) =>
       (relation.visibility === "restricted" && current.ref.type !== "ticket") ||
@@ -1723,7 +1758,21 @@ function validateViewShape(
     }
     return;
   }
-  if (relations.length !== 1) {
+  if (current.ref.type === "ticket") {
+    const source = relations[0];
+    if (
+      sourceMessage === null
+        ? relations.length !== 0 || !hasRestricted
+        : source?.visibility !== "readable" ||
+          (sourceMessage
+            ? source.relationType !== "started-from" ||
+              source.target.ref.id !== sourceMessage.messageID
+            : source.relationType !== "implements")
+    ) {
+      throw new TypeError("Invalid Ticket creation source");
+    }
+  }
+  if (relations.length !== (sourceMessage === null ? 0 : 1)) {
     throw new TypeError(`${current.ref.type} must contain one source relation`);
   }
   if (
@@ -1748,7 +1797,9 @@ function validateViewShape(
         item.activityType !== "ticket.status-changed" &&
         item.activityType !== "ticket.assignee-changed" &&
         item.activityType !== "ticket.priority-changed" &&
-        item.activityType !== "ticket.due-date-changed",
+        item.activityType !== "ticket.due-date-changed" &&
+        item.activityType !== "ticket.discussion-linked" &&
+        item.activityType !== "ticket.discussion-unlinked",
     )
   ) {
     throw new TypeError("Ticket Timeline contains an unexpected item");

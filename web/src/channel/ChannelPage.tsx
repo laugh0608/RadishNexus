@@ -1,3 +1,8 @@
+import { useExecutionWrite } from "../collaboration/execution-write";
+import {
+  LocatedExecutionMessage,
+  MessageWorkButton,
+} from "../collaboration/ExecutionPanels";
 import { ConfigurationLauncher } from "../workspace/ConfigurationPanel";
 import { ContextSourceNotice } from "../ContextSourceNotice";
 import { useEffect, useReducer, useState, type FormEvent } from "react";
@@ -72,6 +77,12 @@ export function ChannelPage({
   const [startedThreads, setStartedThreads] = useState<
     Readonly<Record<string, StartedThread>>
   >({});
+
+  const executionWrite = useExecutionWrite({ onSessionExpired });
+  const clearExecution = executionWrite.clear;
+  useEffect(() => {
+    if (state.status === "error") clearExecution();
+  }, [state.status, clearExecution]);
 
   useEffect(() => {
     let disposed = false;
@@ -480,6 +491,13 @@ export function ChannelPage({
               {olderError}
             </p>
           )}
+          <LocatedExecutionMessage
+            key={`${workspaceID}/${channelID}`}
+            workspace={workspaceID}
+            channel={channelID}
+            onSessionExpired={onSessionExpired}
+            write={executionWrite}
+          />
           {state.messages.length === 0 ? (
             <div className="channel-empty">
               <strong>这个 Channel 还没有 Message</strong>
@@ -491,7 +509,7 @@ export function ChannelPage({
                 const createdThread = startedThreads[message.id];
                 const editingThread = threadDraft?.messageID === message.id;
                 return (
-                  <li key={message.id}>
+                  <li key={`${workspaceID}/${channelID}/${message.id}`}>
                     <article className="message-card">
                       <header>
                         <div>
@@ -503,6 +521,13 @@ export function ChannelPage({
                         <code>{message.id}</code>
                       </header>
                       <p className="message-body">{message.body}</p>
+                      <MessageWorkButton
+                        workspace={workspaceID}
+                        channel={channelID}
+                        message={message.id}
+                        onSessionExpired={onSessionExpired}
+                        write={executionWrite}
+                      />
                       {message.threadID === null ? null : (
                         <p className="message-thread-ref">
                           Thread 回复 · <code>{message.threadID}</code>

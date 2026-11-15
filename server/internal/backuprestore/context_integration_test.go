@@ -12,6 +12,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	authpostgres "github.com/laugh0608/RadishNexus/server/internal/platform/authn/postgres"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -129,6 +130,15 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if _, e = core.SupersedeDecision(ctx, invocation, goldenpath.SupersedeDecisionInput{DecisionID: decision.Decision.ID, ReplacementID: replacement.Decision.ID, ClientOperationID: "backup-original-supersession", BaseDecisionRevision: 2, BaseReplacementRevision: 2, SupersessionReason: "Original historical supersession"}); e != nil {
 		t.Fatal(e)
 	}
+	execution := goldenpath.NewTicketExecutionService(goldenpostgres.New(original), goldenpath.CryptoIDGenerator{})
+	sourceTicket, e := execution.Write(ctx, invocation, goldenpath.TicketFromMessage, goldenpath.TicketExecutionInput{ChannelID: channel.Object.ID, MessageID: message.Message.ID, Title: "Work from original message", ClientOperationID: "backup-execution-source", Confirmed: true})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = execution.Write(ctx, invocation, goldenpath.TicketDiscussionLink, goldenpath.TicketExecutionInput{TicketID: sourceTicket.Ticket.ID, ThreadID: thread.ID, ClientOperationID: "backup-execution-link", Confirmed: true}); e != nil {
+		t.Fatal(e)
+	}
+
 	bundle, e := exporter.Export(ctx, principal, session.Token, project.Object.ID)
 	if e != nil {
 		t.Fatal(e)
@@ -145,8 +155,17 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if _, e = importer.Export(ctx, actor, owner.Token, result.ProjectID); e != nil {
 		t.Fatal(e)
 	}
-	var importedThread, importedReplacement, importedTicket string
+	var importedThread, importedReplacement, importedTicket, importedChannel, importedMessage, importedExecutionTicket string
 	for _, m := range plan.Mappings {
+		if m.Kind == "channel" && m.SourceID == channel.Object.ID {
+			importedChannel = m.TargetID
+		}
+		if m.Kind == "message" && m.SourceID == message.Message.ID {
+			importedMessage = m.TargetID
+		}
+		if m.Kind == "ticket" && m.SourceID == sourceTicket.Ticket.ID {
+			importedExecutionTicket = m.TargetID
+		}
 		if m.Kind == "decision" && m.SourceID == replacement.Decision.ID {
 			importedReplacement = m.TargetID
 		}
@@ -193,6 +212,22 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	execution = goldenpath.NewTicketExecutionService(goldenpostgres.New(imported), goldenpath.CryptoIDGenerator{})
+	nativeExecutionInput := goldenpath.TicketExecutionInput{ChannelID: importedChannel, MessageID: importedMessage, Title: "Native message execution", ClientOperationID: "backup-native-execution", Confirmed: true}
+	nativeExecution, e := execution.Write(ctx, currentInvocation, goldenpath.TicketFromMessage, nativeExecutionInput)
+	if e != nil {
+		t.Fatal(e)
+	}
+	nativeLinkInput := goldenpath.TicketExecutionInput{TicketID: nativeExecution.Ticket.ID, ThreadID: importedThread, ClientOperationID: "backup-native-discussion", Confirmed: true}
+	nativeLink, e := execution.Write(ctx, currentInvocation, goldenpath.TicketDiscussionLink, nativeLinkInput)
+	if e != nil {
+		t.Fatal(e)
+	}
+	nativeUnlinkInput := goldenpath.TicketExecutionInput{TicketID: nativeExecution.Ticket.ID, LinkID: nativeLink.LinkID, ClientOperationID: "backup-native-discussion-removal", Confirmed: true}
+	if _, e = execution.Write(ctx, currentInvocation, goldenpath.TicketDiscussionUnlink, nativeUnlinkInput); e != nil {
+		t.Fatal(e)
+	}
+
 	baseline := snapshotIncludedTables(t, ctx, imported)
 	activity := snapshotTable(t, ctx, imported, "radishnexus.activity_items")
 	restoredURL := recoveryBackupDatabase(t, ctx, targetURL)
@@ -247,6 +282,24 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	if e != nil || !reflect.DeepEqual(dateReceipt, cleared) {
 		t.Fatal("restored due date receipt", dateReceipt, e)
 	}
+	view, e := restoredCore.GetNexusView(ctx, actor, entityref.Ref{Type: "ticket", ID: importedExecutionTicket})
+	if e != nil || view.TicketMessageSource == nil || view.TicketMessageSource.MessageID != importedMessage {
+		t.Fatal("restored imported Message Ticket", e)
+	}
+	execution = goldenpath.NewTicketExecutionService(goldenpostgres.New(restored), goldenpath.CryptoIDGenerator{})
+	executionReceipt, e := execution.Write(ctx, currentInvocation, goldenpath.TicketFromMessage, nativeExecutionInput)
+	if e != nil || executionReceipt.Created || executionReceipt.Ticket.ID != nativeExecution.Ticket.ID {
+		t.Fatal("restored Message Ticket receipt", e)
+	}
+	linkReceipt, e := execution.Write(ctx, currentInvocation, goldenpath.TicketDiscussionLink, nativeLinkInput)
+	if e != nil || linkReceipt.Created || linkReceipt.LinkID != nativeLink.LinkID {
+		t.Fatal("restored discussion link receipt", e)
+	}
+	removedReceipt, e := execution.Write(ctx, currentInvocation, goldenpath.TicketDiscussionUnlink, nativeUnlinkInput)
+	if e != nil || removedReceipt.LinkID != nativeLink.LinkID {
+		t.Fatal("restored discussion unlink receipt", e)
+	}
+
 	restoredContext := goldenpath.NewContextService(goldenpostgres.NewContextStore(restored, schema))
 	status, e := restoredContext.Result(ctx, actor, fresh.Token, plan.OperationID)
 	if e != nil || !reflect.DeepEqual(status, result) {

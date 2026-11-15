@@ -353,6 +353,12 @@ func validDiscoveryTitle(title string) bool {
 }
 
 func discoveryPrefix(kind string) string {
+	switch kind {
+	case "message-execution", "thread-execution":
+		return "tkt_"
+	case "ticket-execution":
+		return "thr_"
+	}
 	if strings.HasPrefix(kind, "management-") {
 		return managementCursorPrefix(kind)
 	}

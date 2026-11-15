@@ -1,3 +1,6 @@
+import { useExecutionWrite } from "./execution-write";
+import { ExecutionDiscussions, ExecutionReplies } from "./ExecutionPanels";
+import { executionMessageLink } from "./execution-api";
 import { useTicketDueDateActions } from "./TicketDueDateActions";
 import { ticketDueDateLabel } from "./ticket-due-date";
 import { useDecisionReviews } from "./DecisionReviews";
@@ -334,6 +337,20 @@ function CollaborationPageContent({
     }
   };
 
+  const discussionWrite = useExecutionWrite({ onSessionExpired });
+  const replyWrite = useExecutionWrite({ onSessionExpired });
+  const messageWrite = useExecutionWrite({ onSessionExpired });
+  const clearMessage = messageWrite.clear;
+  const clearDiscussion = discussionWrite.clear;
+  const clearReply = replyWrite.clear;
+  useEffect(() => {
+    if (state.status === "error") {
+      clearDiscussion();
+      clearReply();
+      clearMessage();
+    }
+  }, [state.status, clearDiscussion, clearReply, clearMessage]);
+
   if (state.status === "loading") {
     return (
       <main className="collaboration-layout" aria-busy="true">
@@ -372,7 +389,16 @@ function CollaborationPageContent({
     );
   }
 
-  const { current, relations, timeline } = state.view;
+  const { current, relations, timeline, sourceMessage } = state.view;
+  const sourceHref = sourceMessage
+    ? executionMessageLink(workspaceID, sourceMessage)
+    : null;
+  const discussionKind =
+    entityType === "ticket"
+      ? "ticket"
+      : isThreadCurrent(current) && current.originChannel !== null
+        ? "thread"
+        : null;
   return (
     <main className="collaboration-layout">
       <ContextSourceNotice
@@ -455,6 +481,33 @@ function CollaborationPageContent({
 
       <section className="collaboration-columns">
         <div className="collaboration-context">
+          {sourceHref && (
+            <p>
+              <a href={sourceHref}>打开原消息</a>
+            </p>
+          )}
+          {discussionKind && (
+            <ExecutionDiscussions
+              workspace={workspaceID}
+              kind={discussionKind}
+              id={entityID}
+              project={current.project.id}
+              onSessionExpired={onSessionExpired}
+              write={discussionWrite}
+              onChanged={relationChanged}
+            />
+          )}
+          {isThreadCurrent(current) && current.originChannel && (
+            <ExecutionReplies
+              workspace={workspaceID}
+              channel={current.originChannel.ref.id}
+              thread={entityID}
+              onSessionExpired={onSessionExpired}
+              write={replyWrite}
+              messageWrite={messageWrite}
+              onChanged={relationChanged}
+            />
+          )}
           {entityType === "ticket" ? (
             <TicketComponents
               workspaceID={workspaceID}
@@ -736,9 +789,13 @@ function TimelineList({
           <span>
             {item.actor.id} ·{" "}
             {"relationState" in item
-              ? item.relationState === "active"
-                ? "已关联组件"
-                : "已解除组件关联"
+              ? item.activityType.startsWith("ticket.discussion-")
+                ? item.relationState === "active"
+                  ? "已关联执行讨论"
+                  : "已解除执行讨论"
+                : item.relationState === "active"
+                  ? "已关联组件"
+                  : "已解除组件关联"
               : "fromStatus" in item
                 ? `${ticketStatusLabels[item.fromStatus]} → ${ticketStatusLabels[item.toStatus]}（版本 ${item.fromRevision} → ${item.toRevision}）`
                 : "assignment" in item

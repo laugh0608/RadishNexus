@@ -153,6 +153,37 @@ func (store *Store) ListChannelMessages(
 		return page, err
 	}
 
+	page, err = queryMessagePage(ctx, tx, principal, input, nil)
+	if err != nil {
+		return page, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return goldenpath.MessagePage{}, fmt.Errorf("commit list Channel Messages: %w", err)
+	}
+	return page, nil
+}
+
+func (store *Store) ListExecutionReplies(ctx context.Context, principal authz.Principal, thread string, input goldenpath.ListChannelMessagesInput) (page goldenpath.MessagePage, channelID string, canReply bool, err error) {
+	tx, err := store.beginAdmission(ctx, principal, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return page, "", false, err
+	}
+	defer rollback(ctx, tx, &err)
+	channel, access, err := executionThreadAccess(ctx, tx, principal, thread)
+	if err != nil {
+		return page, "", false, err
+	}
+	input.ChannelID = channel
+	page, err = queryMessagePage(ctx, tx, principal, input, &thread)
+	if err != nil {
+		return page, "", false, err
+	}
+	err = tx.Commit(ctx)
+	return page, channel, access.status == "active" && access.project.active && access.project.role.CanContribute(), err
+}
+
+func queryMessagePage(ctx context.Context, tx pgx.Tx, principal authz.Principal, input goldenpath.ListChannelMessagesInput, thread *string) (page goldenpath.MessagePage, err error) {
+
 	var beforeTime any
 	var beforeMessageID any
 	if input.Before != nil {
@@ -165,6 +196,7 @@ func (store *Store) ListChannelMessages(
 		FROM radishnexus.messages AS message
 		WHERE message.workspace_id = $1
 		  AND message.channel_id = $2
+		  AND ($7::text IS NULL OR message.thread_id=$7)
 		  AND (
 			message.thread_id IS NULL
 			OR EXISTS (
@@ -192,7 +224,7 @@ func (store *Store) ListChannelMessages(
 		ORDER BY message.created_at DESC, message.id DESC
 		LIMIT $6
 	`, principal.WorkspaceID, input.ChannelID, principal.ID,
-		beforeTime, beforeMessageID, input.Limit+1)
+		beforeTime, beforeMessageID, input.Limit+1, thread)
 	if err != nil {
 		return page, fmt.Errorf("list canonical Channel Messages: %w", err)
 	}
@@ -239,9 +271,6 @@ func (store *Store) ListChannelMessages(
 		}
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return goldenpath.MessagePage{}, fmt.Errorf("commit list Channel Messages: %w", err)
-	}
 	return page, nil
 }
 

@@ -36,10 +36,10 @@ func TestTicketDueDateUpgradeFrom025(t *testing.T) {
 	}
 	var revision, projection int
 	var date *string
-	if err := conn.QueryRow(ctx, `SELECT t.due_date::text,t.due_date_revision,a.projection_version FROM radishnexus.tickets t CROSS JOIN radishnexus.activity_items a`).Scan(&date, &revision, &projection); err != nil || date != nil || revision != 1 || projection != 14 {
+	if err := conn.QueryRow(ctx, `SELECT t.due_date::text,t.due_date_revision,a.projection_version FROM radishnexus.tickets t CROSS JOIN radishnexus.activity_items a`).Scan(&date, &revision, &projection); err != nil || date != nil || revision != 1 || projection != 15 {
 		t.Fatal(date, revision, projection, err)
 	}
-	requireUpgradePrefix(t, conn, 26)
+	requireUpgradePrefix(t, conn, 27)
 
 	for payload, want := range map[string]bool{
 		`{"due_date":{"from":null,"to":"2032-02-29","from_revision":1,"to_revision":2}}`:   true,

@@ -135,6 +135,10 @@ Workspace「我的工单」按当前 Session 的用户和 Project 可读权限�
 
 Project 与「我的工单」列表只在 `include=due_date` 时返回必填可空字段。Ticket Nexus View 使用同一参数加入当前权限可见的变更历史。Go / Web / CLI 配套交付，v7 包承载当前日期和连续历史，v1～v6 按原 profile 校验后归一化为空 / 1。 [上下文迁移手册](../../deploy/context-package.md)
 
+## 消息来源与工单执行讨论
+
+[ADR-0054](../adr/0054-message-to-ticket-and-execution-discussion.md) 增加 `Ticket --started-from--> Message` 和 `Ticket --relates-to--> Thread`。原 Decision 来源采用 `ticket.created` schema 1，Message 来源采用 schema 2。创建、关联和解除各有独立 receipt，写入关联、事件、Outbox 和 Activity 同事务提交。两端权限决定关联读取和讨论历史可见性。migration 027、Activity 15 和 v8 单 Project 包配套交付。 [上下文迁移手册](../../deploy/context-package.md#消息转工单与执行讨论)
+
 ## Decision 最小拒绝
 
 [ADR-0048](../adr/0048-decision-lifecycle-and-rejection.md)增加唯一 decision.reject 命令与 migration 023，复用现有 rejection_reason；接受 / 拒绝先按当前账户、Workspace、Project 与全部 evidence 重新授权，再以同一 Decision 排他锁和 proposed 状态裁决。该切片无内容修改、重开或回转，旧接受 body / canonical digest / receipt 不变；提案精确重试返回同一 Decision 的真实当前状态。决定时间在锁内取数据库时间并严格递增，原状态、receipt、schema 1 decision.rejected、Outbox 与 Activity 11 原子提交。

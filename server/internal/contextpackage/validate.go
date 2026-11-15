@@ -111,7 +111,7 @@ func Validate(d Data) (*Index, error) {
 		_ = ref
 	}
 	for _, h := range d.History {
-		if !ValidID(h.ID, "evt_") || h.Version != 1 || !exists(h.Entity) || !validTime(h.OccurredAt) || !ValidID(h.CorrelationID, "cor_") || !oneOf(h.Source, "web", "api", "system", "import") || !validateLineage(h.Lineage) {
+		if !ValidID(h.ID, "evt_") || (h.Version != 1 && !(h.Version == 2 && h.Type == "ticket.created")) || !exists(h.Entity) || !validTime(h.OccurredAt) || !ValidID(h.CorrelationID, "cor_") || !oneOf(h.Source, "web", "api", "system", "import") || !validateLineage(h.Lineage) {
 			return nil, invalid("history envelope")
 		}
 		if _, ok := x.Actors[h.Actor]; !ok {
@@ -159,6 +159,7 @@ func Validate(d Data) (*Index, error) {
 		}
 	}
 	seenLinks := map[string]bool{}
+	discussionLinks := map[string]Link{}
 	relations := map[Ref]map[string][]Link{}
 	for _, l := range d.Links {
 		if !ValidID(l.ID, "lnk_") || seenLinks[l.ID] || !exists(l.From) || !exists(l.To) || l.Assertion != "asserted" || !oneOf(l.Origin, "user", "import") || !validTime(l.CreatedAt) || !validTime(l.UpdatedAt) || l.UpdatedAt.Before(l.CreatedAt) || !validateLineage(l.Lineage) {
@@ -216,6 +217,20 @@ func Validate(d Data) (*Index, error) {
 			wanted = f.Decision
 			event = "ticket.created"
 			primary = l.From
+		case "ticket/started-from/message":
+			wanted, event, primary = f.Message, "ticket.created", l.From
+			if h.Version != 2 || l.State != "active" || !l.UpdatedAt.Equal(l.CreatedAt) {
+				return nil, invalid("Message Ticket source")
+			}
+		case "ticket/relates-to/thread":
+			wanted, event, primary = f.Thread, "ticket.discussion-linked", l.From
+			thread, ok := x.Decoded[l.To].(Thread)
+			if !ok || thread.ChannelID == nil || !refType(f.Relation, "entity-link") || f.Relation.ID != l.ID ||
+				l.CreatedAt.Before(x.Objects[l.From].CreatedAt) || l.CreatedAt.Before(x.Objects[l.To].CreatedAt) {
+				return nil, invalid("Ticket discussion relation")
+			}
+			discussionLinks[l.ID] = l
+
 		case "ticket/relates-to/document":
 			wanted = f.Ticket
 			event = "document.created"
@@ -224,7 +239,7 @@ func Validate(d Data) (*Index, error) {
 			return nil, invalid("unsupported relation")
 		}
 		target := l.To
-		if l.Relation == "relates-to" || l.Relation == "supersedes" {
+		if (l.Relation == "relates-to" && l.To.Type == "document") || l.Relation == "supersedes" {
 			target = l.From
 		}
 		if wanted == nil || *wanted != target || h.Type != event || h.Entity != primary {
@@ -234,6 +249,9 @@ func Validate(d Data) (*Index, error) {
 			relations[l.From] = map[string][]Link{}
 		}
 		relations[l.From][l.Relation] = append(relations[l.From][l.Relation], l)
+	}
+	if err := validateDiscussionHistory(d, x, discussionLinks); err != nil {
+		return nil, err
 	}
 	if err := validateSupersessionHistory(d, x); err != nil {
 		return nil, err
@@ -403,6 +421,9 @@ func decodeObject(o Object) (any, error) {
 }
 
 func ValidateFacts(h History) (Facts, error) {
+	if h.Version != 1 && !(h.Type == "ticket.created" && h.Version == 2) {
+		return Facts{}, invalid("unsupported history version")
+	}
 	if h.Type == "decision.reviewed" {
 		review, err := DecodeDecisionReview(h.Facts)
 		if err != nil {
@@ -466,8 +487,17 @@ func ValidateFacts(h History) (Facts, error) {
 	case "ticket.created":
 		kind = "ticket"
 		expected = []string{"status", "decision"}
-		if f.Status != "open" || !refType(f.Decision, "decision") {
+		if h.Version == 2 {
+			expected = []string{"status", "message"}
+		}
+		if f.Status != "open" || (h.Version == 1 && !refType(f.Decision, "decision")) || (h.Version == 2 && !refType(f.Message, "message")) {
 			return f, invalid("Ticket creation history")
+		}
+	case "ticket.discussion-linked", "ticket.discussion-unlinked":
+		kind = "ticket"
+		expected = []string{"thread", "relation"}
+		if !refType(f.Thread, "thread") || !refType(f.Relation, "entity-link") || h.CausationID != nil {
+			return f, invalid("Ticket discussion history")
 		}
 	case "ticket.due-date-changed":
 		kind = "ticket"
@@ -563,7 +593,7 @@ func validateObjectHistory(o Object, v any, events []History, x *Index, relation
 		}
 		// Review chronology is verified against the accepted revision during
 		// Decision replay. Recording it does not advance the object's timestamp.
-		if h.OccurredAt.Before(o.CreatedAt) || (h.Type != "decision.reviewed" && h.OccurredAt.After(o.UpdatedAt)) {
+		if h.OccurredAt.Before(o.CreatedAt) || (!oneOf(h.Type, "decision.reviewed", "ticket.discussion-linked", "ticket.discussion-unlinked") && h.OccurredAt.After(o.UpdatedAt)) {
 			return invalid("object history time")
 		}
 	}
@@ -608,12 +638,21 @@ func validateObjectHistory(o Object, v any, events []History, x *Index, relation
 			return invalid("Decision source")
 		}
 	case Ticket:
-		decision := x.Decoded[*f.Decision].(Decision)
-		if (decision.Status != "accepted" && decision.Status != "superseded") || decision.DecidedAt.After(o.CreatedAt) || (decision.Status == "superseded" && !o.CreatedAt.Before(x.SupersededAt[*f.Decision])) {
-			return invalid("Ticket accepted source")
+		links := relations[ref]
+		if len(links["implements"])+len(links["started-from"]) != 1 || len(events)-counts["ticket.discussion-linked"]-counts["ticket.discussion-unlinked"] != p.StatusRevision+p.AssignmentRevision+p.PriorityRevision+p.DueDateRevision-3 {
+			return invalid("Ticket sources or history count")
 		}
-		if !oneRelation("implements", *f.Decision) || len(events) != p.StatusRevision+p.AssignmentRevision+p.PriorityRevision+p.DueDateRevision-3 {
-			return invalid("Ticket history count")
+		if first.Version == 2 {
+			m := x.Decoded[*f.Message].(Message)
+			channel := x.Decoded[Ref{"channel", m.ChannelID}].(Channel)
+			if channel.Visibility != "project" || (m.ThreadID != nil && x.Decoded[Ref{"thread", *m.ThreadID}].(Thread).Visibility != "project") || !oneRelation("started-from", *f.Message) {
+				return invalid("Ticket Message source")
+			}
+		} else {
+			decision := x.Decoded[*f.Decision].(Decision)
+			if (decision.Status != "accepted" && decision.Status != "superseded") || decision.DecidedAt.After(o.CreatedAt) || (decision.Status == "superseded" && !o.CreatedAt.Before(x.SupersededAt[*f.Decision])) || !oneRelation("implements", *f.Decision) {
+				return invalid("Ticket accepted source")
+			}
 		}
 		changes := []History{}
 		for _, h := range events {

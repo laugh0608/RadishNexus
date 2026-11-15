@@ -22,7 +22,8 @@ const (
 	ProfileV3        = "project-collaboration-v3"
 	ProfileV5        = "project-collaboration-v5"
 	ProfileV6        = "project-collaboration-v6"
-	Profile          = "project-collaboration-v7"
+	ProfileV7        = "project-collaboration-v7"
+	Profile          = "project-collaboration-v8"
 	Version          = 1
 	MaxBytes         = 64 << 20
 	MaxObjects       = 10000
