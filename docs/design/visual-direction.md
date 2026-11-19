@@ -1,8 +1,8 @@
 # RadishNexus 视觉方向与页面参考
 
-日期：2026-09-26。
+建立：2026-09-26；参考清单更新：2026-11-19。
 
-状态：视觉语言以 Radish 家族规范为基础，页面设计参考 AFFiNE、Mattermost、AppFlowy。共享工作台与 Document 的首轮稿、预览、评审和实现映射见[工作台代表页设计](workbench-v1.md)。
+状态：视觉语言以 Radish 家族规范为基础。共享工作台与 Document 的首轮设计参考了 AFFiNE、Mattermost、AppFlowy，设计稿与取舍见[工作台代表页设计](workbench-v1.md)。Zulip、Huly、RustChat 列入后续页面设计的参考清单。
 
 ## 参考来源与职责
 
@@ -12,8 +12,11 @@
 | [AFFiNE Docs](https://affine.pro/pagedoc) | 文档创作、阅读与编辑界面 | Document 内容区、阅读宽度、编辑工具条、文档列表与设置分区 |
 | [Mattermost Channels](https://mattermost.com/channels/) 与[讨论串说明](https://docs.mattermost.com/end-user-guide/collaborate/organize-conversations) | 频道与讨论的持续上下文 | Channel 导航、Message 信息密度、Thread 展开和返回频道的路径 |
 | [AppFlowy](https://appflowy.com/) | 工作区、文档与项目内容的组织 | Workspace 切换、侧栏分组、Project 内容发现、列表与详情的关系 |
+| [Zulip 话题列表](https://zulip.com/help/list-of-topics) | 在同一频道内区分和找回并行讨论 | 评估成员如何从 Channel 找到已有讨论、进入对应 Thread；不因此新增 Topic 层级 |
+| [Huly 关联事项](https://docs.huly.io/task-tracking/related-issues/) | 从事项详情发现关联对象 | 评估 Ticket 详情如何用 EntityLink 区分来源 Decision 和相关 Document，让成员看清关系后再跳转 |
+| [RustChat](https://rustchat.io/) | 技术团队在聊天中分享代码片段和日志 | 评估 Thread 中代码、日志摘录与普通回复的排版，让成员能辨认并找回提供证据的原消息 |
 
-表中转译内容是 Nexus 的设计建议，不表示已经完整试用三个产品或验证其全部交互。不混用三套品牌语言；各页面共享一套 Nexus 导航、组件和状态表达。
+表中转译内容是 Nexus 的设计建议。新增三项仅核对了官方资料，尚未实测交互，也不代表已经采纳其功能或技术栈。各页面仍共享一套 Nexus 导航、组件和状态表达，不混用外部品牌语言。
 
 本次读取的家族规范为 `v26.7.3`，RadishX 本地提交 `f39a3c9`，该仓库工作区干净。依据包括 `README.md`、`01-principles.md`、`02-color.md`、`03-typography.md`、`04-space-shape-elevation.md`、`06-components.md`、`07-layout-platforms.md` 和 `references.md`；观察了参考库中的 AFFiNE 中文设置页与文档账户 / 工作区菜单。具体来源均位于 RadishX 的 `docs/design/family-ui/`，未复制截图、品牌资产或运行时代码到 Nexus。
 
