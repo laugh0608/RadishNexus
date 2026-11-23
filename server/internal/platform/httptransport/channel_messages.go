@@ -35,6 +35,7 @@ type MessagingSessionService interface {
 }
 
 type ChannelMessagingApplication interface {
+	GetMessageStartedThread(context.Context, authz.Principal, string, string) (*goldenpath.SubjectProjection, error)
 	ListChannelMessages(context.Context, authz.Principal, goldenpath.ListChannelMessagesInput) (goldenpath.MessagePage, error)
 	CreateMessage(context.Context, goldenpath.Invocation, goldenpath.CreateMessageInput) (goldenpath.CreateMessageResult, error)
 	StartThreadFromMessage(context.Context, goldenpath.Invocation, goldenpath.StartThreadFromMessageInput) (goldenpath.Thread, error)
@@ -114,6 +115,7 @@ func NewChannelMessagesHandler(
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+channelMessagesPattern, handler.list)
 	mux.HandleFunc("POST "+channelMessagesPattern, handler.createMessage)
+	mux.HandleFunc("GET "+messageThreadPattern, handler.getStartedThread)
 	mux.HandleFunc("POST "+messageThreadPattern, handler.startThread)
 	mux.HandleFunc(channelMessagesPattern, handler.methodNotAllowed)
 	mux.HandleFunc(messageThreadPattern, handler.methodNotAllowed)
@@ -201,6 +203,50 @@ func (handler *ChannelMessagesHandler) createMessage(response http.ResponseWrite
 		status = http.StatusCreated
 	}
 	handler.writeJSON(response, request, status, messageResponse{Data: dto})
+}
+
+func (handler *ChannelMessagesHandler) getStartedThread(response http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		handler.methodNotAllowed(response, request)
+		return
+	}
+	workspaceID, channelID, messageID := request.PathValue("workspace_id"), request.PathValue("channel_id"), request.PathValue("message_id")
+	principal, err := handler.authenticate(request, workspaceID, false)
+	if err != nil {
+		handler.writeError(response, request, err)
+		return
+	}
+	if err := validateMessagingPath(workspaceID, channelID, messageID); err != nil {
+		handler.writeError(response, request, err)
+		return
+	}
+	if request.URL.RawQuery != "" {
+		handler.writeError(response, request, fmt.Errorf("%w: query parameters are not supported", authz.ErrInvalid))
+		return
+	}
+	thread, err := handler.messaging.GetMessageStartedThread(request.Context(), principal, channelID, messageID)
+	if err != nil {
+		handler.writeError(response, request, err)
+		return
+	}
+	var result struct {
+		Data struct {
+			Thread *visibleEntityDTO `json:"thread"`
+		} `json:"data"`
+	}
+	if thread != nil {
+		visible, err := requiredVisibleEntity(*thread, "thread")
+		if err != nil {
+			handler.writeError(response, request, err)
+			return
+		}
+		if !validDiscoveryTitle(thread.Title) {
+			handler.writeError(response, request, errors.New("invalid Message started Thread title"))
+			return
+		}
+		result.Data.Thread = &visible
+	}
+	handler.writeJSON(response, request, http.StatusOK, result)
 }
 
 func (handler *ChannelMessagesHandler) startThread(response http.ResponseWriter, request *http.Request) {
@@ -493,11 +539,7 @@ func webInvocation(principal authz.Principal, request *http.Request) goldenpath.
 }
 
 func (handler *ChannelMessagesHandler) methodNotAllowed(response http.ResponseWriter, request *http.Request) {
-	if request.PathValue("message_id") == "" {
-		response.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
-	} else {
-		response.Header().Set("Allow", http.MethodPost)
-	}
+	response.Header().Set("Allow", http.MethodGet+", "+http.MethodPost)
 	handler.writeError(response, request, ErrMethodNotAllowed)
 }
 

@@ -685,6 +685,7 @@ function testChannelClient(
     }),
     createMessage: vi.fn(),
     startThread: vi.fn(),
+    getStartedThread: vi.fn(),
     ...overrides,
   };
 }

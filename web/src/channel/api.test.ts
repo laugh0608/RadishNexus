@@ -177,6 +177,45 @@ describe("Channel Message API adapter", () => {
     );
   });
 
+  it("reads only the nullable visible Thread on the message path", async () => {
+    const thread = {
+      ref: { type: "thread", id: "thr_visible" },
+      title: "Discussion",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ data: { thread } }))
+      .mockResolvedValueOnce(jsonResponse({ data: { thread: null } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const lookup = () =>
+      browserChannelMessageClient.getStartedThread(
+        "wrk_main",
+        "chn_main",
+        "msg_source",
+      );
+    expect(await lookup()).toEqual({ id: "thr_visible", title: "Discussion" });
+    expect(await lookup()).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/workspaces/wrk_main/channels/chn_main/messages/msg_source/threads",
+      expect.objectContaining({
+        method: "GET",
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+      }),
+    );
+    for (const data of [
+      {},
+      { thread: null, count: 1 },
+      { thread: { visibility: "restricted" } },
+      { thread: { ...thread, ref: { type: "message", id: "msg_source" } } },
+      { thread: { ...thread, title: " " } },
+    ]) {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ data }));
+      await expect(lookup()).rejects.toBeInstanceOf(ChannelRequestError);
+    }
+  });
+
   it("maps revoked access and refuses writes without CSRF", async () => {
     vi.stubGlobal(
       "fetch",

@@ -114,6 +114,33 @@ func TestChannelRealtimeReadsValidateAndDelegate(t *testing.T) {
 	}
 }
 
+func TestMessageStartedThreadValidatesSource(t *testing.T) {
+	t.Parallel()
+	principal := validMessagingInvocation().Principal
+	store := &recordingStore{}
+	service := NewService(store, &sequenceIDs{}, fixedClock{})
+	for _, test := range []struct {
+		principal        authz.Principal
+		channel, message string
+		want             error
+	}{
+		{authz.Principal{}, "chn_1", "msg_1", authz.ErrUnauthenticated},
+		{principal, "msg_1", "msg_1", authz.ErrInvalid},
+		{principal, "chn_1", "thr_1", authz.ErrInvalid},
+	} {
+		if _, err := service.GetMessageStartedThread(context.Background(), test.principal, test.channel, test.message); !errors.Is(err, test.want) {
+			t.Fatalf("lookup (%q, %q): got %v, want %v", test.channel, test.message, err, test.want)
+		}
+	}
+	if store.channelMessageID != "" {
+		t.Fatal("invalid source reached the store")
+	}
+	if _, err := service.GetMessageStartedThread(context.Background(), principal, "chn_1", "msg_1"); err != nil ||
+		store.authorizeChannelID != "chn_1" || store.channelMessageID != "msg_1" {
+		t.Fatalf("source lookup was not delegated: %v", err)
+	}
+}
+
 func TestCreateMessageRejectsInvalidFactsBeforeStore(t *testing.T) {
 	t.Parallel()
 

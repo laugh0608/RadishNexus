@@ -10,6 +10,7 @@ import (
 
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
 
 func (store *Store) CreateMessage(
@@ -272,6 +273,46 @@ func queryMessagePage(ctx context.Context, tx pgx.Tx, principal authz.Principal,
 	}
 
 	return page, nil
+}
+
+func (store *Store) GetMessageStartedThread(
+	ctx context.Context, principal authz.Principal, channelID, messageID string,
+) (thread *goldenpath.SubjectProjection, err error) {
+	if err := principal.ValidateUser(); err != nil {
+		return nil, err
+	}
+	tx, err := store.beginAdmission(ctx, principal, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return nil, fmt.Errorf("begin Message started Thread lookup: %w", err)
+	}
+	defer rollback(ctx, tx, &err)
+	source, err := readableMessage(ctx, tx, principal, messageID)
+	if err != nil {
+		return nil, err
+	}
+	if source.channelID != channelID {
+		return nil, authz.ErrNotFound
+	}
+	var threadID string
+	err = tx.QueryRow(ctx, `
+		SELECT link.from_id FROM radishnexus.entity_links AS link
+		JOIN radishnexus.threads AS thread ON thread.workspace_id = link.workspace_id AND thread.id = link.from_id
+		WHERE link.workspace_id = $1 AND link.to_type = 'message' AND link.to_id = $2
+		  AND link.from_type = 'thread' AND link.relation_type = 'started-from' AND link.state = 'active'
+		  AND thread.origin_channel_id = $3
+	`, principal.WorkspaceID, messageID, channelID).Scan(&threadID)
+	if err == nil {
+		thread, err = visibleSubjectProjection(ctx, tx, principal, entityref.Ref{Type: "thread", ID: threadID})
+		if err != nil && !errors.Is(err, authz.ErrNotFound) {
+			return nil, err
+		}
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("look up Thread started from Message: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit Message started Thread lookup: %w", err)
+	}
+	return thread, nil
 }
 
 func (store *Store) StartThreadFromMessage(

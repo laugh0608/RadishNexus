@@ -657,7 +657,7 @@ function SignedInShell({
         <ChannelPage
           userID={session.user.id}
           navigate={navigate}
-          key={`${route.workspaceID}/${route.channelID}`}
+          key={`${session.user.id}/${route.workspaceID}/${route.channelID}`}
           workspaceID={route.workspaceID}
           channelID={route.channelID}
           client={channelClient}

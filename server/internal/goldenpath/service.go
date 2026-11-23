@@ -179,6 +179,7 @@ type Store interface {
 	ListChannelMessages(context.Context, authz.Principal, ListChannelMessagesInput) (MessagePage, error)
 	AuthorizeChannelRead(context.Context, authz.Principal, string) error
 	GetChannelMessage(context.Context, authz.Principal, string, string) (MessageProjection, error)
+	GetMessageStartedThread(context.Context, authz.Principal, string, string) (*SubjectProjection, error)
 	StartThreadFromMessage(context.Context, StartThreadFromMessageCommand) (Thread, error)
 	CreateDecisionFromThread(context.Context, CreateDecisionCommand) (CreateDecisionResult, error)
 	AcceptDecision(context.Context, AcceptDecisionCommand) (AcceptDecisionResult, error)

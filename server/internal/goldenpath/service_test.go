@@ -76,6 +76,12 @@ func (store *recordingStore) GetChannelMessage(
 	return store.channelMessage, nil
 }
 
+func (store *recordingStore) GetMessageStartedThread(_ context.Context, _ authz.Principal, channelID, messageID string) (*SubjectProjection, error) {
+	store.authorizeChannelID = channelID
+	store.channelMessageID = messageID
+	return nil, nil
+}
+
 func (store *recordingStore) StartThreadFromMessage(
 	_ context.Context,
 	command StartThreadFromMessageCommand,

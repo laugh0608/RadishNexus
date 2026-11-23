@@ -1,4 +1,5 @@
 import { csrfTokenFromCookie } from "../auth/api";
+import { object } from "../workspace/api";
 
 export interface ChannelMessage {
   id: string;
@@ -41,7 +42,15 @@ export interface StartThreadInput {
   visibility: ThreadVisibility;
 }
 
+export type ReadableStartedThread = Pick<StartedThread, "id" | "title">;
+
 export interface ChannelMessageClient {
+  getStartedThread(
+    workspaceID: string,
+    channelID: string,
+    messageID: string,
+    signal?: AbortSignal,
+  ): Promise<ReadableStartedThread | null>;
   listMessages(
     workspaceID: string,
     channelID: string,
@@ -86,6 +95,7 @@ export class ChannelRequestError extends Error {
 }
 
 export const browserChannelMessageClient: ChannelMessageClient = {
+  getStartedThread,
   listMessages,
   createMessage,
   startThread,
@@ -219,6 +229,61 @@ async function createMessage(
   }
 }
 
+function messageThreadsPath(
+  workspaceID: string,
+  channelID: string,
+  messageID: string,
+): string {
+  return `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/channels/${encodeURIComponent(channelID)}/messages/${encodeURIComponent(messageID)}/threads`;
+}
+
+async function getStartedThread(
+  workspaceID: string,
+  channelID: string,
+  messageID: string,
+  signal?: AbortSignal,
+): Promise<ReadableStartedThread | null> {
+  requirePathIDs(workspaceID, channelID);
+  if (!validPathID(messageID, "msg_")) {
+    throw new ChannelRequestError("来源 Message 地址无效。", {
+      code: "invalid",
+      status: 400,
+    });
+  }
+  const response = await channelFetch(
+    messageThreadsPath(workspaceID, channelID, messageID),
+    {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+      cache: "no-store",
+      signal,
+    },
+  );
+  if (response.status !== 200)
+    throw contractError("讨论服务返回了意外的读取状态。", response.status);
+  const payload = await responseJSON(response, "讨论");
+  try {
+    const data = object(object(payload, ["data"]).data, ["thread"]);
+    if (data.thread === null) return null;
+    const thread = object(data.thread, ["ref", "title"]);
+    const ref = parseRef(
+      object(thread.ref, ["type", "id"]),
+      "thread.ref",
+      "thread",
+    );
+    const title = nonEmptyString(thread.title, "thread.title");
+    if (title.includes("\0")) throw new TypeError("invalid Thread title");
+    return { id: ref.id, title };
+  } catch (error) {
+    throw contractError(
+      "服务返回的讨论不符合当前契约，请重试。",
+      response.status,
+      error,
+    );
+  }
+}
+
 async function startThread(
   workspaceID: string,
   channelID: string,
@@ -240,7 +305,7 @@ async function startThread(
     });
   }
   const response = await channelFetch(
-    `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/channels/${encodeURIComponent(channelID)}/messages/${encodeURIComponent(messageID)}/threads`,
+    messageThreadsPath(workspaceID, channelID, messageID),
     writeRequest({ title: input.title, visibility: input.visibility }, signal),
   );
   if (response.status !== 201) {

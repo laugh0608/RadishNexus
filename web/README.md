@@ -41,6 +41,7 @@ npm run dev
 - 首页已消费 Project / Channel 只读 list API，行为见下文；Project 工单列表已按 ADR-0038 开放，决策列表已按 ADR-0040 开放；Deployment 与 Thread 独立列表仍未开放。次级 ID 工具校验正式 `dpl_` / `chn_` / `thr_` / `dec_` / `tkt_` ID 并导航到 canonical 路径，不从 fixture 猜测对象。
 - canonical Deployment 页面只调用同源 `/api/v1/workspaces/{workspace_id}/deployments/{deployment_id}/nexus-view`，使用 `credentials: same-origin`、`cache: no-store`、显式公开 DTO 和运行时校验；未知形状不会被当成成功页面。
 - canonical Channel 页面用原生 EventSource 调用 ADR-0020 的同源 SSE，并继续用 ADR-0018 的三个短请求读写：先等待 `ready`，再读取 canonical history；history 期间的 `message.created` 先缓冲，完成后按 Message ID 去重合并。发送失败时为未修改正文保留同一 `client_operation_id`，`200` 精确重试不会追加重复 Message。
+- 频道历史中可以从原消息「查看讨论」，刷新或重新进入后按当前权限取回标题和详情链接。未创建和当前不可读显示同一空态。回复所属的 Thread 与从该回复发起的讨论各自展示。[ADR-0060](../docs/adr/0060-message-started-thread-lookup.md)
 - 浏览器自动重连沿用原生 `Last-Event-ID`；`resync-required` 关闭旧流、建立新边界并全量重读，断线错误链只允许一次 Session + canonical history 诊断，不做持续轮询。`access-revoked` 或诊断所得 `404` 会清空正文、草稿和 Thread 结果，Session `401` 回到登录态；事件顺序、cursor、空控制数据或 DTO 漂移均 fail closed。
 - Channel 的 `401` 回到登录态；任何后续 `404` 都立即移除已经渲染的 Message 正文和本地草稿。Thread 创建只发送 Source Message ref、标题和可见性，不复制 Message 正文。
 - canonical Thread、Decision 与 Ticket 页面使用 ADR-0019 的同源短请求；Ticket 状态命令按 ADR-0039 增量扩展。Thread 创建 Proposed Decision；Decision 必须由有权主体勾选明确确认后人工 acceptance，接受后才能创建 Ticket；写入发生网络歧义且表单未变化时保留同一 `client_operation_id`。

@@ -3,7 +3,7 @@ import {
   emptyClassification,
   initialClassification,
 } from "./ticket-classification-api";
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useExecutionRead } from "./useExecutionRead";
 import { browserChannelMessageClient } from "../channel/api";
 import type { ExecutionWrite } from "./execution-write";
@@ -220,12 +220,14 @@ export function LocatedExecutionMessage({
   workspace,
   channel,
   thread,
+  renderDiscussion,
   onSessionExpired,
   write,
 }: {
   workspace: string;
   channel: string;
   thread?: string;
+  renderDiscussion?: (messageID: string) => ReactNode;
   write: ExecutionWrite;
   onSessionExpired: () => void;
 }) {
@@ -263,6 +265,7 @@ export function LocatedExecutionMessage({
             {new Date(data.createdAt).toLocaleString()}
           </time>
           <p className="message-body">{data.body}</p>
+          {renderDiscussion?.(data.id)}
           <MessageWorkButton
             workspace={workspace}
             channel={channel}

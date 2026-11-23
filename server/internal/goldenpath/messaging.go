@@ -247,13 +247,30 @@ func (service *Service) GetChannelMessage(
 	channelID string,
 	messageID string,
 ) (MessageProjection, error) {
-	if err := validateChannelReadInput(principal, channelID); err != nil {
+	if err := validateChannelMessageRead(principal, channelID, messageID); err != nil {
 		return MessageProjection{}, err
 	}
-	if err := entityref.M0Registry().Validate(entityref.Ref{Type: "message", ID: messageID}); err != nil {
-		return MessageProjection{}, fmt.Errorf("%w: Message reference: %v", authz.ErrInvalid, err)
-	}
 	return service.store.GetChannelMessage(ctx, principal, channelID, messageID)
+}
+
+// GetMessageStartedThread returns nil when the readable source has no visible started Thread.
+func (service *Service) GetMessageStartedThread(
+	ctx context.Context, principal authz.Principal, channelID, messageID string,
+) (*SubjectProjection, error) {
+	if err := validateChannelMessageRead(principal, channelID, messageID); err != nil {
+		return nil, err
+	}
+	return service.store.GetMessageStartedThread(ctx, principal, channelID, messageID)
+}
+
+func validateChannelMessageRead(principal authz.Principal, channelID, messageID string) error {
+	if err := validateChannelReadInput(principal, channelID); err != nil {
+		return err
+	}
+	if err := entityref.M0Registry().Validate(entityref.Ref{Type: "message", ID: messageID}); err != nil {
+		return fmt.Errorf("%w: Message reference: %v", authz.ErrInvalid, err)
+	}
+	return nil
 }
 
 func validateChannelReadInput(principal authz.Principal, channelID string) error {

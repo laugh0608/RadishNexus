@@ -164,6 +164,72 @@ describe("ChannelPage", () => {
     );
   });
 
+  it("reads on demand after remount and discards a late lookup after focus", async () => {
+    const late = deferred<{ id: string; title: string }>();
+    const getStartedThread = vi
+      .fn()
+      .mockResolvedValueOnce({ id: "thr_started", title: "Stored discussion" })
+      .mockReturnValueOnce(late.promise)
+      .mockResolvedValueOnce(null);
+    const client = testClient({
+      listMessages: vi.fn().mockResolvedValue({
+        messages: [{ ...newerMessage, threadID: "thr_parent" }],
+        olderCursor: null,
+      }),
+      getStartedThread,
+    });
+    const first = renderChannel(client);
+    await screen.findByText(newerMessage.body);
+    first.unmount();
+    renderChannel(client);
+    const button = await screen.findByRole("button", { name: "查看讨论" });
+    expect(getStartedThread).not.toHaveBeenCalled();
+    fireEvent.click(button);
+    expect(await screen.findByText("Stored discussion")).toBeDefined();
+    expect(
+      screen
+        .getByRole("link", { name: "打开 canonical Thread" })
+        .getAttribute("href"),
+    ).toBe("/workspaces/wrk_main/threads/thr_started");
+    fireEvent.click(button);
+    expect(screen.queryByText("Stored discussion")).toBeNull();
+    fireEvent.focus(window);
+    await act(async () =>
+      late.resolve({ id: "thr_started", title: "Stale title" }),
+    );
+    expect(getStartedThread.mock.calls[1]?.[3].aborted).toBe(true);
+    expect(screen.queryByText("Stale title")).toBeNull();
+    fireEvent.click(button);
+    expect(await screen.findByText("当前没有可打开的讨论。")).toBeDefined();
+    expect(
+      screen.queryByRole("link", { name: "打开 canonical Thread" }),
+    ).toBeNull();
+    expect(getStartedThread).toHaveBeenLastCalledWith(
+      "wrk_main",
+      "chn_main",
+      "msg_newer",
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("rereads Channel history when the lookup loses access to its source", async () => {
+    const client = testClient({
+      listMessages: vi
+        .fn()
+        .mockResolvedValueOnce({ messages: [newerMessage], olderCursor: null })
+        .mockResolvedValueOnce({ messages: [olderMessage], olderCursor: null }),
+      getStartedThread: vi
+        .fn()
+        .mockRejectedValue(
+          new ChannelRequestError("source unavailable", { status: 404 }),
+        ),
+    });
+    renderChannel(client);
+    fireEvent.click(await screen.findByRole("button", { name: "查看讨论" }));
+    expect(await screen.findByText(olderMessage.body)).toBeDefined();
+    expect(screen.queryByText(newerMessage.body)).toBeNull();
+  });
+
   it("clears previously rendered bodies when a later request proves access revoked", async () => {
     const client = testClient({
       listMessages: vi
@@ -368,6 +434,7 @@ function testClient(
     }),
     createMessage: vi.fn(),
     startThread: vi.fn(),
+    getStartedThread: vi.fn(),
     ...overrides,
   };
 }

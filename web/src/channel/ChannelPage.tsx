@@ -5,14 +5,21 @@ import {
 } from "../collaboration/ExecutionPanels";
 import { ConfigurationLauncher } from "../workspace/ConfigurationPanel";
 import { ContextSourceNotice } from "../ContextSourceNotice";
-import { useEffect, useReducer, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { AuthRequestError, browserAuthClient } from "../auth/api";
 import {
   ChannelRequestError,
   browserChannelMessageClient,
   newClientOperationID,
   type ChannelMessageClient,
-  type StartedThread,
+  type ReadableStartedThread,
   type ThreadVisibility,
 } from "./api";
 import {
@@ -45,6 +52,16 @@ interface ThreadDraft {
   visibility: ThreadVisibility;
 }
 
+type MessageDiscussion =
+  | { messageID: string; status: "loading" | "empty" }
+  | { messageID: string; status: "error"; message: string }
+  | {
+      messageID: string;
+      status: "visible";
+      thread: ReadableStartedThread;
+      created: boolean;
+    };
+
 export function ChannelPage({
   userID,
   navigate,
@@ -74,9 +91,28 @@ export function ChannelPage({
   const [threadDraft, setThreadDraft] = useState<ThreadDraft | null>(null);
   const [threadSending, setThreadSending] = useState(false);
   const [threadError, setThreadError] = useState<string | null>(null);
-  const [startedThreads, setStartedThreads] = useState<
-    Readonly<Record<string, StartedThread>>
-  >({});
+  const [discussion, setDiscussion] = useState<MessageDiscussion | null>(null);
+  const discussionRequest = useRef<AbortController | null>(null);
+  const forgetDiscussion = useCallback(() => {
+    discussionRequest.current?.abort();
+    setDiscussion(null);
+  }, []);
+
+  useEffect(() => {
+    const restore = (event: PageTransitionEvent) => {
+      if (event.persisted) forgetDiscussion();
+    };
+    window.addEventListener("focus", forgetDiscussion);
+    window.addEventListener("pagehide", forgetDiscussion);
+    window.addEventListener("pageshow", restore);
+    document.addEventListener("visibilitychange", forgetDiscussion);
+    return () => {
+      window.removeEventListener("focus", forgetDiscussion);
+      window.removeEventListener("pagehide", forgetDiscussion);
+      window.removeEventListener("pageshow", restore);
+      document.removeEventListener("visibilitychange", forgetDiscussion);
+    };
+  }, [forgetDiscussion]);
 
   const executionWrite = useExecutionWrite({ onSessionExpired });
   const clearExecution = executionWrite.clear;
@@ -98,9 +134,10 @@ export function ChannelPage({
       setPendingMessage(null);
       setThreadDraft(null);
       setThreadError(null);
-      setStartedThreads({});
+      forgetDiscussion();
     };
     const loseAccess = (message: string) => {
+      epoch++;
       connection?.close();
       historyController?.abort();
       failureProbeController?.abort();
@@ -108,6 +145,7 @@ export function ChannelPage({
       dispatch({ type: "failed", message });
     };
     const expireSession = () => {
+      epoch++;
       connection?.close();
       historyController?.abort();
       failureProbeController?.abort();
@@ -123,6 +161,7 @@ export function ChannelPage({
       historyController?.abort();
       failureProbeController?.abort();
       dispatch({ type: "connect" });
+      forgetDiscussion();
       setRealtimeStatus("connecting");
 
       try {
@@ -207,6 +246,7 @@ export function ChannelPage({
               return;
             }
             failureProbedSinceReady = true;
+            forgetDiscussion();
             setRealtimeStatus("reconnecting");
             failureProbeController = new AbortController();
             const signal = failureProbeController.signal;
@@ -256,6 +296,7 @@ export function ChannelPage({
     return () => {
       disposed = true;
       epoch += 1;
+      discussionRequest.current?.abort();
       connection?.close();
       historyController?.abort();
       failureProbeController?.abort();
@@ -263,11 +304,13 @@ export function ChannelPage({
   }, [
     channelID,
     client,
+    forgetDiscussion,
     onSessionExpired,
     probeSession,
     realtimeClient,
     reloadKey,
     workspaceID,
+    userID,
   ]);
 
   const revokeVisibleState = (error: unknown): boolean => {
@@ -282,7 +325,7 @@ export function ChannelPage({
       setPendingMessage(null);
       setThreadDraft(null);
       setThreadError(null);
-      setStartedThreads({});
+      forgetDiscussion();
       dispatch({ type: "failed", message: error.userMessage });
       return true;
     }
@@ -352,6 +395,44 @@ export function ChannelPage({
     }
   };
 
+  const beginDiscussionRequest = () => {
+    discussionRequest.current?.abort();
+    const request = new AbortController();
+    discussionRequest.current = request;
+    return request.signal;
+  };
+
+  const viewDiscussion = async (messageID: string) => {
+    const signal = beginDiscussionRequest();
+    setThreadDraft(null);
+    setDiscussion({ messageID, status: "loading" });
+    try {
+      const thread = await client.getStartedThread(
+        workspaceID,
+        channelID,
+        messageID,
+        signal,
+      );
+      if (!signal.aborted)
+        setDiscussion(
+          thread === null
+            ? { messageID, status: "empty" }
+            : { messageID, status: "visible", thread, created: false },
+        );
+    } catch (error) {
+      if (signal.aborted) return;
+      if (revokeVisibleState(error)) {
+        if (isMissingChannel(error)) setReloadKey((key) => key + 1);
+      } else {
+        setDiscussion({
+          messageID,
+          status: "error",
+          message: channelErrorMessage(error),
+        });
+      }
+    }
+  };
+
   const startThread = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (state.status !== "ready" || threadDraft === null) {
@@ -359,6 +440,7 @@ export function ChannelPage({
     }
     setThreadSending(true);
     setThreadError(null);
+    const signal = beginDiscussionRequest();
     try {
       const thread = await client.startThread(
         workspaceID,
@@ -366,18 +448,57 @@ export function ChannelPage({
         threadDraft.messageID,
         { title: threadDraft.title, visibility: threadDraft.visibility },
       );
-      setStartedThreads((current) => ({
-        ...current,
-        [threadDraft.messageID]: thread,
-      }));
       setThreadDraft(null);
+      if (signal.aborted) return;
+      setDiscussion({
+        messageID: threadDraft.messageID,
+        status: "visible",
+        created: true,
+        thread,
+      });
     } catch (error) {
-      if (!revokeVisibleState(error)) {
+      if (!signal.aborted && !revokeVisibleState(error)) {
         setThreadError(channelErrorMessage(error));
       }
     } finally {
       setThreadSending(false);
     }
+  };
+
+  const renderDiscussion = (messageID: string) => {
+    const result = discussion?.messageID === messageID ? discussion : null;
+    return (
+      <>
+        <button
+          className="text-button"
+          type="button"
+          disabled={threadSending || result?.status === "loading"}
+          onClick={() => void viewDiscussion(messageID)}
+        >
+          {result?.status === "loading" ? "正在读取讨论…" : "查看讨论"}
+        </button>
+        {result?.status === "empty" && (
+          <p role="status">当前没有可打开的讨论。</p>
+        )}
+        {result?.status === "error" && (
+          <p className="inline-error" role="alert">
+            {result.message}
+          </p>
+        )}
+        {result?.status === "visible" && (
+          <div className="thread-result" role="status">
+            {result.created && <span>Thread 已创建</span>}
+            <strong>{result.thread.title}</strong>
+            <code>{result.thread.id}</code>
+            <a
+              href={`/workspaces/${encodeURIComponent(workspaceID)}/threads/${encodeURIComponent(result.thread.id)}`}
+            >
+              打开 canonical Thread
+            </a>
+          </div>
+        )}
+      </>
+    );
   };
 
   if (state.status === "connecting" || state.status === "loading-history") {
@@ -495,6 +616,7 @@ export function ChannelPage({
             key={`${workspaceID}/${channelID}`}
             workspace={workspaceID}
             channel={channelID}
+            renderDiscussion={renderDiscussion}
             onSessionExpired={onSessionExpired}
             write={executionWrite}
           />
@@ -506,7 +628,8 @@ export function ChannelPage({
           ) : (
             <ol className="message-list">
               {state.messages.map((message) => {
-                const createdThread = startedThreads[message.id];
+                const result =
+                  discussion?.messageID === message.id ? discussion : null;
                 const editingThread = threadDraft?.messageID === message.id;
                 return (
                   <li key={`${workspaceID}/${channelID}/${message.id}`}>
@@ -533,13 +656,15 @@ export function ChannelPage({
                           Thread 回复 · <code>{message.threadID}</code>
                         </p>
                       )}
-                      {createdThread === undefined ? (
+                      {renderDiscussion(message.id)}
+                      {result?.status !== "visible" ? (
                         <button
                           className="text-button"
                           disabled={
                             threadSending || messageSending || olderLoading
                           }
                           onClick={() => {
+                            forgetDiscussion();
                             setThreadError(null);
                             setThreadDraft(
                               editingThread
@@ -557,18 +682,7 @@ export function ChannelPage({
                             ? "取消发起 Thread"
                             : "从此消息发起 Thread"}
                         </button>
-                      ) : (
-                        <div className="thread-result" role="status">
-                          <span>Thread 已创建</span>
-                          <strong>{createdThread.title}</strong>
-                          <code>{createdThread.id}</code>
-                          <a
-                            href={`/workspaces/${encodeURIComponent(workspaceID)}/threads/${encodeURIComponent(createdThread.id)}`}
-                          >
-                            打开 canonical Thread
-                          </a>
-                        </div>
-                      )}
+                      ) : null}
                       {editingThread && threadDraft !== null ? (
                         <form
                           className="thread-form"

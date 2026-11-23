@@ -14,6 +14,7 @@ import (
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authn"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
+	"github.com/laugh0608/RadishNexus/server/internal/platform/entityref"
 )
 
 type fakeMessagingSessions struct {
@@ -51,6 +52,10 @@ func (sessions *fakeMessagingSessions) VerifyCSRF(
 }
 
 type fakeChannelMessagingApplication struct {
+	startedThread    *goldenpath.SubjectProjection
+	lookupPrincipal  authz.Principal
+	lookupChannel    string
+	lookupMessage    string
 	page             goldenpath.MessagePage
 	messageResult    goldenpath.CreateMessageResult
 	thread           goldenpath.Thread
@@ -77,6 +82,47 @@ func (application *fakeChannelMessagingApplication) ListChannelMessages(
 	application.listPrincipal = principal
 	application.listInput = input
 	return application.page, application.listErr
+}
+
+func (application *fakeChannelMessagingApplication) GetMessageStartedThread(_ context.Context, principal authz.Principal, channel, message string) (*goldenpath.SubjectProjection, error) {
+	application.lookupPrincipal, application.lookupChannel, application.lookupMessage = principal, channel, message
+	return application.startedThread, application.threadErr
+}
+
+func TestMessageStartedThreadGET(t *testing.T) {
+	const path = "/api/v1/workspaces/wrk_main/channels/chn_main/messages/msg_source/threads"
+	visible := goldenpath.SubjectProjection{State: goldenpath.ProjectionVisible, Ref: entityref.Ref{Type: "thread", ID: "thr_discussion"}, Title: "A discussion"}
+	restricted := visible
+	restricted.State = goldenpath.ProjectionRestricted
+	for _, test := range []struct {
+		name       string
+		projection *goldenpath.SubjectProjection
+		err        error
+		status     int
+		body       string
+	}{
+		{"visible", &visible, nil, 200, `{"data":{"thread":{"ref":{"type":"thread","id":"thr_discussion"},"title":"A discussion"}}}`},
+		{"absent or unreadable target", nil, nil, 200, `{"data":{"thread":null}}`},
+		{"unreadable source", nil, authz.ErrNotFound, 404, ""},
+		{"invalid projection", &restricted, nil, 500, ""},
+		{"storage failure", nil, errors.New("database unavailable"), 500, ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			app := &fakeChannelMessagingApplication{startedThread: test.projection, threadErr: test.err}
+			sessions := validMessagingSessions()
+			response := httptest.NewRecorder()
+			testChannelMessagesHandler(t, sessions, app).ServeHTTP(response, messagingRequest(http.MethodGet, path, ""))
+			body := strings.TrimSpace(response.Body.String())
+			if response.Code != test.status || test.body != "" && body != test.body || test.body == "" && strings.Contains(body, visible.Ref.ID) {
+				t.Fatalf("response = %d %s", response.Code, body)
+			}
+			want := authz.Principal{Kind: authz.PrincipalUser, ID: "usr_reader", WorkspaceID: "wrk_main"}
+			if app.lookupPrincipal != want || app.lookupChannel != "chn_main" || app.lookupMessage != "msg_source" || sessions.verifyCalls != 0 ||
+				response.Header().Get("Cache-Control") != "private, no-store" || response.Header().Get("Vary") != "Cookie" {
+				t.Fatal("incorrect scope, CSRF or cache policy")
+			}
+		})
+	}
 }
 
 func (application *fakeChannelMessagingApplication) CreateMessage(
@@ -293,6 +339,16 @@ func TestChannelMessagesHandlerEnforcesSessionCSRFAndUnfindability(t *testing.T)
 			path:       "/api/v1/workspaces/wrk_main/channels/chn_main/messages",
 			wantStatus: http.StatusMethodNotAllowed, wantCode: "method_not_allowed",
 		},
+		{
+			name: "unsupported lookup query", method: http.MethodGet,
+			path:       "/api/v1/workspaces/wrk_main/channels/chn_main/messages/msg_source/threads?count=true",
+			wantStatus: http.StatusBadRequest, wantCode: "invalid",
+		},
+		{
+			name: "lookup method", method: http.MethodHead,
+			path:       "/api/v1/workspaces/wrk_main/channels/chn_main/messages/msg_source/threads",
+			wantStatus: http.StatusMethodNotAllowed, wantCode: "method_not_allowed",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -311,7 +367,10 @@ func TestChannelMessagesHandlerEnforcesSessionCSRFAndUnfindability(t *testing.T)
 				response.Header().Get("Cache-Control") != "private, no-store" || response.Header().Get("Vary") != "Cookie" {
 				t.Fatalf("response = %d, headers %#v, body %q", response.Code, response.Header(), response.Body.String())
 			}
-			if application.listCalls+application.createCalls+application.threadCalls != 0 {
+			if test.wantStatus == http.StatusMethodNotAllowed && response.Header().Get("Allow") != "GET, POST" {
+				t.Fatalf("Allow = %q", response.Header().Get("Allow"))
+			}
+			if application.listCalls+application.createCalls+application.threadCalls != 0 || application.lookupMessage != "" {
 				t.Fatalf("rejected request reached application: %#v", application)
 			}
 		})

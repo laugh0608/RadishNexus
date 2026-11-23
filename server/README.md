@@ -232,11 +232,12 @@ Deployment Nexus View 只读路由为：
 
 - `GET /api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages`：读取 canonical history，`limit` 缺省 `50`、范围 `1..100`，可用版本化 opaque `before` cursor 向更旧消息翻页；
 - `POST /api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages`：用 `client_operation_id`、`body` 和可选 `thread_id` 创建 Message，首次返回 `201`，完全相同重试返回 `200`，变化重放返回 `409`；
+- `GET /api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages/{message_id}/threads` 按当前读权返回这条消息发起的讨论。源消息可读且没有可打开的讨论时返回 `{"data":{"thread":null}}`。源消息不可读或不在路径内时返回 `404`。[ADR-0060](../docs/adr/0060-message-started-thread-lookup.md)
 - `POST /api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages/{message_id}/threads`：用 `title` 和 `project / restricted` visibility 从路径 Channel 内的 Source Message 创建 Thread。
 
-三个路由均通过当前 Session 与 Workspace / Channel / Thread 权限；两个 POST 还同时要求精确 `Origin`、CSRF Cookie / Header 一致和数据库 CSRF digest。成功与错误统一使用 `Cache-Control: private, no-store` 和 `Vary: Cookie`；显式 DTO 不返回 `client_operation_id`、membership、事件或内部 keyset。完整 cursor、JSON 上限、状态码、最小化和跨 Channel 来源边界见 [ADR-0018](../docs/adr/0018-session-scoped-channel-message-transport.md)。
+上述读写均通过当前 Session 与 Workspace / Channel / Thread 权限；两个 POST 还同时要求精确 `Origin`、CSRF Cookie / Header 一致和数据库 CSRF digest。成功与错误统一使用 `Cache-Control: private, no-store` 和 `Vary: Cookie`；显式 DTO 不返回 `client_operation_id`、membership、事件或内部 keyset。完整 cursor、JSON 上限、状态码、最小化和跨 Channel 来源边界见 [ADR-0018](../docs/adr/0018-session-scoped-channel-message-transport.md)。
 
-同源 Web Shell 已把这三个短请求接入 canonical Channel 页面。浏览器会在模糊发送失败后为未变化正文保留同一幂等键；Session 失效回到登录态，后续 `404` 清除已显示正文。production Web handler 只额外开放精确 Channel 页面路径，不把未知嵌套路由变成任意 SPA fallback。
+同源 Web Shell 已把这些短请求接入 canonical Channel 页面。浏览器会在模糊发送失败后为未变化正文保留同一幂等键；Session 失效回到登录态，后续 `404` 清除已显示正文。production Web handler 只额外开放精确 Channel 页面路径，不把未知嵌套路由变成任意 SPA fallback。
 
 ## Channel Message 实时增量
 
