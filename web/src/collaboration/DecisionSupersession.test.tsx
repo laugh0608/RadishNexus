@@ -69,6 +69,9 @@ function client(
 ): CollaborationClient {
   return {
     loadView: vi.fn().mockResolvedValue(oldView),
+    loadTicketTimeline: vi
+      .fn()
+      .mockResolvedValue({ items: [], nextCursor: null }),
     loadRelations: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
     supersedeDecision: vi.fn(),
     acceptDecision: vi.fn(),

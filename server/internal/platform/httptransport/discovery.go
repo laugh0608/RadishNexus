@@ -44,6 +44,7 @@ type DiscoveryHandler struct {
 }
 
 type discoveryCursor struct {
+	Include      string `json:"include,omitempty"`
 	SourceID     string `json:"source_id,omitempty"`
 	FilterDigest string `json:"filter_digest,omitempty"`
 	Status       string `json:"status,omitempty"`
@@ -439,6 +440,9 @@ func (handler *DiscoveryHandler) writeError(response http.ResponseWriter, reques
 }
 
 func validDiscoveryAfterID(id, kind string) bool {
+	if kind == ticketTimelineKind {
+		return validScopedID(id, "evt_")
+	}
 	if kind == goldenpath.TraceTicketRunHistory {
 		_, _, err := parseCIRunHistoryBoundary(id)
 		return err == nil

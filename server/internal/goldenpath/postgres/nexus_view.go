@@ -19,14 +19,18 @@ func (store *Store) GetNexusView(
 	principal authz.Principal,
 	target entityref.Ref,
 ) (goldenpath.NexusView, error) {
-	return store.getNexusView(ctx, principal, target, false)
+	return store.getNexusView(ctx, principal, target, false, false)
 }
 
 func (store *Store) GetNexusSummary(ctx context.Context, principal authz.Principal, target entityref.Ref) (goldenpath.NexusView, error) {
-	return store.getNexusView(ctx, principal, target, true)
+	return store.getNexusView(ctx, principal, target, true, false)
 }
 
-func (store *Store) getNexusView(ctx context.Context, principal authz.Principal, target entityref.Ref, summary bool) (view goldenpath.NexusView, err error) {
+func (store *Store) GetTicketWithoutTimeline(ctx context.Context, p authz.Principal, ticket string, summary bool) (goldenpath.NexusView, error) {
+	return store.getNexusView(ctx, p, entityref.Ref{Type: "ticket", ID: ticket}, summary, true)
+}
+
+func (store *Store) getNexusView(ctx context.Context, principal authz.Principal, target entityref.Ref, summary, separateTimeline bool) (view goldenpath.NexusView, err error) {
 	if err := principal.ValidateUser(); err != nil {
 		return view, err
 	}
@@ -117,9 +121,11 @@ func (store *Store) getNexusView(ctx context.Context, principal authz.Principal,
 	if view.Current.Checkout != nil && view.Current.Checkout.Visibility == goldenpath.ProjectionRestricted {
 		view.Relations = []goldenpath.RelationProjection{{State: goldenpath.ProjectionRestricted}}
 	}
-	view.Timeline, err = listTimeline(ctx, tx, principal, target)
-	if err != nil {
-		return view, err
+	if !separateTimeline {
+		view.Timeline, err = listTimeline(ctx, tx, principal, target)
+		if err != nil {
+			return view, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {

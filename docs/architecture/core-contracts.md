@@ -333,6 +333,8 @@ safe_facts
 
 查询时间线时先确认 `target_ref` 可读，再对每个 `subject_ref` 使用当前权限重新判定。权限已撤销时，旧投影中的引用不能继续暴露缓存标题或摘要。对象页可以按授权解析规则显示通用受限占位符；全局 Activity、通知、搜索和导出则隐藏不可读项或敏感关联。
 
+Ticket 通用历史支持独立分页，每页在同一快照内核验工单和 subject。不可读的执行讨论整条省略，再按时间和事件 ID 倒序取页。构建关联沿专用历史读取。[Ticket 历史分页](../adr/0059-ticket-activity-pagination.md)
+
 ### 正常更新与协作对象反向发现
 
 [ADR-0022](../adr/0022-transactional-activity-and-incoming-relations.md) 将首批五类 Activity 事件接入同一业务事务；投影完成与业务提交一致，失败整单回滚。显式重建先取得投影表写入排他锁，再读取新的源事件快照，保留完整版本并避免覆盖并发提交。投影版本 5 时，事件映射已覆盖 `document.created` 与 `document.revised`，以及 ADR-0032 的 `component.created` / `environment.created`；恢复历史通过 revised 事件记录来源版本。ADR-0033 增加 `repository.created`、`component.repository-linked` 与 `component.repository-unlinked`；创建投影到 Repository，关系事件的主要对象为 Component，Activity 只投影状态与受控对象引用，精确 link ID 保存在源事件中，不复制外部 URL / 身份。ADR-0034 增加 `ticket.component-linked` 与 `ticket.component-unlinked`，只投影到 Ticket，使用 `relation_state` 和受控 Component subject，不扩散到共享组件时间线。授权管理明细只进入配置 Audit，不进入普通 Activity。旧数据仍由显式重建补齐，不随启动自动执行。

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/laugh0608/RadishNexus/server/internal/goldenpath"
 	"github.com/laugh0608/RadishNexus/server/internal/platform/authz"
@@ -15,7 +14,8 @@ import (
 )
 
 type collaborationReadOptions struct {
-	summary, dueDate, execution, classification bool
+	summary, separate bool
+	goldenpath.TicketTimelineSelection
 }
 
 func parseCollaborationReadOptions(raw, entityType string) (options collaborationReadOptions, err error) {
@@ -28,6 +28,11 @@ func parseCollaborationReadOptions(raw, entityType string) (options collaboratio
 			return options, authz.ErrInvalid
 		}
 		switch key {
+		case "timeline":
+			if entityType != "ticket" || values[0] != "separate" {
+				return options, authz.ErrInvalid
+			}
+			options.separate = true
 		case "relations":
 			if values[0] != "summary" {
 				return options, authz.ErrInvalid
@@ -37,9 +42,7 @@ func parseCollaborationReadOptions(raw, entityType string) (options collaboratio
 			if entityType != "ticket" || !validTicketViewInclude(values[0]) {
 				return options, authz.ErrInvalid
 			}
-			options.dueDate = strings.Contains(values[0], "due_date")
-			options.execution = strings.Contains(values[0], "execution_context")
-			options.classification = strings.Contains(values[0], "classification")
+			options.TicketTimelineSelection = ticketTimelineSelection(values[0])
 		default:
 			return options, authz.ErrInvalid
 		}

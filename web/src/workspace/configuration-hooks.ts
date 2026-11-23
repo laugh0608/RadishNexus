@@ -153,6 +153,7 @@ export function usePage<
   return {
     ...current,
     refresh,
+    retry: () => setRevision((v) => v + 1),
     next: () => {
       if (current.page?.nextCursor) {
         setState({});

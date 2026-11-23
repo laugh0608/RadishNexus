@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -33,6 +34,8 @@ const (
 
 type CollaborationApplication interface {
 	GetNexusView(context.Context, authz.Principal, entityref.Ref) (goldenpath.NexusView, error)
+	GetTicketWithoutTimeline(context.Context, authz.Principal, string, bool) (goldenpath.NexusView, error)
+	ListTicketTimeline(context.Context, authz.Principal, string, goldenpath.TicketTimelineInput) (goldenpath.TicketTimelinePage, error)
 	GetNexusSummary(context.Context, authz.Principal, entityref.Ref) (goldenpath.NexusView, error)
 	ListNexusRelations(context.Context, authz.Principal, entityref.Ref, goldenpath.NexusRelationPageInput) (goldenpath.NexusRelationPage, error)
 	CreateDecisionFromThread(context.Context, goldenpath.Invocation, goldenpath.CreateDecisionInput) (goldenpath.CreateDecisionResult, error)
@@ -72,11 +75,11 @@ type ticketCapabilitiesDTO struct {
 }
 
 type collaborationViewDTO struct {
-	SourceMessage **executionMessageDTO      `json:"source_message,omitempty"`
-	Capabilities  any                        `json:"capabilities,omitempty"`
-	Current       any                        `json:"current"`
-	Relations     []collaborationRelationDTO `json:"relations"`
-	Timeline      []collaborationTimelineDTO `json:"timeline"`
+	SourceMessage **executionMessageDTO       `json:"source_message,omitempty"`
+	Capabilities  any                         `json:"capabilities,omitempty"`
+	Current       any                         `json:"current"`
+	Relations     []collaborationRelationDTO  `json:"relations"`
+	Timeline      *[]collaborationTimelineDTO `json:"timeline,omitempty"`
 }
 
 type threadCurrentDTO struct {
@@ -209,6 +212,8 @@ func NewCollaborationHandler(
 		mux.HandleFunc(pattern, handler.methodNotAllowed)
 	}
 	handler.registerNexusRelations(mux)
+	mux.HandleFunc("GET "+ticketViewPattern+"/timeline", handler.getTicketTimeline)
+	mux.HandleFunc(ticketViewPattern+"/timeline", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/workspaces/", handler.notFound)
 	mux.HandleFunc("/api/v1/workspaces", handler.notFound)
 	return privateNoStore(mux)
@@ -248,25 +253,29 @@ func (handler *CollaborationHandler) getView(
 		handler.writeError(response, request, err)
 		return
 	}
-	read := handler.collaboration.GetNexusView
-	if options.summary {
-		read = handler.collaboration.GetNexusSummary
+	var view goldenpath.NexusView
+	switch {
+	case options.separate:
+		view, err = handler.collaboration.GetTicketWithoutTimeline(request.Context(), principal, target.ID, options.summary)
+	case options.summary:
+		view, err = handler.collaboration.GetNexusSummary(request.Context(), principal, target)
+	default:
+		view, err = handler.collaboration.GetNexusView(request.Context(), principal, target)
 	}
-	view, err := read(request.Context(), principal, target)
 	if err != nil {
 		handler.writeError(response, request, err)
 		return
 	}
 	if target.Type == "ticket" {
-		if view.TicketMessageSource != nil && !options.execution {
+		if view.TicketMessageSource != nil && !options.Execution {
 			handler.writeJSON(response, request, http.StatusConflict, ErrorResponse{Error: ErrorObject{Code: "conflict", Message: "This Ticket source requires an updated Web client.", RequestID: RequestID(request.Context())}})
 			return
 		}
 		timeline := make([]goldenpath.TimelineItem, 0, len(view.Timeline))
 		for _, item := range view.Timeline {
-			if (!options.dueDate && item.ActivityType == goldenpath.TicketDueDateChanged) ||
-				(!options.classification && item.ActivityType == cp.TicketClassificationChanged) ||
-				(!options.execution && (item.ActivityType == goldenpath.DiscussionLinked || item.ActivityType == goldenpath.DiscussionUnlinked)) {
+			if (!options.DueDate && item.ActivityType == goldenpath.TicketDueDateChanged) ||
+				(!options.Classification && item.ActivityType == cp.TicketClassificationChanged) ||
+				(!options.Execution && (item.ActivityType == goldenpath.DiscussionLinked || item.ActivityType == goldenpath.DiscussionUnlinked)) {
 				continue
 			}
 			timeline = append(timeline, item)
@@ -278,6 +287,9 @@ func (handler *CollaborationHandler) getView(
 	if err != nil {
 		handler.writeError(response, request, err)
 		return
+	}
+	if options.separate {
+		dto.Timeline = nil
 	}
 	handler.writeJSON(response, request, http.StatusOK, collaborationViewResponse{Data: dto})
 }
@@ -496,7 +508,7 @@ func publicCollaborationView(target entityref.Ref, view goldenpath.NexusView) (c
 	if err != nil {
 		return collaborationViewDTO{}, err
 	}
-	dto := collaborationViewDTO{Relations: relations, Timeline: timeline}
+	dto := collaborationViewDTO{Relations: relations, Timeline: &timeline}
 	if target.Type == "ticket" {
 		if view.TicketCapabilities == nil || (view.TicketCapabilities.ChangeStatus && view.Current.StatusRevision == goldenpath.MaxTicketStatusRevision) {
 			return collaborationViewDTO{}, errors.New("invalid Ticket capabilities")
@@ -654,8 +666,9 @@ func publicTicketProjection(
 		relations[0].Target.Type != "decision")) {
 		return ticketCurrentDTO{}, errors.New("invalid Ticket Nexus View")
 	}
+	allowed := (goldenpath.TicketTimelineSelection{DueDate: true, Execution: true, Classification: true}).EventTypes()
 	for _, item := range timeline {
-		if item.ActivityType != "ticket.created" && item.ActivityType != "ticket.component-linked" && item.ActivityType != "ticket.component-unlinked" && item.ActivityType != "ticket.status-changed" && item.ActivityType != "ticket.assignee-changed" && item.ActivityType != "ticket.priority-changed" && item.ActivityType != goldenpath.TicketDueDateChanged && item.ActivityType != goldenpath.DiscussionLinked && item.ActivityType != goldenpath.DiscussionUnlinked && item.ActivityType != cp.TicketClassificationChanged {
+		if !slices.Contains(allowed, item.ActivityType) {
 			return ticketCurrentDTO{}, errors.New("unexpected Ticket Timeline item")
 		}
 	}
@@ -1023,7 +1036,7 @@ func publicCollaborationTimeline(items []goldenpath.TimelineItem) ([]collaborati
 func (handler *CollaborationHandler) methodNotAllowed(response http.ResponseWriter, request *http.Request) {
 	if strings.HasSuffix(request.URL.Path, "/reviews") {
 		response.Header().Set("Allow", "GET, POST")
-	} else if strings.HasSuffix(request.URL.Path, "/nexus-view") || strings.HasSuffix(request.URL.Path, "/nexus-view/relations") {
+	} else if strings.HasSuffix(request.URL.Path, "/nexus-view") || strings.HasSuffix(request.URL.Path, "/nexus-view/relations") || strings.HasSuffix(request.URL.Path, "/nexus-view/timeline") {
 		response.Header().Set("Allow", http.MethodGet)
 	} else {
 		response.Header().Set("Allow", http.MethodPost)

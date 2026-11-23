@@ -110,7 +110,13 @@ function CollaborationPageContent({
     const controller = new AbortController();
     activeRead.current = controller;
     void client
-      .loadView(workspaceID, entityType, entityID, controller.signal, "summary")
+      .loadView(
+        workspaceID,
+        entityType,
+        entityID,
+        controller.signal,
+        entityType === "ticket" ? "ticket-page" : "summary",
+      )
       .then(
         (view) => {
           if (!controller.signal.aborted) {
@@ -571,9 +577,21 @@ function CollaborationPageContent({
                 <p className="section-kicker">Permission-filtered history</p>
                 <h2 id="timeline-title">Activity</h2>
               </div>
-              <span className="panel-count">{timeline.length}</span>
+              {entityType !== "ticket" && (
+                <span className="panel-count">{timeline.length}</span>
+              )}
             </div>
-            <TimelineList workspaceID={workspaceID} timeline={timeline} />
+            {entityType === "ticket" ? (
+              <TicketHistory
+                client={client}
+                workspaceID={workspaceID}
+                ticketID={entityID}
+                onSessionExpired={onSessionExpired}
+                onUnavailable={relationUnavailable}
+              />
+            ) : (
+              <TimelineList workspaceID={workspaceID} timeline={timeline} />
+            )}
           </section>
           {entityType === "decision" ? decisionReviews.history : null}
         </div>
@@ -875,6 +893,71 @@ function RelationLink({
             ? "打开后续对象"
             : "打开来源对象"}
     </a>
+  );
+}
+
+function TicketHistory({
+  client,
+  workspaceID,
+  ticketID,
+  onSessionExpired,
+  onUnavailable,
+}: {
+  client: CollaborationClient;
+  workspaceID: string;
+  ticketID: string;
+  onSessionExpired: () => void;
+  onUnavailable: () => void;
+}) {
+  const load = useCallback(
+    async (after: string | undefined, signal: AbortSignal) => {
+      try {
+        return await client.loadTicketTimeline(
+          workspaceID,
+          ticketID,
+          after,
+          signal,
+        );
+      } catch (error) {
+        if (
+          !signal.aborted &&
+          [401, 403, 404].includes(requestStatus(error) ?? 0)
+        )
+          onUnavailable();
+        throw error;
+      }
+    },
+    [client, workspaceID, ticketID, onUnavailable],
+  );
+  const { page, error, next, hasPrevious, refresh, retry } = usePage(
+    load,
+    onSessionExpired,
+    { refreshOnFocus: false, restartOnCursorConflict: true },
+  );
+  if (error)
+    return (
+      <>
+        <p role="status">工单历史读取失败。</p>
+        <button type="button" onClick={retry}>
+          重新读取历史
+        </button>
+      </>
+    );
+  if (!page) return <p role="status">正在读取工单历史…</p>;
+  return (
+    <>
+      <TimelineList workspaceID={workspaceID} timeline={page.items} />
+      {hasPrevious && (
+        <button type="button" onClick={refresh}>
+          返回最新历史
+        </button>
+      )}
+      {page.nextCursor && (
+        <button type="button" onClick={next}>
+          查看更早的历史
+        </button>
+      )}
+    </>
   );
 }
 

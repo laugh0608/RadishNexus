@@ -344,6 +344,7 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 	type nexusSnapshot struct {
 		summary goldenpath.NexusView
 		pages   []goldenpath.NexusRelationPage
+		history []goldenpath.TicketTimelinePage
 	}
 	readNexusRelations := func(pool *pgxpool.Pool) []nexusSnapshot {
 		t.Helper()
@@ -355,6 +356,17 @@ func TestBackupRestoreImportedContext(t *testing.T) {
 				t.Fatal(source.Type, err)
 			}
 			result[i].summary = summary
+			if source.Type == "ticket" {
+				input := goldenpath.TicketTimelineInput{Limit: 1, TicketTimelineSelection: goldenpath.TicketTimelineSelection{DueDate: true, Execution: true, Classification: true}}
+				for j := len(summary.Timeline) - 1; j >= 0; j-- {
+					page, err := reader.ListTicketTimeline(ctx, actor, source.ID, input)
+					if err != nil || len(page.Items) != 1 || !reflect.DeepEqual(page.Items[0], summary.Timeline[j]) || (page.NextEventID != "") != (j > 0) {
+						t.Fatalf("restored Ticket timeline page %d differs from full view: %v", j, err)
+					}
+					result[i].history = append(result[i].history, page)
+					input.AfterEventID = page.NextEventID
+				}
+			}
 			input := goldenpath.NexusRelationPageInput{Limit: 1}
 			for range 12 {
 				page, err := reader.ListNexusRelations(ctx, actor, source, input)

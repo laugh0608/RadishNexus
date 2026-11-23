@@ -465,6 +465,10 @@ Thread 使用 `GET /api/v1/workspaces/{workspace_id}/threads/{thread_id}/deliver
 
 ### 协作 Nexus View 关系分页
 
-Thread、Decision 和 Ticket 的原 `nexus-view` 继续返回完整关系。新 Web 请求 `relations=summary` 读取创建来源、直接替代关系、Activity 和现有操作能力，再通过同一路径下的 `/relations` 读取关系页。分页使用 `limit` 和 `after`，可见边界失效返回 409。服务端每页重新校验 Session 和对象权限。 [ADR-0058](../docs/adr/0058-nexus-view-relation-pagination.md)
+Thread、Decision 和 Ticket 的原 `nexus-view` 继续返回完整关系。通过 `relations=summary` 可独立精简关系并保留创建来源、直接替代关系和现有操作能力，再通过同一路径下的 `/relations` 读取关系页。分页使用 `limit` 和 `after`，可见边界失效返回 409。服务端每页重新校验 Session 和对象权限。 [ADR-0058](../docs/adr/0058-nexus-view-relation-pagination.md)
 
 schema 030 安装入向关系部分索引。复验 029 备份由匹配工件恢复到空目标并显式升级，可运行 `RADISHNEXUS_NEXUS_RELATIONS_LEGACY_REF=93c7095 ./scripts/check-server-backup-restore.sh`。 [升降级流程与证据](../docs/status/reviews/2026-11-15-nexus-view-relation-pagination.md#schema-030-升级与恢复)
+
+### 工单 Activity 历史分页
+
+Ticket 详情支持 `timeline=separate`，响应省略 `timeline` 并跳过全量历史查询。使用同一详情路径下的 `GET /timeline` 分页读历史，支持原有 `include` 组合、`limit` 和 `after`。默认 25 条，最多 50 条，按最近可读事件排序。 [ADR-0059](../docs/adr/0059-ticket-activity-pagination.md)

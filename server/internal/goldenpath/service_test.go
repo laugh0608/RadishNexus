@@ -129,6 +129,14 @@ func (store *recordingStore) GetNexusSummary(ctx context.Context, p authz.Princi
 	return store.GetNexusView(ctx, p, target)
 }
 
+func (s *recordingStore) GetTicketWithoutTimeline(ctx context.Context, p authz.Principal, ticket string, summary bool) (NexusView, error) {
+	view, err := s.GetNexusView(ctx, p, entityref.Ref{Type: "ticket", ID: ticket})
+	view.Timeline = nil
+	return view, err
+}
+func (*recordingStore) ListTicketTimeline(context.Context, authz.Principal, string, TicketTimelineInput) (TicketTimelinePage, error) {
+	return TicketTimelinePage{}, authz.ErrInvalid
+}
 func (*recordingStore) ListNexusRelations(context.Context, authz.Principal, entityref.Ref, NexusRelationPageInput) (NexusRelationPage, error) {
 	return NexusRelationPage{}, nil
 }

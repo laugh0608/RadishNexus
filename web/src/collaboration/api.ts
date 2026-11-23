@@ -299,6 +299,9 @@ export interface DecisionReviewPage {
   nextAfter: string | null;
 }
 
+type CollaborationReadMode = "full" | "summary" | "ticket-page";
+const ticketViewInclude = "due_date,execution_context,classification";
+
 export interface CollaborationClient {
   reviewDecision(
     workspaceID: string,
@@ -330,8 +333,17 @@ export interface CollaborationClient {
     entityType: CollaborationEntityType,
     entityID: string,
     signal?: AbortSignal,
-    mode?: "full" | "summary",
+    mode?: CollaborationReadMode,
   ): Promise<CollaborationView>;
+  loadTicketTimeline(
+    workspaceID: string,
+    ticketID: string,
+    after: string | undefined,
+    signal: AbortSignal,
+  ): Promise<{
+    items: readonly CollaborationTimelineItem[];
+    nextCursor: string | null;
+  }>;
   loadRelations(
     workspaceID: string,
     entityType: CollaborationEntityType,
@@ -421,6 +433,7 @@ export const browserCollaborationClient: CollaborationClient = {
   changeTicketStatus,
   loadView,
   loadRelations,
+  loadTicketTimeline,
   proposeDecision,
   acceptDecision,
   rejectDecision,
@@ -483,13 +496,16 @@ async function loadView(
   entityType: CollaborationEntityType,
   entityID: string,
   signal?: AbortSignal,
-  mode: "full" | "summary" = "full",
+  mode: CollaborationReadMode = "full",
 ): Promise<CollaborationView> {
   requireLocation(workspaceID, entityType, entityID);
   const parameters: string[] = [];
-  if (entityType === "ticket")
-    parameters.push("include=due_date,execution_context,classification");
-  if (mode === "summary") parameters.push("relations=summary");
+  if (entityType === "ticket") parameters.push(`include=${ticketViewInclude}`);
+  if (mode !== "full") parameters.push("relations=summary");
+  if (mode === "ticket-page") {
+    if (entityType !== "ticket") throw new TypeError("Expected Ticket");
+    parameters.push("timeline=separate");
+  }
   const suffix = parameters.length ? `?${parameters.join("&")}` : "";
   const response = await collaborationFetch(
     `/api/v1/workspaces/${encodeURIComponent(workspaceID)}/${pageSegments[entityType]}/${encodeURIComponent(entityID)}/nexus-view${suffix}`,
@@ -514,6 +530,47 @@ async function loadView(
       error,
     );
   }
+}
+
+async function loadTicketTimeline(
+  workspace: string,
+  ticket: string,
+  after: string | undefined,
+  signal: AbortSignal,
+) {
+  requireLocation(workspace, "ticket", ticket);
+  const data = await request(
+    workspace,
+    `/tickets/${encodeURIComponent(ticket)}/nexus-view/timeline${query(after)}&include=${ticketViewInclude}`,
+    "GET",
+    undefined,
+    signal,
+  );
+  const seen = new Set<string>();
+  return parsePage(
+    data,
+    (raw) => {
+      const item = parseTimelineItem(raw, seen.size, "ticket");
+      if (item.activityType === "ticket.created") {
+        const source = item.subjects[0];
+        if (
+          item.subjects.length !== 1 ||
+          !source ||
+          (source.visibility === "readable" &&
+            source.entity.ref.type !== "decision" &&
+            source.entity.ref.type !== "message")
+        )
+          throw new TypeError("Invalid Ticket creation history source");
+      }
+      if (seen.has(item.id))
+        throw new TypeError("Duplicate Ticket history event");
+      seen.add(item.id);
+      return item;
+    },
+    after,
+    (previous, current) =>
+      compareTimestamps(previous.occurredAt, current.occurredAt) >= 0,
+  );
 }
 
 async function loadRelations(
@@ -1088,8 +1145,10 @@ export function parseCollaborationView(
   payload: unknown,
   expectedType: CollaborationEntityType,
   expectedID: string,
-  mode: "full" | "summary" = "full",
+  mode: CollaborationReadMode = "full",
 ): CollaborationView {
+  if (mode === "ticket-page" && expectedType !== "ticket")
+    throw new TypeError("Expected Ticket");
   const envelope = exactRecord(payload, "response", ["data"]);
   const fields = record(envelope.data, "response.data");
   const hasSource = expectedType === "ticket" && "source_message" in fields;
@@ -1097,7 +1156,7 @@ export function parseCollaborationView(
     "current",
     ...(hasSource ? ["source_message"] : []),
     "relations",
-    "timeline",
+    ...(mode === "ticket-page" ? [] : ["timeline"]),
     ...(expectedType !== "thread" ? ["capabilities"] : []),
   ]);
   const current = parseCurrent(data.current, expectedType);
@@ -1107,11 +1166,14 @@ export function parseCollaborationView(
   const relations = array(data.relations, "response.data.relations").map(
     (relation, index) => parseRelation(relation, index, expectedType),
   );
-  if (mode === "summary" && relations.some(isPagedRelation))
+  if (mode !== "full" && relations.some(isPagedRelation))
     throw new TypeError("Unexpected paged relation in Nexus View summary");
-  const timeline = array(data.timeline, "response.data.timeline").map(
-    (item, index) => parseTimelineItem(item, index, expectedType),
-  );
+  const timeline =
+    mode === "ticket-page"
+      ? []
+      : array(data.timeline, "response.data.timeline").map((item, index) =>
+          parseTimelineItem(item, index, expectedType),
+        );
   const sourceMessage = hasSource
     ? data.source_message === null
       ? null

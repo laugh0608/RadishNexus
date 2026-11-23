@@ -6,6 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { AuthRequestError } from "../auth/api";
 import { CollaborationPage } from "./CollaborationPage";
 import {
   CollaborationRequestError,
@@ -37,13 +38,20 @@ function view(
     timeline: [],
   };
 }
-function setup(change = vi.fn(), load = vi.fn().mockResolvedValue(view())) {
+function setup(
+  change = vi.fn(),
+  load = vi.fn().mockResolvedValue(view()),
+  loadTicketTimeline = vi
+    .fn<CollaborationClient["loadTicketTimeline"]>()
+    .mockResolvedValue({ items: [], nextCursor: null }),
+) {
   const client: CollaborationClient = {
     reviewDecision: vi.fn(),
     loadDecisionReviews: vi
       .fn()
       .mockResolvedValue({ items: [], nextAfter: null }),
     loadView: load,
+    loadTicketTimeline,
     loadRelations: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
     changeTicketStatus: change,
     proposeDecision: vi.fn(),
@@ -208,5 +216,94 @@ describe("Ticket status actions", () => {
     await button("取消工单");
     expect(load).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("button", { name: "确认取消工单" })).toBeNull();
+  });
+});
+
+describe("Ticket history paging", () => {
+  const empty = { items: [], nextCursor: null };
+  const more = { items: [], nextCursor: "older" };
+  it("restarts a stale continuation once and keeps a first-page failure local", async () => {
+    const loadHistory = vi
+      .fn<CollaborationClient["loadTicketTimeline"]>()
+      .mockResolvedValueOnce(more)
+      .mockRejectedValueOnce(new AuthRequestError("stale", { status: 409 }))
+      .mockRejectedValueOnce(new AuthRequestError("conflict", { status: 409 }))
+      .mockResolvedValueOnce(empty);
+    const { load } = setup(undefined, undefined, loadHistory);
+    fireEvent.click(await button("查看更早的历史"));
+    fireEvent.click(await button("重新读取历史"));
+    await screen.findByText(/当前尚无已投影 Activity/);
+    expect(loadHistory.mock.calls.map((args) => args[2])).toEqual([
+      undefined,
+      "older",
+      undefined,
+      undefined,
+    ]);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(await button("标记完成")).toBeDefined();
+  });
+
+  it("retries the failed older page without discarding the cursor or reloading detail", async () => {
+    const history = vi
+      .fn<CollaborationClient["loadTicketTimeline"]>()
+      .mockResolvedValueOnce(more)
+      .mockRejectedValueOnce(
+        new AuthRequestError("unavailable", { status: 503 }),
+      )
+      .mockResolvedValueOnce(empty);
+    const { load } = setup(undefined, undefined, history);
+    fireEvent.click(await button("查看更早的历史"));
+    fireEvent.click(await button("重新读取历史"));
+    await button("返回最新历史");
+    expect(history.mock.calls.map((args) => args[2])).toEqual([
+      undefined,
+      "older",
+      "older",
+    ]);
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+  it.each([401, 403, 404])(
+    "clears protected details after a %d history response",
+    async (status) => {
+      const loadHistory = vi
+        .fn<CollaborationClient["loadTicketTimeline"]>()
+        .mockRejectedValueOnce(new AuthRequestError("unavailable", { status }));
+      const { expired } = setup(undefined, undefined, loadHistory);
+      await screen.findByRole("heading", { name: "无法读取这个协作对象" });
+      expect(screen.queryByRole("button", { name: "标记完成" })).toBeNull();
+      expect(expired).toHaveBeenCalledTimes(status === 401 ? 1 : 0);
+    },
+  );
+  it("cancels an old continuation on a Ticket switch and discards its late result", async () => {
+    let finish: (v: typeof more) => void = () => {};
+    const loadHistory = vi
+      .fn<CollaborationClient["loadTicketTimeline"]>()
+      .mockResolvedValueOnce(more)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+      )
+      .mockResolvedValueOnce(empty);
+    const { client, expired, rerender } = setup(
+      undefined,
+      undefined,
+      loadHistory,
+    );
+    fireEvent.click(await button("查看更早的历史"));
+    await waitFor(() => expect(loadHistory).toHaveBeenCalledTimes(2));
+    rerender(
+      <CollaborationPage
+        workspaceID="wrk_main"
+        entityType="ticket"
+        entityID="tkt_other"
+        client={client}
+        onSessionExpired={expired}
+      />,
+    );
+    await waitFor(() => expect(loadHistory).toHaveBeenCalledTimes(3));
+    expect(loadHistory.mock.calls[1]![3].aborted).toBe(true);
+    await act(async () => finish(more));
+    expect(screen.queryByRole("button", { name: "查看更早的历史" })).toBeNull();
   });
 });

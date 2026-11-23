@@ -727,6 +727,9 @@ function testClient(
       .mockResolvedValue({ items: [], nextAfter: null }),
     changeTicketStatus: vi.fn(),
     loadView: vi.fn().mockResolvedValue(threadView),
+    loadTicketTimeline: vi
+      .fn()
+      .mockResolvedValue({ items: [], nextCursor: null }),
     loadRelations: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
     proposeDecision: vi.fn(),
     acceptDecision: vi.fn(),

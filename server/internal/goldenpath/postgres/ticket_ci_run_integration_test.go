@@ -125,6 +125,10 @@ func TestTicketCIRunHTTPSAndPortableScope(t *testing.T) {
 	if bytes.Contains(body, []byte(first)) {
 		t.Fatal("removed relation returned as active")
 	}
+	generic := read(ticket+"/nexus-view/timeline?include=due_date,execution_context,classification", 200)
+	if bytes.Contains(generic, []byte("ticket.ci-run-")) || bytes.Contains(generic, []byte(succeeded)) {
+		t.Fatal("build history escaped dedicated route")
+	}
 	history := ticket + "/ci-run-link-history"
 	pageBody := read(history+"?limit=2", 200)
 	var page struct {

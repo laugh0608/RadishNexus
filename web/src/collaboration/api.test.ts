@@ -931,3 +931,42 @@ it("requests and strictly reads nullable Ticket due date history", async () => {
     vi.unstubAllGlobals();
   }
 });
+
+it("requires the negotiated Ticket history shape and rejects malformed or duplicate history", async () => {
+  const item = {
+    id: "evt_created",
+    activity_type: "ticket.created",
+    occurred_at: "2026-11-23T04:00:00Z",
+    actor: { kind: "user", id: "usr_one" },
+    status: "open",
+    subjects: [{ visibility: "restricted" }],
+  };
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  const load = () =>
+    browserCollaborationClient.loadTicketTimeline(
+      "wrk_main",
+      "tkt_work",
+      undefined,
+      new AbortController().signal,
+    );
+  for (const items of [
+    [{ ...item, subjects: [] }],
+    [{ ...item, subjects: [{ visibility: "restricted", id: "msg_hidden" }] }],
+    [item, item],
+  ]) {
+    fetch.mockResolvedValueOnce(
+      jsonResponse({ data: { items, next_cursor: null } }),
+    );
+    await expect(load()).rejects.toThrow();
+  }
+  fetch.mockResolvedValueOnce(
+    jsonResponse({ data: { items: [item], next_cursor: null } }),
+  );
+  expect((await load()).items[0]?.subjects).toEqual([
+    { visibility: "restricted" },
+  ]);
+  expect(fetch.mock.calls[0]?.[0]).toContain(
+    "/nexus-view/timeline?limit=25&include=due_date,execution_context,classification",
+  );
+});

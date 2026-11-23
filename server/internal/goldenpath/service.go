@@ -193,6 +193,8 @@ type Store interface {
 	RecordStagingDeployment(context.Context, RecordStagingDeploymentCommand) (Deployment, error)
 	ListRelations(context.Context, authz.Principal, entityref.Ref) ([]RelationProjection, error)
 	GetNexusView(context.Context, authz.Principal, entityref.Ref) (NexusView, error)
+	GetTicketWithoutTimeline(context.Context, authz.Principal, string, bool) (NexusView, error)
+	ListTicketTimeline(context.Context, authz.Principal, string, TicketTimelineInput) (TicketTimelinePage, error)
 	GetNexusSummary(context.Context, authz.Principal, entityref.Ref) (NexusView, error)
 	ListNexusRelations(context.Context, authz.Principal, entityref.Ref, NexusRelationPageInput) (NexusRelationPage, error)
 }

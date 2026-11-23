@@ -206,3 +206,7 @@ Thread 的“执行与交付”列出当前可读的工单及其来源。展开�
 ### 协作 Nexus View 关系分页
 
 Thread、Decision 和 Ticket 的“来源与后续结果”保留原始来源及直接替代关系。派生 Decision、实施 Ticket 或工单关联的文档和组件各从当前页读取。切页保留详情和可用操作，游标失效自动从第一页核对。 [ADR-0058](../docs/adr/0058-nexus-view-relation-pagination.md)
+
+### 工单 Activity 历史分页
+
+Ticket 详情的 Activity 区默认显示最新 25 条可读事件，可查看更早的历史或返回最新页。普通读取错误可就地重试，游标失效从首页重读。切换工单或失权会清除旧结果。 [ADR-0059](../docs/adr/0059-ticket-activity-pagination.md)

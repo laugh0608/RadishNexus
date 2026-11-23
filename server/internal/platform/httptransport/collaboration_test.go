@@ -60,6 +60,14 @@ func (application *fakeCollaborationApplication) GetNexusSummary(ctx context.Con
 	return application.GetNexusView(ctx, p, target)
 }
 
+func (s *fakeCollaborationApplication) GetTicketWithoutTimeline(ctx context.Context, p authz.Principal, ticket string, summary bool) (goldenpath.NexusView, error) {
+	view, err := s.GetNexusView(ctx, p, entityref.Ref{Type: "ticket", ID: ticket})
+	view.Timeline = nil
+	return view, err
+}
+func (*fakeCollaborationApplication) ListTicketTimeline(context.Context, authz.Principal, string, goldenpath.TicketTimelineInput) (goldenpath.TicketTimelinePage, error) {
+	return goldenpath.TicketTimelinePage{}, authz.ErrInvalid
+}
 func (*fakeCollaborationApplication) ListNexusRelations(context.Context, authz.Principal, entityref.Ref, goldenpath.NexusRelationPageInput) (goldenpath.NexusRelationPage, error) {
 	return goldenpath.NexusRelationPage{Items: []goldenpath.RelationProjection{}}, nil
 }

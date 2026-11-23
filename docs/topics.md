@@ -57,6 +57,7 @@
 | [工单与构建的可追溯关联：ADR-0056](adr/0056-ticket-ci-run-traceability.md) | M4 人工构建关联、分权追溯和整库恢复 | Ticket、CI Run、Deployment、整库备份 |
 | [从原讨论追踪工单、构建与部署：ADR-0057](adr/0057-thread-delivery-trace.md) | M4，涵盖三类工单来源、分层分页和逐跳授权 | Thread、Ticket、CI Run、Deployment |
 | [核心 Nexus View 关系分页：ADR-0058](adr/0058-nexus-view-relation-pagination.md) | 首批 Thread、Decision、Ticket 的关系分页与详情兼容 | 协作详情、EntityLink、权限 |
+| [Ticket Activity 历史分页：ADR-0059](adr/0059-ticket-activity-pagination.md) | 按当前权限分页读取工单历史，保留旧详情和专用历史入口。[技术验收](status/reviews/2026-11-23-ticket-activity-pagination.md) | Ticket、执行讨论、Activity |
 
 完成需沿真实授权与版本恢复路径成立；只读发现、最小状态、负责人、优先级及截止日期是独立交付，不合称完整工单系统、通用 Timeline 分页或生产容量验收。
 
