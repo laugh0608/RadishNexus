@@ -187,7 +187,12 @@ func (handler *DiscoveryHandler) list(response http.ResponseWriter, request *htt
 		handler.writeError(response, request, err)
 		return
 	}
-	scope = ticketDiscoveryScope(scope, input.TicketFilters)
+	switch kind {
+	case "decision":
+		scope.Status = input.DecisionStatus
+	case "ticket":
+		scope = ticketDiscoveryScope(scope, input.TicketFilters)
+	}
 	var page goldenpath.DiscoveryPage
 	switch kind {
 	case "thread":
@@ -237,6 +242,14 @@ func parseDiscoveryQuery(raw string, scope discoveryCursor) (goldenpath.Discover
 		return input, invalid
 	}
 	for name, values := range values {
+		if scope.Kind == "decision" && name == "status" {
+			if len(values) != 1 || !goldenpath.ValidDecisionStatus(values[0]) {
+				return input, invalid
+			}
+			input.DecisionStatus = values[0]
+			scope.Status = input.DecisionStatus
+			continue
+		}
 		if name == "include" {
 			if (scope.Kind != "ticket" && scope.Kind != "my-tickets") || len(values) != 1 || (values[0] != "due_date" && values[0] != "classification" && values[0] != "due_date,classification") {
 				return input, invalid
@@ -319,7 +332,7 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 		} else if scope.Kind == "thread" {
 			validStatus = item.Status == ""
 		} else if scope.Kind == "decision" {
-			validStatus = item.Status == "proposed" || item.Status == "accepted" || item.Status == "rejected" || item.Status == "superseded"
+			validStatus = goldenpath.ValidDecisionStatus(item.Status) && (input.DecisionStatus == "" || item.Status == input.DecisionStatus)
 		}
 		if item.Ref.Type != refKind || !validScopedID(item.Ref.ID, discoveryPrefix(refKind)) || seen[item.Ref.ID] || !validDiscoveryTitle(item.Title) || !validStatus || ((refKind == "ticket" || refKind == "decision" || refKind == "thread") && item.Ref.ID <= previousID) {
 			return dto, invalid

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthRequestError } from "../auth/api";
-import { collaborationPagePath } from "../collaboration/api";
 import {
+  collaborationPagePath,
+  type DecisionStatus,
+} from "../collaboration/api";
+import {
+  decisionStatusLabels,
+  isDecisionStatus,
   projectDecisionsClient,
   type ProjectDecisionsClient,
 } from "./project-decisions-api";
@@ -38,6 +43,7 @@ function ProjectDecisions({
   client = projectDecisionsClient,
 }: Props) {
   const [state, setState] = useState<PageState>({ status: "loading" });
+  const [statusFilter, setStatusFilter] = useState<DecisionStatus | "">("");
   const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
   const [revision, setRevision] = useState(0);
   const activeRequest = useRef<AbortController | null>(null);
@@ -57,7 +63,13 @@ function ProjectDecisions({
     // denied/failed read of the other, nor a late response after navigation.
     void Promise.all([
       client.project(workspaceID, projectID, controller.signal),
-      client.decisions(workspaceID, projectID, cursor, controller.signal),
+      client.decisions(
+        workspaceID,
+        projectID,
+        cursor,
+        controller.signal,
+        statusFilter || undefined,
+      ),
     ]).then(
       ([project, page]) => {
         if (!controller.signal.aborted)
@@ -78,7 +90,15 @@ function ProjectDecisions({
       },
     );
     return () => controller.abort();
-  }, [client, cursor, onSessionExpired, projectID, revision, workspaceID]);
+  }, [
+    client,
+    cursor,
+    onSessionExpired,
+    projectID,
+    revision,
+    statusFilter,
+    workspaceID,
+  ]);
 
   useEffect(() => {
     const visibility = () => {
@@ -112,6 +132,26 @@ function ProjectDecisions({
     >
       <a href="/">返回工作台</a>
       <h1>项目决策</h1>
+      <label>
+        决策状态
+        <select
+          value={statusFilter}
+          onChange={(event) => {
+            const value = event.currentTarget.value;
+            if (value === "" || isDecisionStatus(value)) {
+              setStatusFilter(value);
+              refresh();
+            }
+          }}
+        >
+          <option value="">全部状态</option>
+          {Object.entries(decisionStatusLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
       <button type="button" onClick={refresh}>
         刷新决策列表
       </button>
@@ -131,7 +171,11 @@ function ProjectDecisions({
             <p>项目已归档 · 可浏览历史决策</p>
           ) : null}
           {state.page.items.length === 0 ? (
-            <p>当前项目没有可显示的决策。</p>
+            <p>
+              {statusFilter
+                ? `本页没有「${decisionStatusLabels[statusFilter]}」决策。`
+                : "当前项目没有可显示的决策。"}
+            </p>
           ) : (
             <ul className="configuration-list">
               {state.page.items.map((decision) => (
@@ -145,15 +189,7 @@ function ProjectDecisions({
                   >
                     {decision.title}
                   </a>
-                  <p>
-                    {decision.status === "proposed"
-                      ? "待确认"
-                      : decision.status === "accepted"
-                        ? "已确认"
-                        : decision.status === "rejected"
-                          ? "已拒绝"
-                          : "已被替代"}
-                  </p>
+                  <p>{decisionStatusLabels[decision.status]}</p>
                 </li>
               ))}
             </ul>

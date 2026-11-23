@@ -201,3 +201,57 @@ func TestProjectDecisionsRejectsInvalidPaginationProjection(t *testing.T) {
 		t.Fatal("short page with next cursor accepted")
 	}
 }
+
+func TestProjectDecisionStatusCursorsAndProjection(t *testing.T) {
+	const path = "/api/v1/workspaces/wrk_main/projects/prj_main/decisions"
+	row := goldenpath.DiscoveryItem{Ref: entityref.Ref{Type: "decision", ID: "dec_boundary"}, Title: "可读问题", Status: "proposed"}
+	reader := &fakeDiscoveryReader{page: goldenpath.DiscoveryPage{Items: []goldenpath.DiscoveryItem{row}, NextID: row.Ref.ID}}
+	handler := discoveryHandlerForTest(t, validMessagingSessions(), reader)
+	get := func(query string, want int) discoveryPageDTO {
+		t.Helper()
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, messagingRequest("GET", path+"?"+query, ""))
+		if w.Code != want {
+			t.Fatalf("%s: %d %s", query, w.Code, w.Body)
+		}
+		var reply struct {
+			Data discoveryPageDTO `json:"data"`
+		}
+		if want == 200 {
+			if err := json.Unmarshal(w.Body.Bytes(), &reply); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return reply.Data
+	}
+	// Frozen literal from ADR-0040, independently of the current cursor serializer.
+	legacy := base64.RawURLEncoding.EncodeToString([]byte(`{"v":1,"workspace_id":"wrk_main","kind":"decision","project_id":"prj_main","after_id":"dec_boundary"}`))
+	unfiltered := get("limit=1", 200)
+	if unfiltered.NextCursor == nil || *unfiltered.NextCursor != legacy {
+		t.Fatal("unfiltered cursor encoding changed")
+	}
+	first := get("status=proposed&limit=1", 200)
+	if first.NextCursor == nil || *first.NextCursor == legacy || reader.input.DecisionStatus != "proposed" {
+		t.Fatal(first, reader.input)
+	}
+	filtered := *first.NextCursor
+	reader.page = goldenpath.DiscoveryPage{}
+	get("after="+legacy, 200)
+	get("status=proposed&after="+filtered, 200)
+	if reader.input.AfterID != row.Ref.ID {
+		t.Fatal(reader.input)
+	}
+	calls := reader.calls
+	for _, q := range []string{"after=" + filtered, "status=accepted&after=" + filtered, "status=proposed&after=" + legacy, "status=", "status=all", "status=Proposed", "status=proposed&status=accepted", "status=proposed,accepted"} {
+		get(q, 400)
+	}
+	if reader.calls != calls {
+		t.Fatal("invalid filter reached store")
+	}
+	for _, status := range []string{"accepted", "rejected", "superseded"} {
+		row.Status = status
+		reader.page = goldenpath.DiscoveryPage{Items: []goldenpath.DiscoveryItem{row}}
+		get("status="+status, 200)
+		get("status=proposed", 500)
+	}
+}

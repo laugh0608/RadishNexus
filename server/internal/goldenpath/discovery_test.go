@@ -80,7 +80,7 @@ func TestDecisionDiscoveryValidatesBeforeReading(t *testing.T) {
 	principal := authz.Principal{Kind: authz.PrincipalUser, ID: "usr_reader", WorkspaceID: "wrk_main"}
 	store := &discoveryStoreStub{}
 	service := NewDiscoveryService(store)
-	for _, input := range []DiscoveryPageInput{{Limit: -1}, {Limit: 0}, {Limit: 51}, {Limit: 25, AfterID: "chn_other"}, {Limit: 25, AfterID: "dec_invalid/path"}} {
+	for _, input := range []DiscoveryPageInput{{Limit: -1}, {Limit: 0}, {Limit: 51}, {Limit: 25, AfterID: "chn_other"}, {Limit: 25, AfterID: "dec_invalid/path"}, {Limit: 25, DecisionStatus: "all"}} {
 		if _, err := service.ListProjectDecisions(context.Background(), principal, "prj_main", input); !errors.Is(err, authz.ErrInvalid) {
 			t.Fatal(input, err)
 		}

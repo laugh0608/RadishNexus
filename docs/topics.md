@@ -34,6 +34,7 @@
 | [频道内的可读讨论列表：ADR-0061](adr/0061-channel-thread-discovery.md) | 从频道分页发现并打开源消息与目标均可读的讨论 | 成员读权、私密回复、翻页撤权 |
 | [从讨论返回原消息：ADR-0062](adr/0062-thread-source-message-navigation.md) | 从可读来源定位顶层消息或所属讨论中的回复；来源撤权后保留独立可读的子讨论 | 消息定位、来源受限 |
 | [Project 决策发现：ADR-0040](adr/0040-project-decision-discovery.md) | 原只读切片及[验收记录](status/reviews/2026-10-18-project-decision-discovery.md) | Project 导航、工单来源 |
+| [项目决策状态筛选](adr/0063-project-decision-status-filter.md) | 四种状态跨页查找、旧游标兼容与[合成账号验证](status/reviews/2026-11-23-project-decision-status-filter.md) | Project 决策发现 |
 | [Decision 生命周期与最小拒绝：ADR-0048](adr/0048-decision-lifecycle-and-rejection.md) | 首片拒绝合同与 R01～R10，[实际证据](status/reviews/2026-11-02-decision-rejection.md)分别记录验证层次 | 已建 Ticket、Document、Activity 与上下文包兼容 |
 | [Decision 最小替代：ADR-0049](adr/0049-decision-supersession.md) | 单链替代、双方版本、原重试与执行历史、v5 迁移已实施；[分层证据](status/reviews/2026-11-02-decision-supersession.md)保留验收限制 | 当前权限、Ticket / Document 来源、双对象 Activity 与上下文包 |
 | [Decision 最小人工复核：ADR-0050](adr/0050-decision-manual-review.md) | Go / PostgreSQL / 正式 HTTPS Chrome 已验收，[分层验证](status/reviews/2026-11-08-decision-manual-review.md)记录当前证据和待验收范围 | 当前证据权限、Decision 版本、Activity 与上下文包 |

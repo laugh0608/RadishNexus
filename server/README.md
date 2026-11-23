@@ -222,7 +222,7 @@ Deployment Nexus View 只读路由为：
 
 [ADR-0040](../docs/adr/0040-project-decision-discovery.md) 增加 `GET /api/v1/workspaces/{workspace_id}/projects/{project_id}/decisions`。复用 `DiscoveryService`、同源 Session 与 repeatable-read 事务；按 governing Project 当前权限读取，与 evidence Thread / origin Channel 的可读性独立。active Workspace 成员可读 workspace 可见项目，restricted Project 必须有当前 membership，owner 不穿透；归档仍可读。
 
-响应仅为 `data.items[{ref,title,status}] / next_cursor`，title 保留 question 原文，状态严格为 `proposed / accepted / rejected / superseded`。仅接受 `limit`（默认 25、最大 50）与 `after`；v1 cursor 绑定 Workspace、Project、kind=`decision`，按稳定 ID 升序、排他边界翻页，不与其他列表互用。待返回页含非法状态、ref、问题或顺序时整页失败；不以状态过滤隐藏异常。列表不展开来源、结论、理由、能力或计数，不改变业务事实。401 / 404、错误 envelope、`private, no-store` 与 `Vary: Cookie` 沿用发现合同。
+响应为 `data.items[{ref,title,status}] / next_cursor`，title 保留 question 原文。查询接受 `limit`（默认 25、最大 50）、`after` 和可选的单一 `status`（`proposed / accepted / rejected / superseded`）。每页按当前状态筛选，再按稳定 ID 升序取数，游标边界排他。省略筛选沿用原 v1 游标。指定筛选时，游标同时绑定 Workspace、Project、列表类型和状态，混用返回 400。待返回页的状态、ref、问题或顺序违反合同时整页失败。401 / 404、错误 envelope、`private, no-store` 与 `Vary: Cookie` 沿用发现合同。[ADR-0063](../docs/adr/0063-project-decision-status-filter.md)
 
 独立查询测量支持本片不新增索引或 migration，无依赖和写入协议变化；规模、权限与浏览器证据见[实施记录](../docs/status/reviews/2026-10-18-project-decision-discovery.md)。
 

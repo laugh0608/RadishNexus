@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { AuthRequestError } from "../auth/api";
@@ -60,9 +61,9 @@ describe("Project Decisions page", () => {
     const link = await screen.findByRole("link", { name: /<script>alert/ });
     expect(link.textContent).toBe(title);
     expect(link.querySelector("script, strong")).toBeNull();
-    expect(screen.getByText("待确认")).toBeDefined();
-    expect(screen.getByText("已确认")).toBeDefined();
-    expect(view.container.querySelector("form, input, select")).toBeNull();
+    expect(within(screen.getByRole("list")).getByText("待确认")).toBeDefined();
+    expect(within(screen.getByRole("list")).getByText("已确认")).toBeDefined();
+    expect(view.container.querySelector("form, input")).toBeNull();
     expect(
       screen.queryByRole("button", { name: /接受|拒绝|创建|确认/ }),
     ).toBeNull();
@@ -147,6 +148,7 @@ describe("Project Decisions page", () => {
         scope.projectID,
         undefined,
         expect.any(AbortSignal),
+        undefined,
       );
     },
   );
@@ -169,6 +171,7 @@ describe("Project Decisions page", () => {
       "prj_main",
       undefined,
       expect.any(AbortSignal),
+      undefined,
     );
     expect(screen.getByText("第 1 页")).toBeDefined();
   });
@@ -202,6 +205,7 @@ describe("Project Decisions page", () => {
       "prj_main",
       undefined,
       expect.any(AbortSignal),
+      undefined,
     );
   });
   it("aborts both reads on leaving the page and rereads on reentry", async () => {
@@ -250,6 +254,7 @@ describe("Project Decisions page", () => {
       "prj_main",
       "next_page",
       expect.any(AbortSignal),
+      undefined,
     );
     expect(
       (screen.getByRole("button", { name: "下一页" }) as HTMLButtonElement)
@@ -264,6 +269,7 @@ describe("Project Decisions page", () => {
       "prj_main",
       undefined,
       expect.any(AbortSignal),
+      undefined,
     );
   });
   it("shows an empty list and retries errors without keeping Project metadata", async () => {
@@ -331,6 +337,7 @@ describe("Project Decisions page", () => {
       "prj_other",
       undefined,
       expect.any(AbortSignal),
+      undefined,
     );
   });
   it.each(["focus", "visibilitychange", "pageshow", "popstate"])(
@@ -362,6 +369,7 @@ describe("Project Decisions page", () => {
         "prj_main",
         undefined,
         expect.any(AbortSignal),
+        undefined,
       );
     },
   );
@@ -392,5 +400,57 @@ describe("Project Decisions page", () => {
       expect(screen.queryByText("First work")).toBeNull();
       expect(screen.queryByText(project.name)).toBeNull();
     },
+  );
+});
+
+it("resets on status changes, ignores a late older page, and preserves the filter during page refresh", async () => {
+  const api = client();
+  const late = pending<typeof page>();
+  vi.mocked(api.decisions)
+    .mockResolvedValueOnce(page)
+    .mockReturnValueOnce(late.promise)
+    .mockResolvedValueOnce({
+      items: [
+        { id: "dec_accepted", title: "Accepted work", status: "accepted" },
+      ],
+      nextCursor: "filtered",
+    })
+    .mockResolvedValue({ items: [], nextCursor: null });
+  render(<ProjectDecisionsPage {...props} client={api} />);
+  await screen.findByText("First work");
+  fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+  const oldSignal = vi.mocked(api.decisions).mock.calls.at(-1)![3]!;
+  fireEvent.change(screen.getByRole("combobox", { name: "决策状态" }), {
+    target: { value: "accepted" },
+  });
+  await screen.findByRole("link", { name: "Accepted work" });
+  expect(oldSignal.aborted).toBe(true);
+  await act(async () => late.resolve(page));
+  expect(screen.queryByText("First work")).toBeNull();
+  expect(screen.getByText("第 1 页")).toBeDefined();
+  expect(api.decisions).toHaveBeenLastCalledWith(
+    "wrk_main",
+    "prj_main",
+    undefined,
+    expect.any(AbortSignal),
+    "accepted",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+  await screen.findByText("本页没有「已确认」决策。");
+  expect(api.decisions).toHaveBeenLastCalledWith(
+    "wrk_main",
+    "prj_main",
+    "filtered",
+    expect.any(AbortSignal),
+    "accepted",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "刷新决策列表" }));
+  await screen.findByText("第 1 页");
+  expect(api.decisions).toHaveBeenLastCalledWith(
+    "wrk_main",
+    "prj_main",
+    undefined,
+    expect.any(AbortSignal),
+    "accepted",
   );
 });

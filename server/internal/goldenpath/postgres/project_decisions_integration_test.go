@@ -705,19 +705,23 @@ func TestProjectDecisionDiscoveryScaleAndConstantQueries(t *testing.T) {
 	service := goldenpath.NewDiscoveryService(goldenpostgres.New(measured))
 	var baseline int64
 	for _, probe := range []struct {
-		label string
-		limit int
-		after string
-		want  int
+		label  string
+		limit  int
+		after  string
+		status string
+		want   int
 	}{
-		{"first-small", 1, "", 1},
-		{"first-default", 25, "", 25},
-		{"tail-default", 25, targetIDs[24], 2},
-		{"first-max", 50, "", 27},
-		{"empty-tail", 50, targetIDs[26], 0},
+		{"first-small", 1, "", "", 1},
+		{"first-default", 25, "", "", 25},
+		{"tail-default", 25, targetIDs[24], "", 2},
+		{"first-max", 50, "", "", 27},
+		{"empty-tail", 50, targetIDs[26], "", 0},
+		{"pending-first", 25, "", "proposed", 13},
+		{"pending-tail", 25, targetIDs[24], "proposed", 1},
+		{"rejected-empty", 25, "", "rejected", 0},
 	} {
 		var plan []byte
-		if err := f.pool.QueryRow(f.ctx, `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT id,question,status FROM radishnexus.decisions WHERE workspace_id=$1 AND governing_project_id=$2 AND id>$3 ORDER BY id LIMIT $4`, f.users["owner"].WorkspaceID, projects[0], probe.after, probe.limit+1).Scan(&plan); err != nil {
+		if err := f.pool.QueryRow(f.ctx, `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT id,question,status FROM radishnexus.decisions WHERE workspace_id=$1 AND governing_project_id=$2 AND id>$3 AND ($5::text='' OR status=$5) ORDER BY id LIMIT $4`, f.users["owner"].WorkspaceID, projects[0], probe.after, probe.limit+1, probe.status).Scan(&plan); err != nil {
 			t.Fatal(err)
 		}
 		if !json.Valid(plan) {
@@ -727,7 +731,7 @@ func TestProjectDecisionDiscoveryScaleAndConstantQueries(t *testing.T) {
 		// Five fixed admission statements (timeout, schema gate, Workspace gate, account and membership).
 		counter.queries.Store(0)
 		start := time.Now()
-		page, err := service.ListProjectDecisions(f.ctx, f.users["reader"], projects[0], goldenpath.DiscoveryPageInput{Limit: probe.limit, AfterID: probe.after})
+		page, err := service.ListProjectDecisions(f.ctx, f.users["reader"], projects[0], goldenpath.DiscoveryPageInput{Limit: probe.limit, AfterID: probe.after, DecisionStatus: probe.status})
 		elapsed := time.Since(start)
 		calls := counter.queries.Load()
 		if err != nil || len(page.Items) != probe.want || calls > 11 {
@@ -749,4 +753,67 @@ func TestProjectDecisionDiscoveryScaleAndConstantQueries(t *testing.T) {
 func containsDecisionID(ids []string, id string) bool {
 	index := sort.SearchStrings(ids, id)
 	return index < len(ids) && ids[index] == id
+}
+
+func TestProjectDecisionStatusFilterCurrentMembershipAndState(t *testing.T) {
+	f := newProjectDecisionFixture(t)
+	project, channel := f.project(t, "state-filter", "restricted")
+	thread := f.thread(t, channel, "private-filter-source", "restricted")
+	old := f.propose(t, thread, "old", "Past decision", true)
+	first := f.propose(t, thread, "one", "First pending question", false)
+	replacement := f.propose(t, thread, "replacement", "Replacement", true)
+	removed := f.propose(t, thread, "no", "Rejected proposal", false)
+	last := f.propose(t, thread, "two", "Last pending question", false)
+	actor := contextInvocation(f.users["owner"])
+	if _, err := f.core.RejectDecision(f.ctx, actor, goldenpath.RejectDecisionInput{DecisionID: removed.ID, ClientOperationID: "reject-proposal", RejectionReason: "Synthetic reason"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.core.SupersedeDecision(f.ctx, actor, goldenpath.SupersedeDecisionInput{DecisionID: old.ID, ReplacementID: replacement.ID, ClientOperationID: "replace-decision", SupersessionReason: "Synthetic replacement", BaseDecisionRevision: 2, BaseReplacementRevision: 2}); err != nil {
+		t.Fatal(err)
+	}
+
+	assertPage := func(status, after string, limit int, next string, ids ...string) {
+		t.Helper()
+		page, err := f.discovery.ListProjectDecisions(f.ctx, f.users["reader"], project, goldenpath.DiscoveryPageInput{DecisionStatus: status, Limit: limit, AfterID: after})
+		if err != nil || page.NextID != next || len(page.Items) != len(ids) {
+			t.Fatalf("%s after %s: %+v, %v", status, after, page, err)
+		}
+		for i, row := range page.Items {
+			if row.Ref.ID != ids[i] || row.Status != status {
+				t.Fatal(row, ids)
+			}
+		}
+	}
+	assertPage("proposed", "", 1, first.ID, first.ID)
+	assertPage("rejected", "", 1, "", removed.ID)
+	assertPage("superseded", "", 1, "", old.ID)
+	assertPage("accepted", "", 1, "", replacement.ID)
+	if err := f.accept("owner", first.ID, "accept-boundary"); err != nil {
+		t.Fatal(err)
+	}
+	assertPage("proposed", first.ID, 1, "", last.ID)
+	assertPage("proposed", "", 1, "", last.ID)
+	assertPage("accepted", "", 2, "", first.ID, replacement.ID)
+	if err := f.accept("owner", last.ID, "accept-tail"); err != nil {
+		t.Fatal(err)
+	}
+	assertPage("proposed", first.ID, 1, "")
+	w := f.get(t, f.handler(t), "reader", project, "?status=accepted&limit=1")
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	assertDecisionDiscoveryNoSource(t, w.Body.String())
+	var body struct {
+		Data struct {
+			Next string `json:"next_cursor"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil || body.Data.Next == "" {
+		t.Fatal(body, err)
+	}
+	role := "viewer"
+	f.configure(t, goldenpath.ConfigurationInput{Kind: "project.member.remove", ScopeID: project, UserID: f.users["reader"].ID, ExpectedRole: &role})
+	if w := f.get(t, f.handler(t), "reader", project, "?status=accepted&after="+body.Data.Next); w.Code != 404 {
+		t.Fatal(w.Code, w.Body.String())
+	}
 }

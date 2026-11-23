@@ -268,8 +268,9 @@ func (store *Store) ListProjectDecisions(ctx context.Context, principal authz.Pr
 	rows, err := tx.Query(ctx, `
 		SELECT id, question, status FROM radishnexus.decisions
 		WHERE workspace_id = $1 AND governing_project_id = $2 AND id > $3
+		  AND ($5::text = '' OR status = $5)
 		ORDER BY id LIMIT $4
-	`, principal.WorkspaceID, projectID, input.AfterID, input.Limit+1)
+	`, principal.WorkspaceID, projectID, input.AfterID, input.Limit+1, input.DecisionStatus)
 	if err != nil {
 		return page, fmt.Errorf("query readable Decisions: %w", err)
 	}

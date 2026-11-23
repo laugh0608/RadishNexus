@@ -4,6 +4,8 @@
 
 日期：2026-10-18
 
+2026-11-23 的增量合同为决策列表增加可选状态筛选，并保留原无筛选游标。[ADR-0063](0063-project-decision-status-filter.md)
+
 关联：[ADR-0004](0004-project-scoped-collaboration-permissions.md)、[ADR-0019](0019-session-scoped-thread-decision-ticket-transport.md)、[ADR-0025](0025-project-and-channel-discovery.md)、[ADR-0038](0038-project-ticket-discovery.md)、[Golden Path](../golden-path.md)。本提案增量扩展只读发现，不改变 Decision 状态写入、来源或权限语义。
 
 ## 背景与源码核对

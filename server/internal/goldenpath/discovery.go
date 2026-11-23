@@ -25,7 +25,12 @@ func (f TicketFilters) Valid() bool {
 	return (f.Status == "" || f.Status == "active" || ValidTicketStatus(f.Status)) && (f.Assignee == "" || f.Assignee == "me" || f.Assignee == "unassigned") && (f.Priority == "" || ValidTicketPriority(f.Priority)) && (f.Type == "" || cp.ValidTicketType(f.Type)) && validTicketFilterLabels(f.Labels) && (f.Title == "" || validTicketTitleQuery(f.Title))
 }
 
+func ValidDecisionStatus(status string) bool {
+	return status == "proposed" || status == "accepted" || status == "rejected" || status == "superseded"
+}
+
 type DiscoveryPageInput struct {
+	DecisionStatus        string
 	IncludeDueDate        bool
 	IncludeClassification bool
 
@@ -131,6 +136,9 @@ func (service *DiscoveryService) ListMyTickets(ctx context.Context, principal au
 func validateDiscoveryInput(principal authz.Principal, kind string, input DiscoveryPageInput) error {
 	if err := principal.ValidateUser(); err != nil {
 		return err
+	}
+	if input.DecisionStatus != "" && (kind != "decision" || !ValidDecisionStatus(input.DecisionStatus)) {
+		return fmt.Errorf("%w: invalid Decision status filter", authz.ErrInvalid)
 	}
 	if !input.TicketFilters.Valid() || (kind != "ticket" && input.TicketFilters != (TicketFilters{})) {
 		return fmt.Errorf("%w: invalid Ticket filters", authz.ErrInvalid)

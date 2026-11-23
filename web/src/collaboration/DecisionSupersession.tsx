@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AuthRequestError } from "../auth/api";
 import {
+  decisionStatusLabels,
   projectDecisionsClient,
   type ProjectDecision,
 } from "../workspace/project-decisions-api";
@@ -15,12 +16,6 @@ import {
 } from "./api";
 
 type Pending = { oldID: string; input: SupersedeDecisionInput };
-const labels = {
-  proposed: "待确认",
-  accepted: "已确认",
-  rejected: "已拒绝",
-  superseded: "已被替代",
-};
 
 export function useDecisionSupersession({
   workspaceID,
@@ -302,7 +297,7 @@ export function useDecisionSupersession({
                     {rows.map((row) => (
                       <li key={row.id}>
                         <span>
-                          {row.title} · {labels[row.status]}
+                          {row.title} · {decisionStatusLabels[row.status]}
                         </span>
                         <button
                           disabled={

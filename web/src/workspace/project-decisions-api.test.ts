@@ -176,3 +176,42 @@ describe("Project Decision API", () => {
     }
   });
 });
+
+it("sends one exact status and rejects a response from a different filter", async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  for (const status of [
+    "proposed",
+    "accepted",
+    "rejected",
+    "superseded",
+  ] as const) {
+    fetch.mockResolvedValueOnce(
+      response({ items: [{ ...decision, status }], next_cursor: null }),
+    );
+    const page = await projectDecisionsClient.decisions(
+      "wrk_main",
+      "prj_main",
+      "opaque",
+      undefined,
+      status,
+    );
+    expect(page.items[0]?.status).toBe(status);
+    expect(fetch.mock.lastCall?.[0]).toBe(
+      "/api/v1/workspaces/wrk_main/projects/prj_main/decisions?limit=25&after=opaque&status=" +
+        status,
+    );
+  }
+  fetch.mockResolvedValueOnce(
+    response({ items: [decision], next_cursor: null }),
+  );
+  await expect(
+    projectDecisionsClient.decisions(
+      "wrk_main",
+      "prj_main",
+      undefined,
+      undefined,
+      "accepted",
+    ),
+  ).rejects.toThrow(/契约/);
+});

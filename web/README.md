@@ -78,7 +78,9 @@ npm run dev
 
 `workspace/ProjectDecisionsPage.tsx` 与 `project-decisions-api.ts` 实现 [ADR-0040](../docs/adr/0040-project-decision-discovery.md)。首页 Project 的“查看项目决策”进入 `/workspaces/{workspace_id}/projects/{project_id}/decisions`；列表按 ADR-0048 / 0049 显示问题原文及“待确认 / 已确认 / 已拒绝 / 已被替代”，打开既有 canonical Decision 详情，详情按自身 Project 返回列表首页。支持直接地址、刷新和退出后重新登录恢复。
 
-Project 名称 / 归档状态与列表共用请求代次；任一失败清空二者，取消或迟到响应不能恢复旧数据。cursor 栈仅存于页面内存，刷新、focus / 可见性恢复、popstate 和 BFCache pageshow 重读首页，pagehide 清理旧内容。错误、空态和加载状态分开；401 返回登录，404 不残留项目名。严格校验 ref、四个状态、问题文本、顺序和分页结构；HTML / Markdown 样式问题只作为纯文本显示。列表无接受动作、筛选或来源展开。桌面、390px 手机、键盘、分页、证据隔离及撤权恢复见[实施记录](../docs/status/reviews/2026-10-18-project-decision-discovery.md)。
+列表默认展示全部，选择一种状态后从该状态的第一页开始，前后翻页均保留选项。「刷新决策列表」重读当前筛选的第一页，从详情重新进入列表恢复全部状态。客户端同时校验 ref、状态、问题文本、顺序及分页结构，问题按纯文本显示。接受、拒绝与来源读取沿用详情入口。[ADR-0063](../docs/adr/0063-project-decision-status-filter.md)
+
+Project 名称 / 归档状态与列表共用请求代次，任一失败清空二者。游标栈仅存于页面内存。focus / 可见性恢复、popstate 和 BFCache pageshow 重读首页，pagehide 清理旧内容。401 返回登录，404 清除项目名。桌面、手机、键盘、证据隔离和撤权场景见[原列表验证](../docs/status/reviews/2026-10-18-project-decision-discovery.md)与[状态筛选验证](../docs/status/reviews/2026-11-23-project-decision-status-filter.md)。
 
 ## Decision 接受与拒绝
 
