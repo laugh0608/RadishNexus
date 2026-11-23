@@ -71,6 +71,11 @@ func (store *discoveryStoreStub) ListProjectDecisions(context.Context, authz.Pri
 	return DiscoveryPage{}, nil
 }
 
+func (store *discoveryStoreStub) ListChannelThreads(context.Context, authz.Principal, string, DiscoveryPageInput) (DiscoveryPage, error) {
+	store.calls++
+	return DiscoveryPage{}, nil
+}
+
 func TestDecisionDiscoveryValidatesBeforeReading(t *testing.T) {
 	principal := authz.Principal{Kind: authz.PrincipalUser, ID: "usr_reader", WorkspaceID: "wrk_main"}
 	store := &discoveryStoreStub{}

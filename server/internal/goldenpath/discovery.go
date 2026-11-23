@@ -58,6 +58,7 @@ type DiscoveryPage struct {
 type DiscoveryStore interface {
 	ListProjects(context.Context, authz.Principal, DiscoveryPageInput) (DiscoveryPage, error)
 	ListProjectChannels(context.Context, authz.Principal, string, DiscoveryPageInput) (DiscoveryPage, error)
+	ListChannelThreads(context.Context, authz.Principal, string, DiscoveryPageInput) (DiscoveryPage, error)
 	ListProjectTickets(context.Context, authz.Principal, string, DiscoveryPageInput) (DiscoveryPage, error)
 	ListMyTickets(context.Context, authz.Principal, DiscoveryPageInput) (DiscoveryPage, error)
 	ListProjectDecisions(context.Context, authz.Principal, string, DiscoveryPageInput) (DiscoveryPage, error)
@@ -84,6 +85,16 @@ func (service *DiscoveryService) ListProjectChannels(ctx context.Context, princi
 		return DiscoveryPage{}, fmt.Errorf("%w: invalid Project reference", authz.ErrInvalid)
 	}
 	return service.store.ListProjectChannels(ctx, principal, projectID, input)
+}
+
+func (service *DiscoveryService) ListChannelThreads(ctx context.Context, principal authz.Principal, channelID string, input DiscoveryPageInput) (DiscoveryPage, error) {
+	if err := validateDiscoveryInput(principal, "thread", input); err != nil {
+		return DiscoveryPage{}, err
+	}
+	if err := entityref.M0Registry().Validate(entityref.Ref{Type: "channel", ID: channelID}); err != nil {
+		return DiscoveryPage{}, fmt.Errorf("%w: invalid Channel reference", authz.ErrInvalid)
+	}
+	return service.store.ListChannelThreads(ctx, principal, channelID, input)
 }
 
 func (service *DiscoveryService) ListProjectTickets(ctx context.Context, principal authz.Principal, projectID string, input DiscoveryPageInput) (DiscoveryPage, error) {

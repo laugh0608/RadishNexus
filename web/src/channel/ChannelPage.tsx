@@ -28,6 +28,7 @@ import {
   type ChannelRealtimeClient,
   type ChannelRealtimeConnection,
 } from "./realtime";
+import { ChannelThreads } from "./ChannelThreads";
 import { channelPageReducer } from "./state";
 
 interface ChannelPageProps {
@@ -82,6 +83,11 @@ export function ChannelPage({
     "connecting" | "live" | "reconnecting"
   >("connecting");
   const historyRead = useRef<AbortController | null>(null);
+  const loseChannelAccess = useRef<(() => void) | undefined>(undefined);
+  const onChannelUnavailable = useCallback(
+    () => loseChannelAccess.current?.(),
+    [],
+  );
   const [olderLoading, setOlderLoading] = useState(false);
   const [olderError, setOlderError] = useState<string | null>(null);
   const [messageBody, setMessageBody] = useState("");
@@ -140,6 +146,7 @@ export function ChannelPage({
       clearInteractiveState();
       dispatch({ type: "failed", message });
     };
+    loseChannelAccess.current = () => loseAccess("当前无法访问这个频道。");
     const expireSession = () => {
       epoch++;
       connection?.close();
@@ -286,6 +293,7 @@ export function ChannelPage({
     return () => {
       window.removeEventListener("pageshow", restore);
       disposed = true;
+      loseChannelAccess.current = undefined;
       epoch += 1;
       discussionRequest.current?.abort();
       connection?.close();
@@ -608,6 +616,14 @@ export function ChannelPage({
           </small>
         </div>
       </section>
+
+      <ChannelThreads
+        key={JSON.stringify([workspaceID, channelID, userID])}
+        workspaceID={workspaceID}
+        channelID={channelID}
+        onUnavailable={onChannelUnavailable}
+        onSessionExpired={onSessionExpired}
+      />
 
       <section className="channel-workspace">
         <div

@@ -233,6 +233,7 @@ Deployment Nexus View 只读路由为：
 - `GET /api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages`：读取 canonical history，`limit` 缺省 `50`、范围 `1..100`，可用版本化 opaque `before` cursor 向更旧消息翻页；
 - `POST /api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages`：用 `client_operation_id`、`body` 和可选 `thread_id` 创建 Message，首次返回 `201`，完全相同重试返回 `200`，变化重放返回 `409`；
 - `GET /api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages/{message_id}/threads` 按当前读权返回这条消息发起的讨论。源消息可读且没有可打开的讨论时返回 `{"data":{"thread":null}}`。源消息不可读或不在路径内时返回 `404`。[ADR-0060](../docs/adr/0060-message-started-thread-lookup.md)
+- `GET /api/v1/workspaces/{workspace_id}/channels/{channel_id}/threads` 在频道内按当前源消息和目标 Thread 的双端读权分页，默认 25 条。私密回复还要检查所属讨论，翻页失去频道访问权返回 `404`。[ADR-0061](../docs/adr/0061-channel-thread-discovery.md)
 - `POST /api/v1/workspaces/{workspace_id}/channels/{channel_id}/messages/{message_id}/threads`：用 `title` 和 `project / restricted` visibility 从路径 Channel 内的 Source Message 创建 Thread。
 
 上述读写均通过当前 Session 与 Workspace / Channel / Thread 权限；两个 POST 还同时要求精确 `Origin`、CSRF Cookie / Header 一致和数据库 CSRF digest。成功与错误统一使用 `Cache-Control: private, no-store` 和 `Vary: Cookie`；显式 DTO 不返回 `client_operation_id`、membership、事件或内部 keyset。完整 cursor、JSON 上限、状态码、最小化和跨 Channel 来源边界见 [ADR-0018](../docs/adr/0018-session-scoped-channel-message-transport.md)。

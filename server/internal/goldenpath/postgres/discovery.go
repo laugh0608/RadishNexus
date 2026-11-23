@@ -135,6 +135,53 @@ func (store *Store) ListProjectChannels(ctx context.Context, principal authz.Pri
 	return page, nil
 }
 
+func (store *Store) ListChannelThreads(ctx context.Context, principal authz.Principal, channelID string, input goldenpath.DiscoveryPageInput) (page goldenpath.DiscoveryPage, err error) {
+	if err := principal.ValidateUser(); err != nil {
+		return page, err
+	}
+	tx, err := store.beginAdmission(ctx, principal, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return page, fmt.Errorf("begin Channel Thread discovery: %w", err)
+	}
+	defer rollback(ctx, tx, &err)
+	channel, err := readableChannel(ctx, tx, principal, channelID)
+	if err != nil {
+		return page, err
+	}
+	// Apply the same Thread rule to the target and to a reply's parent.
+	rows, err := tx.Query(ctx, `
+		WITH readable_threads AS NOT MATERIALIZED (
+			SELECT t.id, t.title FROM radishnexus.threads t
+			WHERE t.workspace_id = $1 AND t.origin_channel_id = $2 AND t.governing_project_id = $3
+			  AND (t.visibility = 'project' OR EXISTS (
+				SELECT 1 FROM radishnexus.thread_memberships member
+				WHERE member.workspace_id = t.workspace_id AND member.thread_id = t.id AND member.user_id = $4
+			  ))
+		)
+		SELECT target.id, target.title FROM readable_threads target
+		JOIN radishnexus.entity_links link ON link.workspace_id = $1 AND link.from_id = target.id
+		  AND link.from_type = 'thread' AND link.relation_type = 'started-from'
+		  AND link.to_type = 'message' AND link.state = 'active'
+		JOIN radishnexus.messages source ON source.workspace_id = link.workspace_id
+		  AND source.channel_id = $2 AND source.id = link.to_id
+		WHERE target.id COLLATE "C" > $5 AND (source.thread_id IS NULL OR EXISTS (
+			SELECT 1 FROM readable_threads parent WHERE parent.id = source.thread_id
+		))
+		ORDER BY target.id COLLATE "C" LIMIT $6
+	`, principal.WorkspaceID, channelID, channel.projectID, principal.ID, input.AfterID, input.Limit+1)
+	if err != nil {
+		return page, fmt.Errorf("query readable Channel Threads: %w", err)
+	}
+	page, err = scanDiscoveryPage(rows, "thread", input.Limit)
+	if err != nil {
+		return page, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return page, fmt.Errorf("commit Channel Thread discovery: %w", err)
+	}
+	return page, nil
+}
+
 func (store *Store) ListProjectTickets(ctx context.Context, principal authz.Principal, projectID string, input goldenpath.DiscoveryPageInput) (page goldenpath.DiscoveryPage, err error) {
 	if err := principal.ValidateUser(); err != nil {
 		return page, err
@@ -246,6 +293,8 @@ func scanDiscoveryPage(rows pgx.Rows, kind string, limit int) (goldenpath.Discov
 		var ticketType *string
 		var labels []goldenpath.TicketLabel
 		switch kind {
+		case "thread":
+			targets = []any{&item.Ref.ID, &item.Title}
 		case "ticket":
 			targets = append(targets, &item.Priority, &item.DueDate, &item.Assignee)
 		case "my-tickets":

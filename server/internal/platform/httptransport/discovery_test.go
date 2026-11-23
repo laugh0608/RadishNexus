@@ -53,6 +53,12 @@ func (reader *fakeDiscoveryReader) ListProjectDecisions(ctx context.Context, pri
 	return reader.ListProjects(ctx, principal, input)
 }
 
+func (reader *fakeDiscoveryReader) ListChannelThreads(ctx context.Context, principal authz.Principal, channel string, input goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error) {
+	reader.kind = "thread"
+	reader.project = channel
+	return reader.ListProjects(ctx, principal, input)
+}
+
 func discoveryHandlerForTest(t *testing.T, sessions WorkspaceSessionResolver, reader DiscoveryReader) http.Handler {
 	t.Helper()
 	session, err := NewBrowserSessionPolicy("https://nexus.example.test")
@@ -202,4 +208,61 @@ func TestDiscoveryRejectsMalformedApplicationPages(t *testing.T) {
 			t.Fatal("invalid page accepted", page)
 		}
 	}
+}
+
+func TestChannelThreadDiscoveryContract(t *testing.T) {
+	const path = "/api/v1/workspaces/wrk_main/channels/chn_main/threads"
+	row := goldenpath.DiscoveryItem{Ref: entityref.Ref{Type: "thread", ID: "thr_one"}, Title: "可读讨论"}
+	reader := &fakeDiscoveryReader{page: goldenpath.DiscoveryPage{Items: []goldenpath.DiscoveryItem{row}, NextID: row.Ref.ID}}
+	handler := discoveryHandlerForTest(t, validMessagingSessions(), reader)
+	request := func(method, path string, status int) *httptest.ResponseRecorder {
+		t.Helper()
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, messagingRequest(method, path, ""))
+		if w.Code != status || w.Header().Get("Cache-Control") != "private, no-store" {
+			t.Fatal(w.Code, w.Body.String(), w.Header())
+		}
+		return w
+	}
+	response := request("GET", path+"?limit=1", 200)
+	var got struct {
+		Data struct {
+			Items []json.RawMessage `json:"items"`
+			Next  string            `json:"next_cursor"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Data.Items) != 1 || string(got.Data.Items[0]) != `{"ref":{"type":"thread","id":"thr_one"},"title":"可读讨论"}` || got.Data.Next == "" || reader.kind != "thread" || reader.project != "chn_main" {
+		t.Fatal(response.Body.String(), reader)
+	}
+	reader.page = goldenpath.DiscoveryPage{}
+	if body := request("GET", path+"?after="+got.Data.Next, 200).Body.String(); strings.TrimSpace(body) != `{"data":{"items":[],"next_cursor":null}}` || reader.input.AfterID != "thr_one" || reader.input.Limit != 25 {
+		t.Fatal(body, reader.input)
+	}
+	for _, q := range []string{"limit=51", "after=no", "include=due_date", "q=filter", "limit=1&limit=2"} {
+		request("GET", path+"?"+q, 400)
+	}
+	request("GET", strings.Replace(path, "chn_main", "chn_other", 1)+"?after="+got.Data.Next, 400)
+	for _, scope := range []discoveryCursor{
+		{Version: 1, WorkspaceID: "wrk_main", ActorID: "usr_other", Kind: "thread", ChannelID: "chn_main"},
+		{Version: 1, WorkspaceID: "wrk_other", ActorID: "usr_reader", Kind: "thread", ChannelID: "chn_main"},
+		{Version: 1, WorkspaceID: "wrk_main", ActorID: "usr_reader", Kind: "ticket-execution", ChannelID: "chn_main"},
+	} {
+		if _, err := parseDiscoveryQuery("after="+got.Data.Next, scope); !errors.Is(err, authz.ErrInvalid) {
+			t.Fatal(scope, err)
+		}
+	}
+	for _, method := range []string{"POST", "HEAD", "PUT"} {
+		if request(method, path, 405).Header().Get("Allow") != "GET" {
+			t.Fatal(method)
+		}
+	}
+	reader.page = goldenpath.DiscoveryPage{Items: []goldenpath.DiscoveryItem{row}}
+	request("GET", path+"?after="+got.Data.Next, 500) // app repeated the boundary
+	reader.err = authz.ErrNotFound
+	request("GET", path, 404)
+	reader.err = authz.ErrUnauthenticated
+	request("GET", path, 401)
 }

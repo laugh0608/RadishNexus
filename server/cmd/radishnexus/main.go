@@ -308,6 +308,7 @@ func newHandler(
 	}
 	mux.Handle("/api/v1/workspaces/{workspace_id}/projects/", discoveryHandler)
 	mux.Handle("/api/v1/workspaces/{workspace_id}/my-tickets", discoveryHandler)
+	mux.Handle("/api/v1/workspaces/{workspace_id}/channels/{channel_id}/threads", discoveryHandler)
 	mux.Handle("/api/v1/workspaces", deploymentNexusViewHandler)
 	mux.Handle("/api/v1/workspaces/", deploymentNexusViewHandler)
 	mux.Handle("/", webHandler)

@@ -21,6 +21,7 @@ import (
 )
 
 const (
+	channelThreadListPattern   = "/api/v1/workspaces/{workspace_id}/channels/{channel_id}/threads"
 	projectListPattern         = "/api/v1/workspaces/{workspace_id}/projects"
 	projectChannelListPattern  = projectListPattern + "/{project_id}/channels"
 	projectTicketListPattern   = projectListPattern + "/{project_id}/tickets"
@@ -31,6 +32,7 @@ const (
 type DiscoveryReader interface {
 	ListProjects(context.Context, authz.Principal, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
 	ListProjectChannels(context.Context, authz.Principal, string, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
+	ListChannelThreads(context.Context, authz.Principal, string, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
 	ListProjectTickets(context.Context, authz.Principal, string, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
 	ListMyTickets(context.Context, authz.Principal, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
 	ListProjectDecisions(context.Context, authz.Principal, string, goldenpath.DiscoveryPageInput) (goldenpath.DiscoveryPage, error)
@@ -44,6 +46,7 @@ type DiscoveryHandler struct {
 }
 
 type discoveryCursor struct {
+	ChannelID    string `json:"channel_id,omitempty"`
 	Include      string `json:"include,omitempty"`
 	SourceID     string `json:"source_id,omitempty"`
 	FilterDigest string `json:"filter_digest,omitempty"`
@@ -88,7 +91,7 @@ type discoveryItemDTO struct {
 	Assignee       **goldenpath.TicketAssignee             `json:"assignee,omitempty"`
 	Ref            entityRefDTO                            `json:"ref"`
 	Title          string                                  `json:"title"`
-	Status         string                                  `json:"status"`
+	Status         string                                  `json:"status,omitempty"`
 }
 
 type discoveryPageDTO struct {
@@ -100,6 +103,7 @@ func NewDiscoveryHandler(sessions WorkspaceSessionResolver, reader DiscoveryRead
 	handler := &DiscoveryHandler{sessions: sessions, reader: reader, session: session, proxy: proxy}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+projectListPattern, handler.list)
+	mux.HandleFunc("GET "+channelThreadListPattern, handler.list)
 	mux.HandleFunc("GET "+projectChannelListPattern, handler.list)
 	mux.HandleFunc("GET "+projectTicketListPattern, handler.list)
 	mux.HandleFunc("GET "+projectDecisionListPattern, handler.list)
@@ -109,6 +113,7 @@ func NewDiscoveryHandler(sessions WorkspaceSessionResolver, reader DiscoveryRead
 		handler.writeError(response, request, ErrMethodNotAllowed)
 	}
 	mux.HandleFunc(projectListPattern, wrongMethod)
+	mux.HandleFunc(channelThreadListPattern, wrongMethod)
 	mux.HandleFunc(projectChannelListPattern, wrongMethod)
 	mux.HandleFunc(projectTicketListPattern, wrongMethod)
 	mux.HandleFunc(projectDecisionListPattern, wrongMethod)
@@ -139,7 +144,8 @@ func (handler *DiscoveryHandler) list(response http.ResponseWriter, request *htt
 		handler.writeError(response, request, err)
 		return
 	}
-	if !validScopedID(workspaceID, "wrk_") || (projectID != "" && !validScopedID(projectID, "prj_")) {
+	channelID := request.PathValue("channel_id")
+	if (channelID != "" && !validScopedID(channelID, "chn_")) || !validScopedID(workspaceID, "wrk_") || (projectID != "" && !validScopedID(projectID, "prj_")) {
 		handler.writeError(response, request, fmt.Errorf("%w: invalid discovery scope", authz.ErrInvalid))
 		return
 	}
@@ -158,6 +164,8 @@ func (handler *DiscoveryHandler) list(response http.ResponseWriter, request *htt
 	}
 	kind := "project"
 	switch request.Pattern {
+	case "GET " + channelThreadListPattern:
+		kind = "thread"
 	case "GET " + projectChannelListPattern:
 		kind = "channel"
 	case "GET " + projectTicketListPattern:
@@ -167,11 +175,11 @@ func (handler *DiscoveryHandler) list(response http.ResponseWriter, request *htt
 	case "GET " + myTicketsListPattern:
 		kind = "my-tickets"
 	}
-	scope := discoveryCursor{Version: 1, WorkspaceID: workspaceID, Kind: kind, ProjectID: projectID}
+	scope := discoveryCursor{Version: 1, WorkspaceID: workspaceID, Kind: kind, ProjectID: projectID, ChannelID: channelID}
 	if kind == "ticket" {
 		scope.Version = 2
 	}
-	if kind == "ticket" || kind == "my-tickets" {
+	if kind == "thread" || kind == "ticket" || kind == "my-tickets" {
 		scope.ActorID = principal.ID
 	}
 	input, err := parseDiscoveryQuery(request.URL.RawQuery, scope)
@@ -182,6 +190,8 @@ func (handler *DiscoveryHandler) list(response http.ResponseWriter, request *htt
 	scope = ticketDiscoveryScope(scope, input.TicketFilters)
 	var page goldenpath.DiscoveryPage
 	switch kind {
+	case "thread":
+		page, err = handler.reader.ListChannelThreads(request.Context(), principal, channelID, input)
 	case "project":
 		page, err = handler.reader.ListProjects(request.Context(), principal, input)
 	case "ticket":
@@ -306,10 +316,12 @@ func publicDiscoveryPage(page goldenpath.DiscoveryPage, input goldenpath.Discove
 			validStatus = goldenpath.ValidTicketStatus(item.Status)
 		} else if scope.Kind == "my-tickets" {
 			validStatus = item.Status == "open" || item.Status == "in-progress"
+		} else if scope.Kind == "thread" {
+			validStatus = item.Status == ""
 		} else if scope.Kind == "decision" {
 			validStatus = item.Status == "proposed" || item.Status == "accepted" || item.Status == "rejected" || item.Status == "superseded"
 		}
-		if item.Ref.Type != refKind || !validScopedID(item.Ref.ID, discoveryPrefix(refKind)) || seen[item.Ref.ID] || !validDiscoveryTitle(item.Title) || !validStatus || ((refKind == "ticket" || refKind == "decision") && item.Ref.ID <= previousID) {
+		if item.Ref.Type != refKind || !validScopedID(item.Ref.ID, discoveryPrefix(refKind)) || seen[item.Ref.ID] || !validDiscoveryTitle(item.Title) || !validStatus || ((refKind == "ticket" || refKind == "decision" || refKind == "thread") && item.Ref.ID <= previousID) {
 			return dto, invalid
 		}
 		previousID = item.Ref.ID
@@ -379,7 +391,7 @@ func discoveryPrefix(kind string) string {
 	switch kind {
 	case "message-execution", "thread-execution", goldenpath.ThreadDeliveryTickets:
 		return "tkt_"
-	case "ticket-execution":
+	case "ticket-execution", "thread":
 		return "thr_"
 	}
 	if strings.HasPrefix(kind, "management-") {

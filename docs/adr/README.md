@@ -66,6 +66,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0058](0058-nexus-view-relation-pagination.md) | 已接受 | 核心 Nexus View 关系分页 |
 | [ADR-0059](0059-ticket-activity-pagination.md) | 已接受 | Ticket Activity 历史分页 |
 | [ADR-0060](0060-message-started-thread-lookup.md) | 已接受 | 从频道原消息找回讨论 |
+| [ADR-0061](0061-channel-thread-discovery.md) | 已接受 | 频道内的可读讨论列表 |
 
 ## 新建规则
 
