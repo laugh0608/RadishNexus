@@ -38,14 +38,14 @@ npm run dev
 - 登录使用私有邮箱与密码，展示名独立；凭据只保留在受控表单和当前同源请求体，不写入 URL、浏览器 storage 或自建 Cookie。Session token 只由服务端 `HttpOnly` Cookie 承载；登出从可读 CSRF Cookie 构造正式请求。
 - `/account` 展示服务端返回的登录方式，提供 owner 创建邀请与当前用户接受邀请；未登录用户可在首页兑换邀请并创建本地账户。邀请码不写入 URL 或 Web Storage，不自动授予 Project 角色或受限 Channel 成员资格。Radish 登录按 capability 隐藏，真实 provider 当前未装配；精确身份合同见 [ADR-0023](../docs/adr/0023-local-account-and-radish-oidc-login.md)。
 - Workspace 选择来自 Session context，但不写入 Session 或授予权限；canonical 业务请求仍按路径 Workspace 重新验证 current membership。
-- 首页已消费 Project / Channel 只读 list API，行为见下文；Project 工单列表已按 ADR-0038 开放，决策列表已按 ADR-0040 开放；Deployment 与 Thread 独立列表仍未开放。次级 ID 工具校验正式 `dpl_` / `chn_` / `thr_` / `dec_` / `tkt_` ID 并导航到 canonical 路径，不从 fixture 猜测对象。
+- 首页可浏览 Project 和 Channel。进入 Project 后可查找工单、按状态筛选决策，进入频道后可分页浏览可读讨论。已有 staging 部署可从关联的 CI Run 打开。次级 ID 工具校验正式 `dpl_` / `chn_` / `thr_` / `dec_` / `tkt_` ID 并导航到 canonical 路径。
 - canonical Deployment 页面只调用同源 `/api/v1/workspaces/{workspace_id}/deployments/{deployment_id}/nexus-view`，使用 `credentials: same-origin`、`cache: no-store`、显式公开 DTO 和运行时校验；未知形状不会被当成成功页面。
 - canonical Channel 页面用原生 EventSource 调用 ADR-0020 的同源 SSE，并继续用 ADR-0018 的三个短请求读写：先等待 `ready`，再读取 canonical history；history 期间的 `message.created` 先缓冲，完成后按 Message ID 去重合并。发送失败时为未修改正文保留同一 `client_operation_id`，`200` 精确重试不会追加重复 Message。
 - 频道历史中可以从原消息「查看讨论」，刷新或重新进入后按当前权限取回标题和详情链接。未创建和当前不可读显示同一空态。频道回复上的「打开所属讨论」直接进入这条回复所在的 Thread；「查看此回复发起的讨论」按需查找以它为来源的另一个 Thread。浏览器从前进后退缓存恢复频道时会重新读取可见历史。[ADR-0060](../docs/adr/0060-message-started-thread-lookup.md)
 - 打开频道内的「频道讨论」可按页浏览可读标题并进入讨论。前进、回退和刷新均重新检查源消息与目标讨论的读权。[ADR-0061](../docs/adr/0061-channel-thread-discovery.md)
 - Thread 详情的「打开原消息」按来源关系定位频道消息；若原消息是回复，打开其所属讨论并定位到该回复。来源失权后，仍有权限的成员可继续阅读子讨论。[ADR-0062](../docs/adr/0062-thread-source-message-navigation.md)
 - 浏览器自动重连沿用原生 `Last-Event-ID`；`resync-required` 关闭旧流、建立新边界并全量重读，断线错误链只允许一次 Session + canonical history 诊断，不做持续轮询。`access-revoked` 或诊断所得 `404` 会清空正文、草稿和 Thread 结果，Session `401` 回到登录态；事件顺序、cursor、空控制数据或 DTO 漂移均 fail closed。
-- Channel 的 `401` 回到登录态；任何后续 `404` 都立即移除已经渲染的 Message 正文和本地草稿。Thread 创建只发送 Source Message ref、标题和可见性，不复制 Message 正文。
+- 频道历史或频道讨论列表返回 `404` 时，页面清除旧内容并提示频道不可访问。在单条回复上查询它发起的讨论时，来源失权的 `404` 会触发频道历史重读，移除失权回复及其链接。Thread 创建只发送 Source Message ref、标题和可见性。
 - canonical Thread、Decision 与 Ticket 页面使用 ADR-0019 的同源短请求；Ticket 状态命令按 ADR-0039 增量扩展。Thread 创建 Proposed Decision；Decision 必须由有权主体勾选明确确认后人工 acceptance，接受后才能创建 Ticket；写入发生网络歧义且表单未变化时保留同一 `client_operation_id`。
 - 协作页区分来源与后续结果，支持 Thread → Decision → Ticket 的双向 canonical 跳转；readable relation 必须携带 `direction`，Go 与 Web 成套升级和回退，见 [ADR-0022](../docs/adr/0022-transactional-activity-and-incoming-relations.md)。
 - 协作 adapter 对 Current、Relations、Timeline、结构化来源、状态与受控时间执行严格运行时校验；restricted evidence 不携带类型、ID、关系名、标题或时间。协作请求的 `401` 回到登录态，后续 `404` 会清除已渲染内容、草稿和成功结果。

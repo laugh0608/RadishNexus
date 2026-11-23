@@ -164,7 +164,7 @@ Ticket 与 Component 已按 [ADR-0034](../adr/0034-ticket-component-relations.md
 
 Project 工单只读发现按 [ADR-0038](../adr/0038-project-ticket-discovery.md) 复用当前 Project 权限和稳定 ID 分页；[ADR-0039](../adr/0039-ticket-status-transitions.md) 以独立状态版本与精确 receipt 接通四状态流转。migration 016、Activity v7、HTTP 与 Web 配套升级，状态命令和原操作重试均重新授权；工单完成不触发 CI Run 或 Deployment。协议与投影细节见[核心契约](core-contracts.md)。
 
-Project 决策只读发现按 [ADR-0040](../adr/0040-project-decision-discovery.md) 在同一 repeatable-read 快照中复核 governing Project 当前权限并按稳定 ID 分页，只返回问题、引用与当前状态；现按 ADR-0048 / 0049 支持 proposed / accepted / rejected / superseded。evidence Thread / origin Channel 权限独立。首页、Project 列表与详情返回使用既有 canonical 页面，元数据与列表在撤权或恢复时共同重读；列表本身没有决定动作。
+Project 决策列表在每页的 repeatable-read 快照中复核 governing Project 当前权限，仅返回问题、引用与当前状态。可选的 `status` 在稳定 ID 分页前筛选 proposed、accepted、rejected 或 superseded。省略筛选时沿用原游标，指定状态时游标同时绑定该状态。evidence Thread 与来源 Channel 的读权独立。Web 在撤权或恢复时重新读取项目元数据与列表，决定动作仍在详情页显式确认。[项目决策发现](../adr/0040-project-decision-discovery.md) · [状态筛选](../adr/0063-project-decision-status-filter.md)
 
 [ADR-0048](../adr/0048-decision-lifecycle-and-rejection.md) 的拒绝与 [ADR-0049](../adr/0049-decision-supersession.md) 的同 Project 单链替代已接入正式 Go / Web。接受 / 拒绝锁住单个 Decision，替代按 ID 排序锁住双方并各推进 decision_revision；每次决定与原操作重试重新检查当前角色及全部 evidence。替代保留原接受事实和已有执行来源，理由仅存于不可变 EntityLink metadata；单事件显式投影双方，旧接受 / 已建 Ticket 原请求仍可核验。替代首次交付采用 schema 024、Activity 12 与 v5 包。人工复核追加独立历史，按证据当前权限分页读取，并随 schema 025、Activity 13 和 v6 包配套交付。 [核心契约](core-contracts.md#decision-最小替代) · [ADR-0050](../adr/0050-decision-manual-review.md)
 

@@ -1,6 +1,6 @@
 # RadishNexus 当前状态
 
-2026-11-23 已完成[项目决策状态筛选](reviews/2026-11-23-project-decision-status-filter.md)、[从讨论返回原消息](reviews/2026-11-23-thread-source-message-navigation.md)及[频道内的可读讨论列表](reviews/2026-11-23-channel-thread-discovery.md)。同日完成[从频道原消息找回讨论及从回复返回所属讨论](reviews/2026-11-23-message-started-thread.md)和 [Ticket Activity 历史分页与有限 Web 故事技术复核](reviews/2026-11-23-ticket-activity-pagination.md)。
+2026-11-23 的九笔功能提交已完成。成员可以分页查阅工单 Activity，在频道、讨论与原消息之间导航，按状态查找项目决策和替代候选，并从项目频道选择讨论作为复核证据或工单执行讨论。合成账号已从原讨论追溯到工单、构建和已有 staging 部署。[当日提交与技术验证](reviews/2026-11-23-daily-closeout.md)
 
 2026-11-15 完成工单截止日期、消息转工单与执行讨论、工单分类与项目内查找的开发和技术验证。工单与构建的可追溯关联已按 ADR-0056 接入。同日完成固定候选的本机 Web 协作技术验收及试用观察准备检查。规划收口记录日期为 2026-11-10。
 
@@ -23,8 +23,8 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | 能力主线 | 当前基线与未关闭范围 | 正式来源 |
 | --- | --- | --- |
 | 身份与管理 | 本地账户、邀请、初始化、恢复、owner / 成员管理交接已有技术证据；真实 OIDC / Radish 联调与团队持续使用仍未验收 | [身份专题](../topics.md#identity) |
-| 沟通与决策 | 可从频道列表分页发现可读讨论、在讨论与可读原消息之间往返，或从回复返回所属讨论。可从讨论创建 / 确认 Decision，在 Project 按四种决策状态跨页查找。最小拒绝与单链替代已交付，最小人工复核已通过正式浏览器验收 | [沟通与决策专题](../topics.md#communication-decisions) |
-| 工单与上下文 | 已交付工单状态、负责人、优先级、截止日期、消息建单、执行讨论、分类与 Project 标签。列表和状态看板支持组合查找，「我的工单」展示分类。已接通 Ticket 与 CI Run 的人工关联，也可从原 Thread 分层追溯工单、构建和 staging 部署。核心关系与 Ticket Activity 已可分页读取 | [工单与上下文专题](../topics.md#tickets-context) · [我的工单验收](reviews/2026-11-08-workspace-my-tickets.md) · [看板验收](reviews/2026-11-08-project-ticket-board.md) |
+| 沟通与决策 | 可从频道分页发现可读讨论，在讨论与可读原消息之间往返，或从回复返回所属讨论。可从讨论创建 / 确认 Decision，在 Project 按四种决策状态查找。已交付最小拒绝、单链替代和人工复核。替代时可只看已确认的旧结论，复核时可从同项目频道选择补充讨论 | [沟通与决策专题](../topics.md#communication-decisions) |
+| 工单与上下文 | 已交付工单状态、负责人、优先级、截止日期、消息建单、分类与 Project 标签。列表和状态看板支持组合查找，「我的工单」展示分类。可在工单详情关联已有执行讨论与 CI Run，也可从原 Thread 分层追溯工单、构建和 staging 部署。核心关系与 Ticket Activity 已可分页读取 | [工单与上下文专题](../topics.md#tickets-context) · [我的工单验收](reviews/2026-11-08-workspace-my-tickets.md) · [看板验收](reviews/2026-11-08-project-ticket-board.md) |
 | 文档协作 | 最小 Markdown 正式保存、冲突、版本 / 恢复及隔离浏览器已有证据；原生中文 IME 暂缓、持续使用未验收 | [文档专题](../topics.md#documents) |
 | 交付集成 | 受认证接入、显式 staging 记录、配置、持久发送及 checkout 接收已有相应证据；ADR-0035 / 0037 B 真实采集与整链暂缓 | [交付专题](../topics.md#delivery-integration) |
 | 运行与产品交付 | Web、自部署、升级恢复、单 Project 上下文包及补验已有指定环境证据；U27、生产容量、更广迁移、有效试用授权与独立持续使用未闭合 | [运行交付专题](../topics.md#product-delivery) |
@@ -48,8 +48,8 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **下一片建议从 staging 环境查看已记录的部署历史**。成员已有构建及工单上下文入口，也需要从已知环境找回部署。先确认只读列表的可见范围、排序与分页，以及记录授权被撤销后的历史读取行为，再接入正式 Web。部署记录与实际执行继续沿现有边界。[环境与授权](../adr/0032-component-environment-configuration-and-authorization.md) · [Deployment 读权](../adr/0011-workspace-scoped-deployment-read.md)
-2. **工单和决策复核均可从频道选择讨论**。工单使用已有的执行讨论关系，复核仅引用该次记录的补充证据。各自沿用对应提交命令与当前对象权限。[工单侧验证](reviews/2026-11-23-ticket-discussion-picker.md) · [复核验证](reviews/2026-11-23-decision-review-evidence-picker.md)
+1. **建议下一步让成员从 staging 环境详情查阅已有部署。** 先确认只读列表合同，包括稳定排序、游标作用域，以及翻页中途失去 Environment 或来源 CI Run 读权时如何响应。每条 Deployment 沿用两端当前均可读的条件。仅撤销记录部署的授权时，只要两端仍可读，历史仍可查阅。[Deployment 读权](../adr/0011-workspace-scoped-deployment-read.md) · [环境与记录授权](../adr/0032-component-environment-configuration-and-authorization.md)
+2. **合同确认后接入 PostgreSQL、Go API 和 Web。** 用合成账号从环境详情翻页、打开已有部署、刷新并重新进入，再分别验证记录授权撤销和读取权限变化后的页面与接口结果。验证使用已记录的部署事实。
 
 11 月 15 日交付覆盖工单截止日期、消息建单与执行讨论、分类与查找、构建关联及原讨论追溯，并完成核心协作关系分页和 schema 030 升级恢复验证。各实现及证据沿对应 ADR 查阅。 [2026-11-15 提交回顾](reviews/2026-11-15-daily-closeout.md)
 

@@ -36,8 +36,8 @@
 | [Project 决策发现：ADR-0040](adr/0040-project-decision-discovery.md) | 原只读切片及[验收记录](status/reviews/2026-10-18-project-decision-discovery.md) | Project 导航、工单来源 |
 | [项目决策状态筛选](adr/0063-project-decision-status-filter.md) | 四种状态跨页查找、旧游标兼容与[合成账号验证](status/reviews/2026-11-23-project-decision-status-filter.md) | Project 决策发现 |
 | [Decision 生命周期与最小拒绝：ADR-0048](adr/0048-decision-lifecycle-and-rejection.md) | 首片拒绝合同与 R01～R10，[实际证据](status/reviews/2026-11-02-decision-rejection.md)分别记录验证层次 | 已建 Ticket、Document、Activity 与上下文包兼容 |
-| [Decision 最小替代：ADR-0049](adr/0049-decision-supersession.md) | 单链替代、双方版本、原重试与执行历史、v5 迁移已实施；[分层证据](status/reviews/2026-11-02-decision-supersession.md)保留验收限制 | 当前权限、Ticket / Document 来源、双对象 Activity 与上下文包 |
-| [Decision 最小人工复核：ADR-0050](adr/0050-decision-manual-review.md) | Go / PostgreSQL / 正式 HTTPS Chrome 已验收，[分层验证](status/reviews/2026-11-08-decision-manual-review.md)记录当前证据和待验收范围 | 当前证据权限、Decision 版本、Activity 与上下文包 |
+| [Decision 最小替代：ADR-0049](adr/0049-decision-supersession.md) | 单链替代、双方版本、原操作重试、执行历史与 v5 迁移已实施。选择旧结论时可只看已确认项。[分层证据](status/reviews/2026-11-02-decision-supersession.md) · [候选筛选与并发验证](status/reviews/2026-11-23-supersession-candidate-filter.md) | 当前权限、Ticket / Document 来源、双对象 Activity 与上下文包 |
+| [Decision 最小人工复核：ADR-0050](adr/0050-decision-manual-review.md) | Go、PostgreSQL 与正式 Web 已验收。补充讨论可从同项目频道选择或粘贴链接。[分层验证与待验收范围](status/reviews/2026-11-08-decision-manual-review.md) · [补充证据选择与撤权验证](status/reviews/2026-11-23-decision-review-evidence-picker.md) | 当前证据权限、Decision 版本、Activity 与上下文包 |
 
 完整聊天、通知、复杂搜索等仍按路线图范围推进。Decision 生命周期先明确触发、理由、历史与兼容，再通过正式决策；本次归属整理不授予实现权。
 
@@ -56,7 +56,7 @@
 | [项目工单状态看板](../web/README.md#project-工单浏览) | M4 工单视图，沿用 Project 工单列表接口和四状态。[验收记录](status/reviews/2026-11-08-project-ticket-board.md) | 项目导航、Ticket 详情 |
 | [负责人：ADR-0046](adr/0046-ticket-assignee.md)、[优先级与筛选：ADR-0047](adr/0047-ticket-priority-and-filtering.md) | 原任务与退出矩阵；[负责人记录](status/reviews/2026-10-28-ticket-assignee.md)、[优先级记录](status/reviews/2026-10-28-ticket-priority.md)及后续有界观察 | 成员生命周期、迁移包版本 |
 | [工单截止日期：ADR-0053](adr/0053-ticket-due-date.md) | M4 可选日历日期、独立版本与变更历史 | Ticket 详情、工单发现、备份与 v7 迁移包 |
-| [消息转工单与执行讨论：ADR-0054](adr/0054-message-to-ticket-and-execution-discussion.md) | M4 消息来源、执行讨论与 v8 上下文取回 | Channel、Thread、Ticket、上下文取回 |
+| [消息转工单与执行讨论：ADR-0054](adr/0054-message-to-ticket-and-execution-discussion.md) | M4 消息来源、执行讨论与 v8 上下文取回。工单详情可从同项目频道关联已有讨论。[双向读回、重试与撤权验证](status/reviews/2026-11-23-ticket-discussion-picker.md) | Channel、Thread、Ticket、上下文取回 |
 | [工单分类与项目内查找：ADR-0055](adr/0055-ticket-classification-and-project-search.md) | M4 类型、项目标签、组合查找与 v9 上下文取回 | Ticket、项目列表、看板、个人工单 |
 | [工单与构建的可追溯关联：ADR-0056](adr/0056-ticket-ci-run-traceability.md) | M4 人工构建关联、分权追溯和整库恢复 | Ticket、CI Run、Deployment、整库备份 |
 | [从原讨论追踪工单、构建与部署：ADR-0057](adr/0057-thread-delivery-trace.md) | M4，涵盖三类工单来源、分层分页和逐跳授权 | Thread、Ticket、CI Run、Deployment |

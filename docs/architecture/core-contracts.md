@@ -397,7 +397,7 @@ Session adapter 产生携带 `MembershipRevision` 和 `SessionID` 的受验证�
 3. 用户从私密 Thread 创建 Proposed Decision。Decision、用户命令 receipt 与 `derived-from` EntityLink 在同一事务写入；该关系是 `asserted + user`，因为 `derived-from` 是业务语义，不代表自动推导。相同 target 与 operation ID 的相同 canonical payload 返回原 Decision，payload 变化冲突。
 4. Decision 草案必须保留 evidence 引用。当前正式写入产生 `decision.proposed`，在同事务投影到 Decision；Thread 通过 incoming Relations 发现该 Decision。`entity-link.created` 与向 Thread Timeline 投影后续事件仍未落地，扩展时另行冻结事件、correlation 与目标投影合同，不为反向读取复制关系事实。
 5. 有确认权限且能读取全部 evidence 的人通过显式确认接受 Decision，产生 `decision.accepted`。Project 管理角色不自动穿透 restricted Thread；系统生成内容只能保留为草案，不能作为 actor 完成接受。精确 retry 仍重新检查当前 evidence 权限，receipt 不授予能力。
-6. 从 Decision 创建 Ticket，Ticket、用户命令 receipt 与 `implements` 关系保留来源，不复制 Thread 正文。读取 Ticket 但不能读取 Thread 的用户只在对象页看到不可识别目标的通用受限占位。
+6. 从 Decision 创建 Ticket 时，Ticket、用户命令 receipt 与 `implements` 关系保留创建来源。成员打开 Decision 时，失去读权的证据 Thread 显示为通用受限占位。另行关联的执行讨论遵循双端读权，失权后整条关系从工单的讨论列表中隐藏，对应的讨论关联事件也从 Ticket Activity 中省略。[决策发现与证据读权](../adr/0040-project-decision-discovery.md) · [工单执行讨论](../adr/0054-message-to-ticket-and-execution-discussion.md)
 7. Jenkins 重复发送同一 delivery 时只产生一个 CI Run；相同幂等键的 digest 变化直接冲突。正式核心只接收已经完成来源验证与字段映射的 delivery，并把 receipt、CI Run、`ci-run.recorded` 和 Outbox 原子提交；[ADR-0030](../adr/0030-authenticated-jenkins-delivery-adapter.md) 的 adapter 负责受控来源、签名 / 重放、有限重试与脱敏运行记录，不阻塞聊天和 Decision 写入；持久采集与通用安全 Audit 仍未完成。
 8. 构建成功只更新 CI Run。只有 active 用户持有目标 Environment 的显式授权后，才能按 [ADR-0031](../adr/0031-session-scoped-staging-deployment-recording.md) 通过独立 Session command 原子记录 staging Deployment、receipt、`deploys` 关系、`deployment.recorded`、Outbox 和 Activity；精确重试复核当前读取与写授权后返回原结果，该 command 不执行外部部署。
 9. 备份恢复保留所有稳定 ID、关系来源、事件 correlation 和审计；Activity 可以重新投影且不产生重复项。

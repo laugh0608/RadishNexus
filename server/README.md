@@ -357,7 +357,7 @@ go run ./cmd/nexus-restore --input /path/to/completed-backup-directory
 
 ## 最小 Markdown Document
 
-[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实；Document 切片将 Activity projection 升至版本 2；当前已由 ADR-0047 扩展为版本 10，新增事件可全量重建，旧投影不改变原有语义。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。
+[ADR-0028](../docs/adr/0028-minimal-markdown-document.md) 的正式实现由 `goldenpath/DocumentService`、PostgreSQL store 和 `httptransport/DocumentHandler` 承载。migration 010 注册 Document / Ticket `relates-to`，新增 `documents` 与不可变 `document_revisions`，扩展既有协作 receipt 的 `result_revision`。两表与 receipt 都属于备份权威事实。Document 切片引入 Activity projection 版本 2，文档事件可从领域事件全量重建。升级需要显式迁移并配套更新 Go / Web，无跨 schema 兼容窗口。[当前投影版本](internal/goldenpath/query.go)
 
 所有端点在 `/api/v1/workspaces/{workspace_id}` 下，要求当前 Session 与 Workspace membership；POST 另要求同源 CSRF。查询返回 `private, no-store`，不能通过引用授予权限。
 
@@ -406,7 +406,7 @@ migration 011 扩展既有协作 receipt 的 CHECK，保留 revision 合同。re
 
 migration 012 保留 revoked 授权，重新授予追加新 ID 与 generation，并保持每个环境 / 用户至多一条 active 记录。历史 Deployment 始终关联原授权；旧授予或撤销 receipt 不重新改变权限。事务按账户、membership、Environment、授权记录的顺序加锁；Deployment 同步重查账户状态。撤销允许清理 archived staging 与失效成员，production 不开放管理写入。
 
-创建对象、Audit、receipt、领域事件、Outbox 和 Activity 同事务提交；授权只进入窄 Audit。此切片将 Activity projection 从 2 升至 3，新增 `component.created` / `environment.created`，migration 将现有 v2 投影标为 v3，重建与恢复继续从领域事件生成。当前版本已由 ADR-0048 扩展为 11；不补造历史对象创建事件。全代次授权、成功 Audit / receipt 与旧 Deployment 引用属于既有备份权威表；升级必须显式迁移，旧二进制拒绝新 schema，不能删历史授权降级。
+创建对象、Audit、receipt、领域事件、Outbox 和 Activity 同事务提交，授权只进入窄 Audit。此切片将 Activity projection 从 2 升至 3，新增 `component.created` / `environment.created`。migration 将既有 v2 投影标为 v3，重建与恢复只依据实际记录的领域事件。全代次授权、成功 Audit / receipt 与旧 Deployment 引用属于既有备份权威表。升级必须显式迁移，旧二进制拒绝新 schema，不能删历史授权降级。
 
 
 ## Repository 映射与 Component 关联
