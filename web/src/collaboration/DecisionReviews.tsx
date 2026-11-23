@@ -16,7 +16,7 @@ import {
   type ReviewConclusion,
   type ReviewDecisionInput,
 } from "./api";
-import { ReviewEvidencePicker } from "./ReviewEvidencePicker";
+import { ProjectThreadPicker } from "./ProjectThreadPicker";
 
 const conclusionLabels: Record<ReviewConclusion, string> = {
   still_applicable: "仍适用",
@@ -466,11 +466,12 @@ export function useDecisionReviews({
                 {browsing ? "返回链接输入" : "从频道选择讨论"}
               </button>
               {browsing ? (
-                <ReviewEvidencePicker
+                <ProjectThreadPicker
                   workspaceID={workspaceID}
                   projectID={current.project.id}
-                  originalEvidenceIDs={originalEvidenceIDs}
-                  onSelect={(id) => {
+                  purpose="review"
+                  disabledThreadIDs={originalEvidenceIDs}
+                  onSelect={({ id }) => {
                     const path = collaborationPagePath(
                       workspaceID,
                       "thread",

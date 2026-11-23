@@ -9,6 +9,6 @@
 | 粘贴链接并重新核对 | 粘贴原讨论链接会提示证据重复。粘贴同项目、可读的补充讨论链接可预览。管理员撤权后再次核对，详情返回 404，草稿、确认及相关历史均从成员页面清除。该成员随后读取复核历史得到空页。 |
 | 预览后撤权再保存 | 管理员恢复读权，成员重新从频道选择讨论并确认。提交前再次撤权，POST 返回 403，表单收起。管理员读回全部记录，仅有第一次保存的复核。 |
 
-组件测试覆盖两个列表各自的游标、切换频道后迟到的响应、频道与项目失权，以及同一讨论重复核对时的权限复查。[候选列表测试](../../../web/src/collaboration/ReviewEvidencePicker.test.tsx) · [复核表单测试](../../../web/src/collaboration/CollaborationPage.test.tsx)
+组件测试覆盖两个列表各自的游标、切换频道后迟到的响应、频道与项目失权，以及同一讨论重复核对时的权限复查。[候选列表测试](../../../web/src/collaboration/ProjectThreadPicker.test.tsx) · [复核表单测试](../../../web/src/collaboration/CollaborationPage.test.tsx)
 
 `./scripts/check-web.sh` 最终通过 49 个文件中的 325 项测试、格式、Lint、类型、生产构建和依赖检查。首次全量运行有一项工单状态测试失败，该文件单独复跑 14 项通过，全量复跑也通过。Vite 仍提示主 JS 包超过 500 kB。仓库基线使用 `./scripts/check-repo.sh` 核验。

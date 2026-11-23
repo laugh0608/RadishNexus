@@ -48,8 +48,8 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **下一片建议从工单详情直接关联已有执行讨论**。当前要先进入 Thread，再选择待关联工单。拟从工单选择同项目的频道和讨论，复用既有确认与关联命令。先核对归档频道、已有关联和撤权时的行为。[工单执行讨论合同](../adr/0054-message-to-ticket-and-execution-discussion.md) · [频道讨论列表](../adr/0061-channel-thread-discovery.md)
-2. **决策复核已支持从频道选择补充讨论**。成员可以跨页找讨论，也可粘贴链接。两条路径共用详情预览和提交时的证据权限检查。[选择器验证](reviews/2026-11-23-decision-review-evidence-picker.md) · [人工复核合同](../adr/0050-decision-manual-review.md)
+1. **下一片建议从 staging 环境查看已记录的部署历史**。成员已有构建及工单上下文入口，也需要从已知环境找回部署。先确认只读列表的可见范围、排序与分页，以及记录授权被撤销后的历史读取行为，再接入正式 Web。部署记录与实际执行继续沿现有边界。[环境与授权](../adr/0032-component-environment-configuration-and-authorization.md) · [Deployment 读权](../adr/0011-workspace-scoped-deployment-read.md)
+2. **工单和决策复核均可从频道选择讨论**。工单使用已有的执行讨论关系，复核仅引用该次记录的补充证据。各自沿用对应提交命令与当前对象权限。[工单侧验证](reviews/2026-11-23-ticket-discussion-picker.md) · [复核验证](reviews/2026-11-23-decision-review-evidence-picker.md)
 
 11 月 15 日交付覆盖工单截止日期、消息建单与执行讨论、分类与查找、构建关联及原讨论追溯，并完成核心协作关系分页和 schema 030 升级恢复验证。各实现及证据沿对应 ADR 查阅。 [2026-11-15 提交回顾](reviews/2026-11-15-daily-closeout.md)
 

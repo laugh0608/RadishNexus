@@ -194,7 +194,7 @@ ADR-0037 A 在正式 CI Run 页面展示未采集、来源不可用、observed �
 
 ## 消息转工单与执行讨论
 
-从 Project 可见消息的“此消息的工单”入口填写标题并确认。工单详情可以直接打开原消息。Thread 页面提供回复和项目工单选择器，关联后从两边均可打开与解除。私密讨论的关联按两端当前权限展示。 [ADR-0054](../docs/adr/0054-message-to-ticket-and-execution-discussion.md)
+从 Project 可见消息的「此消息的工单」入口填写标题并确认。工单详情可以直接打开原消息。在工单的「执行讨论」中选择「关联已有讨论」，可从本项目的可读频道选择讨论。页面核对讨论的当前关联能力后才显示确认按钮。归档频道保留已有关系的阅读与解除。Thread 页面仍可回复或选择项目工单，关联在两端按当前权限展示。[ADR-0054](../docs/adr/0054-message-to-ticket-and-execution-discussion.md) · [工单侧验证](../docs/status/reviews/2026-11-23-ticket-discussion-picker.md)
 
 ### 工单分类与项目内查找
 

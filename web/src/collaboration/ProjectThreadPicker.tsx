@@ -9,13 +9,14 @@ type Choice = { id: string; title: string; status?: "active" | "archived" };
 interface Props {
   workspaceID: string;
   projectID: string;
-  originalEvidenceIDs: readonly string[];
-  onSelect: (id: string) => void;
+  disabledThreadIDs: readonly string[];
+  purpose: "review" | "execution";
+  onSelect: (thread: { id: string; title: string }) => void;
   onUnavailable: () => void;
   onSessionExpired: () => void;
 }
 
-export function ReviewEvidencePicker(props: Props) {
+export function ProjectThreadPicker(props: Props) {
   const [channel, setChannel] = useState<Choice | null>(null);
   const [channelLost, setChannelLost] = useState(false);
   const { workspaceID, projectID, onUnavailable } = props;
@@ -48,21 +49,28 @@ export function ReviewEvidencePicker(props: Props) {
   );
   return (
     <fieldset>
-      <legend>{channel ? "选择补充讨论" : "选择频道"}</legend>
+      <legend>
+        {channel
+          ? props.purpose === "review"
+            ? "选择补充讨论"
+            : "选择执行讨论"
+          : "选择频道"}
+      </legend>
       {channelLost && <p role="status">频道已不可访问，请重新选择。</p>}
       {channel && (
         <button type="button" onClick={() => setChannel(null)}>
           更换频道
         </button>
       )}
-      <EvidenceChoices
+      <ThreadPickerPage
         key={channel?.id ?? projectID}
         load={load}
         onSessionExpired={props.onSessionExpired}
         channel={channel}
-        originalEvidenceIDs={props.originalEvidenceIDs}
+        purpose={props.purpose}
+        disabledThreadIDs={props.disabledThreadIDs}
         select={(item) => {
-          if (channel) props.onSelect(item.id);
+          if (channel) props.onSelect(item);
           else {
             setChannelLost(false);
             setChannel(item);
@@ -73,11 +81,12 @@ export function ReviewEvidencePicker(props: Props) {
   );
 }
 
-function EvidenceChoices({
+function ThreadPickerPage({
   load,
   onSessionExpired,
   channel,
-  originalEvidenceIDs,
+  disabledThreadIDs,
+  purpose,
   select,
 }: {
   load: (
@@ -86,7 +95,8 @@ function EvidenceChoices({
   ) => Promise<{ items: readonly Choice[]; nextCursor: string | null }>;
   onSessionExpired: () => void;
   channel: Choice | null;
-  originalEvidenceIDs: readonly string[];
+  disabledThreadIDs: readonly string[];
+  purpose: Props["purpose"];
   select: (item: Choice) => void;
 }) {
   const page = usePage(load, onSessionExpired);
@@ -97,17 +107,22 @@ function EvidenceChoices({
         state={page}
         empty={channel ? "本页没有可读讨论。" : "本页没有可读频道。"}
         row={(item) => {
-          const original =
-            channel !== null && originalEvidenceIDs.includes(item.id);
+          const excluded =
+            channel !== null && disabledThreadIDs.includes(item.id);
           return (
             <button
               type="button"
-              disabled={original}
+              disabled={
+                excluded ||
+                (purpose === "execution" && item.status === "archived")
+              }
               onClick={() => select(item)}
             >
               {item.title}
-              {original
-                ? "（原讨论）"
+              {excluded
+                ? purpose === "review"
+                  ? "（原讨论）"
+                  : "（已关联）"
                 : item.status === "archived"
                   ? "（已归档）"
                   : ""}

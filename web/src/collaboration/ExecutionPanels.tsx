@@ -1,4 +1,5 @@
 import { TicketClassificationFields } from "./TicketClassificationFields";
+import { ProjectThreadPicker } from "./ProjectThreadPicker";
 import {
   emptyClassification,
   initialClassification,
@@ -6,7 +7,7 @@ import {
 import { useCallback, useState, type ReactNode } from "react";
 import { useExecutionRead } from "./useExecutionRead";
 import { browserChannelMessageClient } from "../channel/api";
-import type { ExecutionWrite } from "./execution-write";
+import { requestStatus, type ExecutionWrite } from "./execution-write";
 import { projectTicketsClient } from "../workspace/project-tickets-api";
 import {
   executionClient,
@@ -318,7 +319,7 @@ export function ExecutionDiscussions({
   const [choose, setChoose] = useState(false);
   const [candidateCursor, setCandidateCursor] = useState<string>();
   const [selected, setSelected] = useState<{
-    ticket: string;
+    id: string;
     title: string;
     link?: string;
   } | null>(null);
@@ -343,22 +344,43 @@ export function ExecutionDiscussions({
   const candidates = useExecutionRead(
     candidatesLoad,
     onSessionExpired,
-    choose && data?.canWrite === true,
+    kind === "thread" && choose && data?.canWrite === true,
   );
   const targetKind = kind === "thread" ? "ticket" : "thread";
+  const changeRelationPage = (cursor?: string) => {
+    setSelected(null);
+    setChoose(false);
+    setAfter(cursor);
+  };
   const confirm = () => {
     if (!selected) return;
+    setSelected(null);
+    setChoose(false);
     write.start(
-      selected.link ? "解除讨论关联" : "关联工单",
+      selected.link
+        ? "解除讨论关联"
+        : kind === "ticket"
+          ? "关联执行讨论"
+          : "关联工单",
       async (operationID, signal) => {
-        await executionClient.discussion(
-          workspace,
-          selected.ticket,
-          id,
-          selected.link,
-          { client_operation_id: operationID, confirmed: true },
-          signal,
-        );
+        try {
+          await executionClient.discussion(
+            workspace,
+            kind === "ticket" ? id : selected.id,
+            kind === "ticket" ? selected.id : id,
+            selected.link,
+            { client_operation_id: operationID, confirmed: true },
+            signal,
+          );
+        } catch (error) {
+          const status = requestStatus(error);
+          if (
+            !signal.aborted &&
+            (status === 403 || status === 404 || status === 409)
+          )
+            onChanged();
+          throw error;
+        }
         if (signal.aborted) return;
         setSelected(null);
         setChoose(false);
@@ -389,13 +411,14 @@ export function ExecutionDiscussions({
                   <button
                     type="button"
                     disabled={!!write.pending}
-                    onClick={() =>
+                    onClick={() => {
+                      setChoose(false);
                       setSelected({
-                        ticket: kind === "ticket" ? id : row.id,
+                        id: row.id,
                         title: row.title,
                         link: row.linkID,
-                      })
-                    }
+                      });
+                    }}
                   >
                     解除关联
                   </button>
@@ -404,23 +427,52 @@ export function ExecutionDiscussions({
             ))}
           </ul>
           {data.nextCursor && (
-            <button type="button" onClick={() => setAfter(data.nextCursor!)}>
+            <button
+              type="button"
+              onClick={() => changeRelationPage(data.nextCursor!)}
+            >
               下一页关联
             </button>
           )}
           {after && (
-            <button type="button" onClick={() => setAfter(undefined)}>
+            <button type="button" onClick={() => changeRelationPage()}>
               返回关联首页
             </button>
           )}
-          {kind === "thread" && data.canWrite && !write.pending && (
-            <button
-              type="button"
-              aria-expanded={choose}
-              onClick={() => setChoose((value) => !value)}
-            >
-              {choose ? "收起工单选择" : "关联项目工单"}
-            </button>
+          {data.canWrite &&
+            !write.pending &&
+            (kind === "thread" || !selected) && (
+              <button
+                type="button"
+                aria-expanded={choose}
+                onClick={() => {
+                  setSelected(null);
+                  setCandidateCursor(undefined);
+                  setChoose((value) => !value);
+                }}
+              >
+                {kind === "thread"
+                  ? choose
+                    ? "收起工单选择"
+                    : "关联项目工单"
+                  : choose
+                    ? "收起讨论选择"
+                    : "关联已有讨论"}
+              </button>
+            )}
+          {kind === "ticket" && choose && data.canWrite && !write.pending && (
+            <ProjectThreadPicker
+              workspaceID={workspace}
+              projectID={project}
+              purpose="execution"
+              disabledThreadIDs={data.items.map((item) => item.id)}
+              onSessionExpired={onSessionExpired}
+              onUnavailable={onChanged}
+              onSelect={(thread) => {
+                setSelected(thread);
+                setChoose(false);
+              }}
+            />
           )}
           {choose && candidates.error && (
             <p role="status">{candidates.error}</p>
@@ -434,7 +486,7 @@ export function ExecutionDiscussions({
                       type="button"
                       disabled={!!write.pending}
                       onClick={() =>
-                        setSelected({ ticket: row.id, title: row.title })
+                        setSelected({ id: row.id, title: row.title })
                       }
                     >
                       {row.title}
@@ -463,6 +515,25 @@ export function ExecutionDiscussions({
             </>
           )}
           {selected &&
+            kind === "ticket" &&
+            !selected.link &&
+            !write.pending &&
+            data.canWrite && (
+              <ConfirmExecutionThread
+                key={selected.id}
+                workspace={workspace}
+                ticket={id}
+                thread={selected}
+                onSessionExpired={onSessionExpired}
+                onConfirm={confirm}
+                onBack={() => {
+                  setSelected(null);
+                  setChoose(true);
+                }}
+              />
+            )}
+          {selected &&
+            (kind === "thread" || selected.link) &&
             !write.pending &&
             (selected.link
               ? data.items.some(
@@ -481,7 +552,13 @@ export function ExecutionDiscussions({
                 </button>
               </div>
             )}
-          <button type="button" onClick={() => setReload((value) => value + 1)}>
+          <button
+            type="button"
+            onClick={() => {
+              changeRelationPage();
+              setReload((value) => value + 1);
+            }}
+          >
             刷新关联
           </button>
         </>
@@ -490,6 +567,57 @@ export function ExecutionDiscussions({
       )}
       {!error && <OperationStatus write={write} />}
     </section>
+  );
+}
+
+function ConfirmExecutionThread({
+  workspace,
+  ticket,
+  thread,
+  onSessionExpired,
+  onConfirm,
+  onBack,
+}: {
+  workspace: string;
+  ticket: string;
+  thread: { id: string; title: string };
+  onSessionExpired: () => void;
+  onConfirm: () => void;
+  onBack: () => void;
+}) {
+  const load = useCallback(
+    (signal: AbortSignal) =>
+      executionClient.list(
+        workspace,
+        { kind: "thread", id: thread.id },
+        undefined,
+        signal,
+      ),
+    [workspace, thread.id],
+  );
+  const { data, error } = useExecutionRead(load, onSessionExpired);
+  return (
+    <div>
+      {error ? (
+        <p role="alert">无法读取所选讨论，请重新选择。</p>
+      ) : !data ? (
+        <p role="status">正在核对讨论…</p>
+      ) : data.items.some((row) => row.id === ticket) ? (
+        <p>该讨论已关联本工单。</p>
+      ) : !data.canWrite ? (
+        <p>当前无法新增这条讨论关联。</p>
+      ) : (
+        <>
+          <p>确认关联“{thread.title}”？</p>
+          <button type="button" onClick={onConfirm}>
+            确认关联讨论
+          </button>
+        </>
+      )}
+      <button type="button" onClick={onBack}>
+        重新选择讨论
+      </button>
+    </div>
   );
 }
 

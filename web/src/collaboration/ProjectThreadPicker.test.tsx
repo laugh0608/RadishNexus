@@ -9,7 +9,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { AuthRequestError } from "../auth/api";
 import * as threads from "../channel/channel-threads-api";
 import { browserDiscoveryClient } from "../workspace/api";
-import { ReviewEvidencePicker } from "./ReviewEvidencePicker";
+import { ProjectThreadPicker } from "./ProjectThreadPicker";
 
 const firstChannel = {
   id: "chn_one",
@@ -25,12 +25,13 @@ function setup() {
   const props = {
     workspaceID: "wrk_one",
     projectID: "prj_one",
-    originalEvidenceIDs: ["thr_original"],
+    purpose: "review" as const,
+    disabledThreadIDs: ["thr_original"],
     onSelect: vi.fn(),
     onUnavailable: vi.fn(),
     onSessionExpired: vi.fn(),
   };
-  render(<ReviewEvidencePicker {...props} />);
+  render(<ProjectThreadPicker {...props} />);
   return props;
 }
 const button = (name: string) => screen.findByRole("button", { name });
@@ -97,7 +98,10 @@ it("scopes both cursors to the current list and discards a late page after chang
     undefined,
   ]);
   fireEvent.click(await button("可选讨论"));
-  expect(props.onSelect).toHaveBeenCalledExactlyOnceWith("thr_visible");
+  expect(props.onSelect).toHaveBeenCalledExactlyOnceWith({
+    id: "thr_visible",
+    title: "可选讨论",
+  });
 });
 
 it("rereads the channel directory on channel loss, and propagates project loss", async () => {
