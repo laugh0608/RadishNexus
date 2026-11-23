@@ -105,6 +105,8 @@ Decision Nexus View capabilities 精确扩展为 accept / reject / create_ticket
 
 从新 accepted 详情发起“替代旧结论”，复用同 Project 决策列表的分页读取选择对象，四种状态均保留显示，只有 accepted 可选，不用客户端角色猜权限或悄悄过滤其它状态。选择后读取旧详情，对照双方 question / outcome / rationale、来源、当前版本和本次理由，再明确确认。旧 evidence 受限时不显示可执行确认；最终资格由服务端写入判定。改变对象、理由或读取代次后清除旧确认。
 
+2026-11-23 起，选择器默认展示全部，成员可勾选「只看已确认」，通过项目决策列表的 `status=accepted` 跨页读取。切换筛选回到该条件的第一页，翻页或切换筛选会清除上次选择、理由及确认。再次选择同一候选也重读旧详情。若旧结论已被替代，页面提示并允许按当前筛选重新选择。详情复核后才发生的竞争仍由原提交命令检查双方版本。[筛选合同](0063-project-decision-status-filter.md) · [双账号验证](../status/reviews/2026-11-23-supersession-candidate-filter.md)
+
 Decision relation 增 outgoing / incoming supersedes。可读该边的双方后，readable 形状才额外返回 supersession {reason, actor, occurred_at}；其它关系不附带该字段。入向不可读目标完全隐藏，出向不可读目标保持不带方向、关系名或目标的 restricted 占位；理由不能从 Activity、错误或附件通道泄漏。evidence 源与替代边分开校验，不能把 supersedes 错当作 derived-from。
 
 结果未知仅保留原完整 payload / operation，可显式重试；原 acceptance、替代或 Ticket 创建未知请求不能因页面读到 superseded 或首次动作不再可用就推断自己失败。对应 retry 能力为 false、401 / 404 或切换对象时清空对应私有草稿；成功的决定不因 retry 能力为 true 而显示新的写动作。双方读取使用共同请求代次，页面恢复、取消、迟到响应继续使用既有保护，不增加浏览器持久化。

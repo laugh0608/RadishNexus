@@ -90,7 +90,7 @@ Project 名称 / 归档状态与列表共用请求代次，任一失败清空二
 
 ## Decision 最小替代
 
-`collaboration/DecisionSupersession.tsx` 从新 accepted 详情按 supersede 能力开放入口，复用同 Project 列表分页，保留四状态但仅可选择另一条 accepted；读取旧详情后显示双方结论、理由、来源和当前版本。编辑对象、理由或读取代次会清除确认；提交绑定双方版本，成功后重新读取。双向 relation 展示理由、操作者与时间，双方 Timeline 分别解释“被替代 / 替代了旧结论”。superseded 保留原接受内容，不允许新接受、拒绝或创建 Ticket。
+`collaboration/DecisionSupersession.tsx` 从新 accepted 详情按 supersede 能力开放入口。同 Project 候选默认展示四种状态，勾选「只看已确认」可按该状态跨页查找。只有另一条 accepted 可选。每次选择都重读旧详情，显示双方结论、理由、来源和当前版本。翻页或切换筛选会清除上次选择及确认。提交绑定双方版本，竞争返回 409 后重读，已被替代的旧结论会提示重新选择。双向 relation 展示理由、操作者与时间，双方 Timeline 分别解释“被替代 / 替代了旧结论”。superseded 保留原接受内容，不允许新接受、拒绝或创建 Ticket。[候选筛选验证](../docs/status/reviews/2026-11-23-supersession-candidate-filter.md)
 
 未知替代保留原双方、版本、理由和 operation，双方 retry_decision 当前仍有权才允许精确重试；不能因首次动作不再可用而丢弃原请求。`DecisionTicketCreation.tsx` 同样保留未知的原创建请求，按 retry_ticket_creation 核验同一 Ticket。双方读取、取消、撤权与迟到响应保护保持页面内存范围，无新依赖或持久化。完整 Decision DTO 必填 nullable rejection_reason 与 decision_revision；微秒时间比较保留锁内 +1µs 的合法差异。
 

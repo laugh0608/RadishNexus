@@ -3,7 +3,6 @@ import { AuthRequestError } from "../auth/api";
 import {
   decisionStatusLabels,
   projectDecisionsClient,
-  type ProjectDecision,
 } from "../workspace/project-decisions-api";
 import {
   CollaborationRequestError,
@@ -16,6 +15,10 @@ import {
 } from "./api";
 
 type Pending = { oldID: string; input: SupersedeDecisionInput };
+type Picker = { acceptedOnly: boolean; cursors: (string | undefined)[] };
+type CandidatePage = Awaited<
+  ReturnType<typeof projectDecisionsClient.decisions>
+>;
 
 export function useDecisionSupersession({
   workspaceID,
@@ -40,16 +43,14 @@ export function useDecisionSupersession({
   onUnavailable: () => void;
   onSessionExpired: () => void;
 }) {
-  const [choosing, setChoosing] = useState(false),
-    [oldID, setOldID] = useState<string | null>(null);
+  const [picker, setPicker] = useState<Picker | null>(null),
+    [selection, setSelection] = useState<{ id: string } | null>(null);
   const [old, setOld] = useState<CollaborationView<DecisionCurrent> | null>(
       null,
     ),
     [reason, setReason] = useState(""),
     [confirmed, setConfirmed] = useState(false);
-  const [rows, setRows] = useState<readonly ProjectDecision[] | null>(null),
-    [cursors, setCursors] = useState<(string | undefined)[]>([undefined]),
-    [next, setNext] = useState<string | null>(null);
+  const [page, setPage] = useState<CandidatePage | "error" | null>(null);
   const [pending, setPending] = useState<Pending | null>(null),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState<string | null>(null);
@@ -61,65 +62,52 @@ export function useDecisionSupersession({
       : undefined;
   const [listRequest, setListRequest] = useState({
     current,
-    choosing,
-    cursors,
+    picker,
     pending,
   });
   if (
     listRequest.current !== current ||
-    listRequest.choosing !== choosing ||
-    listRequest.cursors !== cursors ||
+    listRequest.picker !== picker ||
     listRequest.pending !== pending
   ) {
-    setListRequest({ current, choosing, cursors, pending });
-    setRows(null);
-    setNext(null);
+    setListRequest({ current, picker, pending });
+    setPage(null);
   }
-  const [oldRequest, setOldRequest] = useState({ current, oldID });
-  if (oldRequest.current !== current || oldRequest.oldID !== oldID) {
-    setOldRequest({ current, oldID });
+  const [oldRequest, setOldRequest] = useState({ current, selection });
+  if (oldRequest.current !== current || oldRequest.selection !== selection) {
+    setOldRequest({ current, selection });
     setOld(null);
     setConfirmed(false);
   }
   useEffect(() => {
     const controller = new AbortController();
-    if (!current || !choosing || pending) return () => controller.abort();
+    if (!current || !picker || pending) return () => controller.abort();
     void projectDecisionsClient
       .decisions(
         workspaceID,
         current.project.id,
-        cursors[cursors.length - 1],
+        picker.cursors.at(-1),
         controller.signal,
+        picker.acceptedOnly ? "accepted" : undefined,
       )
       .then(
         (page) => {
-          if (!controller.signal.aborted) {
-            setRows(page.items);
-            setNext(page.nextCursor);
-          }
+          if (!controller.signal.aborted) setPage(page);
         },
         (error: unknown) => {
           if (controller.signal.aborted) return;
-          setMessage("无法读取项目决策，请重新读取双方当前状态。");
-          if (status(error) === 401) {
-            onUnavailable();
-            onSessionExpired();
-          }
+          setPage("error");
+          const code = status(error);
+          if (code === 401 || code === 404) onUnavailable();
+          if (code === 401) onSessionExpired();
         },
       );
     return () => controller.abort();
-  }, [
-    current,
-    choosing,
-    cursors,
-    pending,
-    workspaceID,
-    onUnavailable,
-    onSessionExpired,
-  ]);
+  }, [current, picker, pending, workspaceID, onUnavailable, onSessionExpired]);
   useEffect(() => {
     const controller = new AbortController();
-    if (!current || !oldID) return () => controller.abort();
+    if (!current || !selection) return () => controller.abort();
+    const oldID = selection.id;
     void client
       .loadView(workspaceID, "decision", oldID, controller.signal, "summary")
       .then(
@@ -131,6 +119,7 @@ export function useDecisionSupersession({
             view.current.ref.id !== oldID
           ) {
             setMessage("双方当前状态不符合替代要求。");
+            setSelection(null);
             setPending(null);
             setReason("");
             return;
@@ -142,6 +131,7 @@ export function useDecisionSupersession({
           setPending(null);
           setReason("");
           setMessage("旧结论当前不可读取，请重新选择。");
+          setSelection(null);
           if (status(error) === 401) {
             onUnavailable();
             onSessionExpired();
@@ -149,7 +139,14 @@ export function useDecisionSupersession({
         },
       );
     return () => controller.abort();
-  }, [current, oldID, client, workspaceID, onUnavailable, onSessionExpired]);
+  }, [
+    current,
+    selection,
+    client,
+    workspaceID,
+    onUnavailable,
+    onSessionExpired,
+  ]);
   useEffect(
     () => () => {
       write.current?.abort();
@@ -179,7 +176,7 @@ export function useDecisionSupersession({
     ) {
       setPending(null);
       setReason("");
-      setChoosing(false);
+      setPicker(null);
       setMessage(null);
     }
   }
@@ -229,7 +226,8 @@ export function useDecisionSupersession({
       if (controller.signal.aborted) return;
       setPending(null);
       setReason("");
-      setChoosing(false);
+      setPicker(null);
+      setSelection(null);
       setMessage("原替代操作已确认；双方结论和原执行来源已保留。");
       onRefresh();
     } catch (error) {
@@ -261,6 +259,14 @@ export function useDecisionSupersession({
       }
     }
   };
+  const nextCursor = page && page !== "error" ? page.nextCursor : null;
+  function browse(next: Picker) {
+    setPicker(next);
+    setSelection(null);
+    setReason("");
+    setConfirmed(false);
+    setMessage(null);
+  }
   if (!current || (!canSupersede && !pending && !message)) return null;
   return (
     <section className="decision-actions" aria-label="替代旧结论">
@@ -279,22 +285,47 @@ export function useDecisionSupersession({
             <p>
               用本条已确认结论替代同一项目的另一条已确认结论。已有工单与文档保留原来源和状态。
             </p>
-            <button
-              onClick={() => {
-                setChoosing(true);
-                setCursors([undefined]);
-                setMessage(null);
-              }}
-            >
-              选择旧结论
-            </button>
-            {choosing && (
+            {!picker ? (
+              <button
+                onClick={() =>
+                  browse({ acceptedOnly: false, cursors: [undefined] })
+                }
+              >
+                选择旧结论
+              </button>
+            ) : (
               <div aria-label="项目决策选择">
-                {rows === null ? (
+                <label className="confirmation-control">
+                  <input
+                    type="checkbox"
+                    checked={picker.acceptedOnly}
+                    onChange={(event) =>
+                      browse({
+                        acceptedOnly: event.currentTarget.checked,
+                        cursors: [undefined],
+                      })
+                    }
+                  />
+                  <span>只看已确认</span>
+                </label>
+                {page === null ? (
                   <p>正在读取项目决策…</p>
+                ) : page === "error" ? (
+                  <p role="alert">
+                    无法读取项目决策。{" "}
+                    <button onClick={() => browse({ ...picker })}>
+                      重试候选列表
+                    </button>
+                  </p>
+                ) : page.items.length === 0 ? (
+                  <p>
+                    {picker.acceptedOnly
+                      ? "本页没有已确认决策。"
+                      : "本页没有项目决策。"}
+                  </p>
                 ) : (
                   <ul>
-                    {rows.map((row) => (
+                    {page.items.map((row) => (
                       <li key={row.id}>
                         <span>
                           {row.title} · {decisionStatusLabels[row.status]}
@@ -305,7 +336,7 @@ export function useDecisionSupersession({
                             row.id === current.ref.id
                           }
                           onClick={() => {
-                            setOldID(row.id);
+                            setSelection({ id: row.id });
                             setConfirmed(false);
                             setReason("");
                             setMessage(null);
@@ -317,19 +348,33 @@ export function useDecisionSupersession({
                     ))}
                   </ul>
                 )}
-                {cursors.length > 1 && (
-                  <button onClick={() => setCursors(cursors.slice(0, -1))}>
+                {picker.cursors.length > 1 && (
+                  <button
+                    onClick={() =>
+                      browse({
+                        ...picker,
+                        cursors: picker.cursors.slice(0, -1),
+                      })
+                    }
+                  >
                     上一页结论
                   </button>
                 )}
-                {next && (
-                  <button onClick={() => setCursors([...cursors, next])}>
+                {nextCursor && (
+                  <button
+                    onClick={() =>
+                      browse({
+                        ...picker,
+                        cursors: [...picker.cursors, nextCursor],
+                      })
+                    }
+                  >
                     下一页结论
                   </button>
                 )}
               </div>
             )}
-            {oldID && !old && <p>正在重新读取旧结论…</p>}
+            {selection && !old && <p>正在重新读取旧结论…</p>}
             {old && (
               <form
                 onSubmit={(e) => {
@@ -375,8 +420,22 @@ export function useDecisionSupersession({
                 <p>
                   请核对双方详情中的来源。替代理由将向有权读取双方结论的人公开，请勿复制私密材料正文。
                 </p>
-                {old.current.status !== "accepted" ||
-                old.capabilities?.retryDecision !== true ? (
+                {old.current.status === "superseded" ? (
+                  <div>
+                    <p>这条旧结论已被替代，请重新选择。</p>
+                    {picker && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          browse({ ...picker, cursors: [undefined] })
+                        }
+                      >
+                        重新读取候选
+                      </button>
+                    )}
+                  </div>
+                ) : old.current.status !== "accepted" ||
+                  old.capabilities?.retryDecision !== true ? (
                   <p>旧结论当前不具备替代条件，请重新选择或核对来源权限。</p>
                 ) : (
                   <>

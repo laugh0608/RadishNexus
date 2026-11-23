@@ -114,7 +114,7 @@ async function chooseAndConfirm() {
   fireEvent.change(screen.getByLabelText("替代理由"), {
     target: { value: "New evidence changes the conclusion" },
   });
-  fireEvent.click(screen.getByRole("checkbox"));
+  fireEvent.click(screen.getByRole("checkbox", { name: /我已核对双方结论/ }));
 }
 beforeEach(() =>
   vi.spyOn(projectDecisionsClient, "decisions").mockResolvedValue({
@@ -153,10 +153,114 @@ describe("Decision supersession", () => {
     fireEvent.change(screen.getByLabelText("替代理由"), {
       target: { value: "Changed after confirmation" },
     });
-    expect(screen.getByRole("checkbox")).toHaveProperty("checked", false);
+    expect(
+      screen.getByRole("checkbox", { name: /我已核对双方结论/ }),
+    ).toHaveProperty("checked", false);
     expect(
       screen.getByRole("button", { name: "确认替代旧结论" }),
     ).toHaveProperty("disabled", true);
+    expect(api.supersedeDecision).not.toHaveBeenCalled();
+  });
+  it("starts each filter on page one, clears the previous comparison and ignores a late page", async () => {
+    const decisions = vi.mocked(projectDecisionsClient.decisions);
+    const accepted = [
+      { id: old.ref.id, title: old.question, status: old.status },
+    ];
+    const self = {
+      id: current.ref.id,
+      title: current.question,
+      status: current.status,
+    };
+    let finish!: (page: Awaited<ReturnType<typeof decisions>>) => void;
+    decisions
+      .mockResolvedValueOnce({ items: accepted, nextCursor: "all-next" })
+      .mockResolvedValueOnce({
+        items: [self, ...accepted],
+        nextCursor: "accepted-next",
+      })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+    const api = client();
+    setup(api);
+    await chooseAndConfirm();
+    const toggle = screen.getByRole("checkbox", { name: "只看已确认" });
+    expect(toggle).toHaveProperty("checked", false);
+    fireEvent.click(toggle);
+    await screen.findByRole("button", { name: "选择 New conclusion" });
+    expect(
+      screen.getByRole("button", { name: "选择 New conclusion" }),
+    ).toHaveProperty("disabled", true);
+    expect(screen.queryByLabelText("替代理由")).toBeNull();
+    expect(
+      screen.queryByText(/New evidence changes the conclusion/),
+    ).toBeNull();
+    expect(decisions.mock.lastCall?.slice(2)).toEqual([
+      undefined,
+      expect.any(AbortSignal),
+      "accepted",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "下一页结论" }));
+    const tail = decisions.mock.lastCall!;
+    expect(tail.slice(2)).toEqual([
+      "accepted-next",
+      expect.any(AbortSignal),
+      "accepted",
+    ]);
+    fireEvent.click(toggle);
+    await screen.findByText("Pending conclusion · 待确认");
+    expect(tail[3]?.aborted).toBe(true);
+    expect(decisions.mock.lastCall?.slice(2)).toEqual([
+      undefined,
+      expect.any(AbortSignal),
+      undefined,
+    ]);
+    await act(async () => finish({ items: [], nextCursor: null }));
+    expect(screen.getByText("Pending conclusion · 待确认")).toBeDefined();
+    expect(screen.queryByRole("button", { name: "上一页结论" })).toBeNull();
+    expect(api.supersedeDecision).not.toHaveBeenCalled();
+  });
+  it("rereads the selected Decision and refreshes accepted candidates when another member supersedes it", async () => {
+    const api = client({
+      loadView: vi
+        .fn()
+        .mockResolvedValueOnce(oldView)
+        .mockResolvedValue({
+          ...oldView,
+          current: { ...old, status: "superseded", decisionRevision: 3 },
+        }),
+    });
+    setup(api);
+    fireEvent.click(screen.getByRole("button", { name: "选择旧结论" }));
+    await screen.findByText("Pending conclusion · 待确认");
+    const decisions = vi.mocked(projectDecisionsClient.decisions);
+    decisions
+      .mockResolvedValueOnce({
+        items: [{ id: old.ref.id, title: old.question, status: "accepted" }],
+        nextCursor: null,
+      })
+      .mockResolvedValueOnce({ items: [], nextCursor: null });
+    fireEvent.click(screen.getByRole("checkbox", { name: "只看已确认" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "选择 Old conclusion" }),
+    );
+    await screen.findByLabelText("替代理由");
+    fireEvent.click(
+      screen.getByRole("button", { name: "选择 Old conclusion" }),
+    );
+    await screen.findByText("这条旧结论已被替代，请重新选择。");
+    expect(screen.queryByRole("button", { name: "确认替代旧结论" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "重新读取候选" }));
+    await screen.findByText("本页没有已确认决策。");
+    expect(screen.queryByRole("heading", { name: /旧结论：/ })).toBeNull();
+    expect(decisions.mock.lastCall?.slice(2)).toEqual([
+      undefined,
+      expect.any(AbortSignal),
+      "accepted",
+    ]);
     expect(api.supersedeDecision).not.toHaveBeenCalled();
   });
   it("retains the original pair, revisions, reason and operation after an unknown committed result", async () => {
