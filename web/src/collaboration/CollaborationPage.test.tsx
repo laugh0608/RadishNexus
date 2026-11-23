@@ -91,6 +91,58 @@ const decisionView: CollaborationView<DecisionCurrent> = {
 };
 
 describe("CollaborationPage", () => {
+  it("requires a fresh evidence preview before confirmation and discards the draft if that access is lost", async () => {
+    const accepted = {
+      ...decisionView,
+      current: acceptedDecision,
+      capabilities: {
+        accept: false,
+        reject: false,
+        createTicket: false,
+        supersede: false,
+        retryDecision: true,
+        retryTicketCreation: false,
+        review: true,
+      },
+    };
+    let denyEvidence = false;
+    const loadView: CollaborationClient["loadView"] = async (
+      _workspace,
+      kind,
+    ) => {
+      if (kind === "decision") return accepted;
+      if (denyEvidence)
+        throw new CollaborationRequestError("不可读", { status: 404 });
+      return threadView;
+    };
+    const client = testClient({ loadView });
+    renderPage("decision", acceptedDecision.ref.id, client);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "记录人工复核" }),
+    );
+    const confirmation =
+      screen.getByLabelText("确认按所示版本保存本次人工复核");
+    fireEvent.change(screen.getByLabelText("复核说明"), {
+      target: { value: "合成草稿" },
+    });
+    fireEvent.change(screen.getByLabelText("补充 Thread 链接（可选）"), {
+      target: { value: "/workspaces/wrk_main/threads/thr_source" },
+    });
+    expect(confirmation).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByRole("button", { name: "核对补充讨论" }));
+    await screen.findByText("补充讨论 · Choose the collaboration boundary");
+    fireEvent.click(confirmation);
+    denyEvidence = true;
+    fireEvent.click(screen.getByRole("button", { name: "核对补充讨论" }));
+    await screen.findByText("无法重新读取补充证据。");
+    await waitFor(() =>
+      expect(client.loadDecisionReviews).toHaveBeenCalledTimes(2),
+    );
+    expect(screen.queryByText(/补充讨论 ·/)).toBeNull();
+    expect(screen.queryByDisplayValue("合成草稿")).toBeNull();
+    expect(screen.queryByRole("button", { name: "保存复核" })).toBeNull();
+    expect(client.reviewDecision).not.toHaveBeenCalled();
+  });
   it("retries an unknown review after its Decision is superseded", async () => {
     const accepted = {
       ...decisionView,

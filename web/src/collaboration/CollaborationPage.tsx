@@ -194,6 +194,16 @@ function CollaborationPageContent({
   const decisionReviews = useDecisionReviews({
     workspaceID,
     current: decisionCurrent,
+    originalEvidenceIDs:
+      decisionCurrent && state.status === "ready"
+        ? state.view.relations.flatMap((relation) =>
+            relation.visibility === "readable" &&
+            relation.direction === "outgoing" &&
+            relation.relationType === "derived-from"
+              ? [relation.target.ref.id]
+              : [],
+          )
+        : [],
     canReview:
       state.status === "ready" && state.view.capabilities?.review === true,
     canRetry:

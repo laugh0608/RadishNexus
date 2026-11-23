@@ -16,6 +16,7 @@ import {
   type ReviewConclusion,
   type ReviewDecisionInput,
 } from "./api";
+import { ReviewEvidencePicker } from "./ReviewEvidencePicker";
 
 const conclusionLabels: Record<ReviewConclusion, string> = {
   still_applicable: "仍适用",
@@ -25,6 +26,7 @@ const conclusionLabels: Record<ReviewConclusion, string> = {
 interface Options {
   workspaceID: string;
   current: DecisionCurrent | undefined;
+  originalEvidenceIDs: readonly string[];
   canReview: boolean;
   canRetry: boolean;
   unavailable: boolean;
@@ -38,6 +40,7 @@ interface Options {
 export function useDecisionReviews({
   workspaceID,
   current,
+  originalEvidenceIDs,
   canReview,
   canRetry,
   unavailable,
@@ -103,11 +106,12 @@ export function useDecisionReviews({
   const [conclusion, setConclusion] = useState<ReviewConclusion | "">("");
   const [reason, setReason] = useState("");
   const [link, setLink] = useState("");
+  const [browsing, setBrowsing] = useState(false);
   const [evidence, setEvidence] = useState<{
     id: string;
     title: string;
   } | null>(null);
-  const [previewedID, setPreviewedID] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ id: string } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [pending, setPending] = useState<ReviewDecisionInput | null>(null);
   const [writing, setWriting] = useState(false);
@@ -125,8 +129,9 @@ export function useDecisionReviews({
     setConclusion("");
     setReason("");
     setLink("");
+    setBrowsing(false);
     setEvidence(null);
-    setPreviewedID(null);
+    setPreview(null);
     setConfirmed(false);
     setPending(null);
   }
@@ -137,6 +142,7 @@ export function useDecisionReviews({
     actionScope.unavailable !== unavailable
   ) {
     setActionScope({ current, canRetry, unavailable });
+    setBrowsing(false);
     setConfirmed(false);
     setWriting(false);
     if (unavailable || (current !== undefined && !canRetry)) {
@@ -152,8 +158,8 @@ export function useDecisionReviews({
     [canRetry, current, unavailable],
   );
 
-  const extraEvidenceID = pending?.additionalEvidence?.id ?? previewedID;
-  const checkingEvidence = previewedID !== null && evidence === null;
+  const extraEvidenceID = pending?.additionalEvidence?.id ?? preview?.id;
+  const checkingEvidence = preview !== null && evidence === null;
   const canRetryEvidence =
     pending?.additionalEvidence == null ||
     evidence?.id === pending.additionalEvidence.id;
@@ -180,8 +186,10 @@ export function useDecisionReviews({
         if (controller.signal.aborted) return;
         clearDraft();
         setError("无法重新读取补充证据。");
-        if (cause instanceof CollaborationRequestError && cause.status === 401)
-          onSessionExpired();
+        if (cause instanceof CollaborationRequestError) {
+          if (cause.status === 401) onSessionExpired();
+          else if (cause.status === 403 || cause.status === 404) onRefresh();
+        }
       },
     );
     return () => controller.abort();
@@ -190,20 +198,25 @@ export function useDecisionReviews({
     client,
     current,
     extraEvidenceID,
+    preview,
+    onRefresh,
     onSessionExpired,
     workspaceID,
   ]);
 
-  function previewEvidence() {
-    const id = threadIDFromLink(link, workspaceID);
+  function previewEvidence(value: string) {
+    const id = threadIDFromLink(value, workspaceID);
     setConfirmed(false);
     if (!id) {
       setError("请粘贴当前工作区的 Thread 页面链接。");
       return;
     }
-    if (id === previewedID) return;
+    if (originalEvidenceIDs.includes(id)) {
+      setError("这条讨论已是原证据，请选择其他补充讨论。");
+      return;
+    }
     setEvidence(null);
-    setPreviewedID(id);
+    setPreview({ id });
     setError(null);
   }
 
@@ -214,6 +227,7 @@ export function useDecisionReviews({
     if (!operation) {
       if (
         !canReview ||
+        browsing ||
         !confirmed ||
         conclusion === "" ||
         !validReviewReason(reason) ||
@@ -433,32 +447,73 @@ export function useDecisionReviews({
                   }}
                 />
               </label>
-              <p>原讨论会随记录保留。请用补充讨论链接引用私密材料。</p>
-              <label>
-                补充 Thread 链接（可选）
-                <input
-                  value={link}
-                  onChange={(event) => {
-                    setLink(event.currentTarget.value);
+              <p>
+                原讨论会随记录保留。可以从项目频道选择一条补充讨论，也可以粘贴讨论链接。
+              </p>
+              <button
+                type="button"
+                aria-expanded={browsing}
+                onClick={() => {
+                  setBrowsing(!browsing);
+                  setConfirmed(false);
+                  if (browsing && preview) {
                     setEvidence(null);
-                    setPreviewedID(null);
-                    setConfirmed(false);
+                    setPreview({ id: preview.id });
+                  }
+                  setError(null);
+                }}
+              >
+                {browsing ? "返回链接输入" : "从频道选择讨论"}
+              </button>
+              {browsing ? (
+                <ReviewEvidencePicker
+                  workspaceID={workspaceID}
+                  projectID={current.project.id}
+                  originalEvidenceIDs={originalEvidenceIDs}
+                  onSelect={(id) => {
+                    const path = collaborationPagePath(
+                      workspaceID,
+                      "thread",
+                      id,
+                    )!;
+                    setLink(path);
+                    setBrowsing(false);
+                    previewEvidence(path);
                   }}
+                  onUnavailable={onUnavailable}
+                  onSessionExpired={onSessionExpired}
                 />
-              </label>
-              {link.trim() !== "" && (
-                <button
-                  type="button"
-                  disabled={checkingEvidence}
-                  onClick={previewEvidence}
-                >
-                  {checkingEvidence ? "正在读取讨论…" : "核对补充讨论"}
-                </button>
+              ) : (
+                <>
+                  <label>
+                    补充 Thread 链接（可选）
+                    <input
+                      value={link}
+                      onChange={(event) => {
+                        setLink(event.currentTarget.value);
+                        setError(null);
+                        setEvidence(null);
+                        setPreview(null);
+                        setConfirmed(false);
+                      }}
+                    />
+                  </label>
+                  {link.trim() !== "" && (
+                    <button
+                      type="button"
+                      disabled={checkingEvidence}
+                      onClick={() => previewEvidence(link)}
+                    >
+                      {checkingEvidence ? "正在读取讨论…" : "核对补充讨论"}
+                    </button>
+                  )}
+                  {evidence && <p>补充讨论 · {evidence.title}</p>}
+                </>
               )}
-              {evidence && <p>补充讨论 · {evidence.title}</p>}
               <label>
                 <input
                   type="checkbox"
+                  disabled={browsing || (link.trim() !== "" && !evidence)}
                   checked={confirmed}
                   onChange={(event) =>
                     setConfirmed(event.currentTarget.checked)
@@ -471,6 +526,7 @@ export function useDecisionReviews({
                 type="submit"
                 disabled={
                   !confirmed ||
+                  browsing ||
                   conclusion === "" ||
                   !validReviewReason(reason) ||
                   checkingEvidence ||

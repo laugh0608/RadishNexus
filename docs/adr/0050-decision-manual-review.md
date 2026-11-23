@@ -32,6 +32,8 @@
 
 原证据沿用 Decision 的 `derived-from` EntityLink。补充证据用单个 `thread` ref 保存在本次复核，作用域仅限本记录。它不得重复现有来源，不能改变 Decision 原有证据、授权和替代资格。首片从现有 Channel / Thread 入口复制同源 canonical Thread 链接，表单用既有 Thread 详情读取预览。只提交结构化引用，服务端不访问用户提供的 URL。用户可以在原讨论追加消息后直接复核，也可以引用新讨论。
 
+自 2026-11-23 起，表单也可从该决策所属 Project 的可读频道分页选择讨论，频道中的发现范围沿用 [ADR-0061](0061-channel-thread-discovery.md)。已是原证据的讨论在列表中标明并禁选。选中讨论或粘贴链接均通过 Thread 详情核对当前读权和 Project 归属，再由成员确认。页内重新核对遇到撤权时清理草稿并重读复核历史。提交仍由原命令在事务内检查证据。[双账号验证](../status/reviews/2026-11-23-decision-review-evidence-picker.md)
+
 ## 写入、权限与并发
 
 在 `/api/v1/workspaces/{workspace_id}/decisions/{decision_id}/reviews` 新增 `POST`。请求字段全部必填，其中 `additional_evidence` 可显式为 `null`。

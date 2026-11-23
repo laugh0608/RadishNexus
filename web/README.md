@@ -98,7 +98,7 @@ Go / Web / CLI / schema 024 / Activity 12 / v5 包配套升级；桌面、390px�
 
 ## Decision 最小人工复核
 
-在 accepted Decision 详情选择复核结论、填写说明并确认所见版本，可用同一 Project 的 Thread 链接补充证据。复核历史在 Activity 旁单独分页；刷新后按当前权限重读。结果未知时可以重试原请求。已被替代的 Decision 仍可追溯当前可读的旧复核。 [ADR-0050](../docs/adr/0050-decision-manual-review.md)
+在 accepted Decision 详情打开「记录人工复核」，可从同项目的可读频道分页选择补充讨论，也可粘贴同源 Thread 链接。两种入口都重读讨论详情后才允许确认，原讨论在选择器中标明。补充讨论撤权后，再次核对会清空草稿并重读复核历史，保存时服务端也会复查权限。复核历史在 Activity 旁单独分页。结果未知时可以重试原请求。已被替代的 Decision 仍可追溯当前可读的旧复核。[ADR-0050](../docs/adr/0050-decision-manual-review.md) · [选择器验证](../docs/status/reviews/2026-11-23-decision-review-evidence-picker.md)
 
 ## Ticket 状态操作
 
