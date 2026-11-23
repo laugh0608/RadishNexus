@@ -67,6 +67,7 @@ ADR 记录会长期影响多个模块、协作方式或安全边界的工程取�
 | [ADR-0059](0059-ticket-activity-pagination.md) | 已接受 | Ticket Activity 历史分页 |
 | [ADR-0060](0060-message-started-thread-lookup.md) | 已接受 | 从频道原消息找回讨论 |
 | [ADR-0061](0061-channel-thread-discovery.md) | 已接受 | 频道内的可读讨论列表 |
+| [ADR-0062](0062-thread-source-message-navigation.md) | 已接受 | 从讨论返回原消息及来源撤权 |
 
 ## 新建规则
 

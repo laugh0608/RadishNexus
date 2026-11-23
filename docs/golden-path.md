@@ -16,7 +16,7 @@ Golden Path 用最薄的可运行产品验证 RadishNexus 的核心价值，而�
 
 一个小型研发团队讨论“为登录接口增加速率限制”：
 
-1. 成员从 Project 频道的一条消息发起讨论。刷新或重新进入频道后，可在原消息上选择「查看讨论」，也可以从「频道讨论」列表直接打开仍可读的 Thread。[单条查询](adr/0060-message-started-thread-lookup.md) · [频道讨论列表](adr/0061-channel-thread-discovery.md)
+1. 成员从 Project 频道的一条消息发起讨论。刷新或重新进入频道后，可在原消息上选择「查看讨论」，也可以从「频道讨论」列表直接打开仍可读的 Thread。在讨论的来源行选择「打开原消息」可定位最初的发言或回复。[来源导航](adr/0062-thread-source-message-navigation.md) · [单条查询](adr/0060-message-started-thread-lookup.md) · [频道讨论列表](adr/0061-channel-thread-discovery.md)
 2. Thread 中形成结论，并创建一个 Proposed Decision；
 3. 决策人补充理由后将 Decision 标记为 Accepted；
 4. 从该 Decision 创建一个 Ticket，不复制原始讨论正文；

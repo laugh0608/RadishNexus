@@ -79,7 +79,7 @@ Workspace 继续由路径显式选择；Thread、Decision 和 Ticket 使用规�
 
 成功响应继续使用 `{"data": ...}` envelope，EntityRef 为 `{ "type", "id" }`，actor 为 `{ "kind": "user", "id" }`，时间为 UTC RFC 3339 Nano。公共 adapter 在发送前验证 application 投影与路径、当前对象、关系类型、状态和时间一致；漂移返回通用 `500 internal`，不发送部分结果。
 
-- Thread Current 只返回 ref、governing Project ref、可选可读 origin Channel、title、visibility、creator 与受控时间。messaging-origin Thread 必须同时返回一条 readable `started-from` Message relation；Message 只显示固定标题 `Message`，不复制或环境化正文。
+- Thread Current 只返回 ref、governing Project ref、可选可读 origin Channel、title、visibility、creator 与受控时间。messaging-origin Thread 须返回一项来源。可读时为 `started-from` Message relation，固定标题为 `Message`。来源回复所属 Thread 失权时，仍可读的子讨论只返回既有的 `{"visibility":"restricted"}` 占位。两种形态均不复制正文。[来源导航与撤权](0062-thread-source-message-navigation.md)
 - Decision Current 返回 ref、Project ref、question、`proposed / accepted`、nullable outcome / rationale / decided_at、proposer、deciders 与受控时间。关系和 Timeline 复用当前权限投影；不可读 evidence 只产生没有类型、ID、标题或时间的 `restricted` 占位。
 - Ticket Current 返回 ref、Project ref、title、`open`、creator 与受控时间，并通过 readable `implements` relation 保留 Source Decision。
 - Proposed Decision 创建响应额外返回结构化 `source_thread`；Ticket 创建响应额外返回结构化 `source_decision`。它们不复制 Thread 或 Message 正文。

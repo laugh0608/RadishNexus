@@ -158,6 +158,24 @@ func TestCollaborationHandlerReadsMessagingOriginThreadWithoutMessageBody(t *tes
 		response.Header().Get("Cache-Control") != "private, no-store" || response.Header().Get("Vary") != "Cookie" {
 		t.Fatalf("unsafe Thread response: headers %#v, body %s", response.Header(), response.Body.String())
 	}
+	// A readable child Thread may have a reply source whose parent is private.
+	opaque := goldenpath.RelationProjection{State: goldenpath.ProjectionRestricted}
+	application.view.Relations = []goldenpath.RelationProjection{opaque}
+	for _, query := range []string{"", "?relations=summary"} {
+		request := messagingRequest(http.MethodGet, "/api/v1/workspaces/wrk_main/threads/thr_source/nexus-view"+query, "")
+		w := httptest.NewRecorder()
+		testCollaborationHandler(t, validMessagingSessions(), application).ServeHTTP(w, request)
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"relations":[{"visibility":"restricted"}]`) || strings.Contains(w.Body.String(), "msg_source") {
+			t.Fatalf("restricted source%s: %d %s", query, w.Code, w.Body)
+		}
+	}
+
+	for _, invalid := range [][]goldenpath.RelationProjection{nil, {opaque, opaque}, {{State: goldenpath.ProjectionRestricted, Target: entityref.Ref{Type: "message", ID: "msg_private"}}}} {
+		application.view.Relations = invalid
+		if _, err := publicCollaborationView(threadRef, application.view); err == nil {
+			t.Fatalf("accepted invalid source projection %+v", invalid)
+		}
+	}
 }
 
 func TestCollaborationHandlerProposesDecisionWithIdempotentWebCommand(t *testing.T) {

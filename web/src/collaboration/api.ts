@@ -1428,9 +1428,6 @@ function parseRelation(
   const relation = record(value, path);
   if (relation.visibility === "restricted") {
     exactKeys(relation, path, ["visibility"]);
-    if (expectedType !== "decision" && expectedType !== "ticket") {
-      throw new TypeError(`${path} cannot be restricted for ${expectedType}`);
-    }
     return { visibility: "restricted" };
   }
   exactKeys(relation, path, [
@@ -1958,12 +1955,14 @@ function validateViewShape(
     if (current.originChannel === null && relations.length !== 0) {
       throw new TypeError("project-origin Thread has an unexpected relation");
     }
+    const source = relations[0];
     if (
       current.originChannel !== null &&
       (relations.length !== 1 ||
-        relations[0]?.visibility !== "readable" ||
-        relations[0].relationType !== "started-from" ||
-        relations[0].target.title !== "Message")
+        !source ||
+        (source.visibility === "readable" &&
+          (source.relationType !== "started-from" ||
+            source.target.title !== "Message")))
     ) {
       throw new TypeError("messaging-origin Thread is missing its safe source");
     }

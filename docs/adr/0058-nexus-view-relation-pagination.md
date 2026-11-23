@@ -18,7 +18,7 @@ Thread、Decision 和 Ticket 的 Nexus View 在一次响应中返回全部可展
 
 | 当前对象 | 随详情返回的上下文 | 分页读取的关系 |
 | --- | --- | --- |
-| Thread | 可读的原 Message，或无来源 Channel 的历史 Thread 的既有详情形态 | 入向 `derived-from` Decision |
+| Thread | 原 Message 的可读关系或[受限占位](0062-thread-source-message-navigation.md)；无来源 Channel 的历史 Thread 沿既有详情形态 | 入向 `derived-from` Decision |
 | Decision | 来源 Thread 或既有受限占位，以及按当前权限可读的直接前任和后任 | 入向 `implements` Ticket |
 | Ticket | 创建时的 `implements` Decision，或沿 `execution_context` 读取的原 Message 与既有受限表示 | 出向 `relates-to` Document 与出向 `affects` Component，按同一顺序合页 |
 

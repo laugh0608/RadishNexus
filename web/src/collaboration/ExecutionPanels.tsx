@@ -8,7 +8,11 @@ import { useExecutionRead } from "./useExecutionRead";
 import { browserChannelMessageClient } from "../channel/api";
 import type { ExecutionWrite } from "./execution-write";
 import { projectTicketsClient } from "../workspace/project-tickets-api";
-import { executionClient, executionMessageLocation } from "./execution-api";
+import {
+  executionClient,
+  executionMessageLink,
+  executionMessageLocation,
+} from "./execution-api";
 
 export function OperationStatus({
   write,
@@ -242,8 +246,18 @@ export function LocatedExecutionMessage({
       );
       if (thread !== undefined && message.threadID !== thread)
         throw new TypeError("Wrong Thread");
-      if (thread === undefined && message.threadID !== null)
-        throw new TypeError("Expected Channel message");
+      if (thread === undefined && message.threadID !== null) {
+        // A Thread source relation identifies the channel and message. Only the
+        // authorized message read identifies the reply's canonical parent.
+        const path = executionMessageLink(workspace, {
+          channelID: channel,
+          messageID: message.id,
+          threadID: message.threadID,
+        });
+        if (!path) throw new TypeError("Invalid reply location");
+        if (!signal.aborted) window.location.replace(path);
+        return null;
+      }
       return message;
     },
     [workspace, channel, thread, messageID],

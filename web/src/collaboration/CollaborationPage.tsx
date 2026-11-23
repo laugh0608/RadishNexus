@@ -557,7 +557,15 @@ function CollaborationPageContent({
               </div>
             </div>
             {relations.length > 0 && (
-              <RelationList workspaceID={workspaceID} relations={relations} />
+              <RelationList
+                workspaceID={workspaceID}
+                relations={relations}
+                originChannelID={
+                  isThreadCurrent(current)
+                    ? current.originChannel?.ref.id
+                    : undefined
+                }
+              />
             )}
             <PagedRelationList
               client={client}
@@ -808,9 +816,11 @@ function PagedRelationList({
 function RelationList({
   workspaceID,
   relations,
+  originChannelID,
 }: {
   workspaceID: string;
   relations: readonly CollaborationRelation[];
+  originChannelID?: string;
 }) {
   if (relations.length === 0) {
     return (
@@ -855,7 +865,11 @@ function RelationList({
             <code>
               entity://{relation.target.ref.type}/{relation.target.ref.id}
             </code>
-            <RelationLink workspaceID={workspaceID} relation={relation} />
+            <RelationLink
+              workspaceID={workspaceID}
+              relation={relation}
+              originChannelID={originChannelID}
+            />
           </li>
         ),
       )}
@@ -866,11 +880,26 @@ function RelationList({
 function RelationLink({
   workspaceID,
   relation,
+  originChannelID,
 }: {
   workspaceID: string;
+  originChannelID?: string;
   relation: Extract<CollaborationRelation, { visibility: "readable" }>;
 }) {
   const target = relation.target.ref;
+  if (
+    originChannelID &&
+    target.type === "message" &&
+    relation.direction === "outgoing" &&
+    relation.relationType === "started-from"
+  ) {
+    const href = executionMessageLink(workspaceID, {
+      channelID: originChannelID,
+      messageID: target.id,
+      threadID: null,
+    });
+    return href && <a href={href}>打开原消息</a>;
+  }
   const href =
     target.type === "component"
       ? componentPagePath(workspaceID, target.id)

@@ -604,10 +604,15 @@ func publicThreadCurrent(
 	if err != nil {
 		return threadCurrentDTO{}, err
 	}
-	if len(relations) != 1 || relations[0].State != goldenpath.ProjectionVisible ||
-		relations[0].RelationType != "started-from" || relations[0].Target.Type != "message" ||
-		relations[0].Title != "Message" {
-		return threadCurrentDTO{}, errors.New("messaging-origin Thread requires one readable started-from Message")
+	if len(relations) != 1 {
+		return threadCurrentDTO{}, errors.New("messaging-origin Thread requires one source relation")
+	}
+	// publicCollaborationRelations has already checked the opaque restricted shape.
+	source := relations[0]
+	if source.State != goldenpath.ProjectionRestricted && !(source.State == goldenpath.ProjectionVisible &&
+		source.Direction == "outgoing" && source.RelationType == "started-from" &&
+		source.Target.Type == "message" && source.Title == "Message") {
+		return threadCurrentDTO{}, errors.New("invalid messaging-origin Thread source")
 	}
 	dto.OriginChannel = &channel
 	return dto, nil

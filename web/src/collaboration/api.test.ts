@@ -105,6 +105,27 @@ describe("Collaboration API adapter", () => {
     expect(collaborationPagePath("wrong", "ticket", "tkt_work")).toBeNull();
   });
 
+  it("accepts exactly one opaque source for a channel-origin Thread", () => {
+    const restricted = { visibility: "restricted" };
+    const parse = (relations: unknown[], current: unknown = threadCurrent) =>
+      parseCollaborationView(
+        { data: { current, relations, timeline: [] } },
+        "thread",
+        "thr_source",
+      );
+    expect(parse([restricted]).relations).toEqual([restricted]);
+    for (const relations of [
+      [],
+      [restricted, restricted],
+      [{ ...restricted, target: { type: "message", id: "msg_secret" } }],
+    ]) {
+      expect(() => parse(relations)).toThrow();
+    }
+    expect(() =>
+      parse([restricted], { ...threadCurrent, origin_channel: null }),
+    ).toThrow();
+  });
+
   it("loads a messaging-origin Thread without accepting Message body", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({

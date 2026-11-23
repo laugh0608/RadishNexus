@@ -618,6 +618,28 @@ it("restarts relations at the first page after a stale cursor while keeping the 
   expect(client.loadView).toHaveBeenCalledTimes(1);
 });
 
+it("removes the source link when revalidation returns a restricted source and keeps the readable Thread", async () => {
+  const client = testClient({
+    loadView: vi
+      .fn()
+      .mockResolvedValueOnce(threadView)
+      .mockResolvedValue({
+        ...threadView,
+        relations: [{ visibility: "restricted" }],
+      }),
+  });
+  renderPage("thread", thread.ref.id, client);
+  const link = await screen.findByRole("link", { name: "打开原消息" });
+  expect(link.getAttribute("href")).toBe(
+    "/workspaces/wrk_main/channels/chn_main?message=msg_source",
+  );
+  fireEvent.focus(window);
+  await screen.findByText("受限 evidence");
+  expect(screen.queryByRole("link", { name: "打开原消息" })).toBeNull();
+  expect(screen.queryByText("entity://message/msg_source")).toBeNull();
+  expect(screen.getByRole("heading", { name: thread.title })).toBeTruthy();
+});
+
 it("keeps the authoritative actions available while a relation request fails", async () => {
   const loadRelations = vi
     .fn<CollaborationClient["loadRelations"]>()

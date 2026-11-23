@@ -3,6 +3,7 @@
 package postgres_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -44,20 +45,49 @@ func TestMessageStartedThreadCurrentAccess(t *testing.T) {
 		Ref: entityref.Ref{Type: "thread", ID: child.ID}, Title: child.Title}
 	lookup(f.principal, f.channel, reply, nested, nil)
 
+	visibleSource := goldenpath.RelationProjection{
+		State: goldenpath.ProjectionVisible, Direction: "outgoing", RelationType: "started-from",
+		Target: entityref.Ref{Type: "message", ID: reply}, Title: "Message",
+	}
+	restrictedSource := goldenpath.RelationProjection{State: goldenpath.ProjectionRestricted}
+	checkChildSource := func(want goldenpath.RelationProjection) {
+		t.Helper()
+		for _, read := range []func(context.Context, authz.Principal, entityref.Ref) (goldenpath.NexusView, error){f.core.GetNexusView, f.core.GetNexusSummary} {
+			view, err := read(f.ctx, member, nested.Ref)
+			if err != nil || view.Current.Ref != nested.Ref || len(view.Relations) != 1 || view.Relations[0] != want {
+				t.Fatalf("child Thread source = %+v, %v; want %+v", view.Relations, err, want)
+			}
+		}
+		located, err := f.store.ReadExecutionMessage(f.ctx, member, f.channel, reply)
+		if want.State == goldenpath.ProjectionRestricted {
+			if !errors.Is(err, authz.ErrNotFound) {
+				t.Fatalf("restricted location: %v", err)
+			}
+		} else if err != nil || located.ID != reply || located.ThreadID == nil || *located.ThreadID != f.thread {
+			t.Fatalf("readable reply location: %+v, %v", located, err)
+		}
+	}
+
 	f.mustChange(t, f.owner, proposal("channel", f.channel, "add", member.ID, ""))
 	f.mustChange(t, f.owner, proposal("project", f.project, "role", member.ID, "viewer"))
 	unused := deliveryMessage(t, f.contextFixture, f.channel, "", "no-discussion")
 	lookup(member, f.channel, unused, nil, nil)
 	lookup(member, f.channel, f.message, nil, nil)
 	f.mustChange(t, f.owner, proposal("thread", child.ID, "add", member.ID, ""))
+	checkChildSource(restrictedSource)
 	lookup(member, f.channel, reply, nil, authz.ErrNotFound)
 	f.mustChange(t, f.owner, proposal("thread", f.thread, "add", member.ID, ""))
+	checkChildSource(visibleSource)
 	lookup(member, f.channel, f.message, parent, nil)
 	lookup(member, f.channel, reply, nested, nil)
 	f.mustChange(t, f.owner, proposal("thread", f.thread, "remove", member.ID, ""))
+	checkChildSource(restrictedSource)
 	lookup(member, f.channel, f.message, nil, nil)
 	lookup(member, f.channel, reply, nil, authz.ErrNotFound)
 	f.mustChange(t, f.owner, proposal("thread", child.ID, "remove", member.ID, ""))
+	if _, err := f.core.GetNexusSummary(f.ctx, member, nested.Ref); !errors.Is(err, authz.ErrNotFound) {
+		t.Fatalf("revoked child: %v", err)
+	}
 	f.mustChange(t, f.owner, proposal("channel", f.channel, "remove", member.ID, ""))
 	lookup(member, f.channel, f.message, nil, authz.ErrNotFound)
 
