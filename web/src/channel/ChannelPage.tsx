@@ -1,3 +1,4 @@
+import { collaborationPagePath } from "../collaboration/api";
 import { useExecutionWrite } from "../collaboration/execution-write";
 import {
   LocatedExecutionMessage,
@@ -80,6 +81,7 @@ export function ChannelPage({
   const [realtimeStatus, setRealtimeStatus] = useState<
     "connecting" | "live" | "reconnecting"
   >("connecting");
+  const historyRead = useRef<AbortController | null>(null);
   const [olderLoading, setOlderLoading] = useState(false);
   const [olderError, setOlderError] = useState<string | null>(null);
   const [messageBody, setMessageBody] = useState("");
@@ -99,17 +101,12 @@ export function ChannelPage({
   }, []);
 
   useEffect(() => {
-    const restore = (event: PageTransitionEvent) => {
-      if (event.persisted) forgetDiscussion();
-    };
     window.addEventListener("focus", forgetDiscussion);
     window.addEventListener("pagehide", forgetDiscussion);
-    window.addEventListener("pageshow", restore);
     document.addEventListener("visibilitychange", forgetDiscussion);
     return () => {
       window.removeEventListener("focus", forgetDiscussion);
       window.removeEventListener("pagehide", forgetDiscussion);
-      window.removeEventListener("pageshow", restore);
       document.removeEventListener("visibilitychange", forgetDiscussion);
     };
   }, [forgetDiscussion]);
@@ -124,7 +121,6 @@ export function ChannelPage({
     let disposed = false;
     let epoch = 0;
     let connection: ChannelRealtimeConnection | null = null;
-    let historyController: AbortController | null = null;
     let failureProbeController: AbortController | null = null;
 
     const clearInteractiveState = () => {
@@ -139,7 +135,7 @@ export function ChannelPage({
     const loseAccess = (message: string) => {
       epoch++;
       connection?.close();
-      historyController?.abort();
+      historyRead.current?.abort();
       failureProbeController?.abort();
       clearInteractiveState();
       dispatch({ type: "failed", message });
@@ -147,7 +143,7 @@ export function ChannelPage({
     const expireSession = () => {
       epoch++;
       connection?.close();
-      historyController?.abort();
+      historyRead.current?.abort();
       failureProbeController?.abort();
       clearInteractiveState();
       onSessionExpired();
@@ -158,9 +154,11 @@ export function ChannelPage({
       let initialReadySeen = false;
       let failureProbedSinceReady = false;
       connection?.close();
-      historyController?.abort();
+      historyRead.current?.abort();
       failureProbeController?.abort();
       dispatch({ type: "connect" });
+      setOlderLoading(false);
+      setOlderError(null);
       forgetDiscussion();
       setRealtimeStatus("connecting");
 
@@ -177,30 +175,18 @@ export function ChannelPage({
             }
             initialReadySeen = true;
             dispatch({ type: "ready" });
-            historyController = new AbortController();
+            historyRead.current = new AbortController();
+            const signal = historyRead.current.signal;
             void client
-              .listMessages(
-                workspaceID,
-                channelID,
-                undefined,
-                historyController.signal,
-              )
+              .listMessages(workspaceID, channelID, undefined, signal)
               .then(
                 (page) => {
-                  if (
-                    !disposed &&
-                    currentEpoch === epoch &&
-                    !historyController?.signal.aborted
-                  ) {
+                  if (!disposed && currentEpoch === epoch && !signal.aborted) {
                     dispatch({ type: "history-loaded", page });
                   }
                 },
                 (error: unknown) => {
-                  if (
-                    disposed ||
-                    currentEpoch !== epoch ||
-                    historyController?.signal.aborted
-                  ) {
+                  if (disposed || currentEpoch !== epoch || signal.aborted) {
                     return;
                   }
                   if (isExpiredSession(error)) {
@@ -292,13 +278,18 @@ export function ChannelPage({
       }
     };
 
+    const restore = (event: PageTransitionEvent) => {
+      if (event.persisted) connect();
+    };
+    window.addEventListener("pageshow", restore);
     connect();
     return () => {
+      window.removeEventListener("pageshow", restore);
       disposed = true;
       epoch += 1;
       discussionRequest.current?.abort();
       connection?.close();
-      historyController?.abort();
+      historyRead.current?.abort();
       failureProbeController?.abort();
     };
   }, [
@@ -333,7 +324,13 @@ export function ChannelPage({
   };
 
   const loadOlder = async () => {
-    if (state.status !== "ready" || state.olderCursor === null) {
+    const signal = historyRead.current?.signal;
+    if (
+      state.status !== "ready" ||
+      state.olderCursor === null ||
+      !signal ||
+      signal.aborted
+    ) {
       return;
     }
     setOlderLoading(true);
@@ -343,14 +340,15 @@ export function ChannelPage({
         workspaceID,
         channelID,
         state.olderCursor,
+        signal,
       );
-      dispatch({ type: "older-loaded", page });
+      if (!signal.aborted) dispatch({ type: "older-loaded", page });
     } catch (error) {
-      if (!revokeVisibleState(error)) {
+      if (!signal.aborted && !revokeVisibleState(error)) {
         setOlderError(channelErrorMessage(error));
       }
     } finally {
-      setOlderLoading(false);
+      if (!signal.aborted) setOlderLoading(false);
     }
   };
 
@@ -359,6 +357,7 @@ export function ChannelPage({
     if (state.status !== "ready") {
       return;
     }
+    const readSignal = historyRead.current?.signal;
     setMessageSending(true);
     setMessageError(null);
     setMessageNotice(null);
@@ -378,6 +377,7 @@ export function ChannelPage({
         clientOperationID: operation.id,
         body: operation.body,
       });
+      if (readSignal?.aborted) return;
       dispatch({ type: "message-created", message: outcome.message });
       setMessageBody("");
       setPendingMessage(null);
@@ -387,7 +387,7 @@ export function ChannelPage({
           : "已确认此前重试写入的同一 Message。",
       );
     } catch (error) {
-      if (!revokeVisibleState(error)) {
+      if (!readSignal?.aborted && !revokeVisibleState(error)) {
         setMessageError(channelErrorMessage(error));
       }
     } finally {
@@ -465,17 +465,32 @@ export function ChannelPage({
     }
   };
 
-  const renderDiscussion = (messageID: string) => {
+  const renderDiscussion = (
+    messageID: string,
+    parentThreadID: string | null = null,
+  ) => {
     const result = discussion?.messageID === messageID ? discussion : null;
+    const parentPath =
+      parentThreadID === null
+        ? null
+        : collaborationPagePath(workspaceID, "thread", parentThreadID);
+    const lookupLabel =
+      parentThreadID === null ? "查看讨论" : "查看此回复发起的讨论";
     return (
       <>
+        {parentPath !== null && (
+          <p className="message-thread-ref">
+            <a href={parentPath}>打开所属讨论</a> ·{" "}
+            <code>{parentThreadID}</code>
+          </p>
+        )}
         <button
           className="text-button"
           type="button"
           disabled={threadSending || result?.status === "loading"}
           onClick={() => void viewDiscussion(messageID)}
         >
-          {result?.status === "loading" ? "正在读取讨论…" : "查看讨论"}
+          {result?.status === "loading" ? "正在读取讨论…" : lookupLabel}
         </button>
         {result?.status === "empty" && (
           <p role="status">当前没有可打开的讨论。</p>
@@ -491,9 +506,17 @@ export function ChannelPage({
             <strong>{result.thread.title}</strong>
             <code>{result.thread.id}</code>
             <a
-              href={`/workspaces/${encodeURIComponent(workspaceID)}/threads/${encodeURIComponent(result.thread.id)}`}
+              href={
+                collaborationPagePath(
+                  workspaceID,
+                  "thread",
+                  result.thread.id,
+                ) ?? undefined
+              }
             >
-              打开 canonical Thread
+              {parentThreadID === null
+                ? "打开 canonical Thread"
+                : "打开此回复发起的讨论"}
             </a>
           </div>
         )}
@@ -651,12 +674,7 @@ export function ChannelPage({
                         onSessionExpired={onSessionExpired}
                         write={executionWrite}
                       />
-                      {message.threadID === null ? null : (
-                        <p className="message-thread-ref">
-                          Thread 回复 · <code>{message.threadID}</code>
-                        </p>
-                      )}
-                      {renderDiscussion(message.id)}
+                      {renderDiscussion(message.id, message.threadID)}
                       {result?.status !== "visible" ? (
                         <button
                           className="text-button"

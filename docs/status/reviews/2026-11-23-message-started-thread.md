@@ -23,3 +23,13 @@ GOFLAGS='-run=TestMessageStartedThread -v -count=1' ./scripts/check-server-postg
 ```
 
 Go race、vet、模块检查与定向 PostgreSQL 检查通过。Web 的 309 项测试、类型检查、Lint、生产构建和锁定依赖检查通过。Vite 仍提示主 JS chunk 大于 500 kB。浏览器夹具补挂了正式服务已有的成员管理路由，最终授权和撤权均通过同源 Web 执行。[浏览器夹具](../../../server/internal/goldenpath/postgres/authenticated_web_browser_fixture_test.go)
+
+## 从频道回复返回所属讨论
+
+同日的后续 Web 切片复用频道消息已有的 `thread` 引用。两个隔离的 Chrome 会话通过正式页面创建私密回复，再从该回复发起另一个私密讨论。310 项 Web 测试、生产构建、锁定依赖检查、真实 PostgreSQL 的 `TestMessageStartedThreadCurrentAccess` 和仓库检查通过。
+
+| 场景 | 实测结果 |
+| --- | --- |
+| 两个讨论分别可达 | 430 像素宽的频道页通过 SSE 收到回复。键盘激活「打开所属讨论」直接进入原 Thread，全程没有调用查找新讨论的 GET。刷新频道后，「查看此回复发起的讨论」按需读取另一个 Thread，打开后标题与路径均匹配。 |
+| 分别撤权 | 只加入所属讨论的成员能返回原 Thread；在回复上查询另行发起的讨论时得到空结果。通过成员面板加入后两个讨论均可打开。撤销新讨论权限后，其旧地址拒绝访问，所属讨论仍可打开。再撤销所属讨论权限后，原链接的详情请求返回 `404`，浏览器后退和刷新都不再展示这条回复或其链接。 |
+| 恢复历史页 | 在 Chrome 中显式触发 `pageshow.persisted`，观察到频道重建实时连接并按当前权限读取历史。Vitest 还复现了恢复前的分页请求晚到，修复后该响应无法把失权回复重新插回页面。 |

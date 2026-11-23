@@ -54,6 +54,7 @@ describe("ChannelPage", () => {
     renderChannel(client);
 
     expect(await screen.findByText("Newer authoritative body.")).toBeDefined();
+    expect(screen.queryByRole("link", { name: "打开所属讨论" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "读取更早消息" }));
 
     expect(await screen.findByText("Older authoritative body.")).toBeDefined();
@@ -62,6 +63,7 @@ describe("ChannelPage", () => {
       "wrk_main",
       "chn_main",
       "older_cursor",
+      expect.any(AbortSignal),
     );
     const bodies = screen
       .getAllByText(/authoritative body\./u)
@@ -182,13 +184,19 @@ describe("ChannelPage", () => {
     await screen.findByText(newerMessage.body);
     first.unmount();
     renderChannel(client);
-    const button = await screen.findByRole("button", { name: "查看讨论" });
+    const button = await screen.findByRole("button", {
+      name: "查看此回复发起的讨论",
+    });
+    const parent = screen.getByRole("link", { name: "打开所属讨论" });
+    expect(parent.getAttribute("href")).toBe(
+      "/workspaces/wrk_main/threads/thr_parent",
+    );
     expect(getStartedThread).not.toHaveBeenCalled();
     fireEvent.click(button);
     expect(await screen.findByText("Stored discussion")).toBeDefined();
     expect(
       screen
-        .getByRole("link", { name: "打开 canonical Thread" })
+        .getByRole("link", { name: "打开此回复发起的讨论" })
         .getAttribute("href"),
     ).toBe("/workspaces/wrk_main/threads/thr_started");
     fireEvent.click(button);
@@ -202,8 +210,9 @@ describe("ChannelPage", () => {
     fireEvent.click(button);
     expect(await screen.findByText("当前没有可打开的讨论。")).toBeDefined();
     expect(
-      screen.queryByRole("link", { name: "打开 canonical Thread" }),
+      screen.queryByRole("link", { name: "打开此回复发起的讨论" }),
     ).toBeNull();
+    expect(parent.isConnected).toBe(true);
     expect(getStartedThread).toHaveBeenLastCalledWith(
       "wrk_main",
       "chn_main",
@@ -216,7 +225,10 @@ describe("ChannelPage", () => {
     const client = testClient({
       listMessages: vi
         .fn()
-        .mockResolvedValueOnce({ messages: [newerMessage], olderCursor: null })
+        .mockResolvedValueOnce({
+          messages: [{ ...newerMessage, threadID: "thr_parent" }],
+          olderCursor: null,
+        })
         .mockResolvedValueOnce({ messages: [olderMessage], olderCursor: null }),
       getStartedThread: vi
         .fn()
@@ -225,9 +237,12 @@ describe("ChannelPage", () => {
         ),
     });
     renderChannel(client);
-    fireEvent.click(await screen.findByRole("button", { name: "查看讨论" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "查看此回复发起的讨论" }),
+    );
     expect(await screen.findByText(olderMessage.body)).toBeDefined();
     expect(screen.queryByText(newerMessage.body)).toBeNull();
+    expect(screen.queryByRole("link", { name: "打开所属讨论" })).toBeNull();
   });
 
   it("clears previously rendered bodies when a later request proves access revoked", async () => {
@@ -337,6 +352,40 @@ describe("ChannelPage", () => {
 
     expect(await screen.findByText("Newer authoritative body.")).toBeDefined();
     expect(client.listMessages).toHaveBeenCalledTimes(2);
+  });
+
+  it("rechecks reply access on a persisted back navigation and ignores an older in-flight page", async () => {
+    const previousPage = deferred<{
+      messages: readonly ChannelMessage[];
+      olderCursor: null;
+    }>();
+    const reply = { ...newerMessage, threadID: "thr_parent" };
+    const client = testClient({
+      listMessages: vi
+        .fn()
+        .mockResolvedValueOnce({
+          messages: [reply],
+          olderCursor: "older_cursor",
+        })
+        .mockReturnValueOnce(previousPage.promise)
+        .mockResolvedValueOnce({ messages: [olderMessage], olderCursor: null }),
+    });
+    const realtime = new RealtimeHarness();
+    renderChannel(client, { realtimeClient: realtime.client });
+    act(() => realtime.latest().onReady());
+    await screen.findByRole("link", { name: "打开所属讨论" });
+    fireEvent.click(screen.getByRole("button", { name: "读取更早消息" }));
+    fireEvent(window, new PageTransitionEvent("pageshow", { persisted: true }));
+    expect(screen.queryByText(reply.body)).toBeNull();
+    expect(screen.queryByRole("link", { name: "打开所属讨论" })).toBeNull();
+    act(() => realtime.latest().onReady());
+    await screen.findByText(olderMessage.body);
+    await act(async () =>
+      previousPage.resolve({ messages: [reply], olderCursor: null }),
+    );
+    expect(screen.queryByText(reply.body)).toBeNull();
+    expect(screen.queryByRole("link", { name: "打开所属讨论" })).toBeNull();
+    expect(client.getStartedThread).not.toHaveBeenCalled();
   });
 
   it("clears bodies and drafts immediately on access-revoked", async () => {

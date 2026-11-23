@@ -1,6 +1,6 @@
 # RadishNexus 当前状态
 
-2026-11-23 已完成[从频道原消息找回讨论](reviews/2026-11-23-message-started-thread.md)，并完成 [Ticket Activity 历史分页与有限 Web 故事技术复核](reviews/2026-11-23-ticket-activity-pagination.md)。
+2026-11-23 已完成[从频道原消息找回讨论及从回复返回所属讨论](reviews/2026-11-23-message-started-thread.md)，并完成 [Ticket Activity 历史分页与有限 Web 故事技术复核](reviews/2026-11-23-ticket-activity-pagination.md)。
 
 2026-11-15 完成工单截止日期、消息转工单与执行讨论、工单分类与项目内查找的开发和技术验证。工单与构建的可追溯关联已按 ADR-0056 接入。同日完成固定候选的本机 Web 协作技术验收及试用观察准备检查。规划收口记录日期为 2026-11-10。
 
@@ -23,7 +23,7 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 | 能力主线 | 当前基线与未关闭范围 | 正式来源 |
 | --- | --- | --- |
 | 身份与管理 | 本地账户、邀请、初始化、恢复、owner / 成员管理交接已有技术证据；真实 OIDC / Radish 联调与团队持续使用仍未验收 | [身份专题](../topics.md#identity) |
-| 沟通与决策 | 可从频道原消息找回当前可读的讨论。讨论创建 / 确认 Decision、Project 决策发现已交付；最小拒绝、单链替代及四状态读取已交付，最小人工复核已通过正式浏览器验收 | [沟通与决策专题](../topics.md#communication-decisions) |
+| 沟通与决策 | 可从频道原消息找回当前可读的讨论，也可从回复直接返回所属讨论。讨论创建 / 确认 Decision、Project 决策发现已交付；最小拒绝、单链替代及四状态读取已交付，最小人工复核已通过正式浏览器验收 | [沟通与决策专题](../topics.md#communication-decisions) |
 | 工单与上下文 | 已交付工单状态、负责人、优先级、截止日期、消息建单、执行讨论、分类与 Project 标签。列表和状态看板支持组合查找，「我的工单」展示分类。已接通 Ticket 与 CI Run 的人工关联，也可从原 Thread 分层追溯工单、构建和 staging 部署。核心关系与 Ticket Activity 已可分页读取 | [工单与上下文专题](../topics.md#tickets-context) · [我的工单验收](reviews/2026-11-08-workspace-my-tickets.md) · [看板验收](reviews/2026-11-08-project-ticket-board.md) |
 | 文档协作 | 最小 Markdown 正式保存、冲突、版本 / 恢复及隔离浏览器已有证据；原生中文 IME 暂缓、持续使用未验收 | [文档专题](../topics.md#documents) |
 | 交付集成 | 受认证接入、显式 staging 记录、配置、持久发送及 checkout 接收已有相应证据；ADR-0035 / 0037 B 真实采集与整链暂缓 | [交付专题](../topics.md#delivery-integration) |
@@ -48,8 +48,8 @@ M0.5 Golden Path / M1 Web 平台基础纵向原型。正式 Go、PostgreSQL 和 
 
 ### 接下来的事项
 
-1. **补齐从频道回复回到所属讨论的入口**。频道历史目前显示回复所属 Thread 的引用。下一片可用既有 canonical 路径将该引用接到讨论详情，并保留从同一条回复「查看讨论」进入它另行发起的 Thread 的入口。这两条关系在私密回复的数据库用例中已有覆盖。[频道实现](../../web/src/channel/ChannelPage.tsx) · [ADR-0060](../adr/0060-message-started-thread-lookup.md)
-2. **随功能自行验证**。下一片用合成账号验证回复所属讨论与从该回复发起的讨论指向各自对象，并复查撤权后的页面。后续切片继续从路线图和能力专题选择。[路线图](../roadmap.md) · [能力主线](../topics.md)
+1. **下一片优先设计频道内的可读讨论列表**。目前成员要先找到原消息，再逐条查看它发起的讨论。M1 的对象发现要求普通成员能在可访问的范围内找到工作对象。拟从当前频道直接浏览已有讨论，先约定来源消息与 Thread 的可见性、稳定分页和撤权后的重读行为，再接入数据库、Go 和 Web。[M1 路线图](../roadmap.md#m1web-平台基础) · [现有单条查询合同](../adr/0060-message-started-thread-lookup.md)
+2. **按功能自行验证**。列表切片用合成账号验证跨页发现、私密回复来源、仅能读取一端及翻页期间撤权。当前已完成的单条消息和回复导航沿用[本机自动化验证记录](reviews/2026-11-23-message-started-thread.md)。
 
 11 月 15 日交付覆盖工单截止日期、消息建单与执行讨论、分类与查找、构建关联及原讨论追溯，并完成核心协作关系分页和 schema 030 升级恢复验证。各实现及证据沿对应 ADR 查阅。 [2026-11-15 提交回顾](reviews/2026-11-15-daily-closeout.md)
 

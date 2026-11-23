@@ -1212,6 +1212,7 @@ code {
 }
 
 .message-thread-ref {
+  overflow-wrap: anywhere;
   padding: 10px 12px;
   margin: -4px 0 0;
   border-left: 3px solid var(--accent);
@@ -1290,6 +1291,7 @@ code {
   font-size: 10px;
 }
 
+.message-thread-ref a,
 .thread-result a,
 .created-object a,
 .collaboration-relation-list a {
