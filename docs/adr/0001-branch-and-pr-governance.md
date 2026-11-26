@@ -111,3 +111,9 @@ Ruleset 只绑定稳定上下文 `Candidate Quality`。工作流内部可以随�
 ## 变更要求
 
 修改本决策时，必须同步仓库治理、贡献指南、PR 模板、Ruleset JSON、Workflow 和仓库检查器。分支模型、必需检查名或合并方式发生实质变化时，应使用新 ADR 替代本记录。
+
+## 二进制资产门禁
+
+本仓采用 [Radish 系列资产规则 v1](https://github.com/RadishIntelligence/.github/tree/main/asset-policy/v1)。单个二进制超过 5 MiB 时须登记例外，新增二进制合计超过 10 MiB 时提示复核。本仓的输出路径和例外以 [policy.tsv](../../.radish-assets/policy.tsv) 为准。
+
+新克隆在仓库根目录运行 `git config --local core.hooksPath .githooks` 启用本地钩子。PR 检查会核对新增提交中的资产。可用 `bash .radish-assets/check.sh --staged` 检查暂存区。

@@ -41,3 +41,8 @@
 *.ttf binary
 *.otf binary
 *.pen binary
+
+# Repository asset checks
+/.radish-assets/* text eol=lf
+/.githooks/pre-commit text eol=lf
+/.githooks/pre-push text eol=lf

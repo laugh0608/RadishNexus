@@ -25,6 +25,13 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Check binary asset policy
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          RADISH_ASSET_BASE: ${{ github.event.pull_request.base.sha }}
+          RADISH_ASSET_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: bash .radish-assets/check.sh --range "$RADISH_ASSET_BASE" "$RADISH_ASSET_HEAD"
 
       - name: Setup Python
         uses: actions/setup-python@v7
